@@ -8,7 +8,7 @@ function canvas(w: number, h: number) { const c = document.createElement('canvas
 
 export function paperBase(style: Style, W: number, H: number, dpr: number): HTMLCanvasElement {
   const key = ['base', W, H, dpr, style.palette.paper, style.paper.grain].join('|'); const hit = cache.get(key); if (hit) return hit;
-  const c = canvas(W * dpr, H * dpr); const x = c.getContext('2d')!; x.scale(dpr, dpr);
+  const c = canvas(W * dpr, H * dpr); const x = c.getContext('2d', { willReadFrequently: true })!; x.scale(dpr, dpr);
   x.fillStyle = style.palette.paper; x.fillRect(0, 0, W, H);
   const rng = mulberry32(1234); const dark = luminance(style.palette.paper) > 0.5; const g = style.paper.grain;
   const n = Math.round(W * H / 38 * g);
@@ -24,7 +24,7 @@ export function paper(style: Style, W: number, H: number, dpr: number, boil: num
   const key = ['paper', W, H, dpr, style.palette.paper, style.paper.grain, style.paper.wash, style.paper.washSeed, style.palette.wash, life, wb, style.paper.washScale].join('|');
   const hit = cache.get(key); if (hit) return hit;
   const base = paperBase(style, W, H, dpr);
-  const c = canvas(W * dpr, H * dpr); const x = c.getContext('2d')!; x.scale(dpr, dpr);
+  const c = canvas(W * dpr, H * dpr); const x = c.getContext('2d', { willReadFrequently: true })!; x.scale(dpr, dpr);
   x.drawImage(base, 0, 0, W, H);
   if (style.paper.wash > 0) watercolourWash(style, x, W, H, dpr, wb, life);
   // keep the cache small
@@ -36,7 +36,7 @@ export function paper(style: Style, W: number, H: number, dpr: number, boil: num
    stacked as ~26 lightly deformed, nearly transparent layers; their thin outlines pile up into the drying ring. Granulation settles inside. */
 function watercolourWash(style: Style, xPaper: CanvasRenderingContext2D, W: number, H: number, dpr: number, boil: number, life: number) {
   const amt = style.paper.wash; const base = style.palette.wash; const light = luminance(style.palette.paper) > 0.5;
-  const off = canvas(Math.round(W * dpr), Math.round(H * dpr)); const x = off.getContext('2d')!; x.scale(dpr, dpr);
+  const off = canvas(Math.round(W * dpr), Math.round(H * dpr)); const x = off.getContext('2d', { willReadFrequently: true })!; x.scale(dpr, dpr);
   let rng: Rng = mulberry32(9000 + style.paper.washSeed * 131);
   const path = (pts: Pt[]) => { x.beginPath(); pts.forEach((p, i) => i ? x.lineTo(p[0], p[1]) : x.moveTo(p[0], p[1])); x.closePath() };
   const [bh, bs, bl] = hexToHsl(base);
@@ -59,7 +59,7 @@ function watercolourWash(style: Style, xPaper: CanvasRenderingContext2D, W: numb
 
 export function grainOverlay(W: number, H: number, dpr: number, light: boolean): HTMLCanvasElement {
   const key = ['grain', W, H, dpr, light].join('|'); const hit = cache.get(key); if (hit) return hit;
-  const c = canvas(W * dpr, H * dpr); const x = c.getContext('2d')!; x.scale(dpr, dpr);
+  const c = canvas(W * dpr, H * dpr); const x = c.getContext('2d', { willReadFrequently: true })!; x.scale(dpr, dpr);
   x.fillStyle = light ? '#ffffff' : '#000000'; x.fillRect(0, 0, W, H); const rng = mulberry32(4321);
   const n = Math.round(W * H / 26);
   for (let i = 0; i < n; i++) { const a = rng(); x.fillStyle = light ? `rgba(60,45,25,${0.05 + a * 0.13})` : `rgba(255,245,225,${0.04 + a * 0.1})`; const sz = rng() < 0.8 ? 1 : 1.5; x.fillRect(rng() * W, rng() * H, sz, sz) }

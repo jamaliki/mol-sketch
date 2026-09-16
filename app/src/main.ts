@@ -6,9 +6,10 @@ import { LOOKS } from './looks';
 import { buildPanel } from './app/panel';
 import { OrbitControls } from './app/controls';
 import { drawSketch } from './ink/sketch';
+import { renderClassic, classic } from './classic/adapter';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
-const skCanvas = document.getElementById('sk') as HTMLCanvasElement; const skCtx = skCanvas.getContext('2d')!;
+const skCanvas = document.getElementById('sk') as HTMLCanvasElement; const skCtx = skCanvas.getContext('2d', { willReadFrequently: true })!;   // CPU-backed: the classic engine composites huge offscreen canvases, which GPU canvases can drop silently
 const stage = document.getElementById('stage')!;
 const hud = document.getElementById('hud')!;
 
@@ -18,10 +19,17 @@ try { const s = localStorage.getItem('triad-sketch-style'); if (s) style = merge
 const R = new Renderer(canvas);
 let dpr = Math.min(2, window.devicePixelRatio || 1);
 let live = true; let turntable = 0; let pitchSwing = 0; let dirty = true; let lastLive = 0; let currentLook = 'watercolour';
-let sketchOn = true;            // draw the full sketch when the view rests
+type RestMode = 'preview' | 'sketch' | 'classic';
+let restMode: RestMode = 'classic';   // what is drawn once the view rests: the fast hybrid sketch or the exact classic engine
+let sketchOn = true;
 let lastChange = 0; let sketchShown = false; let boil = 0; let sketchStats = { readMs: 0, regionMs: 0, drawMs: 0, regions: 0 };
 function invalidate() { dirty = true; lastChange = performance.now(); if (sketchShown) { sketchShown = false; skCanvas.classList.remove('on') } }
-function runSketch() { skCanvas.width = R.w; skCanvas.height = R.h; sketchStats = drawSketch(skCtx, R, style, boil); sketchShown = true; skCanvas.classList.add('on') }
+function runSketch(mode: RestMode = restMode) {
+  skCanvas.width = R.w; skCanvas.height = R.h;
+  if (mode === 'classic') { const ms = renderClassic(skCtx, R, style, boil, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 } }
+  else sketchStats = drawSketch(skCtx, R, style, boil);
+  sketchShown = true; skCanvas.classList.add('on');
+}
 
 function fit() { const w = Math.max(64, Math.floor(stage.clientWidth * dpr)), h = Math.max(64, Math.floor(stage.clientHeight * dpr)); R.resize(w, h); invalidate() }
 window.addEventListener('resize', fit);
@@ -64,7 +72,8 @@ const panel = buildPanel(document.getElementById('controls')!, {
   looks: LOOKS, currentLook: () => currentLook, applyLook,
   rebuild, redraw, camera: R.camera,
   onLive: v => { live = v; invalidate() }, onTurntable: v => { turntable = v; invalidate() }, onPitchSwing: v => { pitchSwing = v },
-  onSketch: v => { sketchOn = v; invalidate() },
+  onRest: (v: string) => { restMode = v as RestMode; sketchOn = v !== 'preview'; invalidate() },
+  renderNow: () => { R.render(style); runSketch('classic'); hud.textContent = `classic ${sketchStats.drawMs.toFixed(0)} ms · ${R.w}×${R.h}` },
   savePng: () => { const a = document.createElement('a'); a.href = snapshot(); a.download = `${R.structure?.name || 'triad-sketch'}.png`; a.click() },
   saveStyle: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(style, null, 1)); a.download = 'triad-sketch-style.json'; a.click() },
   loadStyle: async (f: File) => { style = mergeStyle(DEFAULT_STYLE, JSON.parse(await f.text())); panel.refresh(); rebuild() },
@@ -90,7 +99,7 @@ function loop(t: number) {
     const rested = t - lastChange > 220; const period = Math.max(900, (sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs) * 3);
     if ((!sketchShown && rested) || (live && sketchShown && t - lastSketchAt > period)) {
       if (sketchShown) boil++; lastSketchAt = t; runSketch();
-      hud.textContent = `sketch ${(sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs).toFixed(0)} ms (read ${sketchStats.readMs.toFixed(0)}, regions ${sketchStats.regionMs.toFixed(0)}, draw ${sketchStats.drawMs.toFixed(0)}) · ${sketchStats.regions} regions · ${R.w}×${R.h}`;
+      hud.textContent = restMode === 'classic' ? `classic ${sketchStats.drawMs.toFixed(0)} ms · ${R.w}×${R.h}` : `sketch ${(sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs).toFixed(0)} ms (read ${sketchStats.readMs.toFixed(0)}, regions ${sketchStats.regionMs.toFixed(0)}, draw ${sketchStats.drawMs.toFixed(0)}) · ${sketchStats.regions} regions · ${R.w}×${R.h}`;
     }
   }
   requestAnimationFrame(loop);
@@ -104,5 +113,8 @@ loadUrl('examples/test_protein.pdb').catch(e => status(e.message));
   applyLook, loadText, loadUrl, render: () => { R.render(style); return R.stats.frameMs }, renderer: R, camera: R.camera,
   setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
   setSize: (w: number, h: number) => { R.resize(w, h) }, rebuild,
-  sketch: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch(); return sketchStats }, setSketch: (v: boolean) => { sketchOn = v; invalidate() },
+  sketch: (b?: number, mode?: RestMode) => { R.render(style); if (b !== undefined) boil = b; runSketch(mode || 'sketch'); return sketchStats },
+  renderClassic, classicEngine: () => classic(),
+  classic: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch('classic'); return sketchStats.drawMs },
+  setSketch: (v: boolean) => { sketchOn = v; invalidate() }, setRest: (m: RestMode) => { restMode = m; sketchOn = m !== 'preview'; invalidate() },
 };

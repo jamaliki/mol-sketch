@@ -170,7 +170,7 @@ export function drawSketch(ctx: Ctx, R: Renderer, style: Style, boil: number): S
   if (surfaceRegions.length) {
     const z = surfaceRegions.reduce((a, r) => a + r.z * r.count, 0) / surfaceRegions.reduce((a, r) => a + r.count, 0);
     items.push({ z, draw: () => {
-      const off = document.createElement('canvas'); off.width = W; off.height = H; const x = off.getContext('2d')!;
+      const off = document.createElement('canvas'); off.width = W; off.height = H; const x = off.getContext('2d', { willReadFrequently: true })!;
       let zmin = Infinity, zmax = -Infinity, xmin = W, xmax = 0, ymin = H, ymax = 0;
       for (const r of surfaceRegions) { zmin = Math.min(zmin, r.z); zmax = Math.max(zmax, r.z); xmin = Math.min(xmin, r.x0); xmax = Math.max(xmax, r.x1); ymin = Math.min(ymin, r.y0); ymax = Math.max(ymax, r.y1) }
       const zs = Math.max(1e-6, zmax - zmin); const la = pen.lightAngle * Math.PI / 180; const lx = Math.cos(la), ly = Math.sin(la); const Rr = Math.max(xmax - xmin, ymax - ymin) / 2 || 1; const cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2;
@@ -186,7 +186,7 @@ export function drawSketch(ctx: Ctx, R: Renderer, style: Style, boil: number): S
           watercolourShape(x, pen, L.pts, col, seedBase + (r.label & 0xffffff) * 31, { fog: 0, layers: many ? 2 : 5, strength: tone, offscreen: true, granulate: false, noRing: many && depth < 0.15 }) }
       }
       // silhouette band along the boundary with anything that is not surface, and granulation, masked by the surface's union
-      const band = document.createElement('canvas'); band.width = W; band.height = H; const bx = band.getContext('2d')!;
+      const band = document.createElement('canvas'); band.width = W; band.height = H; const bx = band.getContext('2d', { willReadFrequently: true })!;
       bx.lineWidth = 4.4 * px; bx.lineCap = 'round'; bx.globalAlpha = 0.55;
       for (const r of surfaceRegions) { const col = mix(scheme.surface(s.residues[r.label & 0xffffff]), P.ink, 0.35); bx.strokeStyle = col;
         for (const L of r.loops) { const n = L.pts.length; let any = false; bx.beginPath(); let open = false; for (let i = 0; i < n; i++) { const sil = L.kind[i] === 1 && (L.other[i] >>> 24) !== REP_SURFACE; if (sil) { if (!open) { bx.moveTo(L.pts[i][0], L.pts[i][1]); open = true } bx.lineTo(L.pts[(i + 1) % n][0], L.pts[(i + 1) % n][1]); any = true } else open = false } if (any) bx.stroke() } }

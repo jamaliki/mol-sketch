@@ -9,7 +9,7 @@ export interface PanelHost {
   applyLook: (k: string) => void;
   rebuild: () => void; redraw: () => void;
   camera: Camera;
-  onLive: (v: boolean) => void; onTurntable: (v: number) => void; onPitchSwing: (v: number) => void; onSketch: (v: boolean) => void;
+  onLive: (v: boolean) => void; onTurntable: (v: number) => void; onPitchSwing: (v: number) => void; onRest: (v: string) => void; renderNow: () => void;
   savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadExample: (n: string) => void; reset: () => void;
   setDpr: (v: number) => void;
   palettes: Record<string, Palette>;
@@ -136,7 +136,8 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   control(V, { t: 'range', label: 'fog start', path: 'view.fogStart', min: 0, max: 1, step: 0.05 });
   control(V, { t: 'range', label: 'light angle', path: 'view.light', min: -180, max: 180, step: 5 });
   control(V, { t: 'range', label: 'boil every', path: 'boilEvery', min: 1, max: 12, step: 1 });
-  const skIn = el('input', { type: 'checkbox', checked: '' }) as HTMLInputElement; skIn.onchange = () => H.onSketch(skIn.checked); row(V, 'sketch at rest', skIn);
+  const restSel = el('select', { onchange: (e: any) => H.onRest(e.target.value) }, ...[['classic', 'classic (exact, slower)'], ['sketch', 'sketch (fast)'], ['preview', 'preview only']].map(([v, t]) => el('option', { value: v }, t))) as HTMLSelectElement; restSel.value = 'classic'; row(V, 'at rest', restSel);
+  V.append(el('div', { class: 'btns' }, el('button', { onclick: H.renderNow }, 'Render now (classic)')));
   const liveIn = el('input', { type: 'checkbox', checked: '' }) as HTMLInputElement; liveIn.onchange = () => H.onLive(liveIn.checked); row(V, 'breathing', liveIn);
   const tt = el('input', { type: 'range', min: 0, max: 90, step: 1, value: 0 }) as HTMLInputElement; const ttv = el('span', { class: 'val' }, '0');
   tt.oninput = () => { ttv.textContent = tt.value; H.onTurntable(+tt.value) }; row(V, 'turntable °/s', tt, ttv);
