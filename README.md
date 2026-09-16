@@ -13,12 +13,16 @@ the same page headlessly to write PNG or SVG frames.
 
 | | |
 |---|---|
-| ![ink colour](docs/img/ink_colour.png) | ![pencil and ink](docs/img/pencil_and_ink.png) |
+| ![ink colour](docs/img/ink_colour.png) | ![pencil](docs/img/pencil.png) |
 | ![ribosome surface](docs/img/ribosome_surface_by_subunit.png) | ![ribosome cartoon](docs/img/ribosome_cartoon_by_subunit.png) |
+
+Every image above is reproduced by one command from a settings file in [`looks/`](looks); the commands, and
+what each setting does, are in [docs/looks.md](docs/looks.md). `./make-previews.sh` regenerates them all.
 
 ## Contents
 
 - [Quick start](#quick-start)
+- [Looks](#looks)
 - [The page](#the-page)
 - [The command line](#the-command-line)
 - [Inputs](#inputs)
@@ -50,6 +54,27 @@ node render.js 6GZQ.cif --set reps.cartoon= --set reps.surface=polymer --set rep
 
 Or just open `triad-sketch.html` in a browser: it loads with the serine hydrolase demo and every control on
 the right-hand panel.
+
+## Looks
+
+`looks/*.json` are complete settings files, the format *Data › Save settings* writes. Pass one with
+`--settings` and add `--set` flags for the camera and the selections; the result is exactly the images in
+this README. [docs/looks.md](docs/looks.md) documents each one, setting by setting.
+
+| file | what it is |
+|---|---|
+| `looks/watercolour.json` | translucent washes on cream paper; the default for finished work |
+| `looks/ink-colour.json` | pen and ink with coloured hatching, white paper |
+| `looks/ink.json` | the same in black ink only |
+| `looks/pencil.json` | coloured-pencil scribble fills with construction lines |
+| `looks/assembly-surface.json` | watercolour surface coloured by subunit, for large complexes |
+| `looks/assembly-cartoon.json` | tube/ribbon cartoon coloured by subunit, thin pen, heavy fog |
+
+```bash
+node render.js examples/mechanism.json --settings looks/watercolour.json --frames drawn --out out
+node render.js 6GZQ.cif --settings looks/assembly-surface.json \
+     --set reps.cartoon= --set reps.sticks= --set reps.surface=polymer --size 900x900 --frames 0
+```
 
 ## The page
 
