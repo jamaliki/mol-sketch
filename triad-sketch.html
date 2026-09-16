@@ -206,7 +206,7 @@ const PRESETS={
 for(const k in PRESETS)for(const c in SS_COLS)if(!PRESETS[k][c])PRESETS[k][c]=SS_COLS[c];
 const DEFAULT_CFG={
   fps:24, stepEvery:2, boilEvery:2, arrowLead:0.2,
-  view:{yaw:-18,pitch:14,zoom:1,panX:0,panY:0,fov:20,fog:0.5,fogStart:0.45},
+  view:{yaw:-18,pitch:14,zoom:1,panX:0,panY:0,fov:20,fog:0.5,fogStart:0.45,spin:0,pitchSwing:0},
   style:{rough:1.1,passes:2,pressure:0.55,fillWobble:1,hatchDensity:1.4,hierarchy:0.6,wash:0.3,washSeed:1,washLife:0.6,inkWidth:1.5,ballScale:1,bondWidth:2.1,hatchSpacing:5,hatchAngle:-40,lightAngle:-125,shading:0.65,pencilFill:0.55,grain:0.6,font:'Caveat',labelSize:19,captionSize:24,contextAlpha:0.5},
   show:{H:true,lonePairs:true,charges:true,arrows:true,labels:true,hbonds:true,context:false,caption:true,stepLabel:true,colorBonds:false,resLabels:false,valence:true,construction:false},
   palette:{...PRESETS['PyMOL flat']},
@@ -215,7 +215,7 @@ const DEFAULT_CFG={
 };
 let cfg=JSON.parse(JSON.stringify(DEFAULT_CFG));
 try{const s=localStorage.getItem('triad-sketch-cfg');if(s){const o=JSON.parse(s);cfg={...cfg,...o,view:{...cfg.view,...o.view},style:{...cfg.style,...o.style},show:{...cfg.show,...o.show},palette:{...cfg.palette,...o.palette},rep:{...cfg.rep,...(o.rep||{})}}}}catch(e){}
-function migrateCfg(){const v=cfg.view;if(v.fov===undefined)v.fov=v.perspective!==undefined?Math.round(8+v.perspective*40):20;if(v.fogStart===undefined)v.fogStart=0.45;delete v.perspective;delete v.depthGain;if(cfg.style.pressure===undefined)cfg.style.pressure=0.55;if(cfg.style.fillWobble===undefined)cfg.style.fillWobble=1;if(cfg.style.hatchDensity===undefined)cfg.style.hatchDensity=1.4;if(cfg.style.hierarchy===undefined)cfg.style.hierarchy=0.6;if(cfg.style.wash===undefined)cfg.style.wash=0.3;if(cfg.style.washSeed===undefined)cfg.style.washSeed=1;if(cfg.style.washLife===undefined)cfg.style.washLife=0.6;if(!cfg.palette.nucleic)cfg.palette.nucleic='#e0a23a';if(!cfg.palette.wash||cfg.palette.wash==='#c9b48a'||cfg.palette.wash==='#c9a97a'||cfg.palette.wash==='#c7d0d8')cfg.palette.wash=cfg.palette.paper&&luminance(cfg.palette.paper)>0.9?'#7fb2c9':'#d1a35b';if(cfg.show.construction===undefined)cfg.show.construction=false}
+function migrateCfg(){const v=cfg.view;if(v.fov===undefined)v.fov=v.perspective!==undefined?Math.round(8+v.perspective*40):20;if(v.fogStart===undefined)v.fogStart=0.45;if(v.spin===undefined)v.spin=0;if(v.pitchSwing===undefined)v.pitchSwing=0;delete v.perspective;delete v.depthGain;if(cfg.style.pressure===undefined)cfg.style.pressure=0.55;if(cfg.style.fillWobble===undefined)cfg.style.fillWobble=1;if(cfg.style.hatchDensity===undefined)cfg.style.hatchDensity=1.4;if(cfg.style.hierarchy===undefined)cfg.style.hierarchy=0.6;if(cfg.style.wash===undefined)cfg.style.wash=0.3;if(cfg.style.washSeed===undefined)cfg.style.washSeed=1;if(cfg.style.washLife===undefined)cfg.style.washLife=0.6;if(!cfg.palette.nucleic)cfg.palette.nucleic='#e0a23a';if(!cfg.palette.wash||cfg.palette.wash==='#c9b48a'||cfg.palette.wash==='#c9a97a'||cfg.palette.wash==='#c7d0d8')cfg.palette.wash=cfg.palette.paper&&luminance(cfg.palette.paper)>0.9?'#7fb2c9':'#d1a35b';if(cfg.show.construction===undefined)cfg.show.construction=false}
 migrateCfg();
 function saveCfg(){try{localStorage.setItem('triad-sketch-cfg',JSON.stringify(cfg))}catch(e){}}
 
@@ -367,20 +367,23 @@ function sampleState(frame){
 /* ============================ projection ============================ */
 let FIT={cx:0,cy:0,cz:0,rx:0,ry:0,spanX:10,spanY:10,zspan:4,key:''};
 function rot3(p,cy,sy,cp,sp){const x=p[0]-FIT.cx,y=p[1]-FIT.cy,z=p[2]-FIT.cz;const x1=x*cy+z*sy,z1=-x*sy+z*cy;return[x1,y*cp-z1*sp,y*sp+z1*cp]}
+let VIEW_YAW=0,VIEW_PITCH=0; // effective angles for the frame being drawn (base + turntable)
 function computeFit(){
-  const key=scene.keyframes.length+'|'+cfg.view.yaw+'|'+cfg.view.pitch+'|'+(scene._rev||0);
+  const spinning=cfg.view.spin!==0||cfg.view.pitchSwing!==0;
+  const key=scene.keyframes.length+'|'+(spinning?'sphere':VIEW_YAW+'|'+VIEW_PITCH)+'|'+(scene._rev||0);
   if(FIT.key===key)return;
   let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9],c=0;
   for(const k of scene.keyframes)for(const id in k.atoms){const p=k.atoms[id].pos;for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],p[i]);mx[i]=Math.max(mx[i],p[i])}c++}
   if(!c){FIT={cx:0,cy:0,cz:0,rx:0,ry:0,spanX:10,spanY:10,zspan:4,key};return}
   FIT.cx=(mn[0]+mx[0])/2;FIT.cy=(mn[1]+mx[1])/2;FIT.cz=(mn[2]+mx[2])/2;
-  const yaw=cfg.view.yaw*Math.PI/180,pitch=cfg.view.pitch*Math.PI/180;const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+  const yaw=VIEW_YAW*Math.PI/180,pitch=VIEW_PITCH*Math.PI/180;const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+  if(spinning){let R=0;for(const k of scene.keyframes)for(const id in k.atoms){const p=k.atoms[id].pos;R=Math.max(R,Math.hypot(p[0]-FIT.cx,p[1]-FIT.cy,p[2]-FIT.cz))}FIT.rx=0;FIT.ry=0;FIT.spanX=2*R;FIT.spanY=2*R;FIT.zspan=2*R;FIT.key=key;return}
   let rmn=[1e9,1e9,1e9],rmx=[-1e9,-1e9,-1e9];
   for(const k of scene.keyframes)for(const id in k.atoms){const r=rot3(k.atoms[id].pos,cy,sy,cp,sp);for(let i=0;i<3;i++){rmn[i]=Math.min(rmn[i],r[i]);rmx[i]=Math.max(rmx[i],r[i])}}
   FIT.rx=(rmn[0]+rmx[0])/2;FIT.ry=(rmn[1]+rmx[1])/2;FIT.spanX=Math.max(rmx[0]-rmn[0],1);FIT.spanY=Math.max(rmx[1]-rmn[1],1);FIT.zspan=Math.max(rmx[2]-rmn[2],1);FIT.key=key;
 }
 function makeProjector(W,H){
-  const yaw=cfg.view.yaw*Math.PI/180,pitch=cfg.view.pitch*Math.PI/180;
+  const yaw=VIEW_YAW*Math.PI/180,pitch=VIEW_PITCH*Math.PI/180;
   const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
   const capH=cfg.show.caption?H*0.13:0,topH=cfg.show.stepLabel?H*0.05:0;
   // PyMOL-style camera: distance D set by the field of view and the scene's half extent
@@ -1078,6 +1081,7 @@ let PAPER_FILL=null;
 function paperFill(){return (isInk()&&PAPER_FILL)?PAPER_FILL:cfg.palette.paper}
 function renderFrame(ctx,W,H,frame,dpr){
   RF={W,H,dpr};
+  VIEW_YAW=cfg.view.yaw+cfg.view.spin*frame/Math.max(1,cfg.fps);VIEW_PITCH=cfg.view.pitch+cfg.view.pitchSwing*Math.sin(frame/Math.max(1,cfg.fps)*Math.PI*2*Math.max(1e-6,Math.abs(cfg.view.spin))/360);
   const drawn=Math.floor(frame/Math.max(1,cfg.stepEvery))*Math.max(1,cfg.stepEvery);
   const st=sampleState(drawn);
   const boil=Math.floor(drawn/Math.max(1,cfg.boilEvery));
@@ -1167,6 +1171,7 @@ let frame=0,playing=false,lastT=0,acc=0;
 let lastDrawn=-1;
 function draw(force){
   const step=Math.max(1,cfg.stepEvery);const d=Math.floor(frame/step)*step;
+  if(cfg.view.spin!==0&&d===lastDrawn&&!force)return;
   if(!force&&d===lastDrawn)return;
   lastDrawn=d;
   renderFrame(ctx,CW,CH,frame,dpr);
@@ -1290,6 +1295,8 @@ function buildPanel(){
   slider(V,'field of view',()=>cfg.view.fov,v=>cfg.view.fov=v,0,70,1,v=>v+'°');
   slider(V,'depth fog',()=>cfg.view.fog,v=>cfg.view.fog=v,0,1,0.05,v=>v.toFixed(2));
   slider(V,'fog start',()=>cfg.view.fogStart,v=>cfg.view.fogStart=v,0,0.9,0.05,v=>v.toFixed(2));
+  slider(V,'turntable',()=>cfg.view.spin,v=>cfg.view.spin=v,-90,90,1,v=>v===0?'off':v+'°/s');
+  slider(V,'pitch swing',()=>cfg.view.pitchSwing,v=>cfg.view.pitchSwing=v,0,45,1,v=>v+'°');
   // palette
   const pre=document.getElementById('preset');pre.innerHTML='<option value="">custom</option>'+Object.keys(PRESETS).map(k=>`<option>${k}</option>`).join('');
   pre.onchange=()=>{if(PRESETS[pre.value]){cfg.palette={...PRESETS[pre.value]};saveCfg();buildSwatches();redraw()}};

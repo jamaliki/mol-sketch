@@ -12,13 +12,14 @@
      --settings F     settings JSON saved from the page (Data › Save settings)
      --set path=val   override any setting, repeatable. cfg paths: rep.fill=watercolour view.yaw=30 style.wash=0.4 show.labels=false
                       scene paths: reps.cartoon=polymer reps.surface="polymer" reps.sticks=hetatm groupColors.HIS57=#7cbf72
+     --turntable N    render N frames of a full 360° yaw rotation (sets view.spin; use --set view.pitchSwing=15 to nod)
      --list           print the timeline and exit
 */
 const path=require('path'),fs=require('fs');
 const argv=process.argv.slice(2);const inputs=[];const opt={out:'out',format:'png',scale:2,size:'960x720',frames:'all',set:[]};
 for(let i=0;i<argv.length;i++){const a=argv[i];
   if(a==='--out')opt.out=argv[++i];else if(a==='--format')opt.format=argv[++i];else if(a==='--scale')opt.scale=+argv[++i];else if(a==='--size')opt.size=argv[++i];
-  else if(a==='--frames')opt.frames=argv[++i];else if(a==='--settings')opt.settings=argv[++i];else if(a==='--set')opt.set.push(argv[++i]);else if(a==='--list')opt.list=true;
+  else if(a==='--frames')opt.frames=argv[++i];else if(a==='--settings')opt.settings=argv[++i];else if(a==='--set')opt.set.push(argv[++i]);else if(a==='--list')opt.list=true;else if(a==='--turntable')opt.turntable=+argv[++i];
   else if(a==='--help'||a==='-h'){console.log(fs.readFileSync(__filename,'utf8').split('*/')[0].replace('/*',''));process.exit(0)}
   else inputs.push(a)}
 if(!inputs.length){console.error('No input. Try: node render.js examples/test_protein.pdb --set rep.fill=watercolour');process.exit(1)}
@@ -42,6 +43,7 @@ if(!inputs.length){console.error('No input. Try: node render.js examples/test_pr
   const [W,H]=opt.size.split('x').map(Number);await page.evaluate(([w,h])=>TriadSketch.setCanvasSize(w,h),[W,H]);
   for(const kv of opt.set){const i=kv.indexOf('=');const k=kv.slice(0,i),raw=kv.slice(i+1);let v=raw;if(raw==='true')v=true;else if(raw==='false')v=false;else if(raw!==''&&!isNaN(+raw))v=+raw;
     await page.evaluate(([k,v])=>{const parts=k.split('.');const target=(parts[0]==='reps'||parts[0]==='groupColors'||parts[0]==='view'&&false)?TriadSketch.scene:TriadSketch.cfg;let o=target;for(let i=0;i<parts.length-1;i++){o[parts[i]]=o[parts[i]]||{};o=o[parts[i]]}o[parts[parts.length-1]]=v;TriadSketch.buildPanel();TriadSketch.rebuild();TriadSketch.redraw()},[k,v])}
+  if(opt.turntable){await page.evaluate(n=>{const c=TriadSketch.cfg;c.view.spin=360*c.fps/n;TriadSketch.redraw()},opt.turntable);if(opt.frames==='all')opt.frames='0-'+(opt.turntable-1)}
   const info=await page.evaluate(()=>({total:TriadSketch.TL.total,step:Math.max(1,TriadSketch.cfg.stepEvery),segs:TriadSketch.TL.segs.map(s=>({kf:s.kf,type:s.type,start:s.start,len:s.len,name:TriadSketch.scene.keyframes[s.kf].name}))}));
   if(opt.list){console.log(JSON.stringify(info,null,1));await browser.close();fs.unlinkSync(tmp);return}
   let frames=[];const spec=opt.frames;

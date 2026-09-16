@@ -102,6 +102,9 @@ node render.js input [input …] [options]
                    keyframes = the first frame of each keyframe's hold
   --settings F     a settings JSON saved from the page (Data › Save settings)
   --set path=val   override one setting; repeatable (see below)
+  --turntable N    render N frames of one full yaw rotation (sets view.spin = 360·fps/N); add
+                   --set view.pitchSwing=12 for a gentle nod. Fit uses the bounding sphere so the
+                   size does not breathe as the molecule turns; raise view.zoom to fill the frame
   --list           print the timeline (keyframes, holds, transitions) and exit
 ```
 
@@ -121,6 +124,9 @@ node render.js examples/mechanism.json --format svg --frames keyframes --out svg
 node render.js 6GZQ.cif --set reps.cartoon=polymer --set reps.sticks= --set rep.cartoonColor=carbon \
                         --set rep.colorBy=subunit --set style.inkWidth=0.5 --set view.fog=0.7 --set view.fogStart=0.3
 node render.js scene.json --settings my-look.json --frames 120-240 --out part2
+node render.js 6GZQ.cif --set reps.cartoon= --set reps.surface=polymer --set rep.surfaceColor=subunit \
+                        --set rep.fill=watercolour --set view.pitchSwing=12 --size 960x960 --turntable 72 --out turn
+ffmpeg -framerate 12 -pattern_type glob -i 'turn/frame_*.png' -c:v libx264 -pix_fmt yuv420p turntable.mp4
 ```
 
 The easiest workflow is to find the look in the page, *Save settings*, and pass that file with
@@ -220,7 +226,9 @@ the atoms move), `pdbFrames` (2: frames per file in a PDB stack).
 `surfaceColor` (single), `probe` Å (1.4), `surfaceScale` (1), `surfaceOpacity` (1).
 
 **view** — `yaw`, `pitch` degrees, `zoom` (1), `panX`, `panY` (fractions of the canvas), `fov` degrees
-(20; 0 = orthographic), `fog` (0.5), `fogStart` (0.45: fraction of the depth range before fog begins).
+(20; 0 = orthographic), `fog` (0.5), `fogStart` (0.45: fraction of the depth range before fog begins),
+`spin` degrees per second of turntable yaw (0 = off; the page's *turntable* slider), `pitchSwing` degrees
+of pitch oscillation per turn (0).
 
 **style** — `rough` (1.1: line jitter amplitude), `passes` (2: overdrawn strokes per line), `pressure`
 (0.55: pen-pressure width variation), `hierarchy` (0.6: silhouettes heavier, interior marks lighter),
