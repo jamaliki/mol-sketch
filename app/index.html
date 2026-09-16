@@ -11,6 +11,8 @@
   #app { display:grid; grid-template-columns: 1fr 300px; height:100% }
   #stage { position:relative; overflow:hidden; background:#111 }
   canvas { display:block; width:100%; height:100%; cursor:grab }
+  #sk { position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .25s }
+  #sk.on { opacity:1 }
   canvas:active { cursor:grabbing }
   #panel { background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; padding:10px 12px 40px }
   #panel h1 { font-size:15px; margin:4px 0 10px; font-weight:600; letter-spacing:.3px }
@@ -30,6 +32,10 @@
   #status { color:var(--dim); font-size:11px; margin-top:6px; min-height:2.6em; white-space:pre-wrap }
   #drop { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(217,140,44,.15); border:3px dashed var(--acc); color:var(--fg); font-size:20px; pointer-events:none }
   #stage.drag #drop { display:flex }
+  @media (max-width: 720px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: 58vh 1fr }
+    #panel { border-left:none; border-top:1px solid var(--line) }
+  }
   #hud { position:absolute; left:10px; bottom:8px; color:#cfc7b4; font-size:11px; opacity:.75; pointer-events:none; text-shadow:0 1px 2px #000 }
   .looks { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin:6px 0 }
   .looks button { text-align:left; padding:6px 8px } .looks button b { display:block } .looks button span { color:var(--dim); font-size:11px }
@@ -38,7 +44,7 @@
 </head>
 <body>
 <div id="app">
-  <div id="stage"><canvas id="c"></canvas><div id="drop">Drop a PDB or mmCIF file</div><div id="hud"></div></div>
+  <div id="stage"><canvas id="c"></canvas><canvas id="sk"></canvas><div id="drop">Drop a PDB or mmCIF file</div><div id="hud"></div></div>
   <div id="panel">
     <h1>Triad Sketch<small>hand-drawn molecules</small></h1>
     <div id="controls"></div>

@@ -1,0 +1,10 @@
+import { chromium } from 'playwright';
+const [look, example, limit] = process.argv.slice(2);
+const b = await chromium.launch({ executablePath: process.env.CHROMIUM || undefined, args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader'] });
+const p = await b.newPage({ viewport: { width: 1280, height: 860 } });
+await p.goto('http://localhost:5173/'); await p.waitForFunction(() => window.TriadSketch && window.TriadSketch.renderer.structure, null, { timeout: 60000 });
+await p.evaluate(() => { window.TriadSketch.setLive(false); window.TriadSketch.setSketch(false) });
+await p.evaluate(n => window.TriadSketch.loadUrl('/examples/' + n), example); await p.waitForTimeout(300);
+await p.evaluate(k => window.TriadSketch.applyLook(k), look);
+const st = await p.evaluate(l => { window.__sketchLimit = l; const T = window.TriadSketch; const st = T.sketch(3); return { st, prof: window.__sketchProfile } }, +limit);
+console.log(JSON.stringify(st)); await b.close();

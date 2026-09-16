@@ -1,10 +1,10 @@
 /* The look: everything the renderer reads that is not geometry. Looks in looks.ts are values of this. */
 
-export type Fill = 'ink' | 'ink colour' | 'watercolour';
+export type Fill = 'flat' | 'wash' | 'pencil' | 'watercolour' | 'ink' | 'ink colour';
 export type ColorBy = 'element' | 'residue' | 'chain' | 'subunit' | 'entity';
 
 export interface Palette {
-  paper: string; ink: string; wash: string;
+  paper: string; ink: string; hatch: string; wash: string; arrow: string; charge: string; label: string; context: string; accent: string;
   C: string; N: string; O: string; H: string; S: string; P: string; X: string;
   helix: string; sheet: string; loop: string; nucleic: string; surface: string;
 }
@@ -20,6 +20,11 @@ export interface Style {
   cartoonScale: number;
   probe: number;             // Å added to residue blobs
   line: { width: number; rough: number; passes: number; hierarchy: number; pressure: number; alpha: number };
+  shading: number;           // pencil shadow / hatch on the dark side
+  pencilFill: number;        // scribble density in pencil mode
+  fillWobble: number;        // how far fills stray from the ink
+  construction: boolean;     // faint guide geometry
+  sideChainHelper: boolean;  // hide backbone atoms of residues drawn as cartoon
   hatch: { spacing: number; angle: number; density: number };
   paper: { grain: number; wash: number; washSeed: number; washLife: number; washScale: number };
   water: { layers: number; wobble: number; ring: number; granulation: number; tone: number };
@@ -28,9 +33,9 @@ export interface Style {
 }
 
 export const PALETTES: Record<string, Palette> = {
-  'PyMOL flat': { paper: '#faf8f3', ink: '#1e1e1e', wash: '#7fb2c9', C: '#8f8f8f', N: '#3a6ee0', O: '#e04848', H: '#e8e8e8', S: '#e5cf3b', P: '#f09a3e', X: '#b48fd8', helix: '#e0524a', sheet: '#f2d94a', loop: '#6fbf6a', nucleic: '#e0a23a', surface: '#cfd8e0' },
-  'Colored pencil': { paper: '#f3ecd9', ink: '#2b2a28', wash: '#d1a35b', C: '#6b6660', N: '#3f5fa8', O: '#c94b3c', H: '#f7f3ea', S: '#c9a227', P: '#d97b2a', X: '#8a7d9a', helix: '#e0524a', sheet: '#f2d94a', loop: '#6fbf6a', nucleic: '#e0a23a', surface: '#cfd8e0' },
-  'Sepia wash': { paper: '#efe3c8', ink: '#4a3728', wash: '#c9a56a', C: '#8c7a62', N: '#5f6f8c', O: '#a5482e', H: '#f5ecd8', S: '#b8922e', P: '#b06a2a', X: '#8a7d9a', helix: '#a5482e', sheet: '#c9a13a', loop: '#7a8a5a', nucleic: '#b06a2a', surface: '#d8cdb0' },
+  'PyMOL flat': { paper: '#faf8f3', ink: '#1e1e1e', hatch: '#2a2a2a', wash: '#7fb2c9', arrow: '#d23b2f', charge: '#1e1e1e', label: '#1e1e1e', context: '#cfcac0', accent: '#f2e85a', C: '#8f8f8f', N: '#3a6ee0', O: '#e04848', H: '#e8e8e8', S: '#e5cf3b', P: '#f09a3e', X: '#b48fd8', helix: '#e0524a', sheet: '#f2d94a', loop: '#6fbf6a', nucleic: '#e0a23a', surface: '#cfd8e0' },
+  'Colored pencil': { paper: '#f3ecd9', ink: '#2b2a28', hatch: '#3a3632', wash: '#d1a35b', arrow: '#c2453a', charge: '#2b2a28', label: '#5b4636', context: '#c9b99a', accent: '#d98c2c', C: '#6b6660', N: '#3f5fa8', O: '#c94b3c', H: '#f7f3ea', S: '#c9a227', P: '#d97b2a', X: '#8a7d9a', helix: '#e0524a', sheet: '#f2d94a', loop: '#6fbf6a', nucleic: '#e0a23a', surface: '#cfd8e0' },
+  'Sepia wash': { paper: '#efe3c8', ink: '#4a3728', hatch: '#5a4632', wash: '#c9a56a', arrow: '#8a2f22', charge: '#4a3728', label: '#5a4632', context: '#d3c19c', accent: '#a5581f', C: '#8c7a62', N: '#5f6f8c', O: '#a5482e', H: '#f5ecd8', S: '#b8922e', P: '#b06a2a', X: '#8a7d9a', helix: '#a5482e', sheet: '#c9a13a', loop: '#7a8a5a', nucleic: '#b06a2a', surface: '#d8cdb0' },
 };
 
 export const DEFAULT_STYLE: Style = {
@@ -43,7 +48,8 @@ export const DEFAULT_STYLE: Style = {
   stickRadius: 0.22,
   cartoonScale: 1,
   probe: 1.4,
-  line: { width: 1.6, rough: 1.0, passes: 2, hierarchy: 0.6, pressure: 0.5, alpha: 0.85 },
+  line: { width: 1.5, rough: 1.1, passes: 2, hierarchy: 0.6, pressure: 0.55, alpha: 0.85 },
+  shading: 0.65, pencilFill: 0.55, fillWobble: 1, construction: false, sideChainHelper: true,
   hatch: { spacing: 5, angle: -40, density: 1.2 },
   paper: { grain: 0.4, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1 },
   water: { layers: 3, wobble: 1, ring: 0.6, granulation: 0.5, tone: 0.6 },

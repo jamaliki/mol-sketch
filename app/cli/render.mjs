@@ -10,6 +10,7 @@
      --turntable N      N frames of one full yaw turn (adds --swing D degrees of pitch nod)
      --frames N         N frames with the lines re-boiled each frame (default 1); ignored with --turntable
      --out DIR          output folder (default ./out), files frame_0000.png …
+     --preview          write the fast GPU preview instead of the full sketch pass
      --software         force SwiftShader (CPU) GL, for machines without a GPU
 
    Requires `npm run build` first (renders the built app from dist/). */
@@ -17,11 +18,11 @@ import { chromium } from 'playwright';
 import fs from 'fs'; import path from 'path'; import http from 'http'; import { fileURLToPath } from 'url';
 
 const here = path.dirname(fileURLToPath(import.meta.url)); const dist = path.join(here, '..', 'dist');
-const argv = process.argv.slice(2); const opt = { look: '', style: '', set: [], size: '1920x1440', yaw: 0, pitch: 0, zoom: 1, fov: NaN, turntable: 0, swing: 0, frames: 1, out: 'out', software: false }; let input = '';
+const argv = process.argv.slice(2); const opt = { look: '', style: '', set: [], size: '1920x1440', yaw: 0, pitch: 0, zoom: 1, fov: NaN, turntable: 0, swing: 0, frames: 1, out: 'out', software: false, preview: false }; let input = '';
 for (let i = 0; i < argv.length; i++) { const a = argv[i];
   if (a === '--look') opt.look = argv[++i]; else if (a === '--style') opt.style = argv[++i]; else if (a === '--set') opt.set.push(argv[++i]);
   else if (a === '--size') opt.size = argv[++i]; else if (a === '--yaw') opt.yaw = +argv[++i]; else if (a === '--pitch') opt.pitch = +argv[++i]; else if (a === '--zoom') opt.zoom = +argv[++i]; else if (a === '--fov') opt.fov = +argv[++i];
-  else if (a === '--turntable') opt.turntable = +argv[++i]; else if (a === '--swing') opt.swing = +argv[++i]; else if (a === '--frames') opt.frames = +argv[++i]; else if (a === '--out') opt.out = argv[++i]; else if (a === '--software') opt.software = true;
+  else if (a === '--turntable') opt.turntable = +argv[++i]; else if (a === '--swing') opt.swing = +argv[++i]; else if (a === '--frames') opt.frames = +argv[++i]; else if (a === '--out') opt.out = argv[++i]; else if (a === '--software') opt.software = true; else if (a === '--preview') opt.preview = true;
   else if (a === '-h' || a === '--help') { console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0].replace('/*', '')); process.exit(0) }
   else input = a }
 if (!input) { console.error('usage: node cli/render.mjs input.pdb --look watercolour [--size 1920x1440] [--turntable 72]'); process.exit(1) }
@@ -40,7 +41,7 @@ page.on('pageerror', e => console.error('page error:', e.message));
 await page.goto(`http://127.0.0.1:${port}/`);
 await page.waitForFunction(() => window.TriadSketch, null, { timeout: 60000 });
 const text = fs.readFileSync(input, 'utf8');
-await page.evaluate(async ([t, n]) => { window.TriadSketch.setLive(false); await window.TriadSketch.loadText(t, n) }, [text, path.basename(input)]);
+await page.evaluate(async ([t, n]) => { window.TriadSketch.setLive(false); window.TriadSketch.setSketch(false); await window.TriadSketch.loadText(t, n) }, [text, path.basename(input)]);
 if (opt.look) await page.evaluate(k => window.TriadSketch.applyLook(k), opt.look);
 if (opt.style) { const st = JSON.parse(fs.readFileSync(opt.style, 'utf8')); await page.evaluate(s => { window.TriadSketch.style = s }, st) }
 if (opt.set.length) await page.evaluate(sets => { const T = window.TriadSketch; const st = JSON.parse(JSON.stringify(T.style));
@@ -51,7 +52,7 @@ await page.evaluate(([w, h, yaw, pitch, zoom, fov]) => { const T = window.TriadS
 fs.mkdirSync(opt.out, { recursive: true });
 const n = opt.turntable || opt.frames; const t0 = Date.now();
 for (let f = 0; f < n; f++) {
-  const png = await page.evaluate(([f, n, tt, swing, yaw0, pitch0]) => { const T = window.TriadSketch; if (tt) { T.camera.yaw = yaw0 + 360 * f / n; T.camera.pitch = pitch0 + swing * Math.sin(2 * Math.PI * f / n) } T.render(); return T.png() }, [f, n, opt.turntable, opt.swing, opt.yaw, opt.pitch]);
+  const png = await page.evaluate(([f, n, tt, swing, yaw0, pitch0, preview]) => { const T = window.TriadSketch; if (tt) { T.camera.yaw = yaw0 + 360 * f / n; T.camera.pitch = pitch0 + swing * Math.sin(2 * Math.PI * f / n) } if (preview) { T.render(); return T.png() } T.sketch(f); return T.png() }, [f, n, opt.turntable, opt.swing, opt.yaw, opt.pitch, opt.preview]);
   fs.writeFileSync(path.join(opt.out, `frame_${String(f).padStart(4, '0')}.png`), Buffer.from(png.split(',')[1], 'base64'));
   process.stdout.write(`\r${f + 1}/${n} frames  ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }

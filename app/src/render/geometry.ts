@@ -48,7 +48,8 @@ export function buildSurface(s: Structure, mask: Uint8Array, scheme: ColorScheme
 }
 
 /* ---------------- cartoon ---------------- */
-interface Sample { p: number[]; t: number[]; n: number[]; w: number; th: number; flat: number; color: [number, number, number]; id: number }
+export interface Sample { p: number[]; t: number[]; n: number[]; w: number; th: number; flat: number; color: [number, number, number]; id: number; ss: string; nucleic: boolean }
+export interface CartoonRun { id: number; samples: Sample[]; colorHex: string; ss: string }
 
 const v3 = {
   sub: (a: number[], b: number[]) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
@@ -71,7 +72,7 @@ function catmull(p0: number[], p1: number[], p2: number[], p3: number[], t: numb
 export function buildCartoon(s: Structure, mask: Uint8Array, scheme: ColorScheme, style: Style, detail = 1) {
   const X = s.x, Y = s.y, Z = s.z; const sc = style.cartoonScale;
   const pos = (i: number) => [X[i], Y[i], Z[i]];
-  const verts: number[] = []; const idx: number[] = []; let runId = 0;
+  const verts: number[] = []; const idx: number[] = []; let runId = 0; const runs: CartoonRun[] = [];
   const big = s.count > 60000;
   const perRes = Math.max(2, Math.round((big ? 3 : 6) * detail));
 
@@ -104,7 +105,9 @@ export function buildCartoon(s: Structure, mask: Uint8Array, scheme: ColorScheme
         return { w: 0.5 * sc, th: 0.5 * sc, flat: 0 };
       });
       // run ids: a new id at each SS change so the stylisation draws a line between helix and loop
-      const rid = seg.map((r, i) => { if (i === 0 || r.ss !== seg[i - 1].ss) runId++; return runId });
+      // run ids: a new id at each SS change, and every so often along long stretches so no single region grows huge
+      let runLen = 0;
+      const rid = seg.map((r, i) => { runLen++; if (i === 0 || r.ss !== seg[i - 1].ss || runLen > (r.nucleic ? 10 : r.ss === 'L' ? 16 : 40)) { runId++; runLen = 1 } return runId });
       const samples: Sample[] = [];
       let prevN: number[] | null = null;
       for (let i = 0; i < n - 1; i++) {
@@ -124,41 +127,52 @@ export function buildCartoon(s: Structure, mask: Uint8Array, scheme: ColorScheme
           let w = a.w + (b.w - a.w) * t, th = a.th + (b.th - a.th) * t, flat = a.flat + (b.flat - a.flat) * t;
           if (isArrow) { w = 2.4 * a.w * (1 - t) + 0.08; th = a.th; flat = 1 }
           const near = t < 0.5 ? i : i + 1;
-          samples.push({ p, t: T, n: N, w, th, flat, color: hexToRgb(scheme.cartoon(seg[near])), id: rid[near] });
+          samples.push({ p, t: T, n: N, w, th, flat, color: hexToRgb(scheme.cartoon(seg[near])), id: rid[near], ss: seg[near].ss, nucleic: seg[near].nucleic });
         }
       }
+      // split the samples into runs (one per SS stretch) so each run is one region family for the sketch pass
+      let a = 0; while (a < samples.length) { let b = a; while (b + 1 < samples.length && samples[b + 1].id === samples[a].id) b++;
+        const run = samples.slice(a, b + 2 <= samples.length ? b + 2 : b + 1);   // overlap by one sample so runs join
+        runs.push({ id: samples[a].id, samples: run, colorHex: scheme.cartoon(seg[Math.min(seg.length - 1, Math.round(a / perRes))]), ss: samples[a].ss }); a = b + 1 }
       emitRibbon(samples, verts, idx);
     }
   }
-  return { verts: Float32Array.from(verts), idx: Uint32Array.from(idx) };
+  return { verts: Float32Array.from(verts), idx: Uint32Array.from(idx), runs };
 }
 
-/** 8-point superellipse rings swept along the samples; n=8 is a flat ribbon, n=2 a tube. */
+/** 8-point superellipse rings swept along the samples; n=8 is a flat ribbon, n=2 a tube.
+    Vertices are duplicated per quad so each quad carries a face id: id = run*4 + face, where face 0 is the +B side,
+    1 the −B side, 2 and 3 the two edges; tubes have a single face. The sketch pass turns face boundaries into ribbon edge lines. */
 function emitRibbon(S: Sample[], verts: number[], idx: number[]) {
-  const RING = 8; const base = verts.length / MESH_STRIDE;
-  for (let k = 0; k < S.length; k++) {
-    const s = S[k]; const B = v3.norm(v3.cross(s.t, s.n)); const N = s.n;
-    const a = s.w / 2, b = s.th / 2; const nExp = 2 + 6 * s.flat;
+  const RING = 8;
+  const FACE = [0, 0, 0, 0, 1, 1, 1, 0];   // quad j (between ring points j and j+1) → face: 0 the +B side (with both thin edges), 1 the −B side
+  const ring = (s: Sample) => {
+    const B = v3.norm(v3.cross(s.t, s.n)); const N = s.n; const a = s.w / 2, b = s.th / 2; const nExp = 2 + 6 * s.flat; const e = 2 / nExp;
+    const out: { p: number[]; n: number[] }[] = [];
     for (let j = 0; j < RING; j++) {
       const ang = (j + 0.5) / RING * Math.PI * 2; const c = Math.cos(ang), sn = Math.sin(ang);
-      const e = 2 / nExp;
-      const x = Math.sign(c) * Math.pow(Math.abs(c), e), y = Math.sign(sn) * Math.pow(Math.abs(sn), e);   // unit superellipse
+      const x = Math.sign(c) * Math.pow(Math.abs(c), e), y = Math.sign(sn) * Math.pow(Math.abs(sn), e);
       const gx = nExp * Math.pow(Math.abs(x), nExp - 1) * Math.sign(x) / a, gy = nExp * Math.pow(Math.abs(y), nExp - 1) * Math.sign(y) / b;
       const gl = Math.hypot(gx, gy) || 1; const nx = gx / gl, ny = gy / gl;
-      const px = s.p[0] + N[0] * x * a + B[0] * y * b, py = s.p[1] + N[1] * x * a + B[1] * y * b, pz = s.p[2] + N[2] * x * a + B[2] * y * b;
-      const nrm = v3.norm([N[0] * nx + B[0] * ny, N[1] * nx + B[1] * ny, N[2] * nx + B[2] * ny]);
-      verts.push(px, py, pz, nrm[0], nrm[1], nrm[2], s.color[0], s.color[1], s.color[2], s.id, CLS_CARTOON);
+      out.push({ p: [s.p[0] + N[0] * x * a + B[0] * y * b, s.p[1] + N[1] * x * a + B[1] * y * b, s.p[2] + N[2] * x * a + B[2] * y * b], n: v3.norm([N[0] * nx + B[0] * ny, N[1] * nx + B[1] * ny, N[2] * nx + B[2] * ny]) });
     }
-    if (k > 0) {
-      const r0 = base + (k - 1) * RING, r1 = base + k * RING;
-      for (let j = 0; j < RING; j++) { const j1 = (j + 1) % RING; idx.push(r0 + j, r1 + j, r1 + j1, r0 + j, r1 + j1, r0 + j1) }
+    return out;
+  };
+  let prev = S.length ? ring(S[0]) : [];
+  const push = (s: Sample, r: { p: number[]; n: number[] }, id: number) => { verts.push(r.p[0], r.p[1], r.p[2], r.n[0], r.n[1], r.n[2], s.color[0], s.color[1], s.color[2], id, CLS_CARTOON); return verts.length / MESH_STRIDE - 1 };
+  for (let k = 1; k < S.length; k++) {
+    const cur = ring(S[k]); const s0 = S[k - 1], s1 = S[k];
+    for (let j = 0; j < RING; j++) {
+      const j1 = (j + 1) % RING; const face = (s1.flat > 0.5 || s0.flat > 0.5) ? FACE[j] : 0; const id = s1.id * 4 + face;
+      const a = push(s0, prev[j], id), b = push(s1, cur[j], id), c = push(s1, cur[j1], id), d = push(s0, prev[j1], id);
+      idx.push(a, b, c, a, c, d);
     }
+    prev = cur;
   }
   // end caps
-  const cap = (k: number, flip: boolean) => { const r = base + k * RING; const c = verts.length / MESH_STRIDE; const s = S[k];
-    verts.push(s.p[0], s.p[1], s.p[2], -s.t[0] * (flip ? -1 : 1), -s.t[1] * (flip ? -1 : 1), -s.t[2] * (flip ? -1 : 1), s.color[0], s.color[1], s.color[2], s.id, CLS_CARTOON);
-    for (let j = 0; j < RING; j++) { const j1 = (j + 1) % RING; if (flip) idx.push(c, r + j1, r + j); else idx.push(c, r + j, r + j1) } };
-  if (S.length) { cap(0, false); cap(S.length - 1, true) }
+  const cap = (k: number, flip: boolean) => { const s = S[k]; const r = ring(s); const id = s.id * 4; const c = push(s, { p: s.p, n: [-s.t[0] * (flip ? -1 : 1), -s.t[1] * (flip ? -1 : 1), -s.t[2] * (flip ? -1 : 1)] }, id);
+    const vi = r.map(q => push(s, q, id)); for (let j = 0; j < RING; j++) { const j1 = (j + 1) % RING; if (flip) idx.push(c, vi[j1], vi[j]); else idx.push(c, vi[j], vi[j1]) } };
+  if (S.length > 1) { cap(0, false); cap(S.length - 1, true) }
 }
 
 export { SPHERE_STRIDE, CYL_STRIDE };

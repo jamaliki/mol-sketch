@@ -5,8 +5,10 @@ import { DEFAULT_STYLE, PALETTES, cloneStyle, mergeStyle, type Style } from './s
 import { LOOKS } from './looks';
 import { buildPanel } from './app/panel';
 import { OrbitControls } from './app/controls';
+import { drawSketch } from './ink/sketch';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
+const skCanvas = document.getElementById('sk') as HTMLCanvasElement; const skCtx = skCanvas.getContext('2d')!;
 const stage = document.getElementById('stage')!;
 const hud = document.getElementById('hud')!;
 
@@ -16,15 +18,19 @@ try { const s = localStorage.getItem('triad-sketch-style'); if (s) style = merge
 const R = new Renderer(canvas);
 let dpr = Math.min(2, window.devicePixelRatio || 1);
 let live = true; let turntable = 0; let pitchSwing = 0; let dirty = true; let lastLive = 0; let currentLook = 'watercolour';
+let sketchOn = true;            // draw the full sketch when the view rests
+let lastChange = 0; let sketchShown = false; let boil = 0; let sketchStats = { readMs: 0, regionMs: 0, drawMs: 0, regions: 0 };
+function invalidate() { dirty = true; lastChange = performance.now(); if (sketchShown) { sketchShown = false; skCanvas.classList.remove('on') } }
+function runSketch() { skCanvas.width = R.w; skCanvas.height = R.h; sketchStats = drawSketch(skCtx, R, style, boil); sketchShown = true; skCanvas.classList.add('on') }
 
-function fit() { const w = Math.max(64, Math.floor(stage.clientWidth * dpr)), h = Math.max(64, Math.floor(stage.clientHeight * dpr)); R.resize(w, h); dirty = true }
+function fit() { const w = Math.max(64, Math.floor(stage.clientWidth * dpr)), h = Math.max(64, Math.floor(stage.clientHeight * dpr)); R.resize(w, h); invalidate() }
 window.addEventListener('resize', fit);
 
 function save() { try { localStorage.setItem('triad-sketch-style', JSON.stringify(style)) } catch { } }
-function rebuild() { R.rebuild(style); dirty = true; save(); status() }
-function redraw() { dirty = true; save() }
+function rebuild() { R.rebuild(style); invalidate(); save(); status() }
+function redraw() { invalidate(); save() }
 
-const controls = new OrbitControls(canvas, R.camera, () => { dirty = true });
+const controls = new OrbitControls(canvas, R.camera, () => { invalidate() });
 
 function status(msg?: string) {
   const s = R.structure; const st = R.stats;
@@ -57,33 +63,46 @@ const panel = buildPanel(document.getElementById('controls')!, {
   get style() { return style }, set style(v) { style = v },
   looks: LOOKS, currentLook: () => currentLook, applyLook,
   rebuild, redraw, camera: R.camera,
-  onLive: v => { live = v; dirty = true }, onTurntable: v => { turntable = v; dirty = true }, onPitchSwing: v => { pitchSwing = v },
-  savePng: () => { R.render(style); const a = document.createElement('a'); a.href = R.toDataURL(); a.download = `${R.structure?.name || 'triad-sketch'}.png`; a.click() },
+  onLive: v => { live = v; invalidate() }, onTurntable: v => { turntable = v; invalidate() }, onPitchSwing: v => { pitchSwing = v },
+  onSketch: v => { sketchOn = v; invalidate() },
+  savePng: () => { const a = document.createElement('a'); a.href = snapshot(); a.download = `${R.structure?.name || 'triad-sketch'}.png`; a.click() },
   saveStyle: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(style, null, 1)); a.download = 'triad-sketch-style.json'; a.click() },
   loadStyle: async (f: File) => { style = mergeStyle(DEFAULT_STYLE, JSON.parse(await f.text())); panel.refresh(); rebuild() },
   loadFile: async (f: File) => { await loadText(await f.text(), f.name) },
-  loadExample: (name: string) => loadUrl('/examples/' + name).catch(e => status(e.message)),
+  loadExample: (name: string) => loadUrl('examples/' + name).catch(e => status(e.message)),
   reset: () => { style = cloneStyle(DEFAULT_STYLE); panel.refresh(); rebuild() },
   setDpr: (v: number) => { dpr = v; fit() },
   palettes: PALETTES,
 });
 
-/* render loop: draw when something changed; when live, re-boil at ~10 fps; turntable spins */
-let lastT = performance.now();
+/** PNG of what is on screen: the sketch when it is shown, else the GPU frame */
+function snapshot() { if (sketchShown) return skCanvas.toDataURL('image/png'); R.render(style); return R.toDataURL() }
+
+/* render loop: the GPU preview draws whenever something changed; once the view has rested, the sketch pass draws the real thing on the overlay.
+   With breathing on, the sketch is redrawn with a new boil seed every so often. */
+let lastT = performance.now(); let lastSketchAt = 0;
 function loop(t: number) {
   const dt = (t - lastT) / 1000; lastT = t;
-  if (turntable) { R.camera.yaw = (R.camera.yaw + turntable * dt) % 360; if (pitchSwing) R.camera.pitch = pitchSwing * Math.sin(R.camera.yaw * Math.PI / 180); dirty = true }
-  if (live && t - lastLive > 1000 / 10) { lastLive = t; dirty = true }
-  if (dirty) { dirty = false; R.render(style); hud.textContent = `${R.stats.frameMs.toFixed(1)} ms/frame · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°` }
+  if (turntable) { R.camera.yaw = (R.camera.yaw + turntable * dt) % 360; if (pitchSwing) R.camera.pitch = pitchSwing * Math.sin(R.camera.yaw * Math.PI / 180); invalidate() }
+  if (!sketchOn && live && t - lastLive > 1000 / 10) { lastLive = t; dirty = true }
+  if (dirty) { dirty = false; R.render(style); hud.textContent = `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°` }
+  else if (sketchOn && R.structure && !turntable) {
+    const rested = t - lastChange > 220; const period = Math.max(900, (sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs) * 3);
+    if ((!sketchShown && rested) || (live && sketchShown && t - lastSketchAt > period)) {
+      if (sketchShown) boil++; lastSketchAt = t; runSketch();
+      hud.textContent = `sketch ${(sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs).toFixed(0)} ms (read ${sketchStats.readMs.toFixed(0)}, regions ${sketchStats.regionMs.toFixed(0)}, draw ${sketchStats.drawMs.toFixed(0)}) · ${sketchStats.regions} regions · ${R.w}×${R.h}`;
+    }
+  }
   requestAnimationFrame(loop);
 }
 fit(); requestAnimationFrame(loop);
-loadUrl('/examples/test_protein.pdb').catch(e => status(e.message));
+loadUrl('examples/test_protein.pdb').catch(e => status(e.message));
 
 /* scripting hook (used by the CLI and tests) */
 (window as any).TriadSketch = {
   get style() { return style }, set style(v: Style) { style = mergeStyle(DEFAULT_STYLE, v); panel.refresh(); rebuild() },
   applyLook, loadText, loadUrl, render: () => { R.render(style); return R.stats.frameMs }, renderer: R, camera: R.camera,
-  setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: () => R.toDataURL(),
+  setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
   setSize: (w: number, h: number) => { R.resize(w, h) }, rebuild,
+  sketch: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch(); return sketchStats }, setSketch: (v: boolean) => { sketchOn = v; invalidate() },
 };

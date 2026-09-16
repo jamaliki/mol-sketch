@@ -9,7 +9,7 @@ export interface PanelHost {
   applyLook: (k: string) => void;
   rebuild: () => void; redraw: () => void;
   camera: Camera;
-  onLive: (v: boolean) => void; onTurntable: (v: number) => void; onPitchSwing: (v: number) => void;
+  onLive: (v: boolean) => void; onTurntable: (v: number) => void; onPitchSwing: (v: number) => void; onSketch: (v: boolean) => void;
   savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadExample: (n: string) => void; reset: () => void;
   setDpr: (v: number) => void;
   palettes: Record<string, Palette>;
@@ -83,13 +83,17 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
 
   /* colour */
   const C = section('Colour');
-  control(C, { t: 'select', label: 'fill', path: 'fill', options: ['watercolour', 'ink colour', 'ink'] });
+  control(C, { t: 'select', label: 'fill', path: 'fill', options: ['watercolour', 'ink colour', 'ink', 'pencil', 'flat', 'wash'] });
+  control(C, { t: 'range', label: 'shading', path: 'shading', min: 0, max: 1, step: 0.05 });
+  control(C, { t: 'range', label: 'pencil fill', path: 'pencilFill', min: 0, max: 1, step: 0.05 });
+  control(C, { t: 'range', label: 'fill wobble', path: 'fillWobble', min: 0, max: 2, step: 0.05 });
+  control(C, { t: 'check', label: 'construction', path: 'construction' });
   control(C, { t: 'select', label: 'carbons by', path: 'colorBy', options: ['residue', 'element', 'chain', 'subunit', 'entity'], geom: true });
   control(C, { t: 'select', label: 'cartoon by', path: 'cartoonColor', options: ['ss', 'carbon'], geom: true });
   control(C, { t: 'select', label: 'surface by', path: 'surfaceColor', options: ['subunit', 'chain', 'entity', 'residue', 'single'], geom: true });
   const pal = el('select', {}, el('option', { value: '' }, 'palette preset…'), ...Object.keys(H.palettes).map(o => el('option', { value: o }, o))) as HTMLSelectElement;
   pal.onchange = () => { if (pal.value) { H.style.palette = { ...H.palettes[pal.value] }; refresh(); H.rebuild() } pal.value = '' }; row(C, 'preset', pal);
-  for (const k of ['paper', 'ink', 'wash']) control(C, { t: 'color', label: k, path: 'palette.' + k });
+  for (const k of ['paper', 'ink', 'hatch', 'wash']) control(C, { t: 'color', label: k, path: 'palette.' + k });
   for (const k of ['C', 'N', 'O', 'S', 'P', 'H', 'X', 'helix', 'sheet', 'loop', 'nucleic', 'surface']) control(C, { t: 'color', label: k, path: 'palette.' + k, geom: true });
 
   /* lines */
@@ -132,6 +136,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   control(V, { t: 'range', label: 'fog start', path: 'view.fogStart', min: 0, max: 1, step: 0.05 });
   control(V, { t: 'range', label: 'light angle', path: 'view.light', min: -180, max: 180, step: 5 });
   control(V, { t: 'range', label: 'boil every', path: 'boilEvery', min: 1, max: 12, step: 1 });
+  const skIn = el('input', { type: 'checkbox', checked: '' }) as HTMLInputElement; skIn.onchange = () => H.onSketch(skIn.checked); row(V, 'sketch at rest', skIn);
   const liveIn = el('input', { type: 'checkbox', checked: '' }) as HTMLInputElement; liveIn.onchange = () => H.onLive(liveIn.checked); row(V, 'breathing', liveIn);
   const tt = el('input', { type: 'range', min: 0, max: 90, step: 1, value: 0 }) as HTMLInputElement; const ttv = el('span', { class: 'val' }, '0');
   tt.oninput = () => { ttv.textContent = tt.value; H.onTurntable(+tt.value) }; row(V, 'turntable °/s', tt, ttv);

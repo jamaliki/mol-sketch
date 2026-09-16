@@ -6,7 +6,7 @@ import { Camera } from './camera';
 import { Structure } from '../model/structure';
 import { selectAtoms } from '../model/selection';
 import { ColorScheme } from '../model/color';
-import { buildSticks, buildSurface, buildCartoon, REP_STICKS, REP_CARTOON, REP_SURFACE } from './geometry';
+import { buildSticks, buildSurface, buildCartoon, REP_STICKS, REP_CARTOON, REP_SURFACE, type CartoonRun } from './geometry';
 import { type Style, hexToRgb } from '../style';
 
 export class Renderer {
@@ -20,6 +20,9 @@ export class Renderer {
   /** centre and radius of what is drawn (union of the selections); the camera orbits this */
   focus: [number, number, number] = [0, 0, 0];
   batches: { spheres: SphereBatch[]; cyls: CylinderBatch[]; meshes: MeshBatch[] } = { spheres: [], cyls: [], meshes: [] };
+  /** what the sketch pass needs besides the pixels: the selections and the cartoon runs */
+  geom: { stickMask: Uint8Array | null; surfaceMask: Uint8Array | null; runs: CartoonRun[]; scheme: ColorScheme | null } = { stickMask: null, surfaceMask: null, runs: [], scheme: null };
+  lastView: Float32Array | null = null; lastProj: Float32Array | null = null;
   frame = 0;
   stats = { atoms: 0, instances: 0, triangles: 0, buildMs: 0, frameMs: 0 };
 
@@ -36,7 +39,7 @@ export class Renderer {
     if (w === this.w && h === this.h) return; this.w = w; this.h = h; const gl = this.gl;
     this.canvas.width = w; this.canvas.height = h;
     this.gbuf?.dispose(); this.edge?.dispose(); this.blurA?.dispose(); this.blurB?.dispose();
-    this.gbuf = new Target(gl, w, h, 3, true); this.edge = new Target(gl, w, h, 1, false, gl.LINEAR);
+    this.gbuf = new Target(gl, w, h, 4, true); this.edge = new Target(gl, w, h, 1, false, gl.LINEAR);
     this.blurA = new Target(gl, w, h, 1, false, gl.LINEAR); this.blurB = new Target(gl, w, h, 1, false, gl.LINEAR);
     this.camera.aspect = w / h;
   }
@@ -55,23 +58,24 @@ export class Renderer {
     const scheme = new ColorScheme(s, style, this.overrides);
     let inst = 0, tris = 0;
     const shown = new Uint8Array(s.count);
+    this.geom = { stickMask: null, surfaceMask: null, runs: [], scheme };
     if (style.reps.sticks.trim()) {
-      const m = selectAtoms(s, style.reps.sticks); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildSticks(s, m, scheme, style);
+      const m = selectAtoms(s, style.reps.sticks); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildSticks(s, m, scheme, style); this.geom.stickMask = m;
       this.batches.spheres.push(new SphereBatch(gl, this.progs.sphere, g.spheres, REP_STICKS)); this.batches.cyls.push(new CylinderBatch(gl, this.progs.cyl, g.cylinders, REP_STICKS));
       inst += g.spheres.length / 9 + g.cylinders.length / 12;
     }
     if (style.reps.cartoon.trim()) {
-      const m = selectAtoms(s, style.reps.cartoon); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildCartoon(s, m, scheme, style);
+      const m = selectAtoms(s, style.reps.cartoon); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildCartoon(s, m, scheme, style); this.geom.runs = g.runs;
       this.batches.meshes.push(new MeshBatch(gl, this.progs.mesh, g.verts, g.idx, REP_CARTOON)); tris += g.idx.length / 3;
     }
     if (style.reps.surface.trim()) {
-      const m = selectAtoms(s, style.reps.surface); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildSurface(s, m, scheme, style);
+      const m = selectAtoms(s, style.reps.surface); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildSurface(s, m, scheme, style); this.geom.surfaceMask = m;
       this.batches.spheres.push(new SphereBatch(gl, this.progs.sphere, g, REP_SURFACE)); inst += g.length / 9;
     }
     // fit the camera to what is drawn
     let n = 0, cx = 0, cy = 0, cz = 0; for (let i = 0; i < s.count; i++) if (shown[i]) { n++; cx += s.x[i]; cy += s.y[i]; cz += s.z[i] }
     if (n) { cx /= n; cy /= n; cz /= n; let r2 = 0; for (let i = 0; i < s.count; i++) if (shown[i]) { const d = (s.x[i] - cx) ** 2 + (s.y[i] - cy) ** 2 + (s.z[i] - cz) ** 2; if (d > r2) r2 = d }
-      this.focus = [cx, cy, cz]; this.camera.radius = Math.sqrt(r2) * 0.72 + 1.5 }
+      this.focus = [cx, cy, cz]; this.camera.radius = Math.sqrt(r2) * 0.78 + (style.reps.surface.trim() ? 4 : 1.5) }
     this.stats.atoms = s.count; this.stats.instances = inst; this.stats.triangles = tris; this.stats.buildMs = performance.now() - t0;
   }
 
@@ -87,16 +91,16 @@ export class Renderer {
 
   render(style: Style) {
     const gl = this.gl; const t0 = performance.now(); const cam = this.camera;
-    const view = this.centred(cam.view()), proj = cam.proj(); const ortho = cam.fov < 1 ? 1 : 0;
+    const view = this.centred(cam.view()), proj = cam.proj(); const ortho = cam.fov < 1 ? 1 : 0; this.lastView = view; this.lastProj = proj;
     // ---- G-buffer ----
     this.gbuf.bind(); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
     gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const P = this.progs;
-    P.sphere.use().m4('u_view', view).m4('u_proj', proj).f('u_ortho', ortho);
+    P.sphere.use().m4('u_view', view).m4('u_proj', proj).f('u_ortho', ortho).f('u_near', cam.near).f('u_far', cam.far);
     for (const b of this.batches.spheres) { P.sphere.f('u_rep', b.rep); b.draw(gl) }
-    P.cyl.use().m4('u_view', view).m4('u_proj', proj).f('u_ortho', ortho);
+    P.cyl.use().m4('u_view', view).m4('u_proj', proj).f('u_ortho', ortho).f('u_near', cam.near).f('u_far', cam.far);
     for (const b of this.batches.cyls) { P.cyl.f('u_rep', b.rep); b.draw(gl) }
-    P.mesh.use().m4('u_view', view).m4('u_proj', proj);
+    P.mesh.use().m4('u_view', view).m4('u_proj', proj).f('u_near', cam.near).f('u_far', cam.far);
     for (const b of this.batches.meshes) { P.mesh.f('u_rep', b.rep); b.draw(gl) }
     gl.disable(gl.DEPTH_TEST);
     // ---- edges ----
@@ -128,6 +132,34 @@ export class Renderer {
     drawQuad(gl);
     this.frame++;
     this.stats.frameMs = performance.now() - t0;
+  }
+
+  /** Read the G-buffer back for the sketch pass: labels (rep<<24 | id), linear depth in Å, normals. Rows are top-down. */
+  readback() {
+    const gl = this.gl; const w = this.w, h = this.h; const n = w * h; const cam = this.camera;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.gbuf.fbo);
+    const idb = new Uint8Array(n * 4), auxb = new Uint8Array(n * 4), nb = new Uint8Array(n * 4);
+    gl.readBuffer(gl.COLOR_ATTACHMENT2); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, idb);
+    gl.readBuffer(gl.COLOR_ATTACHMENT3); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, auxb);
+    gl.readBuffer(gl.COLOR_ATTACHMENT1); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, nb);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    const label = new Uint32Array(n), depth = new Float32Array(n), normal = new Int8Array(n * 3);
+    const near = cam.near, far = cam.far;
+    for (let y = 0; y < h; y++) { const src = (h - 1 - y) * w; for (let x = 0; x < w; x++) { const i = y * w + x, j = (src + x) * 4;
+      const rep = Math.round(idb[j + 3] / 255 * 4); if (rep) { label[i] = (rep << 24) | (idb[j] | (idb[j + 1] << 8) | (idb[j + 2] << 16)) }
+      depth[i] = near + (auxb[j] * 255 + auxb[j + 1]) / 65535 * (far - near);
+      normal[i * 3] = nb[j] - 128; normal[i * 3 + 1] = nb[j + 1] - 128; normal[i * 3 + 2] = nb[j + 2] - 128 } }
+    return { w, h, label, depth, normal };
+  }
+  /** Project a model-space point with the matrices of the last frame: screen px (top-down), linear depth, per-Å pixel scale, fog 0..1. */
+  project(x: number, y: number, z: number) {
+    const V = this.lastView!, P = this.lastProj!;
+    const vx = V[0] * x + V[4] * y + V[8] * z + V[12], vy = V[1] * x + V[5] * y + V[9] * z + V[13], vz = V[2] * x + V[6] * y + V[10] * z + V[14];
+    const cx = P[0] * vx + P[8] * vz, cy = P[5] * vy + P[9] * vz, cw = P[11] * vz + P[15], cz = P[10] * vz + P[14];
+    const w = cw || 1; const sx = (cx / w * 0.5 + 0.5) * this.w, sy = (1 - (cy / w * 0.5 + 0.5)) * this.h;
+    const pxPerA = P[5] / w * this.h / 2;   // pixels per model unit at this depth
+    const cam = this.camera; const dn = (-vz - (cam.distance - cam.radius)) / (2 * cam.radius);
+    return { x: sx, y: sy, z: -vz, d: pxPerA, fog: Math.max(0, Math.min(1, dn)), vz, ndcz: cz / w };
   }
 
   /** PNG of the last frame. */

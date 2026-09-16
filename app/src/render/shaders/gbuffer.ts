@@ -8,11 +8,15 @@ export const GBUF_OUT = `
 layout(location=0) out vec4 o_albedo;
 layout(location=1) out vec4 o_normal;
 layout(location=2) out vec4 o_id;
+layout(location=3) out vec4 o_aux;      // linear depth, 16 bit, normalised over near..far
+uniform float u_near, u_far;
 vec3 encodeId(float id){ float i = floor(id + 0.5); return vec3(mod(i,256.0), mod(floor(i/256.0),256.0), floor(i/65536.0)) / 255.0; }
-void writeG(vec3 albedo, float cls, vec3 n, float id, float rep){
+void writeG(vec3 albedo, float cls, vec3 n, float id, float rep, float viewZ){
   o_albedo = vec4(albedo, cls/16.0);
   o_normal = vec4(n*0.5+0.5, 1.0);
   o_id = vec4(encodeId(id), rep/4.0);
+  float dn = clamp((-viewZ - u_near)/(u_far - u_near), 0.0, 1.0); float hi = floor(dn*255.0); float lo = floor(fract(dn*255.0)*255.0);
+  o_aux = vec4(hi/255.0, lo/255.0, 0.0, 1.0);
 }`;
 
 const DEPTH_FN = `
@@ -48,7 +52,7 @@ void main(){
   float t = -b - sqrt(h);
   vec3 hit = ro + rd*t; vec3 n = (hit - v_c)/v_r;
   gl_FragDepth = fragDepth(hit);
-  writeG(v_color, v_cls, n, v_id, u_rep);
+  writeG(v_color, v_cls, n, v_id, u_rep, hit.z);
 }`;
 
 /* ---------- cylinders (bond halves) ---------- */
@@ -93,7 +97,7 @@ void main(){
   if (s < 0.0 || s > len) discard;
   vec3 n = normalize(hit - (v_a + u*s));
   gl_FragDepth = fragDepth(hit);
-  writeG(v_color, v_cls, n, v_id, u_rep);
+  writeG(v_color, v_cls, n, v_id, u_rep, hit.z);
 }`;
 
 /* ---------- triangle meshes (cartoon) ---------- */
@@ -101,18 +105,19 @@ export const MESH_VS = `#version 300 es
 precision highp float;
 uniform mat4 u_view, u_proj;
 in vec3 a_pos; in vec3 a_nrm; in vec3 a_color; in float a_id; in float a_cls;
-out vec3 v_n; out vec3 v_color; out float v_id; out float v_cls;
+out vec3 v_n; out vec3 v_color; flat out float v_id; out float v_cls; out float v_z;
 void main(){
   v_n = mat3(u_view)*a_nrm; v_color = a_color; v_id = a_id; v_cls = a_cls;
-  gl_Position = u_proj*u_view*vec4(a_pos,1.0);
+  vec4 pv = u_view*vec4(a_pos,1.0); v_z = pv.z;
+  gl_Position = u_proj*pv;
 }`;
 
 export const MESH_FS = `#version 300 es
 precision highp float;
 uniform float u_rep;
-in vec3 v_n; in vec3 v_color; in float v_id; in float v_cls;
+in vec3 v_n; in vec3 v_color; flat in float v_id; in float v_cls; in float v_z;
 ${GBUF_OUT}
 void main(){
   vec3 n = normalize(v_n); if (!gl_FrontFacing) n = -n;
-  writeG(v_color, v_cls, n, v_id, u_rep);
+  writeG(v_color, v_cls, n, v_id, u_rep, v_z);
 }`;
