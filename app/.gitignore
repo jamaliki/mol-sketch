@@ -1,0 +1,7 @@
+node_modules/
+dist/
+out/
+.previews/
+vite.log
+public/examples/6GZQ.cif
+*.mp4

@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Triad Sketch</title>
+<style>
+  :root { --bg:#1d1c1a; --panel:#26241f; --fg:#e8e2d4; --dim:#9a927f; --acc:#d98c2c; --line:#3a362e; }
+  * { box-sizing: border-box }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:13px/1.4 "IBM Plex Sans", system-ui, sans-serif; overflow:hidden }
+  #app { display:grid; grid-template-columns: 1fr 300px; height:100% }
+  #stage { position:relative; overflow:hidden; background:#111 }
+  canvas { display:block; width:100%; height:100%; cursor:grab }
+  canvas:active { cursor:grabbing }
+  #panel { background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; padding:10px 12px 40px }
+  #panel h1 { font-size:15px; margin:4px 0 10px; font-weight:600; letter-spacing:.3px }
+  #panel h1 small { color:var(--dim); font-weight:400; margin-left:6px }
+  details { border-top:1px solid var(--line); padding:6px 0 }
+  summary { cursor:pointer; font-weight:600; color:var(--fg); padding:4px 0; user-select:none }
+  .row { display:grid; grid-template-columns: 96px 1fr 44px; align-items:center; gap:6px; margin:3px 0 }
+  .row label { color:var(--dim); overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .row input[type=range] { width:100%; accent-color:var(--acc) }
+  .row .val { color:var(--dim); text-align:right; font-variant-numeric:tabular-nums; font-size:11px }
+  .row select, .row input[type=text] { width:100%; background:#1a1917; color:var(--fg); border:1px solid var(--line); border-radius:4px; padding:3px 5px; font:inherit; grid-column: 2 / 4 }
+  .row input[type=color] { width:100%; height:22px; border:1px solid var(--line); background:none; padding:0; grid-column:2/4 }
+  .row input[type=checkbox] { justify-self:start; accent-color:var(--acc) }
+  .btns { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 }
+  button { background:#332f28; color:var(--fg); border:1px solid var(--line); border-radius:5px; padding:5px 9px; font:inherit; cursor:pointer }
+  button:hover { border-color:var(--acc) }
+  #status { color:var(--dim); font-size:11px; margin-top:6px; min-height:2.6em; white-space:pre-wrap }
+  #drop { position:absolute; inset:0; display:none; align-items:center; justify-content:center; background:rgba(217,140,44,.15); border:3px dashed var(--acc); color:var(--fg); font-size:20px; pointer-events:none }
+  #stage.drag #drop { display:flex }
+  #hud { position:absolute; left:10px; bottom:8px; color:#cfc7b4; font-size:11px; opacity:.75; pointer-events:none; text-shadow:0 1px 2px #000 }
+  .looks { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin:6px 0 }
+  .looks button { text-align:left; padding:6px 8px } .looks button b { display:block } .looks button span { color:var(--dim); font-size:11px }
+  .looks button.on { border-color:var(--acc); background:#3d3524 }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="stage"><canvas id="c"></canvas><div id="drop">Drop a PDB or mmCIF file</div><div id="hud"></div></div>
+  <div id="panel">
+    <h1>Triad Sketch<small>hand-drawn molecules</small></h1>
+    <div id="controls"></div>
+  </div>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

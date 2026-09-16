@@ -55,6 +55,12 @@ node render.js 6GZQ.cif --set reps.cartoon= --set reps.surface=polymer --set rep
 Or just open `triad-sketch.html` in a browser: it loads with the serine hydrolase demo and every control on
 the right-hand panel.
 
+## Interactive app
+
+[`app/`](app) is the GPU version: the same looks rendered in real time with WebGL2, so you can rotate a
+ribosome by hand. `cd app && npm install && npm run dev`. It has its own [README](app/README.md) and a
+headless CLI; keyframed scenes and SVG output are still only in the canvas engine described below.
+
 ## Looks
 
 `looks/*.json` are complete settings files, the format *Data › Save settings* writes. Pass one with
