@@ -6,7 +6,8 @@ import { LOOKS } from './looks';
 import { buildPanel } from './app/panel';
 import { OrbitControls } from './app/controls';
 import { drawSketch } from './ink/sketch';
-import { renderClassic, renderScene, classic } from './classic/adapter';
+import { renderClassic, renderScene, classic, sceneFromStructure } from './classic/adapter';
+import { pcaBasis } from './render/renderer';
 import { sceneFitPoints, structureFromState, type SceneDoc } from './classic/scene';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
@@ -41,6 +42,25 @@ function loadScene(doc: SceneDoc, name: string) {
   R.camera.base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   R.fitOverride = sceneFitPoints(doc); R.camera.capFrac = style.show.caption ? 0.13 : 0; R.camera.topFrac = style.show.stepLabel ? 0.05 : 0;
   panel.refresh(); setFrame(0); status(`scene: ${doc.keyframes.length} keyframes, ${timeline().total} frames`);
+}
+/** A PDB/mmCIF stack → a scene with one keyframe per file (atoms matched by residue and name across files), oriented by PCA. */
+function loadStack(files: { name: string; text: string }[]) {
+  files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+  const structs = files.map(f => parseStructure(f.text, f.name.replace(/\.(pdb|ent|cif|mmcif)$/i, '')));
+  const base = pcaBasis(structs[0]); const one = structs.length === 1;
+  const keyframes = structs.map(st => { const sc = sceneFromStructure(st, style, {}, base, new Float32Array(0)); const k = sc.keyframes[0]; return { name: st.name, hold: one ? 24 : 0, transition: one ? 0 : 2, atoms: k.atoms, bonds: k.bonds, arrows: [] } });
+  const hasPoly = structs[0].residues.some(r => !r.het);
+  const doc: SceneDoc = { name: files.length > 1 ? 'PDB stack' : structs[0].name, reps: { sticks: hasPoly ? 'hetatm and not water' : 'all', cartoon: hasPoly ? 'polymer' : '', surface: '' }, groupColors: {}, view: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 }, keyframes };
+  (doc as any).fromPdb = true;
+  loadScene(doc, doc.name || 'stack');
+  status(`stack: ${files.length} file(s) → ${keyframes.length} keyframes, ${timeline().total} frames`);
+}
+function sceneJson(): string {
+  const doc: any = sceneDoc ? { ...sceneDoc } : (R.structure ? sceneFromStructure(R.structure, style, R.overrides, R.camera.base, new Float32Array(0)) : null);
+  if (!doc) return '{}';
+  doc.reps = { ...style.reps }; doc.groupColors = { ...R.overrides }; delete doc.fitPoints;
+  doc.view = { yaw: R.camera.yaw, pitch: R.camera.pitch, zoom: R.camera.zoom, panX: R.camera.panX, panY: R.camera.panY, fov: R.camera.fov, fog: style.view.fog, fogStart: style.view.fogStart };
+  return JSON.stringify(doc, null, 1);
 }
 function runSketch(mode: RestMode = restMode) {
   skCanvas.width = R.w; skCanvas.height = R.h;
@@ -81,7 +101,13 @@ async function loadUrl(url: string) { const r = await fetch(url); if (!r.ok) thr
 /* drag & drop */
 stage.addEventListener('dragover', e => { e.preventDefault(); stage.classList.add('drag') });
 stage.addEventListener('dragleave', () => stage.classList.remove('drag'));
-stage.addEventListener('drop', async e => { e.preventDefault(); stage.classList.remove('drag'); const f = e.dataTransfer?.files[0]; if (f) { try { await loadText(await f.text(), f.name) } catch (err: any) { status('could not read ' + f.name + ': ' + err.message) } } });
+stage.addEventListener('drop', async e => { e.preventDefault(); stage.classList.remove('drag'); const fl = Array.from(e.dataTransfer?.files || []); if (fl.length) { try { await loadFiles(fl) } catch (err: any) { status('could not read: ' + err.message) } } });
+/** one file: structure or scene; several: a stack */
+async function loadFiles(fl: File[]) {
+  if (fl.length === 1) { await loadText(await fl[0].text(), fl[0].name); return }
+  const texts = []; for (const f of fl) texts.push({ name: f.name, text: await f.text() });
+  loadStack(texts);
+}
 
 /* panel */
 function applyLook(key: string) {
@@ -99,7 +125,8 @@ const panel = buildPanel(document.getElementById('controls')!, {
   savePng: () => { const a = document.createElement('a'); a.href = snapshot(); a.download = `${R.structure?.name || 'triad-sketch'}.png`; a.click() },
   saveStyle: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(style, null, 1)); a.download = 'triad-sketch-style.json'; a.click() },
   loadStyle: async (f: File) => { style = mergeStyle(DEFAULT_STYLE, JSON.parse(await f.text())); panel.refresh(); rebuild() },
-  loadFile: async (f: File) => { await loadText(await f.text(), f.name) },
+  loadFile: async (f: File) => { await loadText(await f.text(), f.name) }, loadFiles,
+  saveScene: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(sceneJson()); a.download = (sceneDoc?.name || R.structure?.name || 'scene') + '.json'; a.click() },
   loadExample: (name: string) => loadUrl('examples/' + name).catch(e => status(e.message)),
   play: (v: boolean) => { playing = v }, isPlaying: () => playing, seek: (f: number) => { playing = false; setFrame(f) }, step: (d: number) => { playing = false; setFrame(frame + d) },
   reset: () => { style = cloneStyle(DEFAULT_STYLE); panel.refresh(); rebuild() },
@@ -141,7 +168,7 @@ loadUrl('examples/test_protein.pdb').catch(e => status(e.message));
   setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
   setSize: (w: number, h: number) => { R.resize(w, h) }, rebuild,
   sketch: (b?: number, mode?: RestMode) => { R.render(style); if (b !== undefined) boil = b; runSketch(mode || 'sketch'); return sketchStats },
-  renderClassic, classicEngine: () => classic(), seek: setFrame, loadScene, get frame() { return frame }, get scene() { return sceneDoc },
+  renderClassic, classicEngine: () => classic(), seek: setFrame, loadScene, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
   classic: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch('classic'); return sketchStats.drawMs },
   setSketch: (v: boolean) => { sketchOn = v; invalidate() }, setRest: (m: RestMode) => { restMode = m; sketchOn = m !== 'preview'; invalidate() },
 };

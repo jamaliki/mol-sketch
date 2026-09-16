@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /* Headless batch renderer for the Triad Sketch app.
 
-   node cli/render.mjs input.pdb|input.cif|scene.json [options]
+   node cli/render.mjs input.pdb|input.cif|scene.json [more.pdb …] [options]
+                      several structure files (sorted by name) become a stack: one keyframe each
      --look NAME        watercolour | ink-colour | ink | assembly-surface | assembly-cartoon
      --style FILE       a style JSON saved from the app (applied after --look)
      --set path=value   override one style field, repeatable (reps.cartoon=polymer line.width=2 palette.paper=#fff)
@@ -19,13 +20,14 @@ import { chromium } from 'playwright';
 import fs from 'fs'; import path from 'path'; import http from 'http'; import { fileURLToPath } from 'url';
 
 const here = path.dirname(fileURLToPath(import.meta.url)); const dist = path.join(here, '..', 'dist');
-const argv = process.argv.slice(2); const opt = { look: '', style: '', set: [], size: '1920x1440', yaw: 0, pitch: 0, zoom: 1, fov: NaN, turntable: 0, swing: 0, frames: '', out: 'out', software: false, engine: 'classic' }; let input = '';
+const argv = process.argv.slice(2); const inputs = []; const opt = { look: '', style: '', set: [], size: '1920x1440', yaw: 0, pitch: 0, zoom: 1, fov: NaN, turntable: 0, swing: 0, frames: '', out: 'out', software: false, engine: 'classic' };
 for (let i = 0; i < argv.length; i++) { const a = argv[i];
   if (a === '--look') opt.look = argv[++i]; else if (a === '--style') opt.style = argv[++i]; else if (a === '--set') opt.set.push(argv[++i]);
   else if (a === '--size') opt.size = argv[++i]; else if (a === '--yaw') opt.yaw = +argv[++i]; else if (a === '--pitch') opt.pitch = +argv[++i]; else if (a === '--zoom') opt.zoom = +argv[++i]; else if (a === '--fov') opt.fov = +argv[++i];
   else if (a === '--turntable') opt.turntable = +argv[++i]; else if (a === '--swing') opt.swing = +argv[++i]; else if (a === '--frames') opt.frames = argv[++i]; else if (a === '--out') opt.out = argv[++i]; else if (a === '--software') opt.software = true; else if (a === '--engine') opt.engine = argv[++i];
   else if (a === '-h' || a === '--help') { console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0].replace('/*', '')); process.exit(0) }
-  else input = a }
+  else inputs.push(a) }
+const input = inputs[0];
 if (!input) { console.error('usage: node cli/render.mjs input.pdb --look watercolour [--size 1920x1440] [--turntable 72]'); process.exit(1) }
 if (!fs.existsSync(path.join(dist, 'index.html'))) { console.error('dist/ not found: run  npm run build  first'); process.exit(1) }
 
@@ -41,8 +43,8 @@ const page = await browser.newPage({ viewport: { width: Math.min(W, 4096) + 300,
 page.on('pageerror', e => console.error('page error:', e.message));
 await page.goto(`http://127.0.0.1:${port}/`);
 await page.waitForFunction(() => window.TriadSketch, null, { timeout: 60000 });
-const text = fs.readFileSync(input, 'utf8');
-await page.evaluate(async ([t, n]) => { window.TriadSketch.setLive(false); window.TriadSketch.setSketch(false); await window.TriadSketch.loadText(t, n) }, [text, path.basename(input)]);
+if (inputs.length > 1) { const files = inputs.map(f => ({ name: path.basename(f), text: fs.readFileSync(f, 'utf8') })); await page.evaluate(files => { window.TriadSketch.setLive(false); window.TriadSketch.setSketch(false); window.TriadSketch.loadStack(files) }, files) }
+else { const text = fs.readFileSync(input, 'utf8'); await page.evaluate(async ([t, n]) => { window.TriadSketch.setLive(false); window.TriadSketch.setSketch(false); await window.TriadSketch.loadText(t, n) }, [text, path.basename(input)]) }
 if (opt.look) await page.evaluate(k => window.TriadSketch.applyLook(k), opt.look);
 if (opt.style) { const st = JSON.parse(fs.readFileSync(opt.style, 'utf8')); await page.evaluate(s => { window.TriadSketch.style = s }, st) }
 if (opt.set.length) await page.evaluate(sets => { const T = window.TriadSketch; const st = JSON.parse(JSON.stringify(T.style));

@@ -59,6 +59,7 @@ export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style:
 export function renderScene(ctx: CanvasRenderingContext2D, R: Renderer, style: Style, doc: any, frame: number, dpr = 1): number {
   const t0 = performance.now(); const E = classic();
   E.cfg = cfgFromStyle(style, R.camera, true);
+  doc.reps = { ...style.reps }; doc.groupColors = { ...R.overrides };   // the style is the source of truth once loaded
   if (E.scene !== doc) E.scene = doc;
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, R.w, R.h); ctx.restore();
   E.renderFrame(ctx, R.w / dpr, R.h / dpr, frame, dpr);

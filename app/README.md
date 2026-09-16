@@ -116,6 +116,11 @@ line.width=2 --set palette.paper=#ffffff`.
 
 ## Scenes
 
+Several structure files loaded together (the file picker takes many; drop them together; `node cli/render.mjs
+step_*.pdb`) become a stack: one keyframe per file, atoms matched by residue and name, bonds inferred per file,
+2 frames per file by default. *Save scene JSON* writes it out for annotation; [../docs/mechanism-from-pdbs.md](../docs/mechanism-from-pdbs.md)
+is the workflow from a stack to a figure like the mechanism example.
+
 A keyframed scene JSON (the format in `../docs/scene-format.md`; `examples/mechanism.json` is the serine
 hydrolase mechanism) loads like a structure: drop it on the canvas or pick it from the examples. The
 *Animation* section then has play/pause, a frame scrubber and step buttons (space, `,` and `.` on the

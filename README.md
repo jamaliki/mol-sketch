@@ -62,6 +62,10 @@ included verbatim, drawing the exact frame once the view rests. It loads structu
 its own [README](app/README.md) and a headless CLI. `cd app && npm install && npm run dev`. SVG output is
 still only in the page.
 
+To make a figure like the mechanism example from your own coordinates, see
+[docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): load a PDB stack as keyframes, cut the view down,
+save the scene JSON, add arrows, charges and captions, render.
+
 ## Looks
 
 `looks/*.json` are complete settings files, the format *Data › Save settings* writes. Pass one with

@@ -11,7 +11,7 @@ export interface PanelHost {
   camera: Camera;
   onLive: (v: boolean) => void; onTurntable: (v: number) => void; onPitchSwing: (v: number) => void; onRest: (v: string) => void; renderNow: () => void;
   play: (v: boolean) => void; isPlaying: () => boolean; seek: (f: number) => void; step: (d: number) => void;
-  savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadExample: (n: string) => void; reset: () => void;
+  savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadFiles: (f: File[]) => void; saveScene: () => void; loadExample: (n: string) => void; reset: () => void;
   setDpr: (v: number) => void;
   palettes: Record<string, Palette>;
 }
@@ -60,14 +60,14 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
 
   /* data */
   const D = section('Data');
-  const fileIn = el('input', { type: 'file', accept: '.pdb,.ent,.cif,.mmcif,.json', style: 'display:none', onchange: (e: any) => { const f = e.target.files[0]; if (f) H.loadFile(f); e.target.value = '' } }) as HTMLInputElement;
+  const fileIn = el('input', { type: 'file', accept: '.pdb,.ent,.cif,.mmcif,.json', multiple: '', style: 'display:none', onchange: (e: any) => { const fl = Array.from(e.target.files as FileList); if (fl.length) H.loadFiles(fl); e.target.value = '' } }) as HTMLInputElement;
   const styleIn = el('input', { type: 'file', accept: '.json', style: 'display:none', onchange: (e: any) => { const f = e.target.files[0]; if (f) H.loadStyle(f); e.target.value = '' } }) as HTMLInputElement;
   const ex = el('select', {}, ...['mechanism.json', '1A8O.pdb', '1LCD.pdb', 'test_protein.pdb', 'test_protein_rna.cif', '6GZQ.cif'].map(o => el('option', { value: o }, o))) as HTMLSelectElement;
   D.append(el('div', { class: 'btns' },
-    el('button', { onclick: () => fileIn.click() }, 'Open PDB / mmCIF / scene…'), fileIn,
+    el('button', { onclick: () => fileIn.click() }, 'Open PDB / mmCIF / scene… (several = a stack)'), fileIn,
     el('button', { onclick: () => H.loadExample(ex.value) }, 'Load example'), ex));
   D.append(el('div', { class: 'btns' },
-    el('button', { onclick: H.savePng }, 'Save PNG'), el('button', { onclick: H.saveStyle }, 'Save style'), el('button', { onclick: () => styleIn.click() }, 'Load style…'), styleIn,
+    el('button', { onclick: H.savePng }, 'Save PNG'), el('button', { onclick: H.saveScene }, 'Save scene JSON'), el('button', { onclick: H.saveStyle }, 'Save style'), el('button', { onclick: () => styleIn.click() }, 'Load style…'), styleIn,
     el('button', { onclick: H.reset }, 'Reset')));
   const dprSel = el('select', { onchange: (e: any) => H.setDpr(+e.target.value) }, ...['1', '2', '3'].map(o => el('option', { value: o }, o + '×'))) as HTMLSelectElement; dprSel.value = String(Math.min(2, Math.round(window.devicePixelRatio || 1)));
   row(D, 'resolution', dprSel);
