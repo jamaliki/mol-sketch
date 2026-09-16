@@ -542,7 +542,7 @@ function drawArrow(ctx,p0,p1,o){
 /* paper */
 const paperCache={key:'',canvas:null};const baseCache={key:'',canvas:null};
 function paper(W,H,dpr,boil){
-  const life=cfg.style.wash>0?cfg.style.washLife:0;const wb=life>0?Math.floor((boil|0)/2):0; // the wash breathes at half the stroke boil rate
+  const life=cfg.style.wash>0?cfg.style.washLife:0;const wb=life>0?(boil|0):0; // the wash breathes with every drawing
   const key=[W,H,dpr,cfg.palette.paper,cfg.style.grain,cfg.style.wash,cfg.style.washSeed,cfg.palette.wash,life,wb].join('|');
   if(paperCache.key===key)return paperCache.canvas;
   const bkey=[W,H,dpr,cfg.palette.paper,cfg.style.grain].join('|');
@@ -581,8 +581,13 @@ function watercolourWash(xPaper,W,H,boil,life){boil=boil||0;life=life||0;
     const cx=W*(0.12+rng()*0.76),cy=H*(0.12+rng()*0.76),r=Math.min(W,H)*(0.11+rng()*0.16);
     const col=hslToHex(bh+(rng()-0.5)*14,clamp(bs*(0.85+rng()*0.3),0,0.75),clamp(bl+(rng()-0.5)*0.08,0.3,0.85));
     const m=8+Math.floor(rng()*5);const poly=[];for(let i=0;i<m;i++){const a=i/m*Math.PI*2+rng()*0.3;const rad=r*(0.75+rng()*0.5);poly.push([cx+Math.cos(a)*rad*1.2,cy+Math.sin(a)*rad*0.9])}
-    const shape=deform(poly,3,0.34);
-    const aFill=0.04;
+    const shape0=deform(poly,3,0.34);
+    // the pool breathes: each vertex drifts on its own slow noise track through the boil count, so the edge creeps rather than jumps
+    const drift=life>0?r*0.18*life:0;const tracks=shape0.map((_,i)=>{const tr=mulberry32(9000+cfg.style.washSeed*131+k*977+i*13);return[new Noise1(tr,16),new Noise1(tr,16)]});
+    const shape=drift?shape0.map((p,i)=>[p[0]+drift*tracks[i][0].at(boil*0.2+i*0.37),p[1]+drift*tracks[i][1].at(boil*0.2+i*0.53)]):shape0;
+    // and its density breathes too: the pool slowly darkens and pales, as a wash does while it dries
+    const dens=life>0?1+0.5*life*new Noise1(mulberry32(9000+cfg.style.washSeed*131+k*977+5),16).at(boil*0.18+k*0.71):1;
+    const aFill=0.04*dens;
     // the pool itself is fixed; its layers are re-drawn each boil step so the wash breathes without wandering
     const rngPool=rng;rng=mulberry32(9000+cfg.style.washSeed*131+k*977+(life>0?boil*17:0));
     for(let L=0;L<layers;L++){const sc=0.8+rng()*0.24;const lay=deform(shape.map(p=>[cx+(p[0]-cx)*sc,cy+(p[1]-cy)*sc]),2,(0.14+rng()*0.16)*(1+0.5*life));path(lay);x.fillStyle=rgba(col,aFill);x.fill()}

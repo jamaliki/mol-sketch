@@ -23,8 +23,10 @@ The tables list only what each look changes from the defaults in the [settings r
 ![](img/mechanism_watercolour.png)
 
 The default for finished work. Fills are stacked translucent layers with fractal edges, a darker drying ring
-and granulation, multiplied over cream paper that has its own faint wash pools; those pools re-deform every
-other boil so an animation breathes.
+and granulation, multiplied over cream paper that has its own faint wash pools. The pools are alive: with every
+drawing their edges creep a few pixels along slow noise tracks and their density rises and falls, as a wash does
+while it dries, so an animation's background changes subtly from frame to frame instead of sitting still under
+the moving strokes.
 
 ```bash
 node render.js examples/mechanism.json --settings looks/watercolour.json --frames 28
@@ -39,7 +41,7 @@ hold, so they are complete by 28). `--frames drawn` renders the whole animation,
 | `palette` | the *Colored pencil* preset | cream paper `#f3ecd9`, warm ink `#2b2a28`, muted element colours (C `#6b6660`, N `#3f5fa8`, O `#c94b3c`, S `#c9a227`), wash `#d1a35b` |
 | `style.wash` | `0.3` (default) | strength of the paper's wash pools; 0 gives clean paper, 0.5 is noticeably stained |
 | `style.washSeed` | `1` (default) | which pool layout; change it if a pool sits under something important |
-| `style.washLife` | `0.6` (default) | how much the pools move between boils; 0 freezes them |
+| `style.washLife` | `0.6` (default) | how much the pools creep and their density breathes from drawing to drawing; 0 freezes them |
 
 Residue colours in this image come from the scene (`groupColors` in `examples/mechanism.json`: Ser195
 yellow, His57 green, Asp102 teal). With a PDB and no scene overrides, carbons follow `rep.colorBy`.
