@@ -20,7 +20,7 @@ import { chromium } from 'playwright';
 import fs from 'fs'; import path from 'path'; import http from 'http'; import { fileURLToPath } from 'url';
 
 const here = path.dirname(fileURLToPath(import.meta.url)); const dist = path.join(here, '..', 'dist');
-const argv = process.argv.slice(2); const inputs = []; const opt = { look: '', style: '', set: [], size: '1920x1440', yaw: 0, pitch: 0, zoom: 1, fov: NaN, turntable: 0, swing: 0, frames: '', out: 'out', software: false, engine: 'classic' };
+const argv = process.argv.slice(2); const inputs = []; const opt = { look: '', style: '', set: [], size: '1920x1440', yaw: NaN, pitch: NaN, zoom: NaN, fov: NaN, turntable: 0, swing: 0, frames: '', out: 'out', software: false, engine: 'classic' };
 for (let i = 0; i < argv.length; i++) { const a = argv[i];
   if (a === '--look') opt.look = argv[++i]; else if (a === '--style') opt.style = argv[++i]; else if (a === '--set') opt.set.push(argv[++i]);
   else if (a === '--size') opt.size = argv[++i]; else if (a === '--yaw') opt.yaw = +argv[++i]; else if (a === '--pitch') opt.pitch = +argv[++i]; else if (a === '--zoom') opt.zoom = +argv[++i]; else if (a === '--fov') opt.fov = +argv[++i];
@@ -51,7 +51,7 @@ if (opt.set.length) await page.evaluate(sets => { const T = window.TriadSketch; 
   for (const kv of sets) { const i = kv.indexOf('='); const ks = kv.slice(0, i).split('.'); let raw = kv.slice(i + 1); let v = raw; if (raw === 'true') v = true; else if (raw === 'false') v = false; else if (raw !== '' && !isNaN(+raw)) v = +raw;
     let o = st; for (let j = 0; j < ks.length - 1; j++) { o[ks[j]] = o[ks[j]] || {}; o = o[ks[j]] } o[ks[ks.length - 1]] = v }
   T.style = st }, opt.set);
-await page.evaluate(([w, h, yaw, pitch, zoom, fov]) => { const T = window.TriadSketch; T.setSize(w, h); T.camera.yaw = yaw; T.camera.pitch = pitch; T.camera.zoom = zoom; if (!isNaN(fov)) T.camera.fov = fov }, [W, H, opt.yaw, opt.pitch, opt.zoom, opt.fov]);
+await page.evaluate(([w, h, yaw, pitch, zoom, fov]) => { const T = window.TriadSketch; T.setSize(w, h); if (!isNaN(yaw)) T.camera.yaw = yaw; if (!isNaN(pitch)) T.camera.pitch = pitch; if (!isNaN(zoom)) T.camera.zoom = zoom; if (!isNaN(fov)) T.camera.fov = fov }, [W, H, opt.yaw, opt.pitch, opt.zoom, opt.fov]);
 fs.mkdirSync(opt.out, { recursive: true });
 const isScene = await page.evaluate(() => !!window.TriadSketch.scene);
 // which frames
@@ -69,7 +69,7 @@ else if (isScene) {
 const t0 = Date.now(); let k = 0;
 for (const f of frames) {
   const png = await page.evaluate(([f, n, tt, swing, yaw0, pitch0, engine, isScene]) => { const T = window.TriadSketch;
-    if (tt) { T.camera.yaw = yaw0 + 360 * f / n; T.camera.pitch = pitch0 + swing * Math.sin(2 * Math.PI * f / n) }
+    if (tt) { T.camera.yaw = (isNaN(yaw0) ? 0 : yaw0) + 360 * f / n; T.camera.pitch = (isNaN(pitch0) ? 0 : pitch0) + swing * Math.sin(2 * Math.PI * f / n) }
     if (isScene) T.seek(f);
     if (engine === 'preview') { T.render(); return T.png() } if (engine === 'classic') T.classic(f); else T.sketch(f); return T.png() }, [f, opt.turntable, opt.turntable, opt.swing, opt.yaw, opt.pitch, opt.engine, isScene]);
   fs.writeFileSync(path.join(opt.out, `frame_${String(f).padStart(4, '0')}.png`), Buffer.from(png.split(',')[1], 'base64'));
