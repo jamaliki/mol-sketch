@@ -26,7 +26,7 @@ export function buildSticks(s: Structure, mask: Uint8Array, scheme: ColorScheme,
   const sph: number[] = [];
   for (let i = 0; i < s.count; i++) {
     if (!mask[i]) continue; const c = colorOf(i);
-    const rad = degree[i] ? (s.element[i] === 'H' ? r * 0.75 : r) : r * 2.2;
+    const rad = (s.flags[i] & 1) ? r * (1 + style.sphereScale * 4) : degree[i] ? (s.element[i] === 'H' ? r * 0.75 : r) : r * 1.7;
     sph.push(X[i], Y[i], Z[i], rad, c[0], c[1], c[2], i, elementClass(s.element[i]));
   }
   return { spheres: Float32Array.from(sph), cylinders: Float32Array.from(cyl) };

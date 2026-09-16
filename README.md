@@ -57,9 +57,10 @@ the right-hand panel.
 
 ## Interactive app
 
-[`app/`](app) is the GPU version: the same looks rendered in real time with WebGL2, so you can rotate a
-ribosome by hand. `cd app && npm install && npm run dev`. It has its own [README](app/README.md) and a
-headless CLI; keyframed scenes and SVG output are still only in the canvas engine described below.
+[`app/`](app) is the interactive version: a WebGL2 preview while you rotate, and the canvas engine below,
+included verbatim, drawing the exact frame once the view rests. It loads structures and keyframed scenes, has
+its own [README](app/README.md) and a headless CLI. `cd app && npm install && npm run dev`. SVG output is
+still only in the page.
 
 ## Looks
 

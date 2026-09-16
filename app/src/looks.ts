@@ -10,11 +10,11 @@ export const LOOKS: Record<string, Look> = {
   },
   'ink-colour': {
     name: 'Ink colour', note: 'pen and ink with coloured hatching, white paper',
-    style: { fill: 'ink colour', palette: { ...PALETTES['PyMOL flat'] }, paper: { washSeed: 6, wash: 0.2 } as any },
+    style: { fill: 'ink colour', palette: { ...PALETTES['PyMOL flat'] }, paper: { washSeed: 6 } as any },
   },
   ink: {
     name: 'Ink', note: 'black ink only',
-    style: { fill: 'ink', palette: { ...PALETTES['PyMOL flat'] }, paper: { washSeed: 6, wash: 0.2 } as any },
+    style: { fill: 'ink', palette: { ...PALETTES['PyMOL flat'] }, paper: { washSeed: 6 } as any },
   },
   'assembly-surface': {
     name: 'Assembly surface', note: 'watercolour surface by subunit',

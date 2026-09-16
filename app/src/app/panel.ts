@@ -10,6 +10,7 @@ export interface PanelHost {
   rebuild: () => void; redraw: () => void;
   camera: Camera;
   onLive: (v: boolean) => void; onTurntable: (v: number) => void; onPitchSwing: (v: number) => void; onRest: (v: string) => void; renderNow: () => void;
+  play: (v: boolean) => void; isPlaying: () => boolean; seek: (f: number) => void; step: (d: number) => void;
   savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadExample: (n: string) => void; reset: () => void;
   setDpr: (v: number) => void;
   palettes: Record<string, Palette>;
@@ -59,11 +60,11 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
 
   /* data */
   const D = section('Data');
-  const fileIn = el('input', { type: 'file', accept: '.pdb,.ent,.cif,.mmcif', style: 'display:none', onchange: (e: any) => { const f = e.target.files[0]; if (f) H.loadFile(f); e.target.value = '' } }) as HTMLInputElement;
+  const fileIn = el('input', { type: 'file', accept: '.pdb,.ent,.cif,.mmcif,.json', style: 'display:none', onchange: (e: any) => { const f = e.target.files[0]; if (f) H.loadFile(f); e.target.value = '' } }) as HTMLInputElement;
   const styleIn = el('input', { type: 'file', accept: '.json', style: 'display:none', onchange: (e: any) => { const f = e.target.files[0]; if (f) H.loadStyle(f); e.target.value = '' } }) as HTMLInputElement;
-  const ex = el('select', {}, ...['test_protein.pdb', 'test_protein_rna.cif', 'synthetic_assembly_12k.cif', '6GZQ.cif'].map(o => el('option', { value: o }, o))) as HTMLSelectElement;
+  const ex = el('select', {}, ...['mechanism.json', '1A8O.pdb', '1LCD.pdb', 'test_protein.pdb', 'test_protein_rna.cif', '6GZQ.cif'].map(o => el('option', { value: o }, o))) as HTMLSelectElement;
   D.append(el('div', { class: 'btns' },
-    el('button', { onclick: () => fileIn.click() }, 'Open PDB / mmCIF…'), fileIn,
+    el('button', { onclick: () => fileIn.click() }, 'Open PDB / mmCIF / scene…'), fileIn,
     el('button', { onclick: () => H.loadExample(ex.value) }, 'Load example'), ex));
   D.append(el('div', { class: 'btns' },
     el('button', { onclick: H.savePng }, 'Save PNG'), el('button', { onclick: H.saveStyle }, 'Save style'), el('button', { onclick: () => styleIn.click() }, 'Load style…'), styleIn,
@@ -72,12 +73,24 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   row(D, 'resolution', dprSel);
   D.append(el('div', { id: 'status' }));
 
+  /* transport (scenes) */
+  const T = section('Animation'); T.style.display = 'none';
+  const playBtn = el('button', { onclick: () => { H.play(!H.isPlaying()); playBtn.textContent = H.isPlaying() ? 'Pause' : 'Play' } }, 'Play') as HTMLButtonElement;
+  const frameIn = el('input', { type: 'range', min: 0, max: 100, step: 1, value: 0 }) as HTMLInputElement; const frameV = el('span', { class: 'val' }, '0');
+  frameIn.oninput = () => { H.seek(+frameIn.value); playBtn.textContent = 'Play' };
+  const stepName = el('div', { style: 'color:var(--dim);font-size:11px;margin:2px 0 4px' }, '');
+  T.append(el('div', { class: 'btns' }, playBtn, el('button', { onclick: () => H.step(-2) }, '◀ step'), el('button', { onclick: () => H.step(2) }, 'step ▶')));
+  row(T, 'frame', frameIn, frameV); T.append(stepName);
+  const transport = (f: number, total: number, name: string) => { T.style.display = ''; frameIn.max = String(total - 1); frameIn.value = String(f); frameV.textContent = String(f); stepName.textContent = name; playBtn.textContent = H.isPlaying() ? 'Pause' : 'Play' };
+
   /* representations */
   const Rp = section('Representations');
   control(Rp, { t: 'text', label: 'sticks', path: 'reps.sticks', geom: true, placeholder: 'hetatm and not water' });
   control(Rp, { t: 'text', label: 'cartoon', path: 'reps.cartoon', geom: true, placeholder: 'polymer' });
   control(Rp, { t: 'text', label: 'surface', path: 'reps.surface', geom: true, placeholder: 'polymer' });
+  control(Rp, { t: 'select', label: 'sticks as', path: 'mode', options: ['sticks', 'ballstick'] });
   control(Rp, { t: 'range', label: 'stick radius', path: 'stickRadius', min: 0.08, max: 0.5, step: 0.01, geom: true });
+  control(Rp, { t: 'range', label: 'cut spheres', path: 'sphereScale', min: 0, max: 1, step: 0.05, geom: true });
   control(Rp, { t: 'range', label: 'cartoon scale', path: 'cartoonScale', min: 0.4, max: 2.5, step: 0.05, geom: true });
   control(Rp, { t: 'range', label: 'surface probe', path: 'probe', min: 0, max: 3, step: 0.1, geom: true });
 
@@ -95,6 +108,13 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   pal.onchange = () => { if (pal.value) { H.style.palette = { ...H.palettes[pal.value] }; refresh(); H.rebuild() } pal.value = '' }; row(C, 'preset', pal);
   for (const k of ['paper', 'ink', 'hatch', 'wash']) control(C, { t: 'color', label: k, path: 'palette.' + k });
   for (const k of ['C', 'N', 'O', 'S', 'P', 'H', 'X', 'helix', 'sheet', 'loop', 'nucleic', 'surface']) control(C, { t: 'color', label: k, path: 'palette.' + k, geom: true });
+
+  /* annotations */
+  const An = section('Annotations', false);
+  for (const [k, label] of [['H', 'hydrogens'], ['lonePairs', 'lone pairs'], ['charges', 'charges'], ['arrows', 'arrows'], ['labels', 'labels'], ['resLabels', 'residue labels'], ['hbonds', 'H-bonds'], ['valence', 'valence'], ['caption', 'caption'], ['stepLabel', 'step label']]) control(An, { t: 'check', label, path: 'show.' + k });
+  control(An, { t: 'select', label: 'font', path: 'font', options: ['Caveat', 'Patrick Hand', 'Kalam', 'Plain sans'] });
+  control(An, { t: 'range', label: 'label size', path: 'labelSize', min: 10, max: 40, step: 1 });
+  control(An, { t: 'range', label: 'caption size', path: 'captionSize', min: 12, max: 48, step: 1 });
 
   /* lines */
   const Ln = section('Lines');
@@ -148,5 +168,5 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
 
   const refresh = () => refreshers.forEach(f => f());
   refresh();
-  return { refresh };
+  return { refresh, transport };
 }

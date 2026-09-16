@@ -1,14 +1,15 @@
 #!/usr/bin/env node
 /* Headless batch renderer for the Triad Sketch app.
 
-   node cli/render.mjs input.pdb|input.cif [options]
+   node cli/render.mjs input.pdb|input.cif|scene.json [options]
      --look NAME        watercolour | ink-colour | ink | assembly-surface | assembly-cartoon
      --style FILE       a style JSON saved from the app (applied after --look)
      --set path=value   override one style field, repeatable (reps.cartoon=polymer line.width=2 palette.paper=#fff)
      --size WxH         output pixels (default 1920x1440)
      --yaw / --pitch / --zoom / --fov   camera
      --turntable N      N frames of one full yaw turn (adds --swing D degrees of pitch nod)
-     --frames N         N frames with the lines re-boiled each frame (default 1); ignored with --turntable
+     --frames SPEC      structures: N frames with the lines re-boiled each frame (default 1)
+                        scenes: all | drawn (one per new drawing) | keyframes | N | A-B   (default drawn)
      --out DIR          output folder (default ./out), files frame_0000.png …
      --engine E         classic (default: the exact canvas engine) | sketch (fast hybrid) | preview (GPU only)
      --software         force SwiftShader (CPU) GL, for machines without a GPU
@@ -18,11 +19,11 @@ import { chromium } from 'playwright';
 import fs from 'fs'; import path from 'path'; import http from 'http'; import { fileURLToPath } from 'url';
 
 const here = path.dirname(fileURLToPath(import.meta.url)); const dist = path.join(here, '..', 'dist');
-const argv = process.argv.slice(2); const opt = { look: '', style: '', set: [], size: '1920x1440', yaw: 0, pitch: 0, zoom: 1, fov: NaN, turntable: 0, swing: 0, frames: 1, out: 'out', software: false, engine: 'classic' }; let input = '';
+const argv = process.argv.slice(2); const opt = { look: '', style: '', set: [], size: '1920x1440', yaw: 0, pitch: 0, zoom: 1, fov: NaN, turntable: 0, swing: 0, frames: '', out: 'out', software: false, engine: 'classic' }; let input = '';
 for (let i = 0; i < argv.length; i++) { const a = argv[i];
   if (a === '--look') opt.look = argv[++i]; else if (a === '--style') opt.style = argv[++i]; else if (a === '--set') opt.set.push(argv[++i]);
   else if (a === '--size') opt.size = argv[++i]; else if (a === '--yaw') opt.yaw = +argv[++i]; else if (a === '--pitch') opt.pitch = +argv[++i]; else if (a === '--zoom') opt.zoom = +argv[++i]; else if (a === '--fov') opt.fov = +argv[++i];
-  else if (a === '--turntable') opt.turntable = +argv[++i]; else if (a === '--swing') opt.swing = +argv[++i]; else if (a === '--frames') opt.frames = +argv[++i]; else if (a === '--out') opt.out = argv[++i]; else if (a === '--software') opt.software = true; else if (a === '--engine') opt.engine = argv[++i];
+  else if (a === '--turntable') opt.turntable = +argv[++i]; else if (a === '--swing') opt.swing = +argv[++i]; else if (a === '--frames') opt.frames = argv[++i]; else if (a === '--out') opt.out = argv[++i]; else if (a === '--software') opt.software = true; else if (a === '--engine') opt.engine = argv[++i];
   else if (a === '-h' || a === '--help') { console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0].replace('/*', '')); process.exit(0) }
   else input = a }
 if (!input) { console.error('usage: node cli/render.mjs input.pdb --look watercolour [--size 1920x1440] [--turntable 72]'); process.exit(1) }
@@ -50,12 +51,28 @@ if (opt.set.length) await page.evaluate(sets => { const T = window.TriadSketch; 
   T.style = st }, opt.set);
 await page.evaluate(([w, h, yaw, pitch, zoom, fov]) => { const T = window.TriadSketch; T.setSize(w, h); T.camera.yaw = yaw; T.camera.pitch = pitch; T.camera.zoom = zoom; if (!isNaN(fov)) T.camera.fov = fov }, [W, H, opt.yaw, opt.pitch, opt.zoom, opt.fov]);
 fs.mkdirSync(opt.out, { recursive: true });
-const n = opt.turntable || opt.frames; const t0 = Date.now();
-for (let f = 0; f < n; f++) {
-  const png = await page.evaluate(([f, n, tt, swing, yaw0, pitch0, engine]) => { const T = window.TriadSketch; if (tt) { T.camera.yaw = yaw0 + 360 * f / n; T.camera.pitch = pitch0 + swing * Math.sin(2 * Math.PI * f / n) } if (engine === 'preview') { T.render(); return T.png() } if (engine === 'classic') T.classic(f); else T.sketch(f); return T.png() }, [f, n, opt.turntable, opt.swing, opt.yaw, opt.pitch, opt.engine]);
+const isScene = await page.evaluate(() => !!window.TriadSketch.scene);
+// which frames
+let frames = [];
+if (opt.turntable) { for (let f = 0; f < opt.turntable; f++) frames.push(f) }
+else if (isScene) {
+  const tl = await page.evaluate(() => { const T = window.TriadSketch.classicEngine().TL; return { total: T.total, segs: T.segs } });
+  const spec = opt.frames || 'drawn';
+  if (spec === 'all') for (let f = 0; f < tl.total; f++) frames.push(f);
+  else if (spec === 'drawn') for (let f = 0; f < tl.total; f += 2) frames.push(f);
+  else if (spec === 'keyframes') { const seen = new Set(); for (const s of tl.segs) if (s.type === 'hold' && !seen.has(s.kf)) { seen.add(s.kf); frames.push(s.start) } }
+  else if (/^\d+-\d+$/.test(spec)) { const [a, b] = spec.split('-').map(Number); for (let f = a; f <= b; f++) frames.push(f) }
+  else frames = [+spec];
+} else { const n = +(opt.frames || 1); for (let f = 0; f < n; f++) frames.push(f) }
+const t0 = Date.now(); let k = 0;
+for (const f of frames) {
+  const png = await page.evaluate(([f, n, tt, swing, yaw0, pitch0, engine, isScene]) => { const T = window.TriadSketch;
+    if (tt) { T.camera.yaw = yaw0 + 360 * f / n; T.camera.pitch = pitch0 + swing * Math.sin(2 * Math.PI * f / n) }
+    if (isScene) T.seek(f);
+    if (engine === 'preview') { T.render(); return T.png() } if (engine === 'classic') T.classic(f); else T.sketch(f); return T.png() }, [f, opt.turntable, opt.turntable, opt.swing, opt.yaw, opt.pitch, opt.engine, isScene]);
   fs.writeFileSync(path.join(opt.out, `frame_${String(f).padStart(4, '0')}.png`), Buffer.from(png.split(',')[1], 'base64'));
-  process.stdout.write(`\r${f + 1}/${n} frames  ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  process.stdout.write(`\r${++k}/${frames.length} frames  ${((Date.now() - t0) / 1000).toFixed(1)}s`);
 }
 process.stdout.write('\n');
-if (n > 1) console.log(`Assemble:  ffmpeg -framerate 12 -pattern_type glob -i '${opt.out}/frame_*.png' -c:v libx264 -pix_fmt yuv420p -crf 16 out.mp4`);
+if (frames.length > 1) console.log(`Assemble:  ffmpeg -framerate 12 -pattern_type glob -i '${opt.out}/frame_*.png' -c:v libx264 -pix_fmt yuv420p -crf 16 out.mp4`);
 await browser.close(); server.close();

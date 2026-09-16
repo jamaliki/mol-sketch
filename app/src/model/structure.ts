@@ -39,6 +39,8 @@ export class Structure {
   atomName: string[] = [];
   residueOf!: Int32Array;      // atom → residue index
   het!: Uint8Array;
+  /** bit 0: draw a cut-point sphere at this atom (Cα of a residue drawn as sticks, or a scene atom marked `sphere`) */
+  flags!: Uint8Array;
   residues: Residue[] = [];
   chains: Chain[] = [];
   bonds: Int32Array = new Int32Array(0);   // pairs
@@ -54,7 +56,7 @@ export class Structure {
     for (const r of recs) { let g = order.get(key(r)); if (!g) { g = []; order.set(key(r), g) } g.push(r) }
     const n = recs.length; s.count = n;
     s.x = new Float32Array(n); s.y = new Float32Array(n); s.z = new Float32Array(n);
-    s.residueOf = new Int32Array(n); s.het = new Uint8Array(n);
+    s.residueOf = new Int32Array(n); s.het = new Uint8Array(n); s.flags = new Uint8Array(n);
     let ai = 0;
     const subunitOf = (d: string): Subunit => {
       if (/\b(30S|16S|18S|40S|small)\b/i.test(d)) return 'S';
@@ -77,6 +79,7 @@ export class Structure {
         ai++;
       }
       if (res.trace < 0 && !first.het && g.length > 0) res.trace = res.atomStart;
+      if (!first.het && !nucleic && res.trace >= 0 && s.atomName[res.trace] === 'CA') s.flags[res.trace] |= 1;
       s.residues.push(res);
       let ch = chainMap.get(first.chain);
       if (!ch) { ch = { id: first.chain, residues: [], entity: res.entity, subunit: res.subunit }; chainMap.set(first.chain, ch); s.chains.push(ch) }

@@ -15,7 +15,7 @@ npm run build          # static bundle in dist/
 npm run render -- public/examples/1A8O.pdb --look watercolour --size 1920x1440 --out out   # headless PNGs (classic engine)
 ```
 
-Drag a PDB or mmCIF file onto the canvas, or pick an example. Drag to rotate, shift-drag or right-drag to
+Drag a PDB, mmCIF or scene JSON file onto the canvas, or pick an example. Drag to rotate, shift-drag or right-drag to
 pan, wheel to zoom, arrow keys to nudge, `r` to reset. The *Looks* buttons apply the same looks as the
 files in `../looks`; every other control edits one field of the style, which is saved in the browser and
 can be exported/imported as JSON (*Save style* / *Load style*).
@@ -24,11 +24,17 @@ can be exported/imported as JSON (*Save style* / *Load style*).
 
 Three renderers share one G-buffer. The GPU resolves what is visible; the classic engine or the sketch pass draws it.
 
-**Classic (exact).** `src/classic/engine.js` is the canvas renderer of `triad-sketch.html`, verbatim, driven by the
-app's camera through a projector hook. It is the reference look: the same code, the same seeds, so a structure
-drawn here matches the page pixel for pixel at the same size. It is what *at rest: classic*, *Render now* and the
+**Classic (exact).** `src/classic/engine.js` is the canvas renderer of `triad-sketch.html`, verbatim. It is the
+reference look: the same code, the same seeds, the same camera, so a frame drawn here matches the page pixel for
+pixel (`scripts/mech.mjs` renders `examples/mechanism.json` at frame 28 and diffs it against
+`docs/img/mechanism_watercolour.png`: mean difference 0.0). It is what *at rest: classic*, *Render now* and the
 CLI's default engine use. Cost is the old cost (about a second for a protein, ten for the ribosome), which is why
 the app shows the GPU preview while you drag and only settles into the classic drawing once you stop.
+
+The app's camera is the page's camera (`src/render/camera.ts`): the drawn atoms' bounding box in the rotated
+frame, an eye distance set by the field of view, the pixel scale that fits the box into the canvas minus the
+caption margins, pan as fractions of the canvas. The GPU derives its matrices from it, the classic engine runs
+its own copy of the same arithmetic, and both frame a view identically.
 
 **Sketch (fast).** The hybrid described below: the GPU's id and depth images traced into regions, the same stroke
 engine drawing each region clipped to what is visible. Close to the classic look, several times faster on large
@@ -108,7 +114,21 @@ fog, fogStart, light. `boilEvery` frames between re-jitters.
 The CLI's `--set path=value` addresses these by dotted path, e.g. `--set reps.surface=polymer --set
 line.width=2 --set palette.paper=#ffffff`.
 
-## Not yet ported from the canvas engine
+## Scenes
 
-Keyframed scenes (the serine hydrolase mechanism), curly arrows, charges, lone pairs, labels and captions,
-ball-and-stick mode, SVG output.
+A keyframed scene JSON (the format in `../docs/scene-format.md`; `examples/mechanism.json` is the serine
+hydrolase mechanism) loads like a structure: drop it on the canvas or pick it from the examples. The
+*Animation* section then has play/pause, a frame scrubber and step buttons (space, `,` and `.` on the
+keyboard). While you drag, the GPU previews the sampled state of the current frame; at rest, and while playing
+when the frame renders in under 90 ms, the classic engine draws the frame with its arrows, charges, lone pairs,
+labels and captions. The *Annotations* section switches each of those on and off. Scene JSON carries its own
+selections, colour overrides and camera, which replace the current ones on load.
+
+```bash
+npm run render -- public/examples/mechanism.json --look watercolour --frames drawn --out out   # every drawing
+npm run render -- public/examples/mechanism.json --look ink-colour --frames keyframes --out kf  # one per step
+```
+
+## Not in the app
+
+SVG output (the canvas engine at the repository root writes it).

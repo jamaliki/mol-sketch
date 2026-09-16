@@ -11,6 +11,10 @@ export interface Palette {
 
 export interface Style {
   fill: Fill;
+  mode: 'sticks' | 'ballstick';
+  sphereScale: number;       // cut-point spheres in sticks mode
+  show: { H: boolean; lonePairs: boolean; charges: boolean; arrows: boolean; labels: boolean; resLabels: boolean; hbonds: boolean; caption: boolean; stepLabel: boolean; valence: boolean };
+  font: 'Caveat' | 'Patrick Hand' | 'Kalam' | 'Plain sans'; labelSize: number; captionSize: number;
   palette: Palette;
   colorBy: ColorBy;          // carbon / cartoon-by-carbon / surface-by-residue schemes
   cartoonColor: 'ss' | 'carbon';
@@ -40,18 +44,21 @@ export const PALETTES: Record<string, Palette> = {
 
 export const DEFAULT_STYLE: Style = {
   fill: 'watercolour',
+  mode: 'sticks', sphereScale: 0.4,
+  show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, resLabels: false, hbonds: true, caption: true, stepLabel: true, valence: true },
+  font: 'Caveat', labelSize: 19, captionSize: 24,
   palette: { ...PALETTES['Colored pencil'] },
   colorBy: 'residue',
   cartoonColor: 'ss',
   surfaceColor: 'subunit',
   reps: { sticks: 'hetatm and not water', cartoon: 'polymer', surface: '' },
-  stickRadius: 0.22,
+  stickRadius: 0.2,
   cartoonScale: 1,
   probe: 1.4,
   line: { width: 1.5, rough: 1.1, passes: 2, hierarchy: 0.6, pressure: 0.55, alpha: 0.85 },
   shading: 0.65, pencilFill: 0.55, fillWobble: 1, construction: false, sideChainHelper: true,
-  hatch: { spacing: 5, angle: -40, density: 1.2 },
-  paper: { grain: 0.4, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1 },
+  hatch: { spacing: 5, angle: -40, density: 1.4 },
+  paper: { grain: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1 },
   water: { layers: 3, wobble: 1, ring: 0.6, granulation: 0.5, tone: 0.6 },
   view: { fov: 20, fog: 0.5, fogStart: 0.45, light: -125 },
   boilEvery: 3,

@@ -25,7 +25,7 @@ export function drawSketch(ctx: Ctx, R: Renderer, style: Style, boil: number): S
   if (!s) { ctx.restore(); return { readMs: 0, regionMs: 0, drawMs: 0, regions: 0 } }
   // pixels → regions
   const rb = R.readback(); const t1 = performance.now();
-  const depthJump = Math.max(0.35, R.camera.radius * 0.006);
+  const F = R.frameInfo!; const depthJump = Math.max(0.35, Math.max(F.spanX, F.spanY) * 0.004);
   const regions = extractRegions(W, H, rb.label, rb.depth, depthJump, 0.75);
   const t2 = performance.now();
   // projections of the atoms the sticks need

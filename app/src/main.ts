@@ -6,7 +6,8 @@ import { LOOKS } from './looks';
 import { buildPanel } from './app/panel';
 import { OrbitControls } from './app/controls';
 import { drawSketch } from './ink/sketch';
-import { renderClassic, classic } from './classic/adapter';
+import { renderClassic, renderScene, classic } from './classic/adapter';
+import { sceneFitPoints, structureFromState, type SceneDoc } from './classic/scene';
 
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const skCanvas = document.getElementById('sk') as HTMLCanvasElement; const skCtx = skCanvas.getContext('2d', { willReadFrequently: true })!;   // CPU-backed: the classic engine composites huge offscreen canvases, which GPU canvases can drop silently
@@ -24,9 +25,27 @@ let restMode: RestMode = 'classic';   // what is drawn once the view rests: the 
 let sketchOn = true;
 let lastChange = 0; let sketchShown = false; let boil = 0; let sketchStats = { readMs: 0, regionMs: 0, drawMs: 0, regions: 0 };
 function invalidate() { dirty = true; lastChange = performance.now(); if (sketchShown) { sketchShown = false; skCanvas.classList.remove('on') } }
+/* scenes: a keyframed document; the GPU previews the sampled state of the current frame, the classic engine draws the frame */
+let sceneDoc: SceneDoc | null = null; let frame = 0; let playing = false; let sceneFast = false;
+function timeline() { return classic().TL as { total: number; segs: { kf: number; type: string; start: number; len: number }[] } }
+function setFrame(f: number) {
+  if (!sceneDoc) return; const total = timeline().total; frame = ((f % total) + total) % total;
+  const E = classic(); E.cfg = { ...E.cfg, stepEvery: 2 }; const drawn = Math.floor(frame / 2) * 2;
+  const st = E.sampleState(drawn); const struct = structureFromState(st, sceneDoc.name || 'scene');
+  R.structure = struct; R.rebuild(style); invalidate(); panel.transport?.(frame, total, st.stepName);
+}
+function loadScene(doc: SceneDoc, name: string) {
+  sceneDoc = doc; const E = classic(); E.scene = doc; frame = 0; playing = false;
+  if (doc.reps) style.reps = { ...doc.reps }; R.overrides = { ...(doc.groupColors || {}) };
+  if (doc.view) { const v = doc.view; R.camera.yaw = v.yaw ?? 0; R.camera.pitch = v.pitch ?? 0; R.camera.zoom = v.zoom ?? 1; R.camera.panX = v.panX ?? 0; R.camera.panY = v.panY ?? 0; if (v.fov !== undefined) { R.camera.fov = v.fov; style.view.fov = v.fov } if (v.fog !== undefined) style.view.fog = v.fog; if (v.fogStart !== undefined) style.view.fogStart = v.fogStart }
+  R.camera.base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
+  R.fitOverride = sceneFitPoints(doc); R.camera.capFrac = style.show.caption ? 0.13 : 0; R.camera.topFrac = style.show.stepLabel ? 0.05 : 0;
+  panel.refresh(); setFrame(0); status(`scene: ${doc.keyframes.length} keyframes, ${timeline().total} frames`);
+}
 function runSketch(mode: RestMode = restMode) {
   skCanvas.width = R.w; skCanvas.height = R.h;
-  if (mode === 'classic') { const ms = renderClassic(skCtx, R, style, boil, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 } }
+  if (mode === 'classic' && sceneDoc) { const ms = renderScene(skCtx, R, style, sceneDoc, frame, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; sceneFast = ms < 90 }
+  else if (mode === 'classic') { const ms = renderClassic(skCtx, R, style, boil, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 } }
   else sketchStats = drawSketch(skCtx, R, style, boil);
   sketchShown = true; skCanvas.classList.add('on');
 }
@@ -35,8 +54,9 @@ function fit() { const w = Math.max(64, Math.floor(stage.clientWidth * dpr)), h 
 window.addEventListener('resize', fit);
 
 function save() { try { localStorage.setItem('triad-sketch-style', JSON.stringify(style)) } catch { } }
-function rebuild() { R.rebuild(style); invalidate(); save(); status() }
-function redraw() { invalidate(); save() }
+function margins() { R.camera.capFrac = sceneDoc && style.show.caption ? 0.13 : 0; R.camera.topFrac = sceneDoc && style.show.stepLabel ? 0.05 : 0 }
+function rebuild() { margins(); R.rebuild(style); invalidate(); save(); status() }
+function redraw() { margins(); invalidate(); save() }
 
 const controls = new OrbitControls(canvas, R.camera, () => { invalidate() });
 
@@ -48,6 +68,8 @@ function status(msg?: string) {
 
 async function loadText(text: string, name: string) {
   const t0 = performance.now();
+  if (/\.json$/i.test(name) || /^\s*\{/.test(text)) { loadScene(JSON.parse(text), name.replace(/\.json$/i, '')); return }
+  sceneDoc = null; R.fitOverride = null; R.camera.capFrac = 0; R.camera.topFrac = 0; R.overrides = {};
   const s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, ''));
   R.setStructure(s); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0;
   const hasPoly = s.residues.some(r => !r.het);
@@ -79,6 +101,7 @@ const panel = buildPanel(document.getElementById('controls')!, {
   loadStyle: async (f: File) => { style = mergeStyle(DEFAULT_STYLE, JSON.parse(await f.text())); panel.refresh(); rebuild() },
   loadFile: async (f: File) => { await loadText(await f.text(), f.name) },
   loadExample: (name: string) => loadUrl('examples/' + name).catch(e => status(e.message)),
+  play: (v: boolean) => { playing = v }, isPlaying: () => playing, seek: (f: number) => { playing = false; setFrame(f) }, step: (d: number) => { playing = false; setFrame(frame + d) },
   reset: () => { style = cloneStyle(DEFAULT_STYLE); panel.refresh(); rebuild() },
   setDpr: (v: number) => { dpr = v; fit() },
   palettes: PALETTES,
@@ -87,11 +110,15 @@ const panel = buildPanel(document.getElementById('controls')!, {
 /** PNG of what is on screen: the sketch when it is shown, else the GPU frame */
 function snapshot() { if (sketchShown) return skCanvas.toDataURL('image/png'); R.render(style); return R.toDataURL() }
 
+/* keyboard transport: space plays, , and . step a drawn frame */
+window.addEventListener('keydown', e => { if ((e.target as HTMLElement)?.tagName === 'INPUT' || !sceneDoc) return; if (e.key === ' ') { e.preventDefault(); playing = !playing } else if (e.key === ',') setFrame(frame - 2); else if (e.key === '.') setFrame(frame + 2) });
+
 /* render loop: the GPU preview draws whenever something changed; once the view has rested, the sketch pass draws the real thing on the overlay.
    With breathing on, the sketch is redrawn with a new boil seed every so often. */
-let lastT = performance.now(); let lastSketchAt = 0;
+let lastT = performance.now(); let lastSketchAt = 0; let playAcc = 0;
 function loop(t: number) {
   const dt = (t - lastT) / 1000; lastT = t;
+  if (playing && sceneDoc) { playAcc += dt * 24; if (playAcc >= 2) { playAcc -= 2; setFrame(frame + 2); if (restMode === 'classic' && sceneFast) { dirty = false; R.render(style); runSketch('classic') } } }
   if (turntable) { R.camera.yaw = (R.camera.yaw + turntable * dt) % 360; if (pitchSwing) R.camera.pitch = pitchSwing * Math.sin(R.camera.yaw * Math.PI / 180); invalidate() }
   if (!sketchOn && live && t - lastLive > 1000 / 10) { lastLive = t; dirty = true }
   if (dirty) { dirty = false; R.render(style); hud.textContent = `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°` }
@@ -114,7 +141,7 @@ loadUrl('examples/test_protein.pdb').catch(e => status(e.message));
   setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
   setSize: (w: number, h: number) => { R.resize(w, h) }, rebuild,
   sketch: (b?: number, mode?: RestMode) => { R.render(style); if (b !== undefined) boil = b; runSketch(mode || 'sketch'); return sketchStats },
-  renderClassic, classicEngine: () => classic(),
+  renderClassic, classicEngine: () => classic(), seek: setFrame, loadScene, get frame() { return frame }, get scene() { return sceneDoc },
   classic: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch('classic'); return sketchStats.drawMs },
   setSketch: (v: boolean) => { sketchOn = v; invalidate() }, setRest: (m: RestMode) => { restMode = m; sketchOn = m !== 'preview'; invalidate() },
 };

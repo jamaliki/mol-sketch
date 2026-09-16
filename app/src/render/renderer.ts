@@ -2,7 +2,7 @@
 import { Program, Target, QUAD_VS, drawQuad } from './gl';
 import { Programs, SphereBatch, CylinderBatch, MeshBatch } from './batches';
 import { EDGE_FS, BLUR_FS, STYLE_FS } from './shaders/style';
-import { Camera } from './camera';
+import { Camera, type Frame } from './camera';
 import { Structure } from '../model/structure';
 import { selectAtoms } from '../model/selection';
 import { ColorScheme } from '../model/color';
@@ -17,12 +17,16 @@ export class Renderer {
   camera = new Camera();
   structure: Structure | null = null;
   overrides: Record<string, string> = {};
-  /** centre and radius of what is drawn (union of the selections); the camera orbits this */
+  /** centre of the fitted box (what is drawn); the sketch pass measures its pixel scale here */
   focus: [number, number, number] = [0, 0, 0];
+  frameInfo: Frame | null = null;
   batches: { spheres: SphereBatch[]; cyls: CylinderBatch[]; meshes: MeshBatch[] } = { spheres: [], cyls: [], meshes: [] };
   /** what the sketch pass needs besides the pixels: the selections and the cartoon runs */
   geom: { stickMask: Uint8Array | null; surfaceMask: Uint8Array | null; runs: CartoonRun[]; scheme: ColorScheme | null } = { stickMask: null, surfaceMask: null, runs: [], scheme: null };
   lastView: Float32Array | null = null; lastProj: Float32Array | null = null;
+  fitPoints: Float32Array = new Float32Array(0);
+  /** when set (scenes), the camera fits these points instead of the drawn atoms */
+  fitOverride: Float32Array | null = null;
   frame = 0;
   stats = { atoms: 0, instances: 0, triangles: 0, buildMs: 0, frameMs: 0 };
 
@@ -41,12 +45,11 @@ export class Renderer {
     this.gbuf?.dispose(); this.edge?.dispose(); this.blurA?.dispose(); this.blurB?.dispose();
     this.gbuf = new Target(gl, w, h, 4, true); this.edge = new Target(gl, w, h, 1, false, gl.LINEAR);
     this.blurA = new Target(gl, w, h, 1, false, gl.LINEAR); this.blurB = new Target(gl, w, h, 1, false, gl.LINEAR);
-    this.camera.aspect = w / h;
   }
 
   setStructure(s: Structure | null) {
     this.structure = s;
-    if (s) { this.focus = s.center; this.camera.radius = s.radius; this.camera.base = pcaBasis(s) }
+    if (s && !this.fitOverride) { this.focus = s.center; this.camera.base = pcaBasis(s) }
   }
 
   /** Rebuild all GPU geometry for the current style (call when selections, colours or radii change). */
@@ -72,42 +75,34 @@ export class Renderer {
       const m = selectAtoms(s, style.reps.surface); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildSurface(s, m, scheme, style); this.geom.surfaceMask = m;
       this.batches.spheres.push(new SphereBatch(gl, this.progs.sphere, g, REP_SURFACE)); inst += g.length / 9;
     }
-    // fit the camera to what is drawn
-    let n = 0, cx = 0, cy = 0, cz = 0; for (let i = 0; i < s.count; i++) if (shown[i]) { n++; cx += s.x[i]; cy += s.y[i]; cz += s.z[i] }
-    if (n) { cx /= n; cy /= n; cz /= n; let r2 = 0; for (let i = 0; i < s.count; i++) if (shown[i]) { const d = (s.x[i] - cx) ** 2 + (s.y[i] - cy) ** 2 + (s.z[i] - cz) ** 2; if (d > r2) r2 = d }
-      this.focus = [cx, cy, cz]; this.camera.radius = Math.sqrt(r2) * 0.78 + (style.reps.surface.trim() ? 4 : 1.5) }
+    // the camera fits what is drawn (or everything, if nothing is selected)
+    let n = 0; for (let i = 0; i < s.count; i++) n += shown[i];
+    const pts = new Float32Array((n || s.count) * 3); let k = 0;
+    for (let i = 0; i < s.count; i++) if (!n || shown[i]) { pts[k++] = s.x[i]; pts[k++] = s.y[i]; pts[k++] = s.z[i] }
+    this.fitPoints = (this.fitOverride ?? pts) as Float32Array; this.camera.setFitPoints(this.fitPoints);
     this.stats.atoms = s.count; this.stats.instances = inst; this.stats.triangles = tris; this.stats.buildMs = performance.now() - t0;
-  }
-
-  /** Model → view matrices are recentred on the structure. */
-  private centred(view: Float32Array): Float32Array {
-    const s = this.structure; if (!s) return view;
-    const T = new Float32Array(16); T[0] = T[5] = T[10] = T[15] = 1; T[12] = -this.focus[0]; T[13] = -this.focus[1]; T[14] = -this.focus[2];
-    // view * T
-    const o = new Float32Array(16);
-    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) o[c * 4 + r] = view[r] * T[c * 4] + view[4 + r] * T[c * 4 + 1] + view[8 + r] * T[c * 4 + 2] + view[12 + r] * T[c * 4 + 3];
-    return o;
   }
 
   render(style: Style) {
     const gl = this.gl; const t0 = performance.now(); const cam = this.camera;
-    const view = this.centred(cam.view()), proj = cam.proj(); const ortho = cam.fov < 1 ? 1 : 0; this.lastView = view; this.lastProj = proj;
+    const F = cam.compute(this.w, this.h); this.frameInfo = F; this.focus = [F.cx, F.cy, F.cz];
+    const view = F.view, proj = F.proj; const ortho = F.ortho ? 1 : 0; this.lastView = view; this.lastProj = proj;
     // ---- G-buffer ----
     this.gbuf.bind(); gl.enable(gl.DEPTH_TEST); gl.depthFunc(gl.LEQUAL); gl.disable(gl.BLEND); gl.disable(gl.CULL_FACE);
     gl.clearColor(0, 0, 0, 0); gl.clearDepth(1); gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
     const P = this.progs;
-    P.sphere.use().m4('u_view', view).m4('u_proj', proj).f('u_ortho', ortho).f('u_near', cam.near).f('u_far', cam.far);
+    P.sphere.use().m4('u_view', view).m4('u_proj', proj).f('u_ortho', ortho).f('u_near', F.near).f('u_far', F.far);
     for (const b of this.batches.spheres) { P.sphere.f('u_rep', b.rep); b.draw(gl) }
-    P.cyl.use().m4('u_view', view).m4('u_proj', proj).f('u_ortho', ortho).f('u_near', cam.near).f('u_far', cam.far);
+    P.cyl.use().m4('u_view', view).m4('u_proj', proj).f('u_ortho', ortho).f('u_near', F.near).f('u_far', F.far);
     for (const b of this.batches.cyls) { P.cyl.f('u_rep', b.rep); b.draw(gl) }
-    P.mesh.use().m4('u_view', view).m4('u_proj', proj).f('u_near', cam.near).f('u_far', cam.far);
+    P.mesh.use().m4('u_view', view).m4('u_proj', proj).f('u_near', F.near).f('u_far', F.far);
     for (const b of this.batches.meshes) { P.mesh.f('u_rep', b.rep); b.draw(gl) }
     gl.disable(gl.DEPTH_TEST);
     // ---- edges ----
     this.edge.bind();
     this.edgeP.use().tex('u_normal', 0, this.gbuf.color[1]).tex('u_id', 1, this.gbuf.color[2]).tex('u_depth', 2, this.gbuf.depth!)
-      .v2('u_px', 1 / this.w, 1 / this.h).f('u_near', cam.near).f('u_far', cam.far).f('u_ortho', ortho)
-      .f('u_depthEdge', Math.max(0.35, cam.radius * 0.006));
+      .v2('u_px', 1 / this.w, 1 / this.h).f('u_near', F.near).f('u_far', F.far).f('u_ortho', ortho)
+      .f('u_depthEdge', Math.max(0.35, Math.max(F.spanX, F.spanY) * 0.004));
     drawQuad(gl);
     // ---- blur of coverage (drying ring) ----
     const br = Math.max(1, Math.round(1.2 * style.water.ring + 0.5));
@@ -127,8 +122,8 @@ export class Renderer {
       .f('u_hatchSpacing', style.hatch.spacing * this.w / 960).f('u_hatchAngle', style.hatch.angle).f('u_hatchDensity', style.hatch.density)
       .i('u_layers', style.water.layers).f('u_wobble', style.water.wobble * this.w / 960).f('u_ring', style.water.ring).f('u_gran', style.water.granulation).f('u_tone', style.water.tone)
       .f('u_fog', style.view.fog).f('u_fogStart', style.view.fogStart).f('u_light', style.view.light)
-      .f('u_near', cam.near).f('u_far', cam.far).f('u_ortho', ortho)
-      .f('u_sceneNear', cam.distance - cam.radius).f('u_sceneFar', cam.distance + cam.radius);
+      .f('u_near', F.near).f('u_far', F.far).f('u_ortho', ortho)
+      .f('u_sceneNear', F.sceneNear).f('u_sceneFar', F.sceneFar);
     drawQuad(gl);
     this.frame++;
     this.stats.frameMs = performance.now() - t0;
@@ -136,7 +131,7 @@ export class Renderer {
 
   /** Read the G-buffer back for the sketch pass: labels (rep<<24 | id), linear depth in Å, normals. Rows are top-down. */
   readback() {
-    const gl = this.gl; const w = this.w, h = this.h; const n = w * h; const cam = this.camera;
+    const gl = this.gl; const w = this.w, h = this.h; const n = w * h;
     gl.bindFramebuffer(gl.FRAMEBUFFER, this.gbuf.fbo);
     const idb = new Uint8Array(n * 4), auxb = new Uint8Array(n * 4), nb = new Uint8Array(n * 4);
     gl.readBuffer(gl.COLOR_ATTACHMENT2); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, idb);
@@ -144,7 +139,7 @@ export class Renderer {
     gl.readBuffer(gl.COLOR_ATTACHMENT1); gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, nb);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     const label = new Uint32Array(n), depth = new Float32Array(n), normal = new Int8Array(n * 3);
-    const near = cam.near, far = cam.far;
+    const F = this.frameInfo!; const near = F.near, far = F.far;
     for (let y = 0; y < h; y++) { const src = (h - 1 - y) * w; for (let x = 0; x < w; x++) { const i = y * w + x, j = (src + x) * 4;
       const rep = Math.round(idb[j + 3] / 255 * 4); if (rep) { label[i] = (rep << 24) | (idb[j] | (idb[j + 1] << 8) | (idb[j + 2] << 16)) }
       depth[i] = near + (auxb[j] * 255 + auxb[j + 1]) / 65535 * (far - near);
@@ -158,7 +153,7 @@ export class Renderer {
     const cx = P[0] * vx + P[8] * vz, cy = P[5] * vy + P[9] * vz, cw = P[11] * vz + P[15], cz = P[10] * vz + P[14];
     const w = cw || 1; const sx = (cx / w * 0.5 + 0.5) * this.w, sy = (1 - (cy / w * 0.5 + 0.5)) * this.h;
     const pxPerA = P[5] / w * this.h / 2;   // pixels per model unit at this depth
-    const cam = this.camera; const dn = (-vz - (cam.distance - cam.radius)) / (2 * cam.radius);
+    const F = this.frameInfo!; const dn = (-vz - F.sceneNear) / Math.max(1e-6, F.sceneFar - F.sceneNear);
     return { x: sx, y: sy, z: -vz, d: pxPerA, fog: Math.max(0, Math.min(1, dn)), vz, ndcz: cz / w };
   }
 

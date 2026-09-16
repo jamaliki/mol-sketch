@@ -191,24 +191,22 @@ function sampleState(frame){
 let FIT={cx:0,cy:0,cz:0,rx:0,ry:0,spanX:10,spanY:10,zspan:4,key:''};
 function rot3(p,cy,sy,cp,sp){const x=p[0]-FIT.cx,y=p[1]-FIT.cy,z=p[2]-FIT.cz;const x1=x*cy+z*sy,z1=-x*sy+z*cy;return[x1,y*cp-z1*sp,y*sp+z1*cp]}
 let VIEW_YAW=0,VIEW_PITCH=0; // effective angles for the frame being drawn (base + turntable)
-let EXT_PROJ=null;
 function computeFit(){
-  if(EXT_PROJ){const c=EXT_PROJ.centre;FIT.cx=c[0];FIT.cy=c[1];FIT.cz=c[2];FIT.key='ext';return}
   const spinning=cfg.view.spin!==0||cfg.view.pitchSwing!==0;
   const key=scene.keyframes.length+'|'+(spinning?'sphere':VIEW_YAW+'|'+VIEW_PITCH)+'|'+(scene._rev||0);
   if(FIT.key===key)return;
   let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9],c=0;
-  for(const k of scene.keyframes)for(const id in k.atoms){const p=k.atoms[id].pos;for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],p[i]);mx[i]=Math.max(mx[i],p[i])}c++}
+  const fitPts=[];if(scene.fitPoints){const f=scene.fitPoints;for(let i=0;i<f.length;i+=3)fitPts.push([f[i],f[i+1],f[i+2]])}else{for(const k of scene.keyframes)for(const id in k.atoms)fitPts.push(k.atoms[id].pos)}
+  for(const p of fitPts){for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],p[i]);mx[i]=Math.max(mx[i],p[i])}c++}
   if(!c){FIT={cx:0,cy:0,cz:0,rx:0,ry:0,spanX:10,spanY:10,zspan:4,key};return}
   FIT.cx=(mn[0]+mx[0])/2;FIT.cy=(mn[1]+mx[1])/2;FIT.cz=(mn[2]+mx[2])/2;
   const yaw=VIEW_YAW*Math.PI/180,pitch=VIEW_PITCH*Math.PI/180;const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
-  if(spinning){let R=0;for(const k of scene.keyframes)for(const id in k.atoms){const p=k.atoms[id].pos;R=Math.max(R,Math.hypot(p[0]-FIT.cx,p[1]-FIT.cy,p[2]-FIT.cz))}FIT.rx=0;FIT.ry=0;FIT.spanX=2*R;FIT.spanY=2*R;FIT.zspan=2*R;FIT.key=key;return}
+  if(spinning){let R=0;for(const p of fitPts){R=Math.max(R,Math.hypot(p[0]-FIT.cx,p[1]-FIT.cy,p[2]-FIT.cz))}FIT.rx=0;FIT.ry=0;FIT.spanX=2*R;FIT.spanY=2*R;FIT.zspan=2*R;FIT.key=key;return}
   let rmn=[1e9,1e9,1e9],rmx=[-1e9,-1e9,-1e9];
-  for(const k of scene.keyframes)for(const id in k.atoms){const r=rot3(k.atoms[id].pos,cy,sy,cp,sp);for(let i=0;i<3;i++){rmn[i]=Math.min(rmn[i],r[i]);rmx[i]=Math.max(rmx[i],r[i])}}
+  for(const p of fitPts){const r=rot3(p,cy,sy,cp,sp);for(let i=0;i<3;i++){rmn[i]=Math.min(rmn[i],r[i]);rmx[i]=Math.max(rmx[i],r[i])}}
   FIT.rx=(rmn[0]+rmx[0])/2;FIT.ry=(rmn[1]+rmx[1])/2;FIT.spanX=Math.max(rmx[0]-rmn[0],1);FIT.spanY=Math.max(rmx[1]-rmn[1],1);FIT.zspan=Math.max(rmx[2]-rmn[2],1);FIT.key=key;
 }
 function makeProjector(W,H){
-  if(EXT_PROJ)return EXT_PROJ.make(W,H);
   const yaw=VIEW_YAW*Math.PI/180,pitch=VIEW_PITCH*Math.PI/180;
   const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
   const capH=cfg.show.caption?H*0.13:0,topH=cfg.show.stepLabel?H*0.05:0;
@@ -993,7 +991,6 @@ return {
   get cfg(){return cfg}, set cfg(v){cfg=v;migrateCfg()},
   get scene(){return scene}, set scene(v){scene=v;FIT.key='';buildTimeline()},
   get TL(){return TL},
-  setProjector(p){EXT_PROJ=p;FIT.key=''},
   renderFrame, sampleState, locate, buildTimeline, demoScene, compileSel,
   DEFAULT_CFG, PRESETS, GROUP_PALETTE, SUBUNIT_COLS,
   invalidatePaper(){paperCache.key='';baseCache.key='';grainCache.key=''},
