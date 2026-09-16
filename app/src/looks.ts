@@ -16,6 +16,10 @@ export const LOOKS: Record<string, Look> = {
     name: 'Ink', note: 'black ink only',
     style: { fill: 'ink', palette: { ...PALETTES['PyMOL flat'] }, paper: { washSeed: 6 } as any },
   },
+  'dark-paper': {
+    name: 'Dark paper', note: 'pastel chalk on navy: pigment laid down, pale ink, no wash',
+    style: { fill: 'watercolour', palette: { ...PALETTES['Dark paper'] }, shading: 0.45, paper: { grain: 0.3, wash: 0 } as any, view: { fog: 0.2 } as any },
+  },
   'assembly-surface': {
     name: 'Assembly surface', note: 'watercolour surface by subunit',
     style: { fill: 'watercolour', palette: { ...PALETTES['Colored pencil'] }, surfaceColor: 'subunit', reps: { sticks: '', cartoon: '', surface: 'polymer' } },

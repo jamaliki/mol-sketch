@@ -201,7 +201,7 @@ const PRESETS={
   'Ink + one color':{paper:'#f6f2e8',ink:'#1f1d1b',hatch:'#1f1d1b',arrow:'#b8322a',charge:'#1f1d1b',label:'#1f1d1b',context:'#b9b2a4',accent:'#b8322a',C:'#f6f2e8',N:'#f6f2e8',O:'#f6f2e8',H:'#f6f2e8',S:'#f6f2e8',P:'#f6f2e8',X:'#f6f2e8'},
   'Blueprint':{paper:'#1d3f6e',ink:'#e8eef7',hatch:'#e8eef7',arrow:'#ffd166',charge:'#e8eef7',label:'#cfe0f5',context:'#5a7fb3',accent:'#ffd166',C:'#7f9fc9',N:'#9cc7ff',O:'#ff9e8f',H:'#e8eef7',S:'#ffd166',P:'#ffb072',X:'#c9a7ff'},
   'Chalkboard':{paper:'#2c3a32',ink:'#f1ede4',hatch:'#f1ede4',arrow:'#ffb86b',charge:'#f1ede4',label:'#d8e3d5',context:'#4f6356',accent:'#ffb86b',C:'#c8c4b8',N:'#8fb8ff',O:'#ff8c7a',H:'#f1ede4',S:'#f2d36b',P:'#ffb072',X:'#c9a7ff'},
-  'Sepia wash':{paper:'#efe3c8',ink:'#4a3728',hatch:'#5a4632',arrow:'#8a2f22',charge:'#4a3728',label:'#5a4632',context:'#d3c19c',accent:'#a5581f',C:'#8c7a62',N:'#5f6f8c',O:'#a5482e',H:'#f5ecd8',S:'#b8922e',P:'#b06a2a',X:'#8a7d9a',helix:'#a5482e',sheet:'#c9a13a',loop:'#7a8a5a',surface:'#d8cdb0'}
+  'Sepia wash':{paper:'#efe3c8',ink:'#4a3728',hatch:'#5a4632',arrow:'#8a2f22',charge:'#4a3728',label:'#5a4632',context:'#d3c19c',accent:'#a5581f',C:'#8c7a62',N:'#5f6f8c',O:'#a5482e',H:'#f5ecd8',S:'#b8922e',P:'#b06a2a',X:'#8a7d9a',helix:'#a5482e',sheet:'#c9a13a',loop:'#7a8a5a',surface:'#d8cdb0'},'Dark paper':{paper:'#0f172a',ink:'#f2efe8',hatch:'#05070d',wash:'#f97316',arrow:'#fb923c',charge:'#f2efe8',label:'#f2efe8',context:'#1e293b',accent:'#f97316',C:'#e7e5e4',N:'#a5b4fc',O:'#fb923c',H:'#f2efe8',S:'#fde047',P:'#fdba74',X:'#c4b5fd',helix:'#fb923c',sheet:'#fde047',loop:'#86efac',nucleic:'#fdba74',surface:'#475569'}
 };
 for(const k in PRESETS)for(const c in SS_COLS)if(!PRESETS[k][c])PRESETS[k][c]=SS_COLS[c];
 const DEFAULT_CFG={
@@ -592,9 +592,9 @@ function watercolourWash(xPaper,W,H,boil,life){boil=boil||0;life=life||0;
     const rngPool=rng;rng=mulberry32(9000+cfg.style.washSeed*131+k*977+(life>0?boil*17:0));
     for(let L=0;L<layers;L++){const sc=0.8+rng()*0.24;const lay=deform(shape.map(p=>[cx+(p[0]-cx)*sc,cy+(p[1]-cy)*sc]),2,(0.14+rng()*0.16)*(1+0.5*life));path(lay);x.fillStyle=rgba(col,aFill);x.fill()}
     // the drying ring: a few crisp, darker outlines close to the true edge
-    for(let e=0;e<3;e++){const sc=0.97+rng()*0.05;const lay=deform(shape.map(p=>[cx+(p[0]-cx)*sc,cy+(p[1]-cy)*sc]),1,0.05);path(lay);x.lineWidth=0.7+rng()*0.5;x.strokeStyle=rgba(mix(col,cfg.palette.ink,0.25),0.14);x.stroke()}
+    for(let e=0;e<3;e++){const sc=0.97+rng()*0.05;const lay=deform(shape.map(p=>[cx+(p[0]-cx)*sc,cy+(p[1]-cy)*sc]),1,0.05);path(lay);x.lineWidth=0.7+rng()*0.5;x.strokeStyle=rgba(mix(col,shadeInk(),0.25),0.14);x.stroke()}
     // granulation
-    x.save();path(shape);x.clip();rng=rngPool;const g=Math.round(r*r*0.012);for(let i=0;i<g;i++){const a=rng()*Math.PI*2,t=Math.pow(rng(),0.6);x.fillStyle=rgba(mix(col,cfg.palette.ink,0.4),0.1+rng()*0.18);const sz=rng()<0.85?1:1.6;x.fillRect(cx+Math.cos(a)*t*r*1.2,cy+Math.sin(a)*t*r*0.9,sz,sz)}x.restore();
+    x.save();path(shape);x.clip();rng=rngPool;const g=Math.round(r*r*0.012);for(let i=0;i<g;i++){const a=rng()*Math.PI*2,t=Math.pow(rng(),0.6);x.fillStyle=rgba(mix(col,shadeInk(),0.4),0.1+rng()*0.18);const sz=rng()<0.85?1:1.6;x.fillRect(cx+Math.cos(a)*t*r*1.2,cy+Math.sin(a)*t*r*0.9,sz,sz)}x.restore();
   }
   x.restore();
   xPaper.save();xPaper.globalCompositeOperation=light?'multiply':'screen';xPaper.globalAlpha=clamp(0.55*amt,0,1);try{xPaper.filter='blur(1.2px)'}catch(e){}xPaper.drawImage(off,0,0,W,H);xPaper.restore();
@@ -683,9 +683,9 @@ function fogged(col,fog){return mix(col,cfg.palette.paper,clamp(fog*cfg.view.fog
 /* Pen rendering of a sphere: hatch that thins toward the light and cross-hatches in the shadow, highlight left bare. */
 function penSphere(ctx,x,y,r,col,el,seed,o){
   const S=cfg.style,P=cfg.palette;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=o.d||1;const dens=S.hatchDensity;
-  const colour=cfg.rep.fill==='ink colour'||isPencil()||isWC();const ink=fogged(colour?mix(col,P.hatch,isPencil()?0.45:isWC()?0.6:0.15):P.hatch,fog);
+  const colour=cfg.rep.fill==='ink colour'||isPencil()||isWC();const dk=isWC()&&luminance(P.paper)<=0.5;const ink=fogged(colour?mix(col,P.hatch,isPencil()?0.45:isWC()?(dk?0.35:0.6):0.15):P.hatch,fog); // on dark paper the pigment shades gently, or it goes to mud
   const la=S.lightAngle*Math.PI/180;const light=[Math.cos(la),Math.sin(la)];const ang=S.hatchAngle*Math.PI/180;
-  const hs=S.hatchSpacing*Math.max(0.7,d)/dens;const a=(0.55+0.45*fk)*(colour?0.9:0.75)*(isWC()?0.45:1);
+  const hs=S.hatchSpacing*Math.max(0.7,d)/dens;const a=(0.55+0.45*fk)*(colour?0.9:0.75)*(isWC()?(dk?0.3:0.45):1);
   if(el==='N'&&r<14){ // stipple with a density gradient
     const rng=mulberry32(seed+5);const n=Math.round(r*r*3.2/(hs*hs)*dens*2);ctx.save();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.clip();ctx.fillStyle=rgba(ink,a);
     for(let i=0;i<n;i++){const t=Math.sqrt(rng()),th=rng()*Math.PI*2;const px=Math.cos(th)*t*r,py=Math.sin(th)*t*r;const lit=(px*light[0]+py*light[1])/r;if(rng()<(lit+1)/2*0.9)continue;ctx.beginPath();ctx.arc(x+px,y+py,0.8*d,0,Math.PI*2);ctx.fill()}
@@ -697,10 +697,10 @@ function penSphere(ctx,x,y,r,col,el,seed,o){
 /* Pen rendering of a stick: strokes along the axis, denser toward the shadow edge, a bare highlight strip, cross strokes in the shadow. Caller has clipped to the capsule. */
 function penStick(ctx,ax,ay,mx,my,R,col,el,seed,o){
   const S=cfg.style,P=cfg.palette;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=o.d||1;const dens=S.hatchDensity;
-  const colour=cfg.rep.fill==='ink colour'||isPencil()||isWC();const ink=fogged(colour?mix(col,P.hatch,isPencil()?0.45:isWC()?0.6:0.15):P.hatch,fog);
+  const colour=cfg.rep.fill==='ink colour'||isPencil()||isWC();const dk=isWC()&&luminance(P.paper)<=0.5;const ink=fogged(colour?mix(col,P.hatch,isPencil()?0.45:isWC()?(dk?0.35:0.6):0.15):P.hatch,fog);
   const ux=mx-ax,uy=my-ay,L=Math.hypot(ux,uy)||1,tx=ux/L,ty=uy/L,nx=-ty,ny=tx;
   const la=S.lightAngle*Math.PI/180;const litSign=(nx*Math.cos(la)+ny*Math.sin(la))>0?1:-1; // +n side faces the light?
-  const rng=mulberry32(seed+21);const hs=S.hatchSpacing*Math.max(0.7,d)/dens;const a=(0.55+0.45*fk)*(colour?1.0:0.8)*(isWC()?0.45:1);
+  const rng=mulberry32(seed+21);const hs=S.hatchSpacing*Math.max(0.7,d)/dens;const a=(0.55+0.45*fk)*(colour?1.0:0.8)*(isWC()?(dk?0.3:0.45):1);
   if(el==='H'){ // hydrogens: two faint strokes only
     for(const t of[-0.45,0.2]){sketchLine(ctx,[[ax+nx*t*R-tx*R*0.6,ay+ny*t*R-ty*R*0.6],[mx+nx*t*R,my+ny*t*R]],{seed:seed+Math.round(t*10),passes:1,width:0.7*d,color:fogged(P.hatch,fog),alpha:0.35*(0.5+0.5*fk),ampScale:0.5,step:5,overshoot:false})}return}
   if(el==='N'){ // stipple gradient
@@ -733,13 +733,16 @@ function watercolourShape(ctx,pts,col,seed,o){
   let cx=0,cy=0;for(const p of pts){cx+=p[0];cy+=p[1]}cx/=pts.length;cy/=pts.length;
   const path=q=>{ctx.beginPath();q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath()};
   const shape=wcDeform(pts,1,0.06,rng);
-  ctx.save();ctx.globalCompositeOperation=o.offscreen?'source-over':(light?'multiply':'screen');
+  ctx.save();
+  // on dark paper, screened layers alone never reach the pigment: lay the colour down first, then let the layers glow over it
+  if(!light&&!o.offscreen){path(shape);ctx.fillStyle=rgba(col,0.7*(o.strength||0.75)/0.75);ctx.fill()}
+  ctx.globalCompositeOperation=o.offscreen?'source-over':(light?'multiply':'screen');
   const aFill=(o.strength||0.75)/layers*1.15;
   for(let L=0;L<layers;L++){const sc=o.noScale?1:0.9+rng()*0.16;const lay=wcDeform(sc===1?shape:shape.map(p=>[cx+(p[0]-cx)*sc,cy+(p[1]-cy)*sc]),2,(0.08+rng()*0.1)*(o.noScale?1.6:1),rng);path(lay);ctx.fillStyle=rgba(col,aFill);ctx.fill()}
-  if(!o.noRing)for(let e=0;e<2;e++){const lay=wcDeform(shape,1,0.03,rng);path(lay);ctx.lineWidth=0.7+rng()*0.5;ctx.strokeStyle=rgba(mix(col,cfg.palette.ink,0.25),0.16*(o.strength||0.75)/0.75);ctx.stroke()}
+  if(!o.noRing)for(let e=0;e<2;e++){const lay=wcDeform(shape,1,0.03,rng);path(lay);ctx.lineWidth=0.7+rng()*0.5;ctx.strokeStyle=rgba(mix(col,shadeInk(),0.25),0.16*(o.strength||0.75)/0.75);ctx.stroke()}
   if(o.granulate!==false){ctx.save();path(shape);ctx.clip();let area=0;for(let i=0;i<shape.length;i++){const a=shape[i],b=shape[(i+1)%shape.length];area+=a[0]*b[1]-b[0]*a[1]}area=Math.abs(area)/2;
     const g=Math.round(area*0.004);let xs=1e9,ys=1e9,xe=-1e9,ye=-1e9;for(const p of shape){xs=Math.min(xs,p[0]);ys=Math.min(ys,p[1]);xe=Math.max(xe,p[0]);ye=Math.max(ye,p[1])}
-    for(let i=0;i<g;i++){ctx.fillStyle=rgba(mix(col,cfg.palette.ink,0.4),0.12+rng()*0.2);ctx.fillRect(xs+rng()*(xe-xs),ys+rng()*(ye-ys),1,1)}ctx.restore()}
+    for(let i=0;i<g;i++){ctx.fillStyle=rgba(mix(col,shadeInk(),0.4),0.12+rng()*0.2);ctx.fillRect(xs+rng()*(xe-xs),ys+rng()*(ye-ys),1,1)}ctx.restore()}
   ctx.restore();
 }
 /* line hierarchy: silhouettes heavier, interior marks lighter */
@@ -753,6 +756,8 @@ function scribbleFill(ctx,x0,y0,x1,y1,col,seed,o){
     for(let dd=-R;dd<R;dd+=sp*(0.8+0.4*rng())){const e0=-R*(0.9+0.2*rng()),e1=R*(0.9+0.2*rng());pts.push([cx+nx*dd+dx*e0*flip,cy+ny*dd+dy*e0*flip]);pts.push([cx+nx*dd+dx*e1*flip,cy+ny*dd+dy*e1*flip]);flip=-flip}
     if(pts.length>3)sketchLine(ctx,pts,{seed:seed+Math.round(ang*100),passes:1,width:(1.1+0.6*rng())*d,color:c,alpha:al*(0.6+0.4*fk),ampScale:0.9,step:6,overshoot:false,pressure:0.8})}
 }
+/* what pigment darkens toward: the ink on light paper, near-black on dark paper (where the ink is pale) */
+function shadeInk(){const P=cfg.palette;return luminance(P.paper)>0.5?P.ink:mix(P.paper,'#000000',0.75)}
 function fillFor(col){const m=cfg.rep.fill;if(isInk())return cfg.palette.paper;if(m==='wash')return mix(col,cfg.palette.paper,0.62);return col}
 /* In ink mode, elements are told apart by pen texture: N stipple, O hatch, S cross-hatch, others light hatch. Caller has set the clip. */
 function elementPattern(ctx,el,x0,y0,x1,y1,seed,o){
@@ -769,7 +774,7 @@ function elementPattern(ctx,el,x0,y0,x1,y1,seed,o){
   angs.forEach((ang,ai)=>{const dx=Math.cos(ang),dy=Math.sin(ang),nx=-dy,ny=dx;const sp=hs*(el==='O'?0.8:el==='C'?1.5:1.1);
     for(let dd=-R;dd<R;dd+=sp+(rng()-0.5)*sp*0.3){sketchLine(ctx,[[cx+nx*dd-dx*R,cy+ny*dd-dy*R],[cx+nx*dd+dx*R,cy+ny*dd+dy*R]],{seed:seed+Math.round(dd*7)+ai*1000,passes:1,width:(colour?1.0:0.8)*d,color:ink,alpha:(colour?0.85:0.7)*(0.5+0.5*fk),ampScale:0.5,step:5,overshoot:false})}});
 }
-function shade(col,k){return k>=0?mix(col,'#ffffff',k):mix(col,cfg.palette.ink,-k)}
+function shade(col,k){return k>=0?mix(col,'#ffffff',k):mix(col,shadeInk(),-k)}
 
 /* flat ball: solid fill, pencil shadow on the far side, sketched outline */
 function drawFlatBall(ctx,x,y,r,col,o){
@@ -830,7 +835,7 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
     const seed=seedBase+strHash(bkey(b.a,b.b));
     if(b.order===0){if(!SH.hbonds)continue;const z=(pa.z+pb.z)/2;const fog=(pa.fog+pb.fog)/2;
       items.push({z,draw:(ctx)=>{const ra=atomDrawR(A,proj)*pa.d,rb=atomDrawR(B,proj)*pb.d;const dx=pb.x-pa.x,dy=pb.y-pa.y,L=Math.hypot(dx,dy)||1;
-        drawHBond(ctx,pa.x+dx/L*(ra+2),pa.y+dy/L*(ra+2),pb.x-dx/L*(rb+2),pb.y-dy/L*(rb+2),{seed,color:fogged(P.hatch,fog),alpha:0.8*b.alpha*(1-fog*cfg.view.fog*0.5),r:R0*0.5*((pa.d+pb.d)/2),gap:R0*1.5})}});continue}
+        drawHBond(ctx,pa.x+dx/L*(ra+2),pa.y+dy/L*(ra+2),pb.x-dx/L*(rb+2),pb.y-dy/L*(rb+2),{seed,color:fogged(luminance(P.paper)>0.5?P.hatch:P.ink,fog),alpha:0.8*b.alpha*(1-fog*cfg.view.fog*0.5),r:R0*0.5*((pa.d+pb.d)/2),gap:R0*1.5})}});continue}
     const mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2;
     const dx=pb.x-pa.x,dy=pb.y-pa.y,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;
     // valence: the main stick stays full width; extra order is a shorter, thinner inner stick on the crowded side (ring interior / substituent side)
@@ -914,13 +919,13 @@ function buildSurface(items,st,pos,atoms,proj,seedBase,lowDetail){
         watercolourShape(x,p.h,p.col,seedBase+strHash('su'+p.k),{fog:0,layers:many?3:5,strength:tone,offscreen:true,granulate:false,noRing:many&&depth<0.15});x.restore()}
       // silhouette: union of discs minus the same union eroded → a band along the outer edge
       const mask=document.createElement('canvas');mask.width=off.width;mask.height=off.height;const mx=mask.getContext('2d');mx.scale(dpr,dpr);
-      mx.fillStyle=mix(mode==='single'?col:P.surface,P.ink,0.35);for(const d of discs){mx.beginPath();mx.arc(d.x,d.y,d.r,0,Math.PI*2);mx.fill()}
+      mx.fillStyle=mix(mode==='single'?col:P.surface,shadeInk(),0.35);for(const d of discs){mx.beginPath();mx.arc(d.x,d.y,d.r,0,Math.PI*2);mx.fill()}
       mx.globalCompositeOperation='destination-out';for(const d of discs){mx.beginPath();mx.arc(d.x,d.y,Math.max(0,d.r-2.2),0,Math.PI*2);mx.fill()}
       x.save();x.globalAlpha=0.55;x.drawImage(mask,0,0,W,H);x.restore();
       // granulation over the whole surface
       const rng=mulberry32(seedBase+7);x.save();x.beginPath();for(const d of discs){x.moveTo(d.x+d.r,d.y);x.arc(d.x,d.y,d.r,0,Math.PI*2)}x.clip();
       let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const d of discs){x0=Math.min(x0,d.x-d.r);y0=Math.min(y0,d.y-d.r);x1=Math.max(x1,d.x+d.r);y1=Math.max(y1,d.y+d.r)}
-      const g=Math.round((x1-x0)*(y1-y0)*0.0025);for(let i=0;i<g;i++){x.fillStyle=rgba(mix(mode==='single'?col:P.surface,P.ink,0.4),0.1+rng()*0.2);x.fillRect(x0+rng()*(x1-x0),y0+rng()*(y1-y0),1,1)}x.restore();
+      const g=Math.round((x1-x0)*(y1-y0)*0.0025);for(let i=0;i<g;i++){x.fillStyle=rgba(mix(mode==='single'?col:P.surface,shadeInk(),0.4),0.1+rng()*0.2);x.fillRect(x0+rng()*(x1-x0),y0+rng()*(y1-y0),1,1)}x.restore();
       // paper under the surface, then the wash multiplied once, then a sketched silhouette line
       ctx.save();ctx.globalAlpha=cfg.rep.surfaceOpacity;ctx.beginPath();for(const d of discs){ctx.moveTo(d.x+d.r,d.y);ctx.arc(d.x,d.y,d.r,0,Math.PI*2)}ctx.fillStyle=paperFill();ctx.fill();
       ctx.globalCompositeOperation=luminance(P.paper)>0.5?'multiply':'screen';ctx.drawImage(off,0,0,W,H);ctx.restore();

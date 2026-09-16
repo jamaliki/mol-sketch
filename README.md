@@ -66,6 +66,11 @@ To make a figure like the mechanism example from your own coordinates, see
 [docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): load a PDB stack as keyframes, cut the view down,
 save the scene JSON, add arrows, charges and captions, render.
 
+## The website hero
+
+[`hero/`](hero) renders the mechanism as the front-page loop of the lab website: no text, the hero's framing, the site's
+colours on dark or cream paper, and a mock-up of the page with both. `cd hero && ./render.sh dark`.
+
 ## Looks
 
 `looks/*.json` are complete settings files, the format *Data › Save settings* writes. Pass one with
@@ -78,6 +83,7 @@ this README. [docs/looks.md](docs/looks.md) documents each one, setting by setti
 | `looks/ink-colour.json` | pen and ink with coloured hatching, white paper |
 | `looks/ink.json` | the same in black ink only |
 | `looks/pencil.json` | coloured-pencil scribble fills with construction lines |
+| `looks/dark-paper.json` | watercolour on the website's navy: pale ink, pigment laid down, no wash |
 | `looks/assembly-surface.json` | watercolour surface coloured by subunit, for large complexes |
 | `looks/assembly-cartoon.json` | tube/ribbon cartoon coloured by subunit, thin pen, heavy fog |
 

@@ -127,6 +127,29 @@ node render.js examples/mechanism.json --settings looks/pencil.json --frames 28
 `style.pencilFill` (0.55) is the scribble density and `style.fillWobble` (1) how far the fill strays
 from the line.
 
+
+## 4b. Dark paper — `looks/dark-paper.json`
+
+![](img/dark_paper.png)
+
+Watercolour on the navy of the lab website (`#0f172a`): pale ink, pigment laid down under the translucent layers
+(screened layers alone never reach the colour on a dark ground), shading toward near-black instead of toward the
+ink, no wash, lighter grain and fog. The engine switches to this behaviour whenever the paper is dark, so any dark
+`palette.paper` works; this file is the tuned one. [../hero/README.md](../hero/README.md) uses it for the website hero.
+
+```bash
+node render.js examples/mechanism.json --settings looks/dark-paper.json --frames 28
+```
+
+| setting | value | why |
+|---|---|---|
+| `palette.paper / ink / hatch` | `#0f172a / #f2efe8 / #05070d` | navy ground, cream line, near-black shading |
+| `palette.C / N / O / H` | `#e7e5e4 / #a5b4fc / #fb923c / #f2efe8` | carbons pale, oxygen in the site's orange |
+| `style.shading` | `0.45` | shadows lighter than on cream, or the sticks go muddy |
+| `style.wash` | `0` | wash pools read as dirt on a dark ground |
+| `style.grain` | `0.3` | the grain screens light speckles onto dark paper; keep it faint |
+| `view.fog` | `0.2` | fog mixes toward navy, which dulls quickly |
+
 ## 5. Assembly surface by subunit — `looks/assembly-surface.json`
 
 ![](img/ribosome_surface_by_subunit.png)

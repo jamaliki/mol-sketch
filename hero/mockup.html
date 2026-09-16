@@ -1,0 +1,100 @@
+<title>Jamali Lab Hero</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Figtree:wght@400;600&display=swap">
+<style>
+:root{--ink:#0f172a;--paper:#f2efe8;--orange:#f97316;--orange-dark:#c2410c;--muted:#57534e;color-scheme:light}
+html,body{margin:0;background:#0f172a;color:var(--paper);font-family:Figtree,system-ui,sans-serif;line-height:1.5;-webkit-font-smoothing:antialiased}
+*{box-sizing:border-box}
+a{color:inherit;text-decoration:none}
+h1{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;letter-spacing:-.04em}
+/* the site's own nav and hero rules, copied from index-CGNRI9Vq.css */
+.site-nav{position:fixed;inset:0 0 auto;z-index:50;border-bottom:1px solid rgba(255,255,255,.16);background:rgba(15,23,42,.94);color:#f2efe8;backdrop-filter:blur(16px);padding-top:env(safe-area-inset-top,0px)}
+.site-nav__inner{width:min(100% - 2.5rem,1180px);margin-inline:auto;display:flex;align-items:center;justify-content:space-between;min-height:78px}
+.site-brand{display:inline-flex;align-items:center;gap:.75rem;font-family:"Bricolage Grotesque",system-ui,sans-serif;font-size:1.05rem;font-weight:600;letter-spacing:-.02em}
+.site-brand__icon{width:2rem;height:2rem;color:var(--orange)}
+.site-nav__links{display:flex;align-items:center;gap:1.65rem}
+.site-nav__link{color:rgba(242,239,232,.78);font-size:.82rem;font-weight:600}
+.home-hero{position:relative;display:flex;min-height:100svh;align-items:flex-end;overflow:hidden;background:#0f172a;color:#fff}
+.hero-art{position:absolute;inset:0;isolation:isolate;overflow:hidden}
+.hero-art video{display:block;width:100%;height:100%;object-fit:cover;object-position:70% 40%}
+.hero-art::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(12,13,16,.3),rgba(12,13,16,.05) 38%,rgba(12,13,16,.7) 75%,#0c0d10);mix-blend-mode:multiply}
+.hero-copy{position:relative;z-index:10;margin-inline:auto;width:100%;max-width:1180px;padding:10rem 1.25rem 3.5rem}
+@media (min-width:640px){.hero-copy{padding-inline:2rem}}
+@media (min-width:1024px){.hero-copy{padding-bottom:5rem}}
+.hero-copy>div{max-width:56rem}
+.display-title{font-size:clamp(3.4rem,8vw,6.5rem);font-weight:600;line-height:.88;text-shadow:0 3px 24px rgba(0,0,0,.28);text-wrap:balance}
+.display-title span{color:#fb923c}
+.hero-copy p{margin:1.75rem 0 0;max-width:42rem;font-size:1.125rem;line-height:1.625;color:rgba(245,245,244,.9)}
+@media (min-width:640px){.hero-copy p{font-size:1.25rem}}
+.btns{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:2.25rem}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:.55rem;min-height:3rem;padding:.8rem 1.35rem;border:1px solid transparent;border-radius:999px;font-size:.88rem;font-weight:600;line-height:1}
+.btn svg{width:1rem;height:1rem}
+.btn--primary{background:var(--orange);color:#1a1408;box-shadow:0 10px 24px rgba(194,65,12,.16)}
+.btn--secondary{border-color:rgba(255,255,255,.42);color:#f2efe8}
+/* the cream alternative: the same hero on the site's paper */
+.home-hero.cream{background:var(--paper);color:var(--ink)}
+.home-hero.cream .hero-art::after{background:linear-gradient(rgba(242,239,232,.35),rgba(242,239,232,0) 38%,rgba(242,239,232,.75) 72%,#f2efe8);mix-blend-mode:normal}
+.home-hero.cream .display-title{text-shadow:none}
+.home-hero.cream .display-title span{color:var(--orange)}
+.home-hero.cream .hero-copy p{color:var(--muted)}
+.home-hero.cream .btn--secondary{border-color:rgba(15,23,42,.42);color:var(--ink)}
+/* the switch, ours */
+.switch{position:fixed;right:max(1rem,env(safe-area-inset-right,0px));bottom:calc(1rem + env(safe-area-inset-bottom,0px));z-index:60;display:flex;flex-direction:column;gap:.5rem;align-items:flex-end}
+.switch .seg{display:inline-flex;padding:.25rem;border-radius:999px;background:rgba(15,23,42,.9);border:1px solid rgba(242,239,232,.25);backdrop-filter:blur(10px)}
+.switch button{border:0;background:transparent;color:rgba(242,239,232,.7);font:600 .8rem/1 Figtree,system-ui,sans-serif;padding:.55rem .9rem;border-radius:999px;cursor:pointer}
+.switch button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
+.switch button[aria-pressed="true"]{background:var(--orange);color:#1a1408}
+.switch small{color:rgba(242,239,232,.7);font-size:.72rem;background:rgba(15,23,42,.8);padding:.3rem .6rem;border-radius:.5rem}
+.home-hero.cream ~ .switch small{color:var(--muted);background:rgba(242,239,232,.85)}
+/* what follows the hero on the site: a strip of its paper, so the join reads */
+.after{background:var(--paper);color:var(--ink);padding:4.5rem 1.25rem;text-align:center;font-size:.9rem;color:var(--muted)}
+@media (prefers-reduced-motion:reduce){.hero-art video{animation:none}}
+</style>
+
+<nav class="site-nav"><div class="site-nav__inner">
+  <a class="site-brand" href="#"><svg class="site-brand__icon" viewBox="0 0 100 100" fill="none" stroke="currentColor" stroke-width="6" stroke-linecap="round"><path d="M30 92c-8-6-8-18 0-26 6-6 4-14 8-22 6-14 14-26 24-34 4-3 10-2 12 3 3 8-2 18-8 26-6 9-8 20-6 30 1 8-4 16-12 20-6 3-13 4-18 3z"/></svg><span>Jamali Lab</span></a>
+  <div class="site-nav__links"><a class="site-nav__link" href="#">Research</a><a class="site-nav__link" href="#">Publications</a><a class="site-nav__link" href="#">People</a><a class="site-nav__link" href="#">Openings</a><a class="site-nav__link" href="#">Contact</a></div>
+</div></nav>
+
+<section id="hero" class="home-hero">
+  <div class="hero-art">
+    <video id="vid" autoplay muted loop playsinline preload="auto" poster="hero_dark_poster.jpg">
+      <source id="src-mp4" src="hero_dark.mp4" type="video/mp4">
+    </video>
+  </div>
+  <div class="hero-copy"><div>
+    <h1 class="display-title">Designing the<br><span>molecules of life</span></h1>
+    <p>We combine large-scale compute, biological intuition, and wet-lab validation to engineer new proteins for health and sustainability.</p>
+    <div class="btns">
+      <a class="btn btn--primary" href="#">Our research <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></a>
+      <a class="btn btn--secondary" href="#">Join the lab <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg></a>
+    </div>
+  </div></div>
+</section>
+
+<div class="switch" role="group" aria-label="Paper">
+  <small>Hero preview &middot; 26 s loop &middot; the current video's brightness/contrast/saturate filters are off</small>
+  <div class="seg">
+    <button type="button" id="b-dark" aria-pressed="true" data-paper="dark">Dark paper</button>
+    <button type="button" id="b-cream" aria-pressed="false" data-paper="cream">Cream paper</button>
+  </div>
+</div>
+
+<section class="after">The rest of the page continues below on the site's cream paper, unchanged.</section>
+
+<script>
+(function(){
+  const hero=document.getElementById('hero'),vid=document.getElementById('vid'),src=document.getElementById('src-mp4');
+  const btns=[...document.querySelectorAll('.switch button')];
+  function set(paper){
+    hero.classList.toggle('cream',paper==='cream');
+    btns.forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.paper===paper)));
+    const t=vid.currentTime;
+    src.src='hero_'+paper+'.mp4';vid.poster='hero_'+paper+'_poster.jpg';vid.load();
+    vid.addEventListener('loadedmetadata',()=>{try{vid.currentTime=t}catch(e){}vid.play().catch(()=>{})},{once:true});
+    try{localStorage.setItem('hero-paper',paper)}catch(e){}
+  }
+  btns.forEach(b=>b.addEventListener('click',()=>set(b.dataset.paper)));
+  let saved=null;try{saved=localStorage.getItem('hero-paper')}catch(e){}
+  if(saved==='cream')set('cream');
+})();
+</script>

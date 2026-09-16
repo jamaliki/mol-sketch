@@ -1,0 +1,3592 @@
+{
+ "name": "Serine hydrolase mechanism (schematic geometry)",
+ "reps": {
+  "sticks": "all",
+  "cartoon": "",
+  "surface": ""
+ },
+ "groupColors": {
+  "SER195": "#f97316",
+  "HIS57": "#fbbf24",
+  "ASP102": "#7dd3fc",
+  "GLY193": "#a8a29e",
+  "SUB1": "#d6d3d1",
+  "HOH300": "#d6d3d1"
+ },
+ "view": {
+  "yaw": 0,
+  "pitch": 0,
+  "zoom": 0.55,
+  "panX": 0.253,
+  "panY": -0.15,
+  "fov": 25,
+  "fog": 0.2,
+  "fogStart": 0.4
+ },
+ "keyframes": [
+  {
+   "name": "Michaelis complex",
+   "caption": "Substrate bound. Ser195 O\u2013H is aimed at the carbonyl carbon; His57 stands ready to take the proton.",
+   "hold": 30,
+   "transition": 60,
+   "atoms": {
+    "CA1": {
+     "el": "C",
+     "pos": [
+      2.2,
+      -0.2,
+      0.5
+     ],
+     "label": "R",
+     "labelDir": [
+      -1,
+      -0.2
+     ],
+     "enterFrom": [
+      5.2,
+      3.4,
+      0.5
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "CA1",
+     "group": "SUB1",
+     "sphere": true
+    },
+    "C1": {
+     "el": "C",
+     "pos": [
+      3.4,
+      0.6,
+      0.4
+     ],
+     "enterFrom": [
+      6.4,
+      4.2,
+      0.4
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "C1",
+     "group": "SUB1"
+    },
+    "O1": {
+     "el": "O",
+     "pos": [
+      2.9,
+      1.7,
+      0.5
+     ],
+     "enterFrom": [
+      5.9,
+      5.3,
+      0.5
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "O1",
+     "group": "SUB1"
+    },
+    "N2": {
+     "el": "N",
+     "pos": [
+      4.7,
+      0.25,
+      0.3
+     ],
+     "lp": [
+      [
+       0.2,
+       -1,
+       0
+      ]
+     ],
+     "enterFrom": [
+      7.7,
+      3.85,
+      0.3
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "N2",
+     "group": "SUB1"
+    },
+    "HN2": {
+     "el": "H",
+     "pos": [
+      5,
+      -0.7,
+      0.2
+     ],
+     "enterFrom": [
+      8,
+      2.9000000000000004,
+      0.2
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "HN2",
+     "group": "SUB1"
+    },
+    "CA2": {
+     "el": "C",
+     "pos": [
+      5.7,
+      1.2,
+      0.2
+     ],
+     "label": "R\u2032",
+     "labelDir": [
+      1,
+      0.2
+     ],
+     "enterFrom": [
+      8.7,
+      4.8,
+      0.2
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "CA2",
+     "group": "SUB1",
+     "sphere": true
+    },
+    "OG": {
+     "el": "O",
+     "pos": [
+      2.6,
+      -2.5,
+      0.2
+     ],
+     "lp": [
+      [
+       -0.3,
+       1,
+       0
+      ]
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "OG",
+     "group": "SER195"
+    },
+    "HG": {
+     "el": "H",
+     "pos": [
+      1.6,
+      -2.3,
+      0.25
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "HG",
+     "group": "SER195"
+    },
+    "CB": {
+     "el": "C",
+     "pos": [
+      3.3,
+      -3.7,
+      0
+     ],
+     "label": "Ser195",
+     "labelDir": [
+      0.4,
+      1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "CB",
+     "group": "SER195",
+     "sphere": true
+    },
+    "ND1": {
+     "el": "N",
+     "pos": [
+      -2.58,
+      -1.89,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "ND1",
+     "group": "HIS57"
+    },
+    "CE1": {
+     "el": "C",
+     "pos": [
+      -1.46,
+      -2.65,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CE1",
+     "group": "HIS57"
+    },
+    "NE2": {
+     "el": "N",
+     "pos": [
+      -0.39,
+      -1.82,
+      0.3
+     ],
+     "lp": [
+      [
+       1,
+       -0.3,
+       0
+      ]
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "NE2",
+     "group": "HIS57"
+    },
+    "CD2": {
+     "el": "C",
+     "pos": [
+      -0.86,
+      -0.55,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CD2",
+     "group": "HIS57"
+    },
+    "CG": {
+     "el": "C",
+     "pos": [
+      -2.21,
+      -0.59,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CG",
+     "group": "HIS57"
+    },
+    "HD1": {
+     "el": "H",
+     "pos": [
+      -3.47,
+      -2.21,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "HD1",
+     "group": "HIS57"
+    },
+    "CBH": {
+     "el": "C",
+     "pos": [
+      -2.9,
+      0.7,
+      0.2
+     ],
+     "label": "His57",
+     "labelDir": [
+      -1,
+      0.4
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CBH",
+     "group": "HIS57",
+     "sphere": true
+    },
+    "OD1": {
+     "el": "O",
+     "pos": [
+      -5.15,
+      -2.8,
+      0.2
+     ],
+     "lp": [
+      [
+       0.9,
+       0.4,
+       0
+      ]
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD1",
+     "group": "ASP102"
+    },
+    "CGD": {
+     "el": "C",
+     "pos": [
+      -6,
+      -3.6,
+      0
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CGD",
+     "group": "ASP102"
+    },
+    "OD2": {
+     "el": "O",
+     "pos": [
+      -6.9,
+      -2.9,
+      -0.2
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD2",
+     "group": "ASP102"
+    },
+    "CBD": {
+     "el": "C",
+     "pos": [
+      -6.4,
+      -5,
+      -0.1
+     ],
+     "label": "Asp102",
+     "labelDir": [
+      -0.3,
+      1
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CBD",
+     "group": "ASP102",
+     "sphere": true
+    },
+    "N193": {
+     "el": "N",
+     "pos": [
+      1.6,
+      4.1,
+      0.6
+     ],
+     "label": "Gly193",
+     "labelDir": [
+      -1,
+      0.1
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "N193",
+     "group": "GLY193"
+    },
+    "H193": {
+     "el": "H",
+     "pos": [
+      2.1,
+      3.25,
+      0.55
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "H193",
+     "group": "GLY193"
+    },
+    "N195": {
+     "el": "N",
+     "pos": [
+      4.1,
+      4.1,
+      0.7
+     ],
+     "label": "Ser195 N\u2013H",
+     "labelDir": [
+      1,
+      0.1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "N195",
+     "group": "SER195"
+    },
+    "H195": {
+     "el": "H",
+     "pos": [
+      3.7,
+      3.25,
+      0.6
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "H195",
+     "group": "SER195"
+    }
+   },
+   "bonds": [
+    [
+     "CA1",
+     "C1",
+     1
+    ],
+    [
+     "C1",
+     "O1",
+     2
+    ],
+    [
+     "C1",
+     "N2",
+     1
+    ],
+    [
+     "N2",
+     "HN2",
+     1
+    ],
+    [
+     "N2",
+     "CA2",
+     1
+    ],
+    [
+     "OG",
+     "HG",
+     1
+    ],
+    [
+     "OG",
+     "CB",
+     1
+    ],
+    [
+     "HG",
+     "NE2",
+     0
+    ],
+    [
+     "H193",
+     "O1",
+     0
+    ],
+    [
+     "H195",
+     "O1",
+     0
+    ],
+    [
+     "NE2",
+     "CE1",
+     1
+    ],
+    [
+     "CE1",
+     "ND1",
+     2
+    ],
+    [
+     "ND1",
+     "CG",
+     1
+    ],
+    [
+     "CG",
+     "CD2",
+     2
+    ],
+    [
+     "CD2",
+     "NE2",
+     1
+    ],
+    [
+     "CG",
+     "CBH",
+     1
+    ],
+    [
+     "ND1",
+     "HD1",
+     1
+    ],
+    [
+     "HD1",
+     "OD1",
+     0
+    ],
+    [
+     "OD1",
+     "CGD",
+     1
+    ],
+    [
+     "CGD",
+     "OD2",
+     2
+    ],
+    [
+     "CGD",
+     "CBD",
+     1
+    ],
+    [
+     "N193",
+     "H193",
+     1
+    ],
+    [
+     "N195",
+     "H195",
+     1
+    ]
+   ],
+   "arrows": [
+    {
+     "from": {
+      "lp": "NE2",
+      "i": 0
+     },
+     "to": {
+      "bond": [
+       "OG",
+       "HG"
+      ]
+     },
+     "bulge": 0.35,
+     "side": 1
+    },
+    {
+     "from": {
+      "bond": [
+       "OG",
+       "HG"
+      ]
+     },
+     "to": {
+      "atom": "C1"
+     },
+     "bulge": 0.35,
+     "side": -1
+    },
+    {
+     "from": {
+      "bond": [
+       "C1",
+       "O1"
+      ]
+     },
+     "to": {
+      "atom": "O1"
+     },
+     "bulge": 0.5,
+     "side": -1
+    }
+   ]
+  },
+  {
+   "name": "Tetrahedral intermediate 1",
+   "caption": "Oxyanion forms and is held by the backbone N\u2013H of Gly193 and Ser195. His57 is now protonated.",
+   "hold": 30,
+   "transition": 60,
+   "atoms": {
+    "CA1": {
+     "el": "C",
+     "pos": [
+      2.1,
+      -0.3,
+      0.5
+     ],
+     "label": "R",
+     "labelDir": [
+      -1,
+      -0.2
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "CA1",
+     "group": "SUB1",
+     "sphere": true
+    },
+    "C1": {
+     "el": "C",
+     "pos": [
+      3.4,
+      0.6,
+      0.4
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "C1",
+     "group": "SUB1"
+    },
+    "O1": {
+     "el": "O",
+     "pos": [
+      2.8,
+      1.8,
+      0.5
+     ],
+     "charge": -1,
+     "lp": [
+      [
+       -0.6,
+       0.8,
+       0
+      ]
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "O1",
+     "group": "SUB1"
+    },
+    "N2": {
+     "el": "N",
+     "pos": [
+      4.8,
+      0.15,
+      0.3
+     ],
+     "lp": [
+      [
+       0.2,
+       -1,
+       0
+      ]
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "N2",
+     "group": "SUB1"
+    },
+    "HN2": {
+     "el": "H",
+     "pos": [
+      5.1,
+      -0.8,
+      0.2
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "HN2",
+     "group": "SUB1"
+    },
+    "CA2": {
+     "el": "C",
+     "pos": [
+      5.8,
+      1.1,
+      0.2
+     ],
+     "label": "R\u2032",
+     "labelDir": [
+      1,
+      0.2
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "CA2",
+     "group": "SUB1",
+     "sphere": true
+    },
+    "OG": {
+     "el": "O",
+     "pos": [
+      3.1,
+      -0.85,
+      0.3
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "OG",
+     "group": "SER195"
+    },
+    "CB": {
+     "el": "C",
+     "pos": [
+      3.5,
+      -2.2,
+      0.1
+     ],
+     "label": "Ser195",
+     "labelDir": [
+      0.4,
+      1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "CB",
+     "group": "SER195",
+     "sphere": true
+    },
+    "HG": {
+     "el": "H",
+     "pos": [
+      0.55,
+      -2,
+      0.3
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "HG",
+     "group": "SER195"
+    },
+    "ND1": {
+     "el": "N",
+     "pos": [
+      -2.58,
+      -1.89,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "ND1",
+     "group": "HIS57"
+    },
+    "CE1": {
+     "el": "C",
+     "pos": [
+      -1.46,
+      -2.65,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CE1",
+     "group": "HIS57"
+    },
+    "NE2": {
+     "el": "N",
+     "pos": [
+      -0.39,
+      -1.82,
+      0.3
+     ],
+     "charge": 1,
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "NE2",
+     "group": "HIS57"
+    },
+    "CD2": {
+     "el": "C",
+     "pos": [
+      -0.86,
+      -0.55,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CD2",
+     "group": "HIS57"
+    },
+    "CG": {
+     "el": "C",
+     "pos": [
+      -2.21,
+      -0.59,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CG",
+     "group": "HIS57"
+    },
+    "HD1": {
+     "el": "H",
+     "pos": [
+      -3.47,
+      -2.21,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "HD1",
+     "group": "HIS57"
+    },
+    "CBH": {
+     "el": "C",
+     "pos": [
+      -2.9,
+      0.7,
+      0.2
+     ],
+     "label": "His57",
+     "labelDir": [
+      -1,
+      0.4
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CBH",
+     "group": "HIS57",
+     "sphere": true
+    },
+    "OD1": {
+     "el": "O",
+     "pos": [
+      -5.15,
+      -2.8,
+      0.2
+     ],
+     "lp": [
+      [
+       0.9,
+       0.4,
+       0
+      ]
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD1",
+     "group": "ASP102"
+    },
+    "CGD": {
+     "el": "C",
+     "pos": [
+      -6,
+      -3.6,
+      0
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CGD",
+     "group": "ASP102"
+    },
+    "OD2": {
+     "el": "O",
+     "pos": [
+      -6.9,
+      -2.9,
+      -0.2
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD2",
+     "group": "ASP102"
+    },
+    "CBD": {
+     "el": "C",
+     "pos": [
+      -6.4,
+      -5,
+      -0.1
+     ],
+     "label": "Asp102",
+     "labelDir": [
+      -0.3,
+      1
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CBD",
+     "group": "ASP102",
+     "sphere": true
+    },
+    "N193": {
+     "el": "N",
+     "pos": [
+      1.6,
+      4.1,
+      0.6
+     ],
+     "label": "Gly193",
+     "labelDir": [
+      -1,
+      0.1
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "N193",
+     "group": "GLY193"
+    },
+    "H193": {
+     "el": "H",
+     "pos": [
+      2.1,
+      3.25,
+      0.55
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "H193",
+     "group": "GLY193"
+    },
+    "N195": {
+     "el": "N",
+     "pos": [
+      4.1,
+      4.1,
+      0.7
+     ],
+     "label": "Ser195 N\u2013H",
+     "labelDir": [
+      1,
+      0.1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "N195",
+     "group": "SER195"
+    },
+    "H195": {
+     "el": "H",
+     "pos": [
+      3.7,
+      3.25,
+      0.6
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "H195",
+     "group": "SER195"
+    }
+   },
+   "bonds": [
+    [
+     "CA1",
+     "C1",
+     1
+    ],
+    [
+     "C1",
+     "O1",
+     1
+    ],
+    [
+     "C1",
+     "N2",
+     1
+    ],
+    [
+     "C1",
+     "OG",
+     1
+    ],
+    [
+     "N2",
+     "HN2",
+     1
+    ],
+    [
+     "N2",
+     "CA2",
+     1
+    ],
+    [
+     "HG",
+     "NE2",
+     1
+    ],
+    [
+     "OG",
+     "CB",
+     1
+    ],
+    [
+     "H193",
+     "O1",
+     0
+    ],
+    [
+     "H195",
+     "O1",
+     0
+    ],
+    [
+     "NE2",
+     "CE1",
+     1
+    ],
+    [
+     "CE1",
+     "ND1",
+     2
+    ],
+    [
+     "ND1",
+     "CG",
+     1
+    ],
+    [
+     "CG",
+     "CD2",
+     2
+    ],
+    [
+     "CD2",
+     "NE2",
+     1
+    ],
+    [
+     "CG",
+     "CBH",
+     1
+    ],
+    [
+     "ND1",
+     "HD1",
+     1
+    ],
+    [
+     "HD1",
+     "OD1",
+     0
+    ],
+    [
+     "OD1",
+     "CGD",
+     1
+    ],
+    [
+     "CGD",
+     "OD2",
+     2
+    ],
+    [
+     "CGD",
+     "CBD",
+     1
+    ],
+    [
+     "N193",
+     "H193",
+     1
+    ],
+    [
+     "N195",
+     "H195",
+     1
+    ]
+   ],
+   "arrows": [
+    {
+     "from": {
+      "lp": "O1",
+      "i": 0
+     },
+     "to": {
+      "bond": [
+       "C1",
+       "O1"
+      ]
+     },
+     "bulge": 0.4,
+     "side": -1
+    },
+    {
+     "from": {
+      "bond": [
+       "C1",
+       "N2"
+      ]
+     },
+     "to": {
+      "atom": "N2"
+     },
+     "bulge": 0.45,
+     "side": -1
+    },
+    {
+     "from": {
+      "lp": "N2",
+      "i": 0
+     },
+     "to": {
+      "atom": "HG"
+     },
+     "bulge": 0.3,
+     "side": -1
+    },
+    {
+     "from": {
+      "bond": [
+       "HG",
+       "NE2"
+      ]
+     },
+     "to": {
+      "atom": "NE2"
+     },
+     "bulge": 0.4,
+     "side": 1
+    }
+   ]
+  },
+  {
+   "name": "Acyl-enzyme",
+   "caption": "The C\u2013N bond breaks. His57 hands its proton to the leaving amine; the acyl group stays on Ser195.",
+   "hold": 30,
+   "transition": 60,
+   "atoms": {
+    "CA1": {
+     "el": "C",
+     "pos": [
+      2.2,
+      -0.2,
+      0.5
+     ],
+     "label": "R",
+     "labelDir": [
+      -1,
+      -0.2
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "CA1",
+     "group": "SUB1",
+     "sphere": true
+    },
+    "C1": {
+     "el": "C",
+     "pos": [
+      3.4,
+      0.6,
+      0.4
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "C1",
+     "group": "SUB1"
+    },
+    "O1": {
+     "el": "O",
+     "pos": [
+      2.9,
+      1.7,
+      0.5
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "O1",
+     "group": "SUB1"
+    },
+    "OG": {
+     "el": "O",
+     "pos": [
+      3.1,
+      -0.85,
+      0.3
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "OG",
+     "group": "SER195"
+    },
+    "CB": {
+     "el": "C",
+     "pos": [
+      3.5,
+      -2.2,
+      0.1
+     ],
+     "label": "Ser195",
+     "labelDir": [
+      0.4,
+      1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "CB",
+     "group": "SER195",
+     "sphere": true
+    },
+    "N2": {
+     "el": "N",
+     "pos": [
+      5.6,
+      -1.3,
+      0.2
+     ],
+     "exitTo": [
+      8.2,
+      -3,
+      0.2
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "N2",
+     "group": "SUB1"
+    },
+    "HN2": {
+     "el": "H",
+     "pos": [
+      5.8,
+      -2.3,
+      0.1
+     ],
+     "exitTo": [
+      8.4,
+      -4,
+      0.1
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "HN2",
+     "group": "SUB1"
+    },
+    "HG": {
+     "el": "H",
+     "pos": [
+      4.7,
+      -1.9,
+      0.2
+     ],
+     "exitTo": [
+      7.3,
+      -3.6,
+      0.2
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "HG",
+     "group": "SER195"
+    },
+    "CA2": {
+     "el": "C",
+     "pos": [
+      6.8,
+      -0.6,
+      0.1
+     ],
+     "label": "R\u2032",
+     "labelDir": [
+      1,
+      0.2
+     ],
+     "exitTo": [
+      9.4,
+      -2.3,
+      0.1
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "CA2",
+     "group": "SUB1",
+     "sphere": true
+    },
+    "ND1": {
+     "el": "N",
+     "pos": [
+      -2.58,
+      -1.89,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "ND1",
+     "group": "HIS57"
+    },
+    "CE1": {
+     "el": "C",
+     "pos": [
+      -1.46,
+      -2.65,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CE1",
+     "group": "HIS57"
+    },
+    "NE2": {
+     "el": "N",
+     "pos": [
+      -0.39,
+      -1.82,
+      0.3
+     ],
+     "lp": [
+      [
+       1,
+       -0.3,
+       0
+      ]
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "NE2",
+     "group": "HIS57"
+    },
+    "CD2": {
+     "el": "C",
+     "pos": [
+      -0.86,
+      -0.55,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CD2",
+     "group": "HIS57"
+    },
+    "CG": {
+     "el": "C",
+     "pos": [
+      -2.21,
+      -0.59,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CG",
+     "group": "HIS57"
+    },
+    "HD1": {
+     "el": "H",
+     "pos": [
+      -3.47,
+      -2.21,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "HD1",
+     "group": "HIS57"
+    },
+    "CBH": {
+     "el": "C",
+     "pos": [
+      -2.9,
+      0.7,
+      0.2
+     ],
+     "label": "His57",
+     "labelDir": [
+      -1,
+      0.4
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CBH",
+     "group": "HIS57",
+     "sphere": true
+    },
+    "OD1": {
+     "el": "O",
+     "pos": [
+      -5.15,
+      -2.8,
+      0.2
+     ],
+     "lp": [
+      [
+       0.9,
+       0.4,
+       0
+      ]
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD1",
+     "group": "ASP102"
+    },
+    "CGD": {
+     "el": "C",
+     "pos": [
+      -6,
+      -3.6,
+      0
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CGD",
+     "group": "ASP102"
+    },
+    "OD2": {
+     "el": "O",
+     "pos": [
+      -6.9,
+      -2.9,
+      -0.2
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD2",
+     "group": "ASP102"
+    },
+    "CBD": {
+     "el": "C",
+     "pos": [
+      -6.4,
+      -5,
+      -0.1
+     ],
+     "label": "Asp102",
+     "labelDir": [
+      -0.3,
+      1
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CBD",
+     "group": "ASP102",
+     "sphere": true
+    },
+    "N193": {
+     "el": "N",
+     "pos": [
+      1.6,
+      4.1,
+      0.6
+     ],
+     "label": "Gly193",
+     "labelDir": [
+      -1,
+      0.1
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "N193",
+     "group": "GLY193"
+    },
+    "H193": {
+     "el": "H",
+     "pos": [
+      2.1,
+      3.25,
+      0.55
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "H193",
+     "group": "GLY193"
+    },
+    "N195": {
+     "el": "N",
+     "pos": [
+      4.1,
+      4.1,
+      0.7
+     ],
+     "label": "Ser195 N\u2013H",
+     "labelDir": [
+      1,
+      0.1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "N195",
+     "group": "SER195"
+    },
+    "H195": {
+     "el": "H",
+     "pos": [
+      3.7,
+      3.25,
+      0.6
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "H195",
+     "group": "SER195"
+    }
+   },
+   "bonds": [
+    [
+     "CA1",
+     "C1",
+     1
+    ],
+    [
+     "C1",
+     "O1",
+     2
+    ],
+    [
+     "C1",
+     "OG",
+     1
+    ],
+    [
+     "OG",
+     "CB",
+     1
+    ],
+    [
+     "N2",
+     "HN2",
+     1
+    ],
+    [
+     "N2",
+     "HG",
+     1
+    ],
+    [
+     "N2",
+     "CA2",
+     1
+    ],
+    [
+     "H193",
+     "O1",
+     0
+    ],
+    [
+     "H195",
+     "O1",
+     0
+    ],
+    [
+     "NE2",
+     "CE1",
+     1
+    ],
+    [
+     "CE1",
+     "ND1",
+     2
+    ],
+    [
+     "ND1",
+     "CG",
+     1
+    ],
+    [
+     "CG",
+     "CD2",
+     2
+    ],
+    [
+     "CD2",
+     "NE2",
+     1
+    ],
+    [
+     "CG",
+     "CBH",
+     1
+    ],
+    [
+     "ND1",
+     "HD1",
+     1
+    ],
+    [
+     "HD1",
+     "OD1",
+     0
+    ],
+    [
+     "OD1",
+     "CGD",
+     1
+    ],
+    [
+     "CGD",
+     "OD2",
+     2
+    ],
+    [
+     "CGD",
+     "CBD",
+     1
+    ],
+    [
+     "N193",
+     "H193",
+     1
+    ],
+    [
+     "N195",
+     "H195",
+     1
+    ]
+   ],
+   "arrows": []
+  },
+  {
+   "name": "Water binds",
+   "caption": "A water molecule takes the place of the amine, hydrogen-bonded to His57.",
+   "hold": 30,
+   "transition": 60,
+   "atoms": {
+    "CA1": {
+     "el": "C",
+     "pos": [
+      2.2,
+      -0.2,
+      0.5
+     ],
+     "label": "R",
+     "labelDir": [
+      -1,
+      -0.2
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "CA1",
+     "group": "SUB1",
+     "sphere": true
+    },
+    "C1": {
+     "el": "C",
+     "pos": [
+      3.4,
+      0.6,
+      0.4
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "C1",
+     "group": "SUB1"
+    },
+    "O1": {
+     "el": "O",
+     "pos": [
+      2.9,
+      1.7,
+      0.5
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "O1",
+     "group": "SUB1"
+    },
+    "OG": {
+     "el": "O",
+     "pos": [
+      3.1,
+      -0.85,
+      0.3
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "OG",
+     "group": "SER195"
+    },
+    "CB": {
+     "el": "C",
+     "pos": [
+      3.5,
+      -2.2,
+      0.1
+     ],
+     "label": "Ser195",
+     "labelDir": [
+      0.4,
+      1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "CB",
+     "group": "SER195",
+     "sphere": true
+    },
+    "OW": {
+     "el": "O",
+     "pos": [
+      1.5,
+      -1,
+      0.6
+     ],
+     "lp": [
+      [
+       0.9,
+       0.6,
+       0
+      ]
+     ],
+     "enterFrom": [
+      -1.5,
+      -5,
+      0.6
+     ],
+     "label": "H\u2082O",
+     "labelDir": [
+      -0.8,
+      -0.9
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "OW",
+     "group": "HOH300"
+    },
+    "HW1": {
+     "el": "H",
+     "pos": [
+      0.72,
+      -1.4,
+      0.6
+     ],
+     "enterFrom": [
+      -2.3,
+      -5.4,
+      0.6
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "HW1",
+     "group": "HOH300"
+    },
+    "HW2": {
+     "el": "H",
+     "pos": [
+      1.05,
+      -0.15,
+      0.7
+     ],
+     "enterFrom": [
+      -1.95,
+      -4.15,
+      0.7
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "HW2",
+     "group": "HOH300"
+    },
+    "ND1": {
+     "el": "N",
+     "pos": [
+      -2.58,
+      -1.89,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "ND1",
+     "group": "HIS57"
+    },
+    "CE1": {
+     "el": "C",
+     "pos": [
+      -1.46,
+      -2.65,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CE1",
+     "group": "HIS57"
+    },
+    "NE2": {
+     "el": "N",
+     "pos": [
+      -0.39,
+      -1.82,
+      0.3
+     ],
+     "lp": [
+      [
+       1,
+       -0.3,
+       0
+      ]
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "NE2",
+     "group": "HIS57"
+    },
+    "CD2": {
+     "el": "C",
+     "pos": [
+      -0.86,
+      -0.55,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CD2",
+     "group": "HIS57"
+    },
+    "CG": {
+     "el": "C",
+     "pos": [
+      -2.21,
+      -0.59,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CG",
+     "group": "HIS57"
+    },
+    "HD1": {
+     "el": "H",
+     "pos": [
+      -3.47,
+      -2.21,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "HD1",
+     "group": "HIS57"
+    },
+    "CBH": {
+     "el": "C",
+     "pos": [
+      -2.9,
+      0.7,
+      0.2
+     ],
+     "label": "His57",
+     "labelDir": [
+      -1,
+      0.4
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CBH",
+     "group": "HIS57",
+     "sphere": true
+    },
+    "OD1": {
+     "el": "O",
+     "pos": [
+      -5.15,
+      -2.8,
+      0.2
+     ],
+     "lp": [
+      [
+       0.9,
+       0.4,
+       0
+      ]
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD1",
+     "group": "ASP102"
+    },
+    "CGD": {
+     "el": "C",
+     "pos": [
+      -6,
+      -3.6,
+      0
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CGD",
+     "group": "ASP102"
+    },
+    "OD2": {
+     "el": "O",
+     "pos": [
+      -6.9,
+      -2.9,
+      -0.2
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD2",
+     "group": "ASP102"
+    },
+    "CBD": {
+     "el": "C",
+     "pos": [
+      -6.4,
+      -5,
+      -0.1
+     ],
+     "label": "Asp102",
+     "labelDir": [
+      -0.3,
+      1
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CBD",
+     "group": "ASP102",
+     "sphere": true
+    },
+    "N193": {
+     "el": "N",
+     "pos": [
+      1.6,
+      4.1,
+      0.6
+     ],
+     "label": "Gly193",
+     "labelDir": [
+      -1,
+      0.1
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "N193",
+     "group": "GLY193"
+    },
+    "H193": {
+     "el": "H",
+     "pos": [
+      2.1,
+      3.25,
+      0.55
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "H193",
+     "group": "GLY193"
+    },
+    "N195": {
+     "el": "N",
+     "pos": [
+      4.1,
+      4.1,
+      0.7
+     ],
+     "label": "Ser195 N\u2013H",
+     "labelDir": [
+      1,
+      0.1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "N195",
+     "group": "SER195"
+    },
+    "H195": {
+     "el": "H",
+     "pos": [
+      3.7,
+      3.25,
+      0.6
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "H195",
+     "group": "SER195"
+    }
+   },
+   "bonds": [
+    [
+     "CA1",
+     "C1",
+     1
+    ],
+    [
+     "C1",
+     "O1",
+     2
+    ],
+    [
+     "C1",
+     "OG",
+     1
+    ],
+    [
+     "OG",
+     "CB",
+     1
+    ],
+    [
+     "OW",
+     "HW1",
+     1
+    ],
+    [
+     "OW",
+     "HW2",
+     1
+    ],
+    [
+     "HW1",
+     "NE2",
+     0
+    ],
+    [
+     "H193",
+     "O1",
+     0
+    ],
+    [
+     "H195",
+     "O1",
+     0
+    ],
+    [
+     "NE2",
+     "CE1",
+     1
+    ],
+    [
+     "CE1",
+     "ND1",
+     2
+    ],
+    [
+     "ND1",
+     "CG",
+     1
+    ],
+    [
+     "CG",
+     "CD2",
+     2
+    ],
+    [
+     "CD2",
+     "NE2",
+     1
+    ],
+    [
+     "CG",
+     "CBH",
+     1
+    ],
+    [
+     "ND1",
+     "HD1",
+     1
+    ],
+    [
+     "HD1",
+     "OD1",
+     0
+    ],
+    [
+     "OD1",
+     "CGD",
+     1
+    ],
+    [
+     "CGD",
+     "OD2",
+     2
+    ],
+    [
+     "CGD",
+     "CBD",
+     1
+    ],
+    [
+     "N193",
+     "H193",
+     1
+    ],
+    [
+     "N195",
+     "H195",
+     1
+    ]
+   ],
+   "arrows": [
+    {
+     "from": {
+      "lp": "NE2",
+      "i": 0
+     },
+     "to": {
+      "bond": [
+       "OW",
+       "HW1"
+      ]
+     },
+     "bulge": 0.35,
+     "side": 1
+    },
+    {
+     "from": {
+      "lp": "OW",
+      "i": 0
+     },
+     "to": {
+      "atom": "C1"
+     },
+     "bulge": 0.35,
+     "side": -1
+    },
+    {
+     "from": {
+      "bond": [
+       "C1",
+       "O1"
+      ]
+     },
+     "to": {
+      "atom": "O1"
+     },
+     "bulge": 0.5,
+     "side": -1
+    }
+   ]
+  },
+  {
+   "name": "Tetrahedral intermediate 2",
+   "caption": "Water attacks the acyl carbon. The oxyanion re-forms in the hole; His57 is protonated again.",
+   "hold": 30,
+   "transition": 60,
+   "atoms": {
+    "CA1": {
+     "el": "C",
+     "pos": [
+      2.1,
+      -0.3,
+      0.5
+     ],
+     "label": "R",
+     "labelDir": [
+      -1,
+      -0.2
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "CA1",
+     "group": "SUB1",
+     "sphere": true
+    },
+    "C1": {
+     "el": "C",
+     "pos": [
+      3.4,
+      0.6,
+      0.4
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "C1",
+     "group": "SUB1"
+    },
+    "O1": {
+     "el": "O",
+     "pos": [
+      2.8,
+      1.8,
+      0.5
+     ],
+     "charge": -1,
+     "lp": [
+      [
+       -0.6,
+       0.8,
+       0
+      ]
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "O1",
+     "group": "SUB1"
+    },
+    "OG": {
+     "el": "O",
+     "pos": [
+      3.1,
+      -0.85,
+      0.3
+     ],
+     "lp": [
+      [
+       -1,
+       -0.2,
+       0
+      ]
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "OG",
+     "group": "SER195"
+    },
+    "CB": {
+     "el": "C",
+     "pos": [
+      3.5,
+      -2.2,
+      0.1
+     ],
+     "label": "Ser195",
+     "labelDir": [
+      0.4,
+      1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "CB",
+     "group": "SER195",
+     "sphere": true
+    },
+    "OW": {
+     "el": "O",
+     "pos": [
+      2.2,
+      -0.2,
+      0.5
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "OW",
+     "group": "HOH300"
+    },
+    "HW1": {
+     "el": "H",
+     "pos": [
+      0.55,
+      -2,
+      0.3
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "HW1",
+     "group": "HOH300"
+    },
+    "HW2": {
+     "el": "H",
+     "pos": [
+      1.5,
+      -0.9,
+      0.5
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "HW2",
+     "group": "HOH300"
+    },
+    "ND1": {
+     "el": "N",
+     "pos": [
+      -2.58,
+      -1.89,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "ND1",
+     "group": "HIS57"
+    },
+    "CE1": {
+     "el": "C",
+     "pos": [
+      -1.46,
+      -2.65,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CE1",
+     "group": "HIS57"
+    },
+    "NE2": {
+     "el": "N",
+     "pos": [
+      -0.39,
+      -1.82,
+      0.3
+     ],
+     "charge": 1,
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "NE2",
+     "group": "HIS57"
+    },
+    "CD2": {
+     "el": "C",
+     "pos": [
+      -0.86,
+      -0.55,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CD2",
+     "group": "HIS57"
+    },
+    "CG": {
+     "el": "C",
+     "pos": [
+      -2.21,
+      -0.59,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CG",
+     "group": "HIS57"
+    },
+    "HD1": {
+     "el": "H",
+     "pos": [
+      -3.47,
+      -2.21,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "HD1",
+     "group": "HIS57"
+    },
+    "CBH": {
+     "el": "C",
+     "pos": [
+      -2.9,
+      0.7,
+      0.2
+     ],
+     "label": "His57",
+     "labelDir": [
+      -1,
+      0.4
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CBH",
+     "group": "HIS57",
+     "sphere": true
+    },
+    "OD1": {
+     "el": "O",
+     "pos": [
+      -5.15,
+      -2.8,
+      0.2
+     ],
+     "lp": [
+      [
+       0.9,
+       0.4,
+       0
+      ]
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD1",
+     "group": "ASP102"
+    },
+    "CGD": {
+     "el": "C",
+     "pos": [
+      -6,
+      -3.6,
+      0
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CGD",
+     "group": "ASP102"
+    },
+    "OD2": {
+     "el": "O",
+     "pos": [
+      -6.9,
+      -2.9,
+      -0.2
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD2",
+     "group": "ASP102"
+    },
+    "CBD": {
+     "el": "C",
+     "pos": [
+      -6.4,
+      -5,
+      -0.1
+     ],
+     "label": "Asp102",
+     "labelDir": [
+      -0.3,
+      1
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CBD",
+     "group": "ASP102",
+     "sphere": true
+    },
+    "N193": {
+     "el": "N",
+     "pos": [
+      1.6,
+      4.1,
+      0.6
+     ],
+     "label": "Gly193",
+     "labelDir": [
+      -1,
+      0.1
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "N193",
+     "group": "GLY193"
+    },
+    "H193": {
+     "el": "H",
+     "pos": [
+      2.1,
+      3.25,
+      0.55
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "H193",
+     "group": "GLY193"
+    },
+    "N195": {
+     "el": "N",
+     "pos": [
+      4.1,
+      4.1,
+      0.7
+     ],
+     "label": "Ser195 N\u2013H",
+     "labelDir": [
+      1,
+      0.1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "N195",
+     "group": "SER195"
+    },
+    "H195": {
+     "el": "H",
+     "pos": [
+      3.7,
+      3.25,
+      0.6
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "H195",
+     "group": "SER195"
+    }
+   },
+   "bonds": [
+    [
+     "CA1",
+     "C1",
+     1
+    ],
+    [
+     "C1",
+     "O1",
+     1
+    ],
+    [
+     "C1",
+     "OG",
+     1
+    ],
+    [
+     "C1",
+     "OW",
+     1
+    ],
+    [
+     "OG",
+     "CB",
+     1
+    ],
+    [
+     "OW",
+     "HW2",
+     1
+    ],
+    [
+     "HW1",
+     "NE2",
+     1
+    ],
+    [
+     "H193",
+     "O1",
+     0
+    ],
+    [
+     "H195",
+     "O1",
+     0
+    ],
+    [
+     "NE2",
+     "CE1",
+     1
+    ],
+    [
+     "CE1",
+     "ND1",
+     2
+    ],
+    [
+     "ND1",
+     "CG",
+     1
+    ],
+    [
+     "CG",
+     "CD2",
+     2
+    ],
+    [
+     "CD2",
+     "NE2",
+     1
+    ],
+    [
+     "CG",
+     "CBH",
+     1
+    ],
+    [
+     "ND1",
+     "HD1",
+     1
+    ],
+    [
+     "HD1",
+     "OD1",
+     0
+    ],
+    [
+     "OD1",
+     "CGD",
+     1
+    ],
+    [
+     "CGD",
+     "OD2",
+     2
+    ],
+    [
+     "CGD",
+     "CBD",
+     1
+    ],
+    [
+     "N193",
+     "H193",
+     1
+    ],
+    [
+     "N195",
+     "H195",
+     1
+    ]
+   ],
+   "arrows": [
+    {
+     "from": {
+      "lp": "O1",
+      "i": 0
+     },
+     "to": {
+      "bond": [
+       "C1",
+       "O1"
+      ]
+     },
+     "bulge": 0.4,
+     "side": -1
+    },
+    {
+     "from": {
+      "bond": [
+       "C1",
+       "OG"
+      ]
+     },
+     "to": {
+      "atom": "OG"
+     },
+     "bulge": 0.45,
+     "side": 1
+    },
+    {
+     "from": {
+      "lp": "OG",
+      "i": 0
+     },
+     "to": {
+      "atom": "HW1"
+     },
+     "bulge": 0.3,
+     "side": 1
+    },
+    {
+     "from": {
+      "bond": [
+       "HW1",
+       "NE2"
+      ]
+     },
+     "to": {
+      "atom": "NE2"
+     },
+     "bulge": 0.4,
+     "side": 1
+    }
+   ]
+  },
+  {
+   "name": "Product release",
+   "caption": "Ser195 takes its proton back from His57 and lets go. The carboxylic acid leaves.",
+   "hold": 30,
+   "transition": 60,
+   "atoms": {
+    "CA1": {
+     "el": "C",
+     "pos": [
+      3.4,
+      1.4,
+      0.5
+     ],
+     "label": "R",
+     "labelDir": [
+      1,
+      0.2
+     ],
+     "exitTo": [
+      6,
+      5,
+      0.5
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "CA1",
+     "group": "SUB1",
+     "sphere": true
+    },
+    "C1": {
+     "el": "C",
+     "pos": [
+      2.4,
+      2,
+      0.4
+     ],
+     "exitTo": [
+      5,
+      5.6,
+      0.4
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "C1",
+     "group": "SUB1"
+    },
+    "O1": {
+     "el": "O",
+     "pos": [
+      2,
+      3.1,
+      0.5
+     ],
+     "exitTo": [
+      4.6,
+      6.7,
+      0.5
+     ],
+     "resn": "SUB",
+     "resi": 1,
+     "het": true,
+     "name": "O1",
+     "group": "SUB1"
+    },
+    "OW": {
+     "el": "O",
+     "pos": [
+      1.5,
+      1.2,
+      0.5
+     ],
+     "exitTo": [
+      4.1,
+      4.8,
+      0.5
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "OW",
+     "group": "HOH300"
+    },
+    "HW2": {
+     "el": "H",
+     "pos": [
+      0.7,
+      1.6,
+      0.5
+     ],
+     "exitTo": [
+      3.3,
+      5.2,
+      0.5
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "HW2",
+     "group": "HOH300"
+    },
+    "OG": {
+     "el": "O",
+     "pos": [
+      2.6,
+      -2.5,
+      0.2
+     ],
+     "lp": [
+      [
+       -0.3,
+       1,
+       0
+      ]
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "OG",
+     "group": "SER195"
+    },
+    "CB": {
+     "el": "C",
+     "pos": [
+      3.3,
+      -3.7,
+      0
+     ],
+     "label": "Ser195",
+     "labelDir": [
+      0.4,
+      1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "CB",
+     "group": "SER195",
+     "sphere": true
+    },
+    "HW1": {
+     "el": "H",
+     "pos": [
+      1.6,
+      -2.3,
+      0.25
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "HW1",
+     "group": "HOH300"
+    },
+    "ND1": {
+     "el": "N",
+     "pos": [
+      -2.58,
+      -1.89,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "ND1",
+     "group": "HIS57"
+    },
+    "CE1": {
+     "el": "C",
+     "pos": [
+      -1.46,
+      -2.65,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CE1",
+     "group": "HIS57"
+    },
+    "NE2": {
+     "el": "N",
+     "pos": [
+      -0.39,
+      -1.82,
+      0.3
+     ],
+     "lp": [
+      [
+       1,
+       -0.3,
+       0
+      ]
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "NE2",
+     "group": "HIS57"
+    },
+    "CD2": {
+     "el": "C",
+     "pos": [
+      -0.86,
+      -0.55,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CD2",
+     "group": "HIS57"
+    },
+    "CG": {
+     "el": "C",
+     "pos": [
+      -2.21,
+      -0.59,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CG",
+     "group": "HIS57"
+    },
+    "HD1": {
+     "el": "H",
+     "pos": [
+      -3.47,
+      -2.21,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "HD1",
+     "group": "HIS57"
+    },
+    "CBH": {
+     "el": "C",
+     "pos": [
+      -2.9,
+      0.7,
+      0.2
+     ],
+     "label": "His57",
+     "labelDir": [
+      -1,
+      0.4
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CBH",
+     "group": "HIS57",
+     "sphere": true
+    },
+    "OD1": {
+     "el": "O",
+     "pos": [
+      -5.15,
+      -2.8,
+      0.2
+     ],
+     "lp": [
+      [
+       0.9,
+       0.4,
+       0
+      ]
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD1",
+     "group": "ASP102"
+    },
+    "CGD": {
+     "el": "C",
+     "pos": [
+      -6,
+      -3.6,
+      0
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CGD",
+     "group": "ASP102"
+    },
+    "OD2": {
+     "el": "O",
+     "pos": [
+      -6.9,
+      -2.9,
+      -0.2
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD2",
+     "group": "ASP102"
+    },
+    "CBD": {
+     "el": "C",
+     "pos": [
+      -6.4,
+      -5,
+      -0.1
+     ],
+     "label": "Asp102",
+     "labelDir": [
+      -0.3,
+      1
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CBD",
+     "group": "ASP102",
+     "sphere": true
+    },
+    "N193": {
+     "el": "N",
+     "pos": [
+      1.6,
+      4.1,
+      0.6
+     ],
+     "label": "Gly193",
+     "labelDir": [
+      -1,
+      0.1
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "N193",
+     "group": "GLY193"
+    },
+    "H193": {
+     "el": "H",
+     "pos": [
+      2.1,
+      3.25,
+      0.55
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "H193",
+     "group": "GLY193"
+    },
+    "N195": {
+     "el": "N",
+     "pos": [
+      4.1,
+      4.1,
+      0.7
+     ],
+     "label": "Ser195 N\u2013H",
+     "labelDir": [
+      1,
+      0.1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "N195",
+     "group": "SER195"
+    },
+    "H195": {
+     "el": "H",
+     "pos": [
+      3.7,
+      3.25,
+      0.6
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "H195",
+     "group": "SER195"
+    }
+   },
+   "bonds": [
+    [
+     "CA1",
+     "C1",
+     1
+    ],
+    [
+     "C1",
+     "O1",
+     2
+    ],
+    [
+     "C1",
+     "OW",
+     1
+    ],
+    [
+     "OW",
+     "HW2",
+     1
+    ],
+    [
+     "OG",
+     "HW1",
+     1
+    ],
+    [
+     "OG",
+     "CB",
+     1
+    ],
+    [
+     "HW1",
+     "NE2",
+     0
+    ],
+    [
+     "NE2",
+     "CE1",
+     1
+    ],
+    [
+     "CE1",
+     "ND1",
+     2
+    ],
+    [
+     "ND1",
+     "CG",
+     1
+    ],
+    [
+     "CG",
+     "CD2",
+     2
+    ],
+    [
+     "CD2",
+     "NE2",
+     1
+    ],
+    [
+     "CG",
+     "CBH",
+     1
+    ],
+    [
+     "ND1",
+     "HD1",
+     1
+    ],
+    [
+     "HD1",
+     "OD1",
+     0
+    ],
+    [
+     "OD1",
+     "CGD",
+     1
+    ],
+    [
+     "CGD",
+     "OD2",
+     2
+    ],
+    [
+     "CGD",
+     "CBD",
+     1
+    ],
+    [
+     "N193",
+     "H193",
+     1
+    ],
+    [
+     "N195",
+     "H195",
+     1
+    ]
+   ],
+   "arrows": []
+  },
+  {
+   "name": "Free enzyme",
+   "caption": "The triad is restored: Ser\u2013H\u00b7\u00b7\u00b7His\u00b7\u00b7\u00b7Asp. Ready for the next substrate.",
+   "hold": 36,
+   "transition": 48,
+   "atoms": {
+    "OG": {
+     "el": "O",
+     "pos": [
+      2.6,
+      -2.5,
+      0.2
+     ],
+     "lp": [
+      [
+       -0.3,
+       1,
+       0
+      ]
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "OG",
+     "group": "SER195"
+    },
+    "CB": {
+     "el": "C",
+     "pos": [
+      3.3,
+      -3.7,
+      0
+     ],
+     "label": "Ser195",
+     "labelDir": [
+      0.4,
+      1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "CB",
+     "group": "SER195",
+     "sphere": true
+    },
+    "HW1": {
+     "el": "H",
+     "pos": [
+      1.6,
+      -2.3,
+      0.25
+     ],
+     "resn": "HOH",
+     "resi": 300,
+     "het": true,
+     "name": "HW1",
+     "group": "HOH300"
+    },
+    "ND1": {
+     "el": "N",
+     "pos": [
+      -2.58,
+      -1.89,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "ND1",
+     "group": "HIS57"
+    },
+    "CE1": {
+     "el": "C",
+     "pos": [
+      -1.46,
+      -2.65,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CE1",
+     "group": "HIS57"
+    },
+    "NE2": {
+     "el": "N",
+     "pos": [
+      -0.39,
+      -1.82,
+      0.3
+     ],
+     "lp": [
+      [
+       1,
+       -0.3,
+       0
+      ]
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "NE2",
+     "group": "HIS57"
+    },
+    "CD2": {
+     "el": "C",
+     "pos": [
+      -0.86,
+      -0.55,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CD2",
+     "group": "HIS57"
+    },
+    "CG": {
+     "el": "C",
+     "pos": [
+      -2.21,
+      -0.59,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CG",
+     "group": "HIS57"
+    },
+    "HD1": {
+     "el": "H",
+     "pos": [
+      -3.47,
+      -2.21,
+      0.3
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "HD1",
+     "group": "HIS57"
+    },
+    "CBH": {
+     "el": "C",
+     "pos": [
+      -2.9,
+      0.7,
+      0.2
+     ],
+     "label": "His57",
+     "labelDir": [
+      -1,
+      0.4
+     ],
+     "resn": "HIS",
+     "resi": 57,
+     "het": false,
+     "name": "CBH",
+     "group": "HIS57",
+     "sphere": true
+    },
+    "OD1": {
+     "el": "O",
+     "pos": [
+      -5.15,
+      -2.8,
+      0.2
+     ],
+     "lp": [
+      [
+       0.9,
+       0.4,
+       0
+      ]
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD1",
+     "group": "ASP102"
+    },
+    "CGD": {
+     "el": "C",
+     "pos": [
+      -6,
+      -3.6,
+      0
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CGD",
+     "group": "ASP102"
+    },
+    "OD2": {
+     "el": "O",
+     "pos": [
+      -6.9,
+      -2.9,
+      -0.2
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "OD2",
+     "group": "ASP102"
+    },
+    "CBD": {
+     "el": "C",
+     "pos": [
+      -6.4,
+      -5,
+      -0.1
+     ],
+     "label": "Asp102",
+     "labelDir": [
+      -0.3,
+      1
+     ],
+     "resn": "ASP",
+     "resi": 102,
+     "het": false,
+     "name": "CBD",
+     "group": "ASP102",
+     "sphere": true
+    },
+    "N193": {
+     "el": "N",
+     "pos": [
+      1.6,
+      4.1,
+      0.6
+     ],
+     "label": "Gly193",
+     "labelDir": [
+      -1,
+      0.1
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "N193",
+     "group": "GLY193"
+    },
+    "H193": {
+     "el": "H",
+     "pos": [
+      2.1,
+      3.25,
+      0.55
+     ],
+     "resn": "GLY",
+     "resi": 193,
+     "het": false,
+     "name": "H193",
+     "group": "GLY193"
+    },
+    "N195": {
+     "el": "N",
+     "pos": [
+      4.1,
+      4.1,
+      0.7
+     ],
+     "label": "Ser195 N\u2013H",
+     "labelDir": [
+      1,
+      0.1
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "N195",
+     "group": "SER195"
+    },
+    "H195": {
+     "el": "H",
+     "pos": [
+      3.7,
+      3.25,
+      0.6
+     ],
+     "resn": "SER",
+     "resi": 195,
+     "het": false,
+     "name": "H195",
+     "group": "SER195"
+    }
+   },
+   "bonds": [
+    [
+     "OG",
+     "HW1",
+     1
+    ],
+    [
+     "OG",
+     "CB",
+     1
+    ],
+    [
+     "HW1",
+     "NE2",
+     0
+    ],
+    [
+     "NE2",
+     "CE1",
+     1
+    ],
+    [
+     "CE1",
+     "ND1",
+     2
+    ],
+    [
+     "ND1",
+     "CG",
+     1
+    ],
+    [
+     "CG",
+     "CD2",
+     2
+    ],
+    [
+     "CD2",
+     "NE2",
+     1
+    ],
+    [
+     "CG",
+     "CBH",
+     1
+    ],
+    [
+     "ND1",
+     "HD1",
+     1
+    ],
+    [
+     "HD1",
+     "OD1",
+     0
+    ],
+    [
+     "OD1",
+     "CGD",
+     1
+    ],
+    [
+     "CGD",
+     "OD2",
+     2
+    ],
+    [
+     "CGD",
+     "CBD",
+     1
+    ],
+    [
+     "N193",
+     "H193",
+     1
+    ],
+    [
+     "N195",
+     "H195",
+     1
+    ]
+   ],
+   "arrows": []
+  }
+ ]
+}

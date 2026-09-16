@@ -27,6 +27,10 @@ cp "$OUT/ink/frame_0028.png" docs/img/ink.png
 $R examples/mechanism.json --settings looks/pencil.json --scale 1 --frames 28 --out "$OUT/pencil"
 cp "$OUT/pencil/frame_0028.png" docs/img/pencil.png
 
+# 4b. Same frame on dark paper (the look the website hero uses)
+$R examples/mechanism.json --settings looks/dark-paper.json --scale 1 --frames 28 --out "$OUT/dark_paper"
+cp "$OUT/dark_paper/frame_0028.png" docs/img/dark_paper.png
+
 # 5. Protein: watercolour cartoon + ligand sticks, then the same as a surface coloured by residue
 $R examples/test_protein.pdb --settings looks/watercolour.json --set view.yaw=30 --set view.pitch=20 \
    --scale 1 --frames 0 --out "$OUT/protein_cartoon"
