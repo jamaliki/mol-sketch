@@ -43,6 +43,7 @@ const page = await browser.newPage({ viewport: { width: Math.min(W, 4096) + 300,
 page.on('pageerror', e => console.error('page error:', e.message));
 await page.goto(`http://127.0.0.1:${port}/`);
 await page.waitForFunction(() => window.TriadSketch, null, { timeout: 60000 });
+await page.waitForFunction(() => window.TriadSketch.renderer.structure, null, { timeout: 30000 }).catch(() => {});   // the start-up example must land before ours, or it replaces it
 if (inputs.length > 1) { const files = inputs.map(f => ({ name: path.basename(f), text: fs.readFileSync(f, 'utf8') })); await page.evaluate(files => { window.TriadSketch.setLive(false); window.TriadSketch.setSketch(false); window.TriadSketch.loadStack(files) }, files) }
 else { const text = fs.readFileSync(input, 'utf8'); await page.evaluate(async ([t, n]) => { window.TriadSketch.setLive(false); window.TriadSketch.setSketch(false); await window.TriadSketch.loadText(t, n) }, [text, path.basename(input)]) }
 if (opt.look) await page.evaluate(k => window.TriadSketch.applyLook(k), opt.look);

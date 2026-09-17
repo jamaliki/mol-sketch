@@ -96,7 +96,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
 
   /* colour */
   const C = section('Colour');
-  control(C, { t: 'select', label: 'fill', path: 'fill', options: ['watercolour', 'ink colour', 'ink', 'pencil', 'flat', 'wash'] });
+  control(C, { t: 'select', label: 'fill', path: 'fill', options: ['watercolour', 'ink colour', 'ink', 'pencil', 'chalk', 'flat', 'wash'] });
   control(C, { t: 'range', label: 'shading', path: 'shading', min: 0, max: 1, step: 0.05 });
   control(C, { t: 'range', label: 'pencil fill', path: 'pencilFill', min: 0, max: 1, step: 0.05 });
   control(C, { t: 'range', label: 'fill wobble', path: 'fillWobble', min: 0, max: 2, step: 0.05 });

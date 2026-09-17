@@ -20,6 +20,10 @@ export const LOOKS: Record<string, Look> = {
     name: 'Dark paper', note: 'pastel chalk on navy: pigment laid down, pale ink, no wash',
     style: { fill: 'watercolour', palette: { ...PALETTES['Dark paper'] }, shading: 0.45, paper: { grain: 0.3, wash: 0 } as any, view: { fog: 0.2 } as any },
   },
+  chalkboard: {
+    name: 'Chalkboard', note: 'chalk on the same navy: broad dusty fills, soft pitted lines, no wash',
+    style: { fill: 'chalk', palette: { ...PALETTES['Dark paper'], arrow: '#f2efe8', wash: '#e7e5e4' }, shading: 0.25, sphereScale: 0.3, line: { width: 2.0, rough: 1.3, passes: 2, pressure: 0.35, alpha: 0.9 } as any, hatch: { spacing: 5, angle: -40, density: 1.4 } as any, paper: { grain: 0.8, wash: 0.12, washSeed: 3 } as any, view: { fog: 0.15 } as any, construction: false },
+  },
   'assembly-surface': {
     name: 'Assembly surface', note: 'watercolour surface by subunit',
     style: { fill: 'watercolour', palette: { ...PALETTES['Colored pencil'] }, surfaceColor: 'subunit', reps: { sticks: '', cartoon: '', surface: 'polymer' } },

@@ -1,0 +1,5774 @@
+{
+  "state_00": [
+    {
+      "serial": 1,
+      "atom_map": 3,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C1",
+      "atom_name": "CM3",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 2,
+      "atom_map": 1,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C2",
+      "atom_name": "C1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 3,
+      "atom_map": 2,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O3",
+      "atom_name": "O2",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 4,
+      "atom_map": 4,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O4",
+      "atom_name": "O4",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 5,
+      "atom_map": 5,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C5",
+      "atom_name": "CZ5",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 6,
+      "atom_map": 6,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C6",
+      "atom_name": "CE6",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 7,
+      "atom_map": 7,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C7",
+      "atom_name": "CD7",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 8,
+      "atom_map": 8,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C8",
+      "atom_name": "CG8",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 9,
+      "atom_map": 11,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "N9",
+      "atom_name": "N11",
+      "element": "N",
+      "formal_charge": 1
+    },
+    {
+      "serial": 10,
+      "atom_map": 12,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O10",
+      "atom_name": "O12",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 11,
+      "atom_map": 13,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O11",
+      "atom_name": "O13",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 12,
+      "atom_map": 9,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C12",
+      "atom_name": "CD9",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 13,
+      "atom_map": 10,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C13",
+      "atom_name": "CE10",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 14,
+      "atom_map": 20,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "OG",
+      "atom_name": "OG",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 15,
+      "atom_map": 21,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H15",
+      "atom_name": "H15",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 16,
+      "atom_map": 22,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 17,
+      "atom_map": 23,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 18,
+      "atom_map": 40,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 19,
+      "atom_map": 47,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 20,
+      "atom_map": 46,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 21,
+      "atom_map": 41,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "ND1",
+      "atom_name": "ND1",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 22,
+      "atom_map": 45,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H22",
+      "atom_name": "H22",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 23,
+      "atom_map": 42,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CE1",
+      "atom_name": "CE1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 24,
+      "atom_map": 43,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 25,
+      "atom_map": 44,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CD2",
+      "atom_name": "CD2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 26,
+      "atom_map": 50,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD2",
+      "atom_name": "OD2",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 27,
+      "atom_map": 51,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 28,
+      "atom_map": 52,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD1",
+      "atom_name": "OD1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 29,
+      "atom_map": 53,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 30,
+      "atom_map": 54,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 31,
+      "atom_map": 70,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 32,
+      "atom_map": 71,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 33,
+      "atom_map": 72,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "OG1",
+      "atom_name": "OG1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 34,
+      "atom_map": 73,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CG2",
+      "atom_name": "CG2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 35,
+      "atom_map": 80,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 36,
+      "atom_map": 81,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 37,
+      "atom_map": 82,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 38,
+      "atom_map": 83,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CD",
+      "atom_name": "CD",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 39,
+      "atom_map": 84,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "OE1",
+      "atom_name": "OE1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 40,
+      "atom_map": 85,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 41,
+      "atom_map": 10000,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C41",
+      "atom_name": "C41",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 42,
+      "atom_map": 10001,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C42",
+      "atom_name": "C42",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 43,
+      "atom_map": 10002,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O43",
+      "atom_name": "O43",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 44,
+      "atom_map": 10003,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 45,
+      "atom_map": 10004,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 46,
+      "atom_map": 10005,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 47,
+      "atom_map": 10011,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 48,
+      "atom_map": 10012,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 49,
+      "atom_map": 10013,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 50,
+      "atom_map": 10016,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H50",
+      "atom_name": "H50",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 51,
+      "atom_map": 10017,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H51",
+      "atom_name": "H51",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 52,
+      "atom_map": 10018,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H52",
+      "atom_name": "H52",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 53,
+      "atom_map": 10019,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H53",
+      "atom_name": "H53",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 54,
+      "atom_map": 10020,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H54",
+      "atom_name": "H54",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 55,
+      "atom_map": 10021,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H55",
+      "atom_name": "H55",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 56,
+      "atom_map": 10022,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H56",
+      "atom_name": "H56",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 57,
+      "atom_map": 10023,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H57",
+      "atom_name": "H57",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 58,
+      "atom_map": 10024,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H58",
+      "atom_name": "H58",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 59,
+      "atom_map": 10025,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H59",
+      "atom_name": "H59",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 60,
+      "atom_map": 10026,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H60",
+      "atom_name": "H60",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 61,
+      "atom_map": 10027,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H61",
+      "atom_name": "H61",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 62,
+      "atom_map": 10028,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H62",
+      "atom_name": "H62",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 63,
+      "atom_map": 10029,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H63",
+      "atom_name": "H63",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 64,
+      "atom_map": 10030,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H64",
+      "atom_name": "H64",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 65,
+      "atom_map": 10031,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H65",
+      "atom_name": "H65",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 66,
+      "atom_map": 10032,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H66",
+      "atom_name": "H66",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 67,
+      "atom_map": 10033,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H67",
+      "atom_name": "H67",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 68,
+      "atom_map": 10034,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H68",
+      "atom_name": "H68",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 69,
+      "atom_map": 10035,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H69",
+      "atom_name": "H69",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 70,
+      "atom_map": 10036,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H70",
+      "atom_name": "H70",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 71,
+      "atom_map": 10037,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H71",
+      "atom_name": "H71",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 72,
+      "atom_map": 10038,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H72",
+      "atom_name": "H72",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 73,
+      "atom_map": 10039,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H73",
+      "atom_name": "H73",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 74,
+      "atom_map": 10040,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H74",
+      "atom_name": "H74",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 75,
+      "atom_map": 10041,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H75",
+      "atom_name": "H75",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 76,
+      "atom_map": 10042,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H76",
+      "atom_name": "H76",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 77,
+      "atom_map": 10043,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H77",
+      "atom_name": "H77",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 78,
+      "atom_map": 10044,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H78",
+      "atom_name": "H78",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 79,
+      "atom_map": 10045,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H79",
+      "atom_name": "H79",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 80,
+      "atom_map": 10046,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H80",
+      "atom_name": "H80",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 81,
+      "atom_map": 10047,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H81",
+      "atom_name": "H81",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 82,
+      "atom_map": 10048,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H82",
+      "atom_name": "H82",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 83,
+      "atom_map": 10049,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H83",
+      "atom_name": "H83",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 84,
+      "atom_map": 10050,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H84",
+      "atom_name": "H84",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 85,
+      "atom_map": 10051,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H85",
+      "atom_name": "H85",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 86,
+      "atom_map": 10052,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H86",
+      "atom_name": "H86",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 87,
+      "atom_map": 10053,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H87",
+      "atom_name": "H87",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 88,
+      "atom_map": 10054,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H88",
+      "atom_name": "H88",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 89,
+      "atom_map": 10055,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H89",
+      "atom_name": "H89",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 90,
+      "atom_map": 10056,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H90",
+      "atom_name": "H90",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 91,
+      "atom_map": 10064,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H91",
+      "atom_name": "H91",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 92,
+      "atom_map": 10069,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H92",
+      "atom_name": "H92",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 93,
+      "atom_map": 10070,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H93",
+      "atom_name": "H93",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 94,
+      "atom_map": 10071,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H94",
+      "atom_name": "H94",
+      "element": "H",
+      "formal_charge": 0
+    }
+  ],
+  "state_01": [
+    {
+      "serial": 1,
+      "atom_map": 3,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C1",
+      "atom_name": "CM3",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 2,
+      "atom_map": 1,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C2",
+      "atom_name": "C1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 3,
+      "atom_map": 2,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O3",
+      "atom_name": "O2",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 4,
+      "atom_map": 4,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O4",
+      "atom_name": "O4",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 5,
+      "atom_map": 5,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C5",
+      "atom_name": "CZ5",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 6,
+      "atom_map": 6,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C6",
+      "atom_name": "CE6",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 7,
+      "atom_map": 7,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C7",
+      "atom_name": "CD7",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 8,
+      "atom_map": 8,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C8",
+      "atom_name": "CG8",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 9,
+      "atom_map": 11,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "N9",
+      "atom_name": "N11",
+      "element": "N",
+      "formal_charge": 1
+    },
+    {
+      "serial": 10,
+      "atom_map": 12,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O10",
+      "atom_name": "O12",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 11,
+      "atom_map": 13,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O11",
+      "atom_name": "O13",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 12,
+      "atom_map": 9,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C12",
+      "atom_name": "CD9",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 13,
+      "atom_map": 10,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C13",
+      "atom_name": "CE10",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 14,
+      "atom_map": 20,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "OG",
+      "atom_name": "OG",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 15,
+      "atom_map": 21,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H15",
+      "atom_name": "H15",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 16,
+      "atom_map": 22,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 17,
+      "atom_map": 23,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 18,
+      "atom_map": 40,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 19,
+      "atom_map": 47,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 20,
+      "atom_map": 46,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 21,
+      "atom_map": 41,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "ND1",
+      "atom_name": "ND1",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 22,
+      "atom_map": 45,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H22",
+      "atom_name": "H22",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 23,
+      "atom_map": 42,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CE1",
+      "atom_name": "CE1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 24,
+      "atom_map": 43,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 1
+    },
+    {
+      "serial": 25,
+      "atom_map": 44,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CD2",
+      "atom_name": "CD2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 26,
+      "atom_map": 50,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD2",
+      "atom_name": "OD2",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 27,
+      "atom_map": 51,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 28,
+      "atom_map": 52,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD1",
+      "atom_name": "OD1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 29,
+      "atom_map": 53,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 30,
+      "atom_map": 54,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 31,
+      "atom_map": 70,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 32,
+      "atom_map": 71,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 33,
+      "atom_map": 72,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "OG1",
+      "atom_name": "OG1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 34,
+      "atom_map": 73,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CG2",
+      "atom_name": "CG2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 35,
+      "atom_map": 80,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 36,
+      "atom_map": 81,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 37,
+      "atom_map": 82,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 38,
+      "atom_map": 83,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CD",
+      "atom_name": "CD",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 39,
+      "atom_map": 84,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "OE1",
+      "atom_name": "OE1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 40,
+      "atom_map": 85,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 41,
+      "atom_map": 10000,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C41",
+      "atom_name": "C41",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 42,
+      "atom_map": 10001,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C42",
+      "atom_name": "C42",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 43,
+      "atom_map": 10002,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O43",
+      "atom_name": "O43",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 44,
+      "atom_map": 10003,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 45,
+      "atom_map": 10004,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 46,
+      "atom_map": 10005,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 47,
+      "atom_map": 10011,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 48,
+      "atom_map": 10012,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 49,
+      "atom_map": 10013,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 50,
+      "atom_map": 10016,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H50",
+      "atom_name": "H50",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 51,
+      "atom_map": 10017,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H51",
+      "atom_name": "H51",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 52,
+      "atom_map": 10018,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H52",
+      "atom_name": "H52",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 53,
+      "atom_map": 10019,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H53",
+      "atom_name": "H53",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 54,
+      "atom_map": 10020,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H54",
+      "atom_name": "H54",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 55,
+      "atom_map": 10021,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H55",
+      "atom_name": "H55",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 56,
+      "atom_map": 10022,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H56",
+      "atom_name": "H56",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 57,
+      "atom_map": 10023,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H57",
+      "atom_name": "H57",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 58,
+      "atom_map": 10024,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H58",
+      "atom_name": "H58",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 59,
+      "atom_map": 10025,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H59",
+      "atom_name": "H59",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 60,
+      "atom_map": 10026,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H60",
+      "atom_name": "H60",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 61,
+      "atom_map": 10027,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H61",
+      "atom_name": "H61",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 62,
+      "atom_map": 10028,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H62",
+      "atom_name": "H62",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 63,
+      "atom_map": 10029,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H63",
+      "atom_name": "H63",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 64,
+      "atom_map": 10030,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H64",
+      "atom_name": "H64",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 65,
+      "atom_map": 10031,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H65",
+      "atom_name": "H65",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 66,
+      "atom_map": 10032,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H66",
+      "atom_name": "H66",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 67,
+      "atom_map": 10033,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H67",
+      "atom_name": "H67",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 68,
+      "atom_map": 10034,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H68",
+      "atom_name": "H68",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 69,
+      "atom_map": 10035,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H69",
+      "atom_name": "H69",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 70,
+      "atom_map": 10036,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H70",
+      "atom_name": "H70",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 71,
+      "atom_map": 10037,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H71",
+      "atom_name": "H71",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 72,
+      "atom_map": 10038,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H72",
+      "atom_name": "H72",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 73,
+      "atom_map": 10039,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H73",
+      "atom_name": "H73",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 74,
+      "atom_map": 10040,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H74",
+      "atom_name": "H74",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 75,
+      "atom_map": 10041,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H75",
+      "atom_name": "H75",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 76,
+      "atom_map": 10042,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H76",
+      "atom_name": "H76",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 77,
+      "atom_map": 10043,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H77",
+      "atom_name": "H77",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 78,
+      "atom_map": 10044,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H78",
+      "atom_name": "H78",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 79,
+      "atom_map": 10045,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H79",
+      "atom_name": "H79",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 80,
+      "atom_map": 10046,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H80",
+      "atom_name": "H80",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 81,
+      "atom_map": 10047,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H81",
+      "atom_name": "H81",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 82,
+      "atom_map": 10048,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H82",
+      "atom_name": "H82",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 83,
+      "atom_map": 10049,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H83",
+      "atom_name": "H83",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 84,
+      "atom_map": 10050,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H84",
+      "atom_name": "H84",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 85,
+      "atom_map": 10051,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H85",
+      "atom_name": "H85",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 86,
+      "atom_map": 10052,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H86",
+      "atom_name": "H86",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 87,
+      "atom_map": 10053,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H87",
+      "atom_name": "H87",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 88,
+      "atom_map": 10054,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H88",
+      "atom_name": "H88",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 89,
+      "atom_map": 10055,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H89",
+      "atom_name": "H89",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 90,
+      "atom_map": 10056,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H90",
+      "atom_name": "H90",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 91,
+      "atom_map": 10064,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H91",
+      "atom_name": "H91",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 92,
+      "atom_map": 10069,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H92",
+      "atom_name": "H92",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 93,
+      "atom_map": 10070,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H93",
+      "atom_name": "H93",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 94,
+      "atom_map": 10071,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H94",
+      "atom_name": "H94",
+      "element": "H",
+      "formal_charge": 0
+    }
+  ],
+  "state_02": [
+    {
+      "serial": 1,
+      "atom_map": 3,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C1",
+      "atom_name": "CM3",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 2,
+      "atom_map": 1,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C2",
+      "atom_name": "C1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 3,
+      "atom_map": 2,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O3",
+      "atom_name": "O2",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 4,
+      "atom_map": 4,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O4",
+      "atom_name": "O4",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 5,
+      "atom_map": 5,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C5",
+      "atom_name": "CZ5",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 6,
+      "atom_map": 6,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C6",
+      "atom_name": "CE6",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 7,
+      "atom_map": 7,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C7",
+      "atom_name": "CD7",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 8,
+      "atom_map": 8,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C8",
+      "atom_name": "CG8",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 9,
+      "atom_map": 11,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "N9",
+      "atom_name": "N11",
+      "element": "N",
+      "formal_charge": 1
+    },
+    {
+      "serial": 10,
+      "atom_map": 12,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O10",
+      "atom_name": "O12",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 11,
+      "atom_map": 13,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O11",
+      "atom_name": "O13",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 12,
+      "atom_map": 9,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C12",
+      "atom_name": "CD9",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 13,
+      "atom_map": 10,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C13",
+      "atom_name": "CE10",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 14,
+      "atom_map": 60,
+      "node": "WAT",
+      "residue": "SUB",
+      "pdb_atom_name": "O14",
+      "atom_name": "OW",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 15,
+      "atom_map": 61,
+      "node": "WAT",
+      "residue": "SUB",
+      "pdb_atom_name": "H15",
+      "atom_name": "HW1",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 16,
+      "atom_map": 62,
+      "node": "WAT",
+      "residue": "SUB",
+      "pdb_atom_name": "H16",
+      "atom_name": "HW2",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 17,
+      "atom_map": 20,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "OG",
+      "atom_name": "OG",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 18,
+      "atom_map": 21,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H18",
+      "atom_name": "H18",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 19,
+      "atom_map": 22,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 20,
+      "atom_map": 23,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 21,
+      "atom_map": 40,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 22,
+      "atom_map": 47,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 23,
+      "atom_map": 46,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 24,
+      "atom_map": 41,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "ND1",
+      "atom_name": "ND1",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 25,
+      "atom_map": 45,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H25",
+      "atom_name": "H25",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 26,
+      "atom_map": 42,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CE1",
+      "atom_name": "CE1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 27,
+      "atom_map": 43,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 28,
+      "atom_map": 44,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CD2",
+      "atom_name": "CD2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 29,
+      "atom_map": 50,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD2",
+      "atom_name": "OD2",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 30,
+      "atom_map": 51,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 31,
+      "atom_map": 52,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD1",
+      "atom_name": "OD1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 32,
+      "atom_map": 53,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 33,
+      "atom_map": 54,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 34,
+      "atom_map": 70,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 35,
+      "atom_map": 71,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 36,
+      "atom_map": 72,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "OG1",
+      "atom_name": "OG1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 37,
+      "atom_map": 73,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CG2",
+      "atom_name": "CG2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 38,
+      "atom_map": 80,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 39,
+      "atom_map": 81,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 40,
+      "atom_map": 82,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 41,
+      "atom_map": 83,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CD",
+      "atom_name": "CD",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 42,
+      "atom_map": 84,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "OE1",
+      "atom_name": "OE1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 43,
+      "atom_map": 85,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 44,
+      "atom_map": 10000,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C44",
+      "atom_name": "C44",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 45,
+      "atom_map": 10001,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C45",
+      "atom_name": "C45",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 46,
+      "atom_map": 10002,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O46",
+      "atom_name": "O46",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 47,
+      "atom_map": 10003,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 48,
+      "atom_map": 10004,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 49,
+      "atom_map": 10005,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 50,
+      "atom_map": 10011,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 51,
+      "atom_map": 10012,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 52,
+      "atom_map": 10013,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 53,
+      "atom_map": 10016,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H53",
+      "atom_name": "H53",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 54,
+      "atom_map": 10017,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H54",
+      "atom_name": "H54",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 55,
+      "atom_map": 10018,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H55",
+      "atom_name": "H55",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 56,
+      "atom_map": 10019,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H56",
+      "atom_name": "H56",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 57,
+      "atom_map": 10020,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H57",
+      "atom_name": "H57",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 58,
+      "atom_map": 10021,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H58",
+      "atom_name": "H58",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 59,
+      "atom_map": 10022,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H59",
+      "atom_name": "H59",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 60,
+      "atom_map": 10023,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H60",
+      "atom_name": "H60",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 61,
+      "atom_map": 10024,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H61",
+      "atom_name": "H61",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 62,
+      "atom_map": 10025,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H62",
+      "atom_name": "H62",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 63,
+      "atom_map": 10026,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H63",
+      "atom_name": "H63",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 64,
+      "atom_map": 10027,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H64",
+      "atom_name": "H64",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 65,
+      "atom_map": 10028,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H65",
+      "atom_name": "H65",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 66,
+      "atom_map": 10029,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H66",
+      "atom_name": "H66",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 67,
+      "atom_map": 10030,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H67",
+      "atom_name": "H67",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 68,
+      "atom_map": 10031,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H68",
+      "atom_name": "H68",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 69,
+      "atom_map": 10032,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H69",
+      "atom_name": "H69",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 70,
+      "atom_map": 10033,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H70",
+      "atom_name": "H70",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 71,
+      "atom_map": 10034,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H71",
+      "atom_name": "H71",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 72,
+      "atom_map": 10035,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H72",
+      "atom_name": "H72",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 73,
+      "atom_map": 10036,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H73",
+      "atom_name": "H73",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 74,
+      "atom_map": 10037,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H74",
+      "atom_name": "H74",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 75,
+      "atom_map": 10038,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H75",
+      "atom_name": "H75",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 76,
+      "atom_map": 10039,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H76",
+      "atom_name": "H76",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 77,
+      "atom_map": 10040,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H77",
+      "atom_name": "H77",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 78,
+      "atom_map": 10041,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H78",
+      "atom_name": "H78",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 79,
+      "atom_map": 10042,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H79",
+      "atom_name": "H79",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 80,
+      "atom_map": 10043,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H80",
+      "atom_name": "H80",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 81,
+      "atom_map": 10044,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H81",
+      "atom_name": "H81",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 82,
+      "atom_map": 10045,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H82",
+      "atom_name": "H82",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 83,
+      "atom_map": 10046,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H83",
+      "atom_name": "H83",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 84,
+      "atom_map": 10047,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H84",
+      "atom_name": "H84",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 85,
+      "atom_map": 10048,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H85",
+      "atom_name": "H85",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 86,
+      "atom_map": 10049,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H86",
+      "atom_name": "H86",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 87,
+      "atom_map": 10050,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H87",
+      "atom_name": "H87",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 88,
+      "atom_map": 10051,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H88",
+      "atom_name": "H88",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 89,
+      "atom_map": 10052,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H89",
+      "atom_name": "H89",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 90,
+      "atom_map": 10053,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H90",
+      "atom_name": "H90",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 91,
+      "atom_map": 10054,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H91",
+      "atom_name": "H91",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 92,
+      "atom_map": 10055,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H92",
+      "atom_name": "H92",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 93,
+      "atom_map": 10056,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H93",
+      "atom_name": "H93",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 94,
+      "atom_map": 10064,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H94",
+      "atom_name": "H94",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 95,
+      "atom_map": 10069,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H95",
+      "atom_name": "H95",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 96,
+      "atom_map": 10070,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H96",
+      "atom_name": "H96",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 97,
+      "atom_map": 10071,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H97",
+      "atom_name": "H97",
+      "element": "H",
+      "formal_charge": 0
+    }
+  ],
+  "state_03": [
+    {
+      "serial": 1,
+      "atom_map": 3,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C1",
+      "atom_name": "CM3",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 2,
+      "atom_map": 1,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C2",
+      "atom_name": "C1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 3,
+      "atom_map": 2,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O3",
+      "atom_name": "O2",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 4,
+      "atom_map": 4,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O4",
+      "atom_name": "O4",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 5,
+      "atom_map": 5,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C5",
+      "atom_name": "CZ5",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 6,
+      "atom_map": 6,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C6",
+      "atom_name": "CE6",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 7,
+      "atom_map": 7,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C7",
+      "atom_name": "CD7",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 8,
+      "atom_map": 8,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C8",
+      "atom_name": "CG8",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 9,
+      "atom_map": 11,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "N9",
+      "atom_name": "N11",
+      "element": "N",
+      "formal_charge": 1
+    },
+    {
+      "serial": 10,
+      "atom_map": 12,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O10",
+      "atom_name": "O12",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 11,
+      "atom_map": 13,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O11",
+      "atom_name": "O13",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 12,
+      "atom_map": 9,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C12",
+      "atom_name": "CD9",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 13,
+      "atom_map": 10,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C13",
+      "atom_name": "CE10",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 14,
+      "atom_map": 60,
+      "node": "WAT",
+      "residue": "SUB",
+      "pdb_atom_name": "O14",
+      "atom_name": "OW",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 15,
+      "atom_map": 61,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H15",
+      "atom_name": "HW1",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 16,
+      "atom_map": 62,
+      "node": "WAT",
+      "residue": "SUB",
+      "pdb_atom_name": "H16",
+      "atom_name": "HW2",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 17,
+      "atom_map": 20,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "OG",
+      "atom_name": "OG",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 18,
+      "atom_map": 21,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H18",
+      "atom_name": "H18",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 19,
+      "atom_map": 22,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 20,
+      "atom_map": 23,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 21,
+      "atom_map": 40,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 22,
+      "atom_map": 47,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 23,
+      "atom_map": 46,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 24,
+      "atom_map": 41,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "ND1",
+      "atom_name": "ND1",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 25,
+      "atom_map": 45,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H25",
+      "atom_name": "H25",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 26,
+      "atom_map": 42,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CE1",
+      "atom_name": "CE1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 27,
+      "atom_map": 43,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 1
+    },
+    {
+      "serial": 28,
+      "atom_map": 44,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CD2",
+      "atom_name": "CD2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 29,
+      "atom_map": 50,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD2",
+      "atom_name": "OD2",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 30,
+      "atom_map": 51,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 31,
+      "atom_map": 52,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD1",
+      "atom_name": "OD1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 32,
+      "atom_map": 53,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 33,
+      "atom_map": 54,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 34,
+      "atom_map": 70,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 35,
+      "atom_map": 71,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 36,
+      "atom_map": 72,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "OG1",
+      "atom_name": "OG1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 37,
+      "atom_map": 73,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CG2",
+      "atom_name": "CG2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 38,
+      "atom_map": 80,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 39,
+      "atom_map": 81,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 40,
+      "atom_map": 82,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 41,
+      "atom_map": 83,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CD",
+      "atom_name": "CD",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 42,
+      "atom_map": 84,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "OE1",
+      "atom_name": "OE1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 43,
+      "atom_map": 85,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 44,
+      "atom_map": 10000,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C44",
+      "atom_name": "C44",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 45,
+      "atom_map": 10001,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C45",
+      "atom_name": "C45",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 46,
+      "atom_map": 10002,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O46",
+      "atom_name": "O46",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 47,
+      "atom_map": 10003,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 48,
+      "atom_map": 10004,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 49,
+      "atom_map": 10005,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 50,
+      "atom_map": 10011,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 51,
+      "atom_map": 10012,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 52,
+      "atom_map": 10013,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 53,
+      "atom_map": 10016,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H53",
+      "atom_name": "H53",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 54,
+      "atom_map": 10017,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H54",
+      "atom_name": "H54",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 55,
+      "atom_map": 10018,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H55",
+      "atom_name": "H55",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 56,
+      "atom_map": 10019,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H56",
+      "atom_name": "H56",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 57,
+      "atom_map": 10020,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H57",
+      "atom_name": "H57",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 58,
+      "atom_map": 10021,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H58",
+      "atom_name": "H58",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 59,
+      "atom_map": 10022,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H59",
+      "atom_name": "H59",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 60,
+      "atom_map": 10023,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H60",
+      "atom_name": "H60",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 61,
+      "atom_map": 10024,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H61",
+      "atom_name": "H61",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 62,
+      "atom_map": 10025,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H62",
+      "atom_name": "H62",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 63,
+      "atom_map": 10026,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H63",
+      "atom_name": "H63",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 64,
+      "atom_map": 10027,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H64",
+      "atom_name": "H64",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 65,
+      "atom_map": 10028,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H65",
+      "atom_name": "H65",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 66,
+      "atom_map": 10029,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H66",
+      "atom_name": "H66",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 67,
+      "atom_map": 10030,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H67",
+      "atom_name": "H67",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 68,
+      "atom_map": 10031,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H68",
+      "atom_name": "H68",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 69,
+      "atom_map": 10032,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H69",
+      "atom_name": "H69",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 70,
+      "atom_map": 10033,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H70",
+      "atom_name": "H70",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 71,
+      "atom_map": 10034,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H71",
+      "atom_name": "H71",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 72,
+      "atom_map": 10035,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H72",
+      "atom_name": "H72",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 73,
+      "atom_map": 10036,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H73",
+      "atom_name": "H73",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 74,
+      "atom_map": 10037,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H74",
+      "atom_name": "H74",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 75,
+      "atom_map": 10038,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H75",
+      "atom_name": "H75",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 76,
+      "atom_map": 10039,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H76",
+      "atom_name": "H76",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 77,
+      "atom_map": 10040,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H77",
+      "atom_name": "H77",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 78,
+      "atom_map": 10041,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H78",
+      "atom_name": "H78",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 79,
+      "atom_map": 10042,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H79",
+      "atom_name": "H79",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 80,
+      "atom_map": 10043,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H80",
+      "atom_name": "H80",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 81,
+      "atom_map": 10044,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H81",
+      "atom_name": "H81",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 82,
+      "atom_map": 10045,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H82",
+      "atom_name": "H82",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 83,
+      "atom_map": 10046,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H83",
+      "atom_name": "H83",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 84,
+      "atom_map": 10047,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H84",
+      "atom_name": "H84",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 85,
+      "atom_map": 10048,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H85",
+      "atom_name": "H85",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 86,
+      "atom_map": 10049,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H86",
+      "atom_name": "H86",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 87,
+      "atom_map": 10050,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H87",
+      "atom_name": "H87",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 88,
+      "atom_map": 10051,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H88",
+      "atom_name": "H88",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 89,
+      "atom_map": 10052,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H89",
+      "atom_name": "H89",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 90,
+      "atom_map": 10053,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H90",
+      "atom_name": "H90",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 91,
+      "atom_map": 10054,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H91",
+      "atom_name": "H91",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 92,
+      "atom_map": 10055,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H92",
+      "atom_name": "H92",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 93,
+      "atom_map": 10056,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H93",
+      "atom_name": "H93",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 94,
+      "atom_map": 10064,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H94",
+      "atom_name": "H94",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 95,
+      "atom_map": 10069,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H95",
+      "atom_name": "H95",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 96,
+      "atom_map": 10070,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H96",
+      "atom_name": "H96",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 97,
+      "atom_map": 10071,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H97",
+      "atom_name": "H97",
+      "element": "H",
+      "formal_charge": 0
+    }
+  ],
+  "state_04": [
+    {
+      "serial": 1,
+      "atom_map": 3,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C1",
+      "atom_name": "CM3",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 2,
+      "atom_map": 1,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C2",
+      "atom_name": "C1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 3,
+      "atom_map": 2,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O3",
+      "atom_name": "O2",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 4,
+      "atom_map": 4,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O4",
+      "atom_name": "O4",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 5,
+      "atom_map": 5,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C5",
+      "atom_name": "CZ5",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 6,
+      "atom_map": 6,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C6",
+      "atom_name": "CE6",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 7,
+      "atom_map": 7,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C7",
+      "atom_name": "CD7",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 8,
+      "atom_map": 8,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C8",
+      "atom_name": "CG8",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 9,
+      "atom_map": 11,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "N9",
+      "atom_name": "N11",
+      "element": "N",
+      "formal_charge": 1
+    },
+    {
+      "serial": 10,
+      "atom_map": 12,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O10",
+      "atom_name": "O12",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 11,
+      "atom_map": 13,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O11",
+      "atom_name": "O13",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 12,
+      "atom_map": 9,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C12",
+      "atom_name": "CD9",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 13,
+      "atom_map": 10,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C13",
+      "atom_name": "CE10",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 14,
+      "atom_map": 60,
+      "node": "WAT",
+      "residue": "SUB",
+      "pdb_atom_name": "O14",
+      "atom_name": "OW",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 15,
+      "atom_map": 61,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H15",
+      "atom_name": "HW1",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 16,
+      "atom_map": 62,
+      "node": "WAT",
+      "residue": "SUB",
+      "pdb_atom_name": "H16",
+      "atom_name": "HW2",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 17,
+      "atom_map": 20,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "OG",
+      "atom_name": "OG",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 18,
+      "atom_map": 21,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H18",
+      "atom_name": "H18",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 19,
+      "atom_map": 22,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 20,
+      "atom_map": 23,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 21,
+      "atom_map": 40,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 22,
+      "atom_map": 47,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 23,
+      "atom_map": 46,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 24,
+      "atom_map": 41,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "ND1",
+      "atom_name": "ND1",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 25,
+      "atom_map": 45,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H25",
+      "atom_name": "H25",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 26,
+      "atom_map": 42,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CE1",
+      "atom_name": "CE1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 27,
+      "atom_map": 43,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 1
+    },
+    {
+      "serial": 28,
+      "atom_map": 44,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CD2",
+      "atom_name": "CD2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 29,
+      "atom_map": 50,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD2",
+      "atom_name": "OD2",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 30,
+      "atom_map": 51,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 31,
+      "atom_map": 52,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD1",
+      "atom_name": "OD1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 32,
+      "atom_map": 53,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 33,
+      "atom_map": 54,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 34,
+      "atom_map": 70,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 35,
+      "atom_map": 71,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 36,
+      "atom_map": 72,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "OG1",
+      "atom_name": "OG1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 37,
+      "atom_map": 73,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CG2",
+      "atom_name": "CG2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 38,
+      "atom_map": 80,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 39,
+      "atom_map": 81,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 40,
+      "atom_map": 82,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 41,
+      "atom_map": 83,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CD",
+      "atom_name": "CD",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 42,
+      "atom_map": 84,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "OE1",
+      "atom_name": "OE1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 43,
+      "atom_map": 85,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 44,
+      "atom_map": 10000,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C44",
+      "atom_name": "C44",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 45,
+      "atom_map": 10001,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C45",
+      "atom_name": "C45",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 46,
+      "atom_map": 10002,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O46",
+      "atom_name": "O46",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 47,
+      "atom_map": 10003,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 48,
+      "atom_map": 10004,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 49,
+      "atom_map": 10005,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 50,
+      "atom_map": 10011,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 51,
+      "atom_map": 10012,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 52,
+      "atom_map": 10013,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 53,
+      "atom_map": 10016,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H53",
+      "atom_name": "H53",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 54,
+      "atom_map": 10017,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H54",
+      "atom_name": "H54",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 55,
+      "atom_map": 10018,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H55",
+      "atom_name": "H55",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 56,
+      "atom_map": 10019,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H56",
+      "atom_name": "H56",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 57,
+      "atom_map": 10020,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H57",
+      "atom_name": "H57",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 58,
+      "atom_map": 10021,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H58",
+      "atom_name": "H58",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 59,
+      "atom_map": 10022,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H59",
+      "atom_name": "H59",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 60,
+      "atom_map": 10023,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H60",
+      "atom_name": "H60",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 61,
+      "atom_map": 10024,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H61",
+      "atom_name": "H61",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 62,
+      "atom_map": 10025,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H62",
+      "atom_name": "H62",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 63,
+      "atom_map": 10026,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H63",
+      "atom_name": "H63",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 64,
+      "atom_map": 10027,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H64",
+      "atom_name": "H64",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 65,
+      "atom_map": 10028,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H65",
+      "atom_name": "H65",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 66,
+      "atom_map": 10029,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H66",
+      "atom_name": "H66",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 67,
+      "atom_map": 10030,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H67",
+      "atom_name": "H67",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 68,
+      "atom_map": 10031,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H68",
+      "atom_name": "H68",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 69,
+      "atom_map": 10032,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H69",
+      "atom_name": "H69",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 70,
+      "atom_map": 10033,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H70",
+      "atom_name": "H70",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 71,
+      "atom_map": 10034,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H71",
+      "atom_name": "H71",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 72,
+      "atom_map": 10035,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H72",
+      "atom_name": "H72",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 73,
+      "atom_map": 10036,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H73",
+      "atom_name": "H73",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 74,
+      "atom_map": 10037,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H74",
+      "atom_name": "H74",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 75,
+      "atom_map": 10038,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H75",
+      "atom_name": "H75",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 76,
+      "atom_map": 10039,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H76",
+      "atom_name": "H76",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 77,
+      "atom_map": 10040,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H77",
+      "atom_name": "H77",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 78,
+      "atom_map": 10041,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H78",
+      "atom_name": "H78",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 79,
+      "atom_map": 10042,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H79",
+      "atom_name": "H79",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 80,
+      "atom_map": 10043,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H80",
+      "atom_name": "H80",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 81,
+      "atom_map": 10044,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H81",
+      "atom_name": "H81",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 82,
+      "atom_map": 10045,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H82",
+      "atom_name": "H82",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 83,
+      "atom_map": 10046,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H83",
+      "atom_name": "H83",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 84,
+      "atom_map": 10047,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H84",
+      "atom_name": "H84",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 85,
+      "atom_map": 10048,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H85",
+      "atom_name": "H85",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 86,
+      "atom_map": 10049,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H86",
+      "atom_name": "H86",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 87,
+      "atom_map": 10050,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H87",
+      "atom_name": "H87",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 88,
+      "atom_map": 10051,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H88",
+      "atom_name": "H88",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 89,
+      "atom_map": 10052,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H89",
+      "atom_name": "H89",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 90,
+      "atom_map": 10053,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H90",
+      "atom_name": "H90",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 91,
+      "atom_map": 10054,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H91",
+      "atom_name": "H91",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 92,
+      "atom_map": 10055,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H92",
+      "atom_name": "H92",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 93,
+      "atom_map": 10056,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H93",
+      "atom_name": "H93",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 94,
+      "atom_map": 10064,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H94",
+      "atom_name": "H94",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 95,
+      "atom_map": 10069,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H95",
+      "atom_name": "H95",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 96,
+      "atom_map": 10070,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H96",
+      "atom_name": "H96",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 97,
+      "atom_map": 10071,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H97",
+      "atom_name": "H97",
+      "element": "H",
+      "formal_charge": 0
+    }
+  ],
+  "state_05": [
+    {
+      "serial": 1,
+      "atom_map": 3,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C1",
+      "atom_name": "CM3",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 2,
+      "atom_map": 1,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C2",
+      "atom_name": "C1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 3,
+      "atom_map": 2,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O3",
+      "atom_name": "O2",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 4,
+      "atom_map": 4,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O4",
+      "atom_name": "O4",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 5,
+      "atom_map": 5,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C5",
+      "atom_name": "CZ5",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 6,
+      "atom_map": 6,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C6",
+      "atom_name": "CE6",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 7,
+      "atom_map": 7,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C7",
+      "atom_name": "CD7",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 8,
+      "atom_map": 8,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C8",
+      "atom_name": "CG8",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 9,
+      "atom_map": 11,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "N9",
+      "atom_name": "N11",
+      "element": "N",
+      "formal_charge": 1
+    },
+    {
+      "serial": 10,
+      "atom_map": 12,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O10",
+      "atom_name": "O12",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 11,
+      "atom_map": 13,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "O11",
+      "atom_name": "O13",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 12,
+      "atom_map": 9,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C12",
+      "atom_name": "CD9",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 13,
+      "atom_map": 10,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "C13",
+      "atom_name": "CE10",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 14,
+      "atom_map": 60,
+      "node": "WAT",
+      "residue": "SUB",
+      "pdb_atom_name": "O14",
+      "atom_name": "OW",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 15,
+      "atom_map": 61,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H15",
+      "atom_name": "HW1",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 16,
+      "atom_map": 62,
+      "node": "WAT",
+      "residue": "SUB",
+      "pdb_atom_name": "H16",
+      "atom_name": "HW2",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 17,
+      "atom_map": 20,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "OG",
+      "atom_name": "OG",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 18,
+      "atom_map": 21,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H18",
+      "atom_name": "H18",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 19,
+      "atom_map": 22,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 20,
+      "atom_map": 23,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 21,
+      "atom_map": 40,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 22,
+      "atom_map": 47,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 23,
+      "atom_map": 46,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 24,
+      "atom_map": 41,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "ND1",
+      "atom_name": "ND1",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 25,
+      "atom_map": 45,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H25",
+      "atom_name": "H25",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 26,
+      "atom_map": 42,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CE1",
+      "atom_name": "CE1",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 27,
+      "atom_map": 43,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 28,
+      "atom_map": 44,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "CD2",
+      "atom_name": "CD2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 29,
+      "atom_map": 50,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD2",
+      "atom_name": "OD2",
+      "element": "O",
+      "formal_charge": -1
+    },
+    {
+      "serial": 30,
+      "atom_map": 51,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 31,
+      "atom_map": 52,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "OD1",
+      "atom_name": "OD1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 32,
+      "atom_map": 53,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 33,
+      "atom_map": 54,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 34,
+      "atom_map": 70,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 35,
+      "atom_map": 71,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 36,
+      "atom_map": 72,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "OG1",
+      "atom_name": "OG1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 37,
+      "atom_map": 73,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "CG2",
+      "atom_name": "CG2",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 38,
+      "atom_map": 80,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CA",
+      "atom_name": "CA",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 39,
+      "atom_map": 81,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CB",
+      "atom_name": "CB",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 40,
+      "atom_map": 82,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CG",
+      "atom_name": "CG",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 41,
+      "atom_map": 83,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "CD",
+      "atom_name": "CD",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 42,
+      "atom_map": 84,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "OE1",
+      "atom_name": "OE1",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 43,
+      "atom_map": 85,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "NE2",
+      "atom_name": "NE2",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 44,
+      "atom_map": 10000,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C44",
+      "atom_name": "C44",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 45,
+      "atom_map": 10001,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C45",
+      "atom_name": "C45",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 46,
+      "atom_map": 10002,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O46",
+      "atom_name": "O46",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 47,
+      "atom_map": 10003,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 48,
+      "atom_map": 10004,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 49,
+      "atom_map": 10005,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 50,
+      "atom_map": 10011,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "N",
+      "atom_name": "N",
+      "element": "N",
+      "formal_charge": 0
+    },
+    {
+      "serial": 51,
+      "atom_map": 10012,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "C",
+      "atom_name": "C",
+      "element": "C",
+      "formal_charge": 0
+    },
+    {
+      "serial": 52,
+      "atom_map": 10013,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "O",
+      "atom_name": "O",
+      "element": "O",
+      "formal_charge": 0
+    },
+    {
+      "serial": 53,
+      "atom_map": 10016,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H53",
+      "atom_name": "H53",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 54,
+      "atom_map": 10017,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H54",
+      "atom_name": "H54",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 55,
+      "atom_map": 10018,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H55",
+      "atom_name": "H55",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 56,
+      "atom_map": 10019,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H56",
+      "atom_name": "H56",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 57,
+      "atom_map": 10020,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H57",
+      "atom_name": "H57",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 58,
+      "atom_map": 10021,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H58",
+      "atom_name": "H58",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 59,
+      "atom_map": 10022,
+      "node": "SUB",
+      "residue": "SUB",
+      "pdb_atom_name": "H59",
+      "atom_name": "H59",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 60,
+      "atom_map": 10023,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H60",
+      "atom_name": "H60",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 61,
+      "atom_map": 10024,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H61",
+      "atom_name": "H61",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 62,
+      "atom_map": 10025,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H62",
+      "atom_name": "H62",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 63,
+      "atom_map": 10026,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H63",
+      "atom_name": "H63",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 64,
+      "atom_map": 10027,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H64",
+      "atom_name": "H64",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 65,
+      "atom_map": 10028,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H65",
+      "atom_name": "H65",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 66,
+      "atom_map": 10029,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H66",
+      "atom_name": "H66",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 67,
+      "atom_map": 10030,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H67",
+      "atom_name": "H67",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 68,
+      "atom_map": 10031,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H68",
+      "atom_name": "H68",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 69,
+      "atom_map": 10032,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H69",
+      "atom_name": "H69",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 70,
+      "atom_map": 10033,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H70",
+      "atom_name": "H70",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 71,
+      "atom_map": 10034,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H71",
+      "atom_name": "H71",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 72,
+      "atom_map": 10035,
+      "node": "ORIENT",
+      "residue": "ASP187",
+      "pdb_atom_name": "H72",
+      "atom_name": "H72",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 73,
+      "atom_map": 10036,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H73",
+      "atom_name": "H73",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 74,
+      "atom_map": 10037,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H74",
+      "atom_name": "H74",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 75,
+      "atom_map": 10038,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H75",
+      "atom_name": "H75",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 76,
+      "atom_map": 10039,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H76",
+      "atom_name": "H76",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 77,
+      "atom_map": 10040,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H77",
+      "atom_name": "H77",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 78,
+      "atom_map": 10041,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H78",
+      "atom_name": "H78",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 79,
+      "atom_map": 10042,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H79",
+      "atom_name": "H79",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 80,
+      "atom_map": 10043,
+      "node": "THR40",
+      "residue": "THR40",
+      "pdb_atom_name": "H80",
+      "atom_name": "H80",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 81,
+      "atom_map": 10044,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H81",
+      "atom_name": "H81",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 82,
+      "atom_map": 10045,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H82",
+      "atom_name": "H82",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 83,
+      "atom_map": 10046,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H83",
+      "atom_name": "H83",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 84,
+      "atom_map": 10047,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H84",
+      "atom_name": "H84",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 85,
+      "atom_map": 10048,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H85",
+      "atom_name": "H85",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 86,
+      "atom_map": 10049,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H86",
+      "atom_name": "H86",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 87,
+      "atom_map": 10050,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H87",
+      "atom_name": "H87",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 88,
+      "atom_map": 10051,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H88",
+      "atom_name": "H88",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 89,
+      "atom_map": 10052,
+      "node": "GLN106",
+      "residue": "GLN106",
+      "pdb_atom_name": "H89",
+      "atom_name": "H89",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 90,
+      "atom_map": 10053,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H90",
+      "atom_name": "H90",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 91,
+      "atom_map": 10054,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H91",
+      "atom_name": "H91",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 92,
+      "atom_map": 10055,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H92",
+      "atom_name": "H92",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 93,
+      "atom_map": 10056,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H93",
+      "atom_name": "H93",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 94,
+      "atom_map": 10064,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H94",
+      "atom_name": "H94",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 95,
+      "atom_map": 10069,
+      "node": "BASE",
+      "residue": "HIS224",
+      "pdb_atom_name": "H95",
+      "atom_name": "H95",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 96,
+      "atom_map": 10070,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H96",
+      "atom_name": "H96",
+      "element": "H",
+      "formal_charge": 0
+    },
+    {
+      "serial": 97,
+      "atom_map": 10071,
+      "node": "NUC",
+      "residue": "SER105",
+      "pdb_atom_name": "H97",
+      "atom_name": "H97",
+      "element": "H",
+      "formal_charge": 0
+    }
+  ]
+}

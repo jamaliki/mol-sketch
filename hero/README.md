@@ -7,15 +7,19 @@ no arrows, framed for the hero's layout, on the site's own colours. Two papers: 
 ```bash
 cd app && npm install && npm run build        # once
 cd ../hero
-./render.sh dark                              # → hero_dark.mp4, hero_dark.webm, hero_dark_poster.jpg (~3 min)
+./render.sh dark                              # → out/hero_dark.{mp4,webm}, hero_dark_poster.jpg (~3 min)
 ./render.sh cream                             # the cream variant
+./render.sh dark-mobile                       # 1080x1920, framed for a phone
+./render.sh calb                              # CALB / pNPA from real coordinates, with the arrows — see calb/README.md
+./render.sh calb-chalk                        # the same as chalk on the board;  calb-mobile, calb-chalk-mobile likewise
 SOFTWARE="" ./render.sh dark                  # on a machine with a GPU
 ```
 
 `render.sh` is the whole recipe: the scene file (the mechanism with the hero's camera and residue colours), the look
-(`dark-paper`, new in `looks/` and in the app, or `watercolour` with the site's palette for cream), the `--set show.*=false`
-flags that remove labels, captions, step numbers, arrows, charges and lone pairs, and the ffmpeg lines that encode
-H.264 (every browser), VP9 (smaller, first choice) and the poster.
+(`dark-paper` or `chalkboard`, both in `looks/` and in the app, or `watercolour` with the site's palette for cream),
+the `--set` flags that remove text and, for the demo, the chemistry, and the ffmpeg lines that encode H.264 (every
+browser), VP9 (smaller, first choice) and the poster. `mockup.html` is the page with every variant behind a switch,
+and a phone frame.
 
 ## On the page
 
@@ -30,6 +34,30 @@ contrast-[1.6] saturate-[1.65]`), which were tuned for that footage and would cr
 ```
 
 and in the CSS, `.hero-art video { object-position: 70% 40%; }` instead of `60% 40%`. The overlay gradient stays.
+
+## Phones
+
+Browsers ignore `media` on a `<video>`'s `<source>`, so the portrait file is chosen once at load, the way the mock-up
+does it: give the video no sources, and
+
+```html
+<video id="hero-video" loop playsinline muted autoplay preload="none" class="h-full w-full object-cover"></video>
+<script>
+  const v = document.getElementById('hero-video');
+  const m = matchMedia('(max-width: 767px)').matches;          // the site's own phone breakpoint
+  const f = m ? '/assets/hero_dark-mobile' : '/assets/hero_dark';
+  v.poster = f + '_poster.jpg';
+  for (const [ext, type] of [['webm', 'video/webm'], ['mp4', 'video/mp4']]) {
+    const s = document.createElement('source'); s.src = f + '.' + ext; s.type = type; v.append(s);
+  }
+  v.load();
+</script>
+```
+
+with `@media (max-width: 767px) { .hero-art video { object-position: 50% 35%; } }`. The portrait renders put the
+drawing in the upper third, above where the headline starts on a phone (about 48 % of the height at 390×844), and
+within the 82 % of the width a 9:16 file shows in a phone's taller viewport. In React the same goes in an effect
+that sets `src` from `window.matchMedia` before the element mounts its sources.
 
 For the cream variant the hero's text flips to the site's ink: `.home-hero` gets `background: var(--paper); color:
 var(--ink)`, the paragraph `color: var(--muted)`, the secondary button a dark border, and the overlay becomes a cream

@@ -150,6 +150,19 @@ node render.js examples/mechanism.json --settings looks/dark-paper.json --frames
 | `style.grain` | `0.3` | the grain screens light speckles onto dark paper; keep it faint |
 | `view.fog` | `0.2` | fog mixes toward navy, which dulls quickly |
 
+## 4c. Chalkboard — `looks/chalkboard.json`
+
+Chalk on the same navy: `fill: chalk`, a fill mode of its own. Broad side-of-the-stick strokes in the pigment colour
+(lightened a little, laid dense), a soft white outline, no pen hatching, and the board's tooth: a field of dark pits
+multiplied over the whole drawing, so every stroke breaks up the way chalk does. A faint pale wash stands in for
+chalk dust. Same palette as dark paper, arrows in white chalk.
+
+![](img/chalkboard.png)
+
+```bash
+node render.js examples/mechanism.json --settings looks/chalkboard.json --frames 28
+```
+
 ## 5. Assembly surface by subunit — `looks/assembly-surface.json`
 
 ![](img/ribosome_surface_by_subunit.png)

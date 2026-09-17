@@ -1,6 +1,6 @@
 /* The look: everything the renderer reads that is not geometry. Looks in looks.ts are values of this. */
 
-export type Fill = 'flat' | 'wash' | 'pencil' | 'watercolour' | 'ink' | 'ink colour';
+export type Fill = 'flat' | 'wash' | 'pencil' | 'watercolour' | 'ink' | 'ink colour' | 'chalk';
 export type ColorBy = 'element' | 'residue' | 'chain' | 'subunit' | 'entity';
 
 export interface Palette {
@@ -14,7 +14,7 @@ export interface Style {
   mode: 'sticks' | 'ballstick';
   sphereScale: number;       // cut-point spheres in sticks mode
   show: { H: boolean; lonePairs: boolean; charges: boolean; arrows: boolean; labels: boolean; resLabels: boolean; hbonds: boolean; caption: boolean; stepLabel: boolean; valence: boolean };
-  font: 'Caveat' | 'Patrick Hand' | 'Kalam' | 'Plain sans'; labelSize: number; captionSize: number;
+  font: 'Caveat' | 'Patrick Hand' | 'Kalam' | 'Plain sans'; labelSize: number; captionSize: number; annot: number;
   palette: Palette;
   colorBy: ColorBy;          // carbon / cartoon-by-carbon / surface-by-residue schemes
   cartoonColor: 'ss' | 'carbon';
@@ -47,7 +47,7 @@ export const DEFAULT_STYLE: Style = {
   fill: 'watercolour',
   mode: 'sticks', sphereScale: 0.4,
   show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, resLabels: false, hbonds: true, caption: true, stepLabel: true, valence: true },
-  font: 'Caveat', labelSize: 19, captionSize: 24,
+  font: 'Caveat', labelSize: 19, captionSize: 24, annot: 1,
   palette: { ...PALETTES['Colored pencil'] },
   colorBy: 'residue',
   cartoonColor: 'ss',

@@ -103,7 +103,7 @@ scripts/shot.mjs  development screenshots against the dev server
 
 ## Style fields
 
-`fill` watercolour | ink colour | ink | pencil | flat | wash. `shading`, `pencilFill`, `fillWobble`,
+`fill` watercolour | ink colour | ink | pencil | chalk | flat | wash. `annot` scales lone pairs, charges and arrow heads. `shading`, `pencilFill`, `fillWobble`,
 `construction`. `palette` paper, ink, hatch, wash, element colours, helix/sheet/loop/nucleic, surface. `colorBy` residue | element | chain | subunit | entity (carbons, and cartoons/surfaces when
 `cartoonColor`/`surfaceColor` say `carbon`/`residue`). `reps` the three selections. `stickRadius`,
 `cartoonScale`, `probe`. `line` width, rough (wobble), passes, hierarchy (silhouettes heavier than

@@ -84,6 +84,7 @@ this README. [docs/looks.md](docs/looks.md) documents each one, setting by setti
 | `looks/ink.json` | the same in black ink only |
 | `looks/pencil.json` | coloured-pencil scribble fills with construction lines |
 | `looks/dark-paper.json` | watercolour on the website's navy: pale ink, pigment laid down, no wash |
+| `looks/chalkboard.json` | chalk on the same navy: dusty fills, soft white line, the board's tooth |
 | `looks/assembly-surface.json` | watercolour surface coloured by subunit, for large complexes |
 | `looks/assembly-cartoon.json` | tube/ribbon cartoon coloured by subunit, thin pen, heavy fog |
 
@@ -279,7 +280,8 @@ of pitch oscillation per turn (0).
 `shading` (0.65), `pencilFill` (0.55), `fillWobble` (1: how far fills stray from the ink), `grain` (0.6),
 `wash` (0.3: watercolour on the paper), `washSeed` (1), `washLife` (0.6: how much the wash breathes per boil),
 `contextAlpha` (0.5: pocket blob), `font` Caveat|Patrick Hand|Kalam|Plain sans, `labelSize` (19),
-`captionSize` (24).
+`captionSize` (24), `annot` (1: scale of lone-pair dots, charge circles and arrow heads, for drawings whose
+atoms are small on the page).
 
 **show** — `H`, `construction`, `valence`, `colorBonds` (ball-and-stick), `lonePairs`, `charges`,
 `arrows`, `labels`, `resLabels`, `hbonds`, `context`, `caption`, `stepLabel`.

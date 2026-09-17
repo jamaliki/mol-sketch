@@ -30,7 +30,7 @@ for(const k in PRESETS)for(const c in SS_COLS)if(!PRESETS[k][c])PRESETS[k][c]=SS
 const DEFAULT_CFG={
   fps:24, stepEvery:2, boilEvery:2, arrowLead:0.2,
   view:{yaw:-18,pitch:14,zoom:1,panX:0,panY:0,fov:20,fog:0.5,fogStart:0.45,spin:0,pitchSwing:0},
-  style:{rough:1.1,passes:2,pressure:0.55,fillWobble:1,hatchDensity:1.4,hierarchy:0.6,wash:0.3,washSeed:1,washLife:0.6,inkWidth:1.5,ballScale:1,bondWidth:2.1,hatchSpacing:5,hatchAngle:-40,lightAngle:-125,shading:0.65,pencilFill:0.55,grain:0.6,font:'Caveat',labelSize:19,captionSize:24,contextAlpha:0.5},
+  style:{rough:1.1,passes:2,pressure:0.55,fillWobble:1,hatchDensity:1.4,hierarchy:0.6,wash:0.3,washSeed:1,washLife:0.6,inkWidth:1.5,ballScale:1,bondWidth:2.1,hatchSpacing:5,hatchAngle:-40,lightAngle:-125,shading:0.65,pencilFill:0.55,grain:0.6,font:'Caveat',labelSize:19,captionSize:24,contextAlpha:0.5,annot:1},
   show:{H:true,lonePairs:true,charges:true,arrows:true,labels:true,hbonds:true,context:false,caption:true,stepLabel:true,colorBonds:false,resLabels:false,valence:true,construction:false},
   palette:{...PRESETS['PyMOL flat']},
   rep:{mode:'sticks',fill:'flat',colorBy:'group',stickRadius:0.2,sphereScale:0.4,sideChainHelper:true,cartoonScale:1,cartoonColor:'ss',probe:1.4,surfaceScale:1,surfaceOpacity:1,surfaceColor:'carbon'},
@@ -122,6 +122,12 @@ const bkey=(a,b)=>a<b?a+'|'+b:b+'|'+a;
 function chargeText(c){if(c===undefined||c===null||c===0)return null;if(typeof c==='string')return c;if(c>0)return c===1?'+':'+'+c;return c===-1?'−':'−'+(-c)}
 
 /* Return a fully resolved drawable state for a frame. */
+/* Position along a keyframe's optional `path`: intermediate poses ({id:[x,y,z]} per step) between this keyframe and the next,
+   walked piecewise-linearly at the eased motion parameter. Without a path (or for an atom the path does not carry) the motion is the straight line. */
+function pathPos(K,id,p0,p1,t){const P=K.path;if(!P||!P.length||t<=0||t>=1)return lerp3(p0,p1,t);
+  const n=P.length+1;const s=t*n;const i=Math.floor(s);const f=s-i;
+  const at=k=>k<=0?p0:k>=n?p1:(P[k-1][id]||null);
+  const q0=at(i),q1=at(i+1);if(!q0||!q1)return lerp3(p0,p1,t);return lerp3(q0,q1,f)}
 function sampleState(frame){
   const n=scene.keyframes.length;const {seg,t}=locate(frame);
   const Ki=scene.keyframes[seg.kf];
@@ -146,7 +152,7 @@ function sampleState(frame){
     const a=Ki.atoms[id],b=isTrans?Kj.atoms[id]:undefined;
     let o;
     if(a&&b){
-      o={id,el:a.el||b.el,pos:lerp3(a.pos,b.pos,tm),alpha:lerp(a.opacity??1,b.opacity??1,tm),r:a.r??b.r,color:a.color??b.color,label:a.label??b.label,labelDir:a.labelDir??b.labelDir,labelAuto:a.labelAuto,charges:[],lps:[]};
+      o={id,el:a.el||b.el,pos:pathPos(Ki,id,a.pos,b.pos,tm),alpha:lerp(a.opacity??1,b.opacity??1,tm),r:a.r??b.r,color:a.color??b.color,label:a.label??b.label,labelDir:a.labelDir??b.labelDir,labelAuto:a.labelAuto,charges:[],lps:[]};
       const ca=chargeText(a.charge),cb=chargeText(b.charge);
       if(ca&&ca===cb)o.charges.push({text:ca,alpha:1});else{if(ca)o.charges.push({text:ca,alpha:1-tm});if(cb)o.charges.push({text:cb,alpha:tm})}
       const la=a.lp||[],lb=b.lp||[];
@@ -178,8 +184,9 @@ function sampleState(frame){
       if(bi.order===bj.order)bonds.push({a:bi.a,b:bi.b,order:bi.order,alpha:base,partial:0});
       else if(bi.order===0||bj.order===0){bonds.push({a:bi.a,b:bi.b,order:bi.order,alpha:base*(1-tm),partial:0});bonds.push({a:bj.a,b:bj.b,order:bj.order,alpha:base*tm,partial:0})}
       else bonds.push({a:bi.a,b:bi.b,order:lerp(bi.order,bj.order,tm),alpha:base,partial:0});
-    }else if(bi){ bonds.push({a:bi.a,b:bi.b,order:bi.order,alpha:base,partial:isTrans?(1-tm):0}) }
-    else{ bonds.push({a:bj.a,b:bj.b,order:bj.order,alpha:base,partial:tm}) }
+    }else if(bi){ // a bond only in this keyframe: breaking (dotted) if one atom stays, but a molecule leaving whole keeps its bonds and just fades
+      const whole=isTrans&&!Kj.atoms[bi.a]&&!Kj.atoms[bi.b];bonds.push({a:bi.a,b:bi.b,order:bi.order,alpha:base,partial:isTrans&&!whole?(1-tm):0}) }
+    else{ const whole=!Ki.atoms[bj.a]&&!Ki.atoms[bj.b];bonds.push({a:bj.a,b:bj.b,order:bj.order,alpha:base,partial:whole?0:tm}) }
   }
   // captions
   let capA=Ki.caption||'',capAa=1,capB='',capBa=0;
@@ -350,13 +357,13 @@ function drawBondLine(ctx,ax,ay,bx,by,o){
 }
 function drawArrow(ctx,p0,p1,o){
   const mx=(p0[0]+p1[0])/2,my=(p0[1]+p1[1])/2;const dx=p1[0]-p0[0],dy=p1[1]-p0[1];const L=Math.hypot(dx,dy)||1;
-  const nx=-dy/L*o.side,ny=dx/L*o.side;const c=[mx+nx*o.bulge*L,my+ny*o.bulge*L];
+  const nx=-dy/L*o.side,ny=dx/L*o.side;const bl=Math.max(o.bulge*L,o.curl||0);const c=[mx+nx*bl,my+ny*bl]; // `curl`: a floor on the bow in px, so a short arrow (a pi bond to its own oxygen) still curls
   const n=32;const pts=[];const m=Math.max(2,Math.round(n*o.prog));
   for(let i=0;i<=m;i++){const t=(i/n);const x=(1-t)*(1-t)*p0[0]+2*(1-t)*t*c[0]+t*t*p1[0];const y=(1-t)*(1-t)*p0[1]+2*(1-t)*t*c[1]+t*t*p1[1];pts.push([x,y])}
   sketchLine(ctx,pts,{seed:o.seed,width:o.width,color:o.color,alpha:o.alpha,ampScale:0.8,overshoot:false});
   // head
   const e=pts[pts.length-1],q=pts[pts.length-2];let tx=e[0]-q[0],ty=e[1]-q[1];const tl=Math.hypot(tx,ty)||1;tx/=tl;ty/=tl;
-  const hl=9*clamp(o.prog*3,0,1),ha=0.5;
+  const hl=9*(o.scale||1)*clamp(o.prog*3,0,1),ha=0.5;
   const l1=[e[0]-hl*(tx*Math.cos(ha)-ty*Math.sin(ha)),e[1]-hl*(ty*Math.cos(ha)+tx*Math.sin(ha))];
   const l2=[e[0]-hl*(tx*Math.cos(-ha)-ty*Math.sin(-ha)),e[1]-hl*(ty*Math.cos(-ha)+tx*Math.sin(-ha))];
   sketchLine(ctx,[l1,e],{seed:o.seed+3,width:o.width,color:o.color,alpha:o.alpha,ampScale:0.5,overshoot:false,passes:1});
@@ -544,8 +551,8 @@ function penStick(ctx,ax,ay,mx,my,R,col,el,seed,o){
   if(el==='S'||el==='P'){for(let sx=-R*0.5+rng()*cs;sx<L;sx+=cs){sketchLine(ctx,[[ax+tx*sx+nx*R*0.9,ay+ty*sx+ny*R*0.9],[ax+tx*(sx+R*0.5)-nx*R*0.9,ay+ty*(sx+R*0.5)-ny*R*0.9]],{seed:seed+Math.round(sx*5)+900,passes:1,width:0.8*d,color:ink,alpha:a*0.6,ampScale:0.4,step:4,overshoot:false})}}
 }
 /* fill colour for the current fill mode: flat colour, a pale wash, or bare paper (ink) */
-const isInk=()=>cfg.rep.fill==='ink'||cfg.rep.fill==='ink colour'||cfg.rep.fill==='pencil'||cfg.rep.fill==='watercolour';
-const isPencil=()=>cfg.rep.fill==='pencil';const isWC=()=>cfg.rep.fill==='watercolour';
+const isInk=()=>cfg.rep.fill==='ink'||cfg.rep.fill==='ink colour'||cfg.rep.fill==='pencil'||cfg.rep.fill==='watercolour'||cfg.rep.fill==='chalk';
+const isChalk=()=>cfg.rep.fill==='chalk';const isPencil=()=>cfg.rep.fill==='pencil'||isChalk();const isWC=()=>cfg.rep.fill==='watercolour';
 let RF={W:960,H:720,dpr:1};
 /* Watercolour fill of one polygon: stacked, lightly deformed transparent layers (multiply) with a drying ring and granulation.
    When `target` is a transparent offscreen, layers stack with source-over and the caller multiplies the result once. */
@@ -574,11 +581,11 @@ const LW={get outer(){return 1+0.45*cfg.style.hierarchy},get inner(){return 1-0.
 /* coloured-pencil scribble fill inside the current clip: back-and-forth strokes, two layers, ragged edges */
 function scribbleFill(ctx,x0,y0,x1,y1,col,seed,o){
   const S=cfg.style;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=o.d||1;const rng=mulberry32(seed+303);
-  const c=fogged(col,fog);const cx=(x0+x1)/2,cy=(y0+y1)/2,R=Math.hypot(x1-x0,y1-y0)/2+3;
-  const layers=[[S.hatchAngle*Math.PI/180+0.9,S.hatchSpacing*0.55,0.55],[S.hatchAngle*Math.PI/180-0.5,S.hatchSpacing*0.75,0.35]];
+  const ch=isChalk();const c=fogged(ch?mix(col,'#ffffff',0.18):col,fog);const cx=(x0+x1)/2,cy=(y0+y1)/2,R=Math.hypot(x1-x0,y1-y0)/2+3;
+  const layers=ch?[[S.hatchAngle*Math.PI/180+0.9,S.hatchSpacing*0.45,0.9],[S.hatchAngle*Math.PI/180-0.6,S.hatchSpacing*0.55,0.55]]:[[S.hatchAngle*Math.PI/180+0.9,S.hatchSpacing*0.55,0.55],[S.hatchAngle*Math.PI/180-0.5,S.hatchSpacing*0.75,0.35]];
   for(const [ang,sp,al] of layers){const dx=Math.cos(ang),dy=Math.sin(ang),nx=-dy,ny=dx;const pts=[];let flip=1;
     for(let dd=-R;dd<R;dd+=sp*(0.8+0.4*rng())){const e0=-R*(0.9+0.2*rng()),e1=R*(0.9+0.2*rng());pts.push([cx+nx*dd+dx*e0*flip,cy+ny*dd+dy*e0*flip]);pts.push([cx+nx*dd+dx*e1*flip,cy+ny*dd+dy*e1*flip]);flip=-flip}
-    if(pts.length>3)sketchLine(ctx,pts,{seed:seed+Math.round(ang*100),passes:1,width:(1.1+0.6*rng())*d,color:c,alpha:al*(0.6+0.4*fk),ampScale:0.9,step:6,overshoot:false,pressure:0.8})}
+    if(pts.length>3)sketchLine(ctx,pts,{seed:seed+Math.round(ang*100),passes:1,width:(ch?(2.2+1.2*rng()):(1.1+0.6*rng()))*d,color:c,alpha:al*(0.6+0.4*fk),ampScale:ch?0.6:0.9,step:6,overshoot:false,pressure:ch?0.95:0.8})}
 }
 /* what pigment darkens toward: the ink on light paper, near-black on dark paper (where the ink is pale) */
 function shadeInk(){const P=cfg.palette;return luminance(P.paper)>0.5?P.ink:mix(P.paper,'#000000',0.75)}
@@ -608,7 +615,7 @@ function drawFlatBall(ctx,x,y,r,col,o){
   if(o.outlineFirst)sketchCircle(ctx,x,y,r,{seed:o.seed+4,width:S.inkWidth*d*(0.75+0.25*fk)*0.9,color:fogged(P.ink,fog),alpha:(0.55+0.4*fk)*(o.outlineAlpha??1),passes:o.passes});
   ctx.beginPath();ctx.arc(x,y,r*(o.outlineFirst?0.97:1),0,Math.PI*2);ctx.fillStyle=paperFill();ctx.fill();if(!isInk()){ctx.fillStyle=rgba(fogged(fillFor(col),fog),o.fillAlpha??1);ctx.fill()}
   if(isWC()){const q=[];for(let i=0;i<14;i++){const a=i/14*Math.PI*2;q.push([x+Math.cos(a)*r,y+Math.sin(a)*r])}watercolourShape(ctx,q,col,o.seed,{fog,layers:8,strength:o.wcStrength||0.8})}
-  if(isInk()){ctx.save();ctx.beginPath();ctx.arc(x,y,r+(isPencil()?1.5:0),0,Math.PI*2);ctx.clip();if(isPencil())scribbleFill(ctx,x-r,y-r,x+r,y+r,col,o.seed,{fog,d});if(!o.noPen)penSphere(ctx,x,y,r,col,o.el,o.seed,{fog,d});ctx.restore()}
+  if(isInk()){ctx.save();ctx.beginPath();ctx.arc(x,y,r+(isPencil()?1.5:0),0,Math.PI*2);ctx.clip();if(isPencil())scribbleFill(ctx,x-r,y-r,x+r,y+r,col,o.seed,{fog,d});if(!o.noPen&&!isChalk())penSphere(ctx,x,y,r,col,o.el,o.seed,{fog,d});ctx.restore()}
   else if(S.shading>0&&r>3){hatchCircle(ctx,x,y,r,S.hatchAngle*Math.PI/180,S.hatchSpacing*(1+fog*0.6)*Math.max(0.7,d),{seed:o.seed+2,width:0.9*d,color:fogged(cfg.rep.fill==='ink colour'?mix(col,P.hatch,0.4):P.hatch,fog),alpha:0.45*S.shading*(0.5+0.5*fk),light,thr:-r*0.15})}
   if(!o.outlineFirst)sketchCircle(ctx,x,y,r,{seed:o.seed+4,width:S.inkWidth*d*(0.75+0.25*fk)*LW.outer,color:fogged(P.ink,fog),alpha:0.55+0.4*fk,passes:isPencil()?(o.passes??3):o.passes});
   ctx.restore();
@@ -634,7 +641,7 @@ function drawHalfStick(ctx,ax,ay,mx,my,R,col,o){
   ctx.beginPath();const ins=0.6;const q=capsulePts(ax,ay,mx,my,Math.max(0.5,R-ins),Math.max(0.5,Rm-ins)).pts;q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath();
   ctx.fillStyle=paperFill();ctx.fill();if(!isInk()){ctx.fillStyle=fogged(fillFor(col),fog);ctx.fill()}
   if(isWC()&&o.el!=='H'){watercolourShape(ctx,q,col,o.seed,{fog,layers:7,strength:0.8})}
-  if(o.el&&isInk()){ctx.save();ctx.clip();if(isPencil()&&o.el!=='H'){const xs=q.map(p=>p[0]),ys=q.map(p=>p[1]);scribbleFill(ctx,Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys),col,o.seed,{fog,d})}if(!isWC()||cfg.style.shading>0)penStick(ctx,ax,ay,mx,my,R,col,o.el,o.seed,{fog,d});ctx.restore()}
+  if(o.el&&isInk()){ctx.save();ctx.clip();if(isPencil()&&o.el!=='H'){const xs=q.map(p=>p[0]),ys=q.map(p=>p[1]);scribbleFill(ctx,Math.min(...xs),Math.min(...ys),Math.max(...xs),Math.max(...ys),col,o.seed,{fog,d})}if((!isWC()||cfg.style.shading>0)&&!isChalk())penStick(ctx,ax,ay,mx,my,R,col,o.el,o.seed,{fog,d});ctx.restore()}
   // pencil shadow along the far side
   if(S.shading>0&&!o.noShadow&&!isInk()){const la=S.lightAngle*Math.PI/180;const lx=Math.cos(la),ly=Math.sin(la);const side=(nx*lx+ny*ly)>0?-1:1;
     ctx.save();ctx.clip();const L=Math.hypot(mx-ax,my-ay);
@@ -947,13 +954,13 @@ function renderFrame(ctx,W,H,frame,dpr){
   const fontFam=S.font==='Plain sans'?'"IBM Plex Sans", system-ui, sans-serif':`"${S.font}", "Caveat", cursive`;
   for(const a of stickAtoms){const p=pos[a.id];const r=atomDrawR(a,proj)*p.d;const seed=seedBase+strHash(a.id);
     if(SH.lonePairs&&a.lps.length){ctx.save();ctx.globalAlpha=a.alpha;
-      a.lps.forEach((lp,i)=>{const d=proj.dir2(lp.dir);const L=Math.hypot(d[0],d[1])||1;const ux=d[0]/L,uy=d[1]/L;const cx=p.x+ux*(r+5),cy=p.y+uy*(r+5);
+      const an=S.annot||1;a.lps.forEach((lp,i)=>{const d=proj.dir2(lp.dir);const L=Math.hypot(d[0],d[1])||1;const ux=d[0]/L,uy=d[1]/L;const cx=p.x+ux*(r+5*an),cy=p.y+uy*(r+5*an);
         ctx.fillStyle=rgba(P.ink,0.9*lp.alpha);const rng=mulberry32(seed+i*3);
-        for(const s of[-2.6,2.6]){ctx.beginPath();ctx.arc(cx-uy*s+(rng()-0.5),cy+ux*s+(rng()-0.5),1.35*p.d,0,Math.PI*2);ctx.fill()}});
+        for(const s of[-2.6*an,2.6*an]){ctx.beginPath();ctx.arc(cx-uy*s+(rng()-0.5),cy+ux*s+(rng()-0.5),1.35*p.d*an,0,Math.PI*2);ctx.fill()}});
       ctx.restore()}
     if(SH.charges&&a.charges.length){ctx.save();ctx.globalAlpha=a.alpha;
-      a.charges.forEach((c,i)=>{const cx=p.x+r*0.95+7,cy=p.y-r*0.95-6;const cr=7*p.d;
-        ctx.font=`600 ${Math.round(15*p.d)}px ${fontFam}`;ctx.textAlign='center';ctx.textBaseline='middle';
+      const an=S.annot||1;a.charges.forEach((c,i)=>{const cx=p.x+r*0.95+7*an,cy=p.y-r*0.95-6*an;const cr=7*p.d*an;
+        ctx.font=`600 ${Math.round(15*p.d*an)}px ${fontFam}`;ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.fillStyle=rgba(P.charge,c.alpha);ctx.fillText(c.text,cx,cy+0.5);
         sketchCircle(ctx,cx,cy,cr,{seed:seed+50+i,width:1,color:P.charge,alpha:0.85*c.alpha,passes:1,wobScale:1.5})});
       ctx.restore()}
@@ -966,7 +973,7 @@ function renderFrame(ctx,W,H,frame,dpr){
     st.arrows.forEach((ar,i)=>{
       const to0=anchorPoint(ar.to,st,proj,null),from0=anchorPoint(ar.from,st,proj,null);if(!to0||!from0)return;
       const from=anchorPoint(ar.from,st,proj,to0),to=anchorPoint(ar.to,st,proj,from0);if(!from||!to)return;
-      drawArrow(ctx,from,to,{seed:seedBase+900+i*31,width:S.inkWidth*1.15,color:P.arrow,alpha:st.arrowAlpha,bulge:ar.bulge??0.4,side:ar.side??1,prog:st.arrowProg});
+      drawArrow(ctx,from,to,{seed:seedBase+900+i*31,width:S.inkWidth*1.15*(S.annot||1),scale:S.annot||1,color:P.arrow,alpha:st.arrowAlpha,bulge:ar.bulge??0.4,curl:(ar.curl||0)*proj.pxPerA,side:ar.side??1,prog:st.arrowProg});
     });
   }
   if(SH.caption){ctx.save();ctx.font=`500 ${S.captionSize}px ${fontFam}`;ctx.fillStyle=P.ink;ctx.textBaseline='bottom';ctx.textAlign='left';
@@ -977,10 +984,18 @@ function renderFrame(ctx,W,H,frame,dpr){
     ctx.fillText(`${st.stepIdx+1}. ${st.stepName}`,22,18);ctx.restore()}
   // paper grain over everything, so fills sit in the paper rather than on it
   if(S.grain>0){ctx.save();const light=luminance(P.paper)>0.5;ctx.globalCompositeOperation=light?'multiply':'screen';ctx.globalAlpha=clamp(0.55*S.grain,0,1);ctx.drawImage(grainOverlay(W,H,dpr,light),0,0,W,H);ctx.restore()}
+  if(isChalk()){ctx.save();ctx.globalCompositeOperation='multiply';ctx.globalAlpha=0.75;ctx.drawImage(pitOverlay(W,H,dpr),0,0,W,H);ctx.restore()}
   ctx.restore();
   return st;
 }
 const grainCache={key:'',canvas:null};
+/* the tooth of a chalkboard: dark pits that break every stroke, multiplied over the drawing */
+const pitCache={key:'',canvas:null};
+function pitOverlay(W,H,dpr){const key=[W,H,dpr].join('|');if(pitCache.key===key)return pitCache.canvas;
+  const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
+  x.fillStyle='#ffffff';x.fillRect(0,0,W,H);const rng=mulberry32(8765);const n=Math.round(W*H/9);
+  for(let i=0;i<n;i++){const a=rng();x.fillStyle=`rgba(0,0,0,${0.25+a*0.55})`;const s=rng()<0.8?1:1.6;x.fillRect(rng()*W,rng()*H,s,s)}
+  pitCache.key=key;pitCache.canvas=c;return c}
 function grainOverlay(W,H,dpr,light){
   const key=[W,H,dpr,light].join('|');if(grainCache.key===key)return grainCache.canvas;
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);

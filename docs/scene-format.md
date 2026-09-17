@@ -57,6 +57,7 @@ timing, and where atoms enter from and leave to.
 | `atoms` | map of atom id → atom |
 | `bonds` | list of `[a, b, order]` or `{a, b, order}`; order `0` is a hydrogen bond (dotted), `2`/`3` draw valence sticks |
 | `arrows` | curly arrows shown while leaving this keyframe |
+| `path` | optional list of intermediate poses, each a map of atom id → `[x, y, z]`, walked in order on the way to the next keyframe (a computed trajectory instead of a straight line; atoms missing from a pose move straight) |
 
 The last keyframe transitions back to the first when looping.
 
@@ -92,7 +93,7 @@ forming (dots, strengthening).
 ## Arrows
 
 Each arrow has a `from` and `to` anchor, an optional `bulge` (curvature, fraction of the arrow length,
-default 0.4) and `side` (+1 / −1, which way it bows).
+default 0.4), `side` (+1 / −1, which way it bows) and `curl` (a floor on the bow in Å, so that a short arrow — a π bond to its own oxygen — still curls; default 0).
 
 Anchors: `{"atom": id}` (the atom's edge, facing the other end), `{"bond": [a, b]}` (the bond midpoint),
 `{"lp": id, "i": n}` (the n-th lone pair's dots). Arrows draw with a growing stroke during the hold, stay

@@ -1,0 +1,140 @@
+REMARK 900 MODELED BENCHMARK CYCLE; SEE MANIFEST.JSON FOR SOURCE
+HETATM    1   C1 SUB S   1      -2.796   3.505  -4.279  1.00  0.00           C  
+HETATM    2   C2 SUB S   1      -3.002   3.627  -2.803  1.00  0.00           C  
+HETATM    3   O3 SUB S   1      -2.766   2.775  -1.967  1.00  0.00           O  
+HETATM    4   O4 SUB S   1      -4.365   0.547  -0.069  1.00  0.00           O  
+HETATM    5   C5 SUB S   1      -3.614  -0.581   0.071  1.00  0.00           C  
+HETATM    6   C6 SUB S   1      -2.960  -0.769   1.284  1.00  0.00           C  
+HETATM    7   C7 SUB S   1      -2.185  -1.913   1.480  1.00  0.00           C  
+HETATM    8   C8 SUB S   1      -2.072  -2.858   0.451  1.00  0.00           C  
+HETATM    9   N9 SUB S   1      -1.269  -4.067   0.663  1.00  0.00           N1+
+HETATM   10  O10 SUB S   1      -1.131  -4.845  -0.291  1.00  0.00           O  
+HETATM   11  O11 SUB S   1      -0.779  -4.239   1.788  1.00  0.00           O1-
+HETATM   12  C12 SUB S   1      -2.724  -2.659  -0.775  1.00  0.00           C  
+HETATM   13  C13 SUB S   1      -3.506  -1.514  -0.959  1.00  0.00           C  
+HETATM   14  O14 SUB S   1      -3.439   4.844  -2.433  1.00  0.00           O  
+HETATM   15  H15 HIS A 224      -1.127   5.753  -2.586  1.00  0.00           H  
+HETATM   16  H16 SUB S   1      -3.460   4.788  -1.454  1.00  0.00           H  
+HETATM   17   OG SER A 105      -0.843   4.625  -0.839  1.00  0.00           O1-
+HETATM   18  H18 SUB S   1      -4.777   0.543  -0.949  1.00  0.00           H  
+HETATM   19   CB SER A 105      -0.092   5.462  -0.126  1.00  0.00           C  
+HETATM   20   CA SER A 105       0.586   4.645   1.020  1.00  0.00           C  
+HETATM   21   CG HIS A 224      -0.849   7.920  -4.927  1.00  0.00           C  
+HETATM   22   CB HIS A 224      -0.902   9.207  -5.671  1.00  0.00           C  
+HETATM   23   CA HIS A 224      -1.177   9.069  -7.170  1.00  0.00           C  
+HETATM   24  ND1 HIS A 224      -0.313   6.741  -5.416  1.00  0.00           N  
+HETATM   25  H25 HIS A 224       0.091   6.615  -6.357  1.00  0.00           H  
+HETATM   26  CE1 HIS A 224      -0.376   5.755  -4.525  1.00  0.00           C  
+HETATM   27  NE2 HIS A 224      -0.949   6.276  -3.440  1.00  0.00           N1+
+HETATM   28  CD2 HIS A 224      -1.263   7.601  -3.653  1.00  0.00           C  
+HETATM   29  OD2 ASP A 187      -1.964  -2.214   7.953  1.00  0.00           O1-
+HETATM   30   CG ASP A 187      -2.464  -2.320   6.794  1.00  0.00           C  
+HETATM   31  OD1 ASP A 187      -3.226  -1.531   6.173  1.00  0.00           O  
+HETATM   32   CB ASP A 187      -2.051  -3.602   6.065  1.00  0.00           C  
+HETATM   33   CA ASP A 187      -2.729  -3.791   4.722  1.00  0.00           C  
+HETATM   34   CA THR A  40       0.823  -2.090  -1.372  1.00  0.00           C  
+HETATM   35   CB THR A  40       2.192  -2.162  -0.711  1.00  0.00           C  
+HETATM   36  OG1 THR A  40       2.025  -2.149   0.704  1.00  0.00           O  
+HETATM   37  CG2 THR A  40       2.927  -3.431  -1.112  1.00  0.00           C  
+HETATM   38   CA GLN A 106       1.444   0.981   0.016  1.00  0.00           C  
+HETATM   39   CB GLN A 106       1.811   1.507  -1.362  1.00  0.00           C  
+HETATM   40   CG GLN A 106       0.602   1.821  -2.239  1.00  0.00           C  
+HETATM   41   CD GLN A 106       0.771   1.350  -3.669  1.00  0.00           C  
+HETATM   42  OE1 GLN A 106       1.847   1.143  -4.214  1.00  0.00           O  
+HETATM   43  NE2 GLN A 106      -0.395   1.224  -4.366  1.00  0.00           N  
+HETATM   44  C44 HIS A 224       1.858   8.158  -9.313  1.00  0.00           C  
+HETATM   45  C45 HIS A 224       0.754   7.950  -8.312  1.00  0.00           C  
+HETATM   46  O46 HIS A 224       0.514   6.856  -7.802  1.00  0.00           O  
+HETATM   47    N HIS A 224       0.047   9.073  -7.982  1.00  0.00           N  
+HETATM   48    C HIS A 224      -2.018  10.273  -7.640  1.00  0.00           C  
+HETATM   49    O HIS A 224      -1.539  11.165  -8.344  1.00  0.00           O  
+HETATM   50    N SER A 105      -0.371   4.254   2.057  1.00  0.00           N  
+HETATM   51    C SER A 105       1.736   5.410   1.698  1.00  0.00           C  
+HETATM   52    O SER A 105       1.708   6.627   1.890  1.00  0.00           O  
+HETATM   53  H53 SUB S   1      -3.206   4.361  -4.822  1.00  0.00           H  
+HETATM   54  H54 SUB S   1      -1.720   3.449  -4.460  1.00  0.00           H  
+HETATM   55  H55 SUB S   1      -3.308   2.614  -4.648  1.00  0.00           H  
+HETATM   56  H56 SUB S   1      -3.062  -0.026   2.072  1.00  0.00           H  
+HETATM   57  H57 SUB S   1      -1.679  -2.048   2.431  1.00  0.00           H  
+HETATM   58  H58 SUB S   1      -2.641  -3.383  -1.582  1.00  0.00           H  
+HETATM   59  H59 SUB S   1      -4.031  -1.369  -1.899  1.00  0.00           H  
+HETATM   60  H60 SER A 105       0.731   5.973  -0.656  1.00  0.00           H  
+HETATM   61  H61 SER A 105      -0.579   6.326   0.362  1.00  0.00           H  
+HETATM   62  H62 SER A 105       1.036   3.766   0.568  1.00  0.00           H  
+HETATM   63  H63 HIS A 224      -1.689   9.810  -5.199  1.00  0.00           H  
+HETATM   64  H64 HIS A 224       0.044   9.734  -5.496  1.00  0.00           H  
+HETATM   65  H65 HIS A 224      -1.751   8.165  -7.406  1.00  0.00           H  
+HETATM   66  H66 HIS A 224      -0.027   4.733  -4.661  1.00  0.00           H  
+HETATM   67  H67 HIS A 224      -1.743   8.157  -2.865  1.00  0.00           H  
+HETATM   68  H68 ASP A 187      -0.960  -3.572   5.915  1.00  0.00           H  
+HETATM   69  H69 ASP A 187      -2.284  -4.465   6.707  1.00  0.00           H  
+HETATM   70  H70 ASP A 187      -3.809  -3.901   4.846  1.00  0.00           H  
+HETATM   71  H71 ASP A 187      -2.545  -2.940   4.067  1.00  0.00           H  
+HETATM   72  H72 ASP A 187      -2.351  -4.699   4.242  1.00  0.00           H  
+HETATM   73  H73 THR A  40       0.258  -3.020  -1.227  1.00  0.00           H  
+HETATM   74  H74 THR A  40       0.213  -1.287  -0.955  1.00  0.00           H  
+HETATM   75  H75 THR A  40       0.929  -1.930  -2.450  1.00  0.00           H  
+HETATM   76  H76 THR A  40       2.781  -1.284  -0.992  1.00  0.00           H  
+HETATM   77  H77 THR A  40       2.795  -1.689   1.079  1.00  0.00           H  
+HETATM   78  H78 THR A  40       3.885  -3.501  -0.587  1.00  0.00           H  
+HETATM   79  H79 THR A  40       2.351  -4.322  -0.840  1.00  0.00           H  
+HETATM   80  H80 THR A  40       3.122  -3.452  -2.188  1.00  0.00           H  
+HETATM   81  H81 GLN A 106       1.416   1.763   0.769  1.00  0.00           H  
+HETATM   82  H82 GLN A 106       0.470   0.494   0.026  1.00  0.00           H  
+HETATM   83  H83 GLN A 106       2.216   0.287   0.360  1.00  0.00           H  
+HETATM   84  H84 GLN A 106       2.423   2.412  -1.254  1.00  0.00           H  
+HETATM   85  H85 GLN A 106       2.439   0.752  -1.843  1.00  0.00           H  
+HETATM   86  H86 GLN A 106       0.476   2.913  -2.271  1.00  0.00           H  
+HETATM   87  H87 GLN A 106      -0.329   1.410  -1.832  1.00  0.00           H  
+HETATM   88  H88 GLN A 106      -0.316   0.907  -5.323  1.00  0.00           H  
+HETATM   89  H89 GLN A 106      -1.309   1.329  -3.954  1.00  0.00           H  
+HETATM   90  H90 HIS A 224       2.798   8.329  -8.783  1.00  0.00           H  
+HETATM   91  H91 HIS A 224       1.947   7.265  -9.939  1.00  0.00           H  
+HETATM   92  H92 HIS A 224       1.647   9.010  -9.966  1.00  0.00           H  
+HETATM   93  H93 HIS A 224       0.313   9.969  -8.393  1.00  0.00           H  
+HETATM   94  H94 SER A 105      -1.270   4.461   1.597  1.00  0.00           H  
+HETATM   95  H95 HIS A 224      -3.067  10.298  -7.300  1.00  0.00           H  
+HETATM   96  H96 SER A 105      -0.375   3.237   2.077  1.00  0.00           H  
+HETATM   97  H97 SER A 105       2.565   4.785   2.069  1.00  0.00           H  
+CONECT    1    2   53   54   55
+CONECT    2    3    3   14
+CONECT    4    5   18
+CONECT    5    6    6   13
+CONECT    6    7   56
+CONECT    7    8    8   57
+CONECT    8    9   12
+CONECT    9   10   10   11
+CONECT   12   13   13   58
+CONECT   13   59
+CONECT   14   16
+CONECT   15   27
+CONECT   17   19
+CONECT   19   20   60   61
+CONECT   20   50   51   62
+CONECT   21   22   24   28   28
+CONECT   22   23   63   64
+CONECT   23   47   48   65
+CONECT   24   25   26
+CONECT   26   27   27   66
+CONECT   27   28
+CONECT   28   67
+CONECT   29   30
+CONECT   30   31   31   32
+CONECT   32   33   68   69
+CONECT   33   70   71   72
+CONECT   34   35   73   74   75
+CONECT   35   36   37   76
+CONECT   36   77
+CONECT   37   78   79   80
+CONECT   38   39   81   82   83
+CONECT   39   40   84   85
+CONECT   40   41   86   87
+CONECT   41   42   42   43
+CONECT   43   88   89
+CONECT   44   45   90   91   92
+CONECT   45   46   46   47
+CONECT   47   93
+CONECT   48   49   49   95
+CONECT   50   94   96
+CONECT   51   52   52   97
+END
