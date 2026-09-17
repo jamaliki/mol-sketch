@@ -62,7 +62,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   const D = section('Data');
   const fileIn = el('input', { type: 'file', accept: '.pdb,.ent,.cif,.mmcif,.json', multiple: '', style: 'display:none', onchange: (e: any) => { const fl = Array.from(e.target.files as FileList); if (fl.length) H.loadFiles(fl); e.target.value = '' } }) as HTMLInputElement;
   const styleIn = el('input', { type: 'file', accept: '.json', style: 'display:none', onchange: (e: any) => { const f = e.target.files[0]; if (f) H.loadStyle(f); e.target.value = '' } }) as HTMLInputElement;
-  const ex = el('select', {}, ...['mechanism.json', '1A8O.pdb', '1LCD.pdb', 'test_protein.pdb', 'test_protein_rna.cif', '6GZQ.cif'].map(o => el('option', { value: o }, o))) as HTMLSelectElement;
+  const ex = el('select', {}, ...['mechanism.json', 'calb_pnpa.json', '1A8O.pdb', '1LCD.pdb', 'test_protein.pdb', 'test_protein_rna.cif', '6GZQ.cif'].map(o => el('option', { value: o }, o))) as HTMLSelectElement;
   D.append(el('div', { class: 'btns' },
     el('button', { onclick: () => fileIn.click() }, 'Open PDB / mmCIF / scene… (several = a stack)'), fileIn,
     el('button', { onclick: () => H.loadExample(ex.value) }, 'Load example'), ex));
