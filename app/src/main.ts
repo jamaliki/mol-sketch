@@ -199,7 +199,7 @@ function autoIndex(key: string): number {
   const r = s.residues.find(r => r.resn + r.resi + (r.chain ? '.' + r.chain : '') === key); return r ? r.index : 0;
 }
 function groupColor(key: string): string { if (R.overrides[key]) return R.overrides[key]; const gp = style.groupPalette && style.groupPalette.length ? style.groupPalette : GROUP_PALETTE; return gp[Math.max(0, autoIndex(key)) % gp.length] }
-function setGroupColor(key: string, v: string | null) { mark('colour of ' + key); if (v) R.overrides[key] = v; else delete R.overrides[key]; if (sceneDoc) sceneDoc.groupColors = { ...R.overrides }; rebuild() }
+function setGroupColor(key: string, v: string | null) { if (v) R.overrides[key] = v; else delete R.overrides[key]; if (sceneDoc) sceneDoc.groupColors = { ...R.overrides }; rebuild() }
 
 /* ---------- keyframes: timing in seconds, order, copies, cameras ---------- */
 function currentKey(): number { return sceneDoc ? classic().locate(frame).seg.kf : 0 }

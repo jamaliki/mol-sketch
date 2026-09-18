@@ -205,7 +205,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     const inp = el('input', { type: 'color' }) as HTMLInputElement; const i = el('i'); const d = el('div', { class: 'sw', title: label }, i, el('span', {}, label), inp);
     const show = () => { const v = get(); i.style.background = v; inp.value = v; d.classList.toggle('auto', !!opts.auto?.()); d.classList.toggle('on', selected?.label === label); if (selected?.label === label) { hexIn.value = v; hexLabel.textContent = label + (opts.auto?.() ? ' (automatic)' : '') } };
     d.onclick = (e) => { if (e.target === inp) return; selected = { get, set, label }; refresh(); inp.click() };
-    d.oncontextmenu = (e) => { e.preventDefault(); if (opts.clear) { opts.clear(); refresh() } };
+    d.oncontextmenu = (e) => { e.preventDefault(); if (opts.clear) { H.mark('colour ' + label); opts.clear(); refresh() } };
     inp.oninput = () => { H.mark('colour ' + label); set(inp.value); show(); H.redraw() }; inp.onchange = () => { set(inp.value); refresh() };
     refreshers.push(show); show(); parent.append(d); return d;
   };
