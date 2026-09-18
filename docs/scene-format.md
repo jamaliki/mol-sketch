@@ -61,6 +61,7 @@ timing, and where atoms enter from and leave to.
 | `leave` | groups or ids that exit during the transition instead of matching same-named atoms in the next keyframe (products going out while an identical substrate comes in); their bonds fade whole |
 | `asNext` | map id → id: an atom that matches a differently named atom in the next keyframe (the proton now on Ser that is next cycle's HG) |
 | `exitDir`, `enterDir` | `[dx, dy, dz]` in Å: the default `exitTo` for atoms leaving this keyframe, and the default `enterFrom` for atoms arriving in it, when they have none of their own |
+| `view` | optional camera for this keyframe: `yaw`, `pitch`, `roll`, `zoom`, `panX`, `panY` (any subset; the rest come from the scene's `view`). The camera holds it through the keyframe and moves to it smoothly during the transition before (angles the short way round, zoom geometrically). A keyframe without one keeps the camera of the nearest earlier keyframe that has one, cyclically, so a `view` on the first keyframe alone fixes the camera for the loop. The app's *cam* button writes it |
 
 The last keyframe transitions back to the first when looping.
 

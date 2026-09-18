@@ -58,9 +58,10 @@ the right-hand panel.
 ## Interactive app
 
 [`app/`](app) is the interactive version: a WebGL2 preview while you rotate, and the canvas engine below,
-included verbatim, drawing the exact frame once the view rests. It loads structures and keyframed scenes, has
-its own [README](app/README.md) and a headless CLI. `cd app && npm install && npm run dev`. SVG output is
-still only in the page.
+included verbatim, drawing the exact frame once the view rests. It loads structures and keyframed scenes, edits
+them (arrows, lone pairs and charges by clicking; keyframe timing, order and cameras; undo), checks them, suggests
+views, and renders a loop to a video file in the browser; it has its own [README](app/README.md) and a headless
+CLI. `cd app && npm install && npm run dev`. SVG output is still only in the page.
 
 To make a figure like the mechanism example from your own coordinates, see
 [docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): load a PDB stack as keyframes, cut the view down,

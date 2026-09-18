@@ -18,7 +18,11 @@ SOFTWARE="" ./render.sh dark                  # on a machine with a GPU
 `render.sh` is the whole recipe: the scene file (the mechanism with the hero's camera and residue colours), the look
 (`dark-paper` or `chalkboard`, both in `looks/` and in the app, or `watercolour` with the site's palette for cream),
 the `--set` flags that remove text and, for the demo, the chemistry, and the ffmpeg lines that encode AV1, VP9 and
-H.264 and the poster. `mockup.html` is the page with every variant behind a switch, and a phone frame.
+H.264 and the poster. `mockup.html` is the page with every variant behind a switch, and a phone frame; served from
+the repository root (`python3 -m http.server 8000`, then `hero/mockup.html`) it plays the renders in `out/`, and
+*Live scene…* (or `?scene=calb/calb_hero.json&look=dark-paper&set=…`) draws a scene JSON in the slot with the engine
+itself, no render needed, so framing and colours can be checked in seconds. The app's *Render* section makes one
+encode in the browser for the same purpose.
 
 To do the same for another mechanism: [`../docs/hero-workflow.md`](../docs/hero-workflow.md). In short, a recipe and
 `tools/mech2scene.py` make the scene, `node cli/render.mjs scene.json --size 1920x1080 --fit 57,13,92,58 --write-view`

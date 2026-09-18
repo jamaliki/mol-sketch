@@ -205,7 +205,7 @@ function sampleState(frame){
 /* ============================ projection ============================ */
 let FIT={cx:0,cy:0,cz:0,rx:0,ry:0,spanX:10,spanY:10,zspan:4,key:''};
 function rot3(p,cy,sy,cp,sp){const x=p[0]-FIT.cx,y=p[1]-FIT.cy,z=p[2]-FIT.cz;const x1=x*cy+z*sy,z1=-x*sy+z*cy;const y1=y*cp-z1*sp,z2=y*sp+z1*cp;if(!VIEW_ROLL)return[x1,y1,z2];const cr=Math.cos(VIEW_ROLL*Math.PI/180),sr=Math.sin(VIEW_ROLL*Math.PI/180);return[x1*cr-y1*sr,x1*sr+y1*cr,z2]} // yaw about y, pitch about x, then roll about the view axis
-let VIEW_YAW=0,VIEW_PITCH=0,VIEW_ROLL=0;
+let VIEW_YAW=0,VIEW_PITCH=0,VIEW_ROLL=0,VIEW_ZOOM=1,VIEW_PANX=0,VIEW_PANY=0; // the camera of the frame being drawn: cfg.view, or the interpolated keyframe views when the scene has them
 let TEX=1; // texture scale for the frame: 1 = marks in screen pixels; with rep.textureScale 'object' they follow the drawing's scale, so the hatching stays the same relative to an atom however large or small it is on the page // effective angles for the frame being drawn (base + turntable)
 function computeFit(){
   const spinning=cfg.view.spin!==0||cfg.view.pitchSwing!==0;
@@ -230,8 +230,8 @@ function makeProjector(W,H){
   const fov=cfg.view.fov*Math.PI/180;const ext=Math.max(FIT.spanX,FIT.spanY)/2+1.5;
   const D=fov>0.002?ext/Math.tan(fov/2):Infinity;
   const dNear=D===Infinity?1:D/Math.max(D-FIT.zspan/2,D*0.3);
-  const base=Math.min((W*0.9)/(FIT.spanX+2.6),(H-capH-topH-24)/(FIT.spanY+2.4))*cfg.view.zoom/Math.pow(dNear,0.7);
-  const ox=W/2-FIT.rx*base+cfg.view.panX*W,oy=(H-capH+topH)/2+FIT.ry*base+cfg.view.panY*H;
+  const base=Math.min((W*0.9)/(FIT.spanX+2.6),(H-capH-topH-24)/(FIT.spanY+2.4))*VIEW_ZOOM/Math.pow(dNear,0.7);
+  const ox=W/2-FIT.rx*base+VIEW_PANX*W,oy=(H-capH+topH)/2+FIT.ry*base+VIEW_PANY*H;
   const fs=clamp(cfg.view.fogStart,0,0.95);
   return {pxPerA:base,D,
     rot(p){return rot3(p,cy,sy,cp,sp)},
@@ -929,9 +929,32 @@ function drawConstruction(ctx,st,pos,proj,seedBase){
 }
 let PAPER_FILL=null;
 function paperFill(){return (isInk()&&PAPER_FILL)?PAPER_FILL:cfg.palette.paper}
+/* Per-keyframe cameras. A keyframe may carry `view` ({yaw,pitch,roll,zoom,panX,panY}, any subset; the rest from cfg.view): the
+   camera holds it through the keyframe and moves smoothly to the next keyframe's during the transition. A keyframe without one
+   keeps the camera of the nearest earlier keyframe that has one (cyclically), so setting a view on the first keyframe alone
+   fixes the camera for the whole loop. viewAt(frame) is the interpolated camera, or null when no keyframe has a view; cfg.view.fixed
+   makes renderFrame ignore keyframe views (the app, whose own camera is then the truth for what is on screen). */
+function keyView(i){const n=scene.keyframes.length;for(let k=0;k<n;k++){const K=scene.keyframes[(i-k+n)%n];if(K.view)return K.view}return null}
+function viewAt(frame){
+  if(!scene.keyframes.some(k=>k.view))return null;
+  const {seg,t}=locate(frame);const V=cfg.view;
+  const fill=v=>({yaw:v.yaw??V.yaw,pitch:v.pitch??V.pitch,roll:v.roll??(V.roll||0),zoom:v.zoom??V.zoom,panX:v.panX??V.panX,panY:v.panY??V.panY});
+  const a=fill(keyView(seg.kf)||V);if(seg.type!=='trans')return a;
+  const b=fill(keyView((seg.kf+1)%scene.keyframes.length)||V);const s=smooth(t);
+  const ang=(p,q)=>p+((((q-p)%360)+540)%360-180)*s;   // the short way round
+  return {yaw:ang(a.yaw,b.yaw),pitch:lerp(a.pitch,b.pitch,s),roll:ang(a.roll,b.roll),zoom:Math.exp(lerp(Math.log(a.zoom),Math.log(b.zoom),s)),panX:lerp(a.panX,b.panX,s),panY:lerp(a.panY,b.panY,s)};
+}
+function frameView(frame){ // the camera for a frame: cfg.view (plus turntable) or the keyframe views
+  const V=cfg.view;const kv=V.fixed?null:viewAt(frame);const yaw=kv?kv.yaw:V.yaw,pitch=kv?kv.pitch:V.pitch;
+  VIEW_ROLL=kv?kv.roll:(V.roll||0);VIEW_ZOOM=kv?kv.zoom:V.zoom;VIEW_PANX=kv?kv.panX:V.panX;VIEW_PANY=kv?kv.panY:V.panY;
+  VIEW_YAW=yaw+V.spin*frame/Math.max(1,cfg.fps);VIEW_PITCH=pitch+V.pitchSwing*Math.sin(frame/Math.max(1,cfg.fps)*Math.PI*2*Math.max(1e-6,Math.abs(V.spin))/360);
+}
+/* The sampled state of a frame and the projector renderFrame would use for it on a W×H canvas: for hit-testing atoms and bonds on
+   screen, overlays, and view scoring. proj.proj(pos) gives {x,y} in the canvas's CSS pixels. */
+function projectFrame(W,H,frame){frameView(frame);const drawn=Math.floor(frame/Math.max(1,cfg.stepEvery))*Math.max(1,cfg.stepEvery);const st=sampleState(drawn);computeFit();return {st,proj:makeProjector(W,H),drawn}}
 function renderFrame(ctx,W,H,frame,dpr){
   RF={W,H,dpr};
-  TEX=1;VIEW_ROLL=cfg.view.roll||0;VIEW_YAW=cfg.view.yaw+cfg.view.spin*frame/Math.max(1,cfg.fps);VIEW_PITCH=cfg.view.pitch+cfg.view.pitchSwing*Math.sin(frame/Math.max(1,cfg.fps)*Math.PI*2*Math.max(1e-6,Math.abs(cfg.view.spin))/360);
+  TEX=1;frameView(frame);
   const drawn=Math.floor(frame/Math.max(1,cfg.stepEvery))*Math.max(1,cfg.stepEvery);
   const st=sampleState(drawn);
   const boil=Math.floor(drawn/Math.max(1,cfg.boilEvery));
@@ -1025,7 +1048,7 @@ return {
   get cfg(){return cfg}, set cfg(v){cfg=v;migrateCfg()},
   get scene(){return scene}, set scene(v){scene=v;FIT.key='';buildTimeline()},
   get TL(){return TL},
-  renderFrame, sampleState, locate, buildTimeline, demoScene, compileSel,
+  renderFrame, sampleState, locate, buildTimeline, demoScene, compileSel, projectFrame, viewAt,
   DEFAULT_CFG, PRESETS, GROUP_PALETTE, SUBUNIT_COLS,
   invalidatePaper(){paperCache.key='';baseCache.key='';grainCache.key=''},
 };

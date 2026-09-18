@@ -11,10 +11,11 @@
   html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:13px/1.4 "IBM Plex Sans", system-ui, sans-serif; overflow:hidden }
   #app { display:grid; grid-template-columns: 1fr 300px; height:100% }
   #stage { position:relative; overflow:hidden; background:#111 }
-  canvas { display:block; width:100%; height:100%; cursor:grab }
-  #sk { position:absolute; inset:0; pointer-events:none; opacity:0; transition:opacity .25s }
+  canvas { display:block; position:absolute; left:0; top:0; width:100%; height:100%; cursor:grab }
+  #sk, #ov { pointer-events:none } #sk { opacity:0; transition:opacity .25s }
   #sk.on { opacity:1 }
   canvas:active { cursor:grabbing }
+  #stage.author #c { cursor:crosshair }
   #panel { background:var(--panel); border-left:1px solid var(--line); overflow-y:auto; padding:10px 12px 40px }
   #panel h1 { font-size:15px; margin:4px 0 10px; font-weight:600; letter-spacing:.3px }
   #panel h1 small { color:var(--dim); font-weight:400; margin-left:6px }
@@ -60,11 +61,23 @@
   .strip .chips { display:flex; gap:2px } .strip .chips i { width:14px; height:14px; border-radius:3px; display:block }
   .strip span { font-size:11px; color:var(--fg) } .strip small { font-size:10px; color:var(--dim); margin-left:auto }
   .hexrow { display:flex; gap:6px; align-items:center; margin:2px 0 6px } .hexrow input { width:92px; font:11px ui-monospace,Menlo,monospace }
+  button.on { border-color:var(--acc); background:#3d3524 } button:disabled { opacity:.45; cursor:default; border-color:var(--line) }
+  .checks { display:flex; flex-direction:column; gap:3px; margin:4px 0 } .check { display:flex; gap:6px; font-size:11px; line-height:1.35; padding:3px 4px; border-radius:4px; cursor:pointer } .check:hover { background:#1f1d19 }
+  .check b { flex:none; width:12px; text-align:center } .check.error b { color:#ef4444 } .check.warn b { color:#f59e0b } .check.note b { color:var(--dim) } .check span { color:var(--fg) } .check.note span { color:var(--dim) }
+  .kflist { display:flex; flex-direction:column; gap:4px } .kf { display:grid; grid-template-columns:18px 1fr; gap:3px 6px; align-items:center; padding:4px 5px; border-radius:5px; border:1px solid var(--line); background:#1f1d19; font-size:11px }
+  .kf.on { border-color:var(--acc) } .kf.over { border-color:#7dd3fc } .kf.drag { opacity:.5 }
+  .kf .idx { color:var(--dim); cursor:pointer; text-align:center; font-weight:600 } .kf.on .idx { color:var(--acc) } .kf .lab { color:var(--dim) }
+  .kf .timing { grid-column:2; display:flex; gap:4px; align-items:center }
+  .kf input[type=number] { width:52px; background:#1a1917; color:var(--fg); border:1px solid var(--line); border-radius:3px; padding:2px 3px; font:11px inherit } .kf input[type=text] { background:none; border:none; border-bottom:1px solid transparent; color:var(--fg); padding:1px 2px; font-size:11px; width:100% } .kf input[type=text]:focus { border-bottom-color:var(--line); outline:none }
+  .kf .meta { grid-column:2; color:var(--dim) } .kf .acts { grid-column:2; display:flex; gap:3px; justify-content:flex-end } .kf .acts button { padding:1px 5px; font-size:10px }
+  .arrows { display:flex; flex-direction:column; gap:3px } .arrow { display:flex; gap:4px; align-items:center; font-size:11px } .arrow span { flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap } .arrow input { width:48px; background:#1a1917; color:var(--fg); border:1px solid var(--line); border-radius:3px; padding:1px 3px; font:11px inherit } .arrow button { padding:1px 6px }
+  .views { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin:4px 0 } .view { cursor:pointer; border:1px solid var(--line); border-radius:5px; overflow:hidden; background:#1f1d19 } .view:hover { border-color:var(--acc) } .view canvas { display:block; width:100%; height:auto; position:static } .view span { display:block; font-size:10px; color:var(--dim); padding:2px 4px }
+  progress { height:8px }
 </style>
 </head>
 <body>
 <div id="app">
-  <div id="stage"><canvas id="c"></canvas><canvas id="sk"></canvas><div id="drop">Drop a PDB, mmCIF or scene JSON file</div><div id="hud"></div></div>
+  <div id="stage"><canvas id="c"></canvas><canvas id="sk"></canvas><canvas id="ov"></canvas><div id="drop">Drop a PDB, mmCIF or scene JSON file</div><div id="hud"></div></div>
   <div id="panel">
     <h1>Triad Sketch<small>hand-drawn molecules</small></h1>
     <div id="controls"></div>

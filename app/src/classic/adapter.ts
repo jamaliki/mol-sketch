@@ -15,7 +15,8 @@ export function cfgFromStyle(style: Style, cam: { yaw: number; pitch: number; ro
   const surfaceColor = style.surfaceColor === 'residue' ? 'carbon' : style.surfaceColor;
   return {
     ...D, groupPalette: style.groupPalette && style.groupPalette.length ? style.groupPalette : null, fps: 24, stepEvery: scene ? 2 : 1, boilEvery: (scene ? 2 : 1) * Math.max(1, Math.round(style.boilHold ?? 1)), arrowLead: 0.2, pdbFrames: 2,
-    view: { yaw: cam.yaw, pitch: cam.pitch, roll: cam.roll || 0, zoom: cam.zoom, panX: cam.panX, panY: cam.panY, fov: cam.fov, fog: style.view.fog, fogStart: style.view.fogStart, spin: 0, pitchSwing: 0 },
+    // fixed: the app's camera is the truth for what is on screen; keyframe cameras reach it through setFrame (main.ts), which copies the interpolated view into the camera
+    view: { yaw: cam.yaw, pitch: cam.pitch, roll: cam.roll || 0, zoom: cam.zoom, panX: cam.panX, panY: cam.panY, fov: cam.fov, fog: style.view.fog, fogStart: style.view.fogStart, spin: 0, pitchSwing: 0, fixed: true },
     style: { ...D.style, rough: style.line.rough, passes: style.line.passes, pressure: style.line.pressure, fillWobble: style.fillWobble, hatchDensity: style.hatch.density, hierarchy: style.line.hierarchy,
       wash: style.paper.wash, washSeed: style.paper.washSeed, washLife: style.paper.washLife, inkWidth: style.line.width, hatchSpacing: style.hatch.spacing, hatchAngle: style.hatch.angle,
       lightAngle: style.view.light, shading: style.shading, pencilFill: style.pencilFill, grain: style.paper.grain, font: style.font, labelSize: style.labelSize, captionSize: style.captionSize, annot: style.annot ?? 1 },

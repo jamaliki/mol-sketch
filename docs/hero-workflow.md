@@ -33,7 +33,9 @@ the geometry has to be edited to make the picture read.
 python3 tools/mech2scene.py hero/calb/data/motif_01 hero/calb/recipe.json hero/calb/calb_hero.json
 ```
 
-Input layout (a mechazyme export; anything with these files works):
+Input layout (a mechazyme export; anything with these files works). SDF bond lines may carry a `CFG=` stereo flag
+after the two atoms; the reader takes them (an earlier version dropped those bonds, which is how the tetrahedral
+intermediates lost their C–O⁻ bond — the app's *Checks* would have said so):
 
 ```
 motif_01/
@@ -103,6 +105,9 @@ node cli/render.mjs scene.json --look dark-paper --frames drawn --size 1920x1080
   --set show.labels=false --set show.caption=false --set show.stepLabel=false --set annot=1.5 --set boilHold=2
 ```
 
+The same, from the app: *Render* in the panel encodes the loop with WebCodecs and downloads one file (AV1 › VP9 ›
+H.264, whichever the browser has), with a poster; the CLI is for the full set and for batches.
+
 `hero/render.sh NAME` is that line plus the three encodes (AV1, VP9, H.264) and the poster, per named variant;
 add a variant by adding a `case` line. `--look` names a look from `looks/`, `--style` a style saved from the app,
 `--set` any style field. `boilHold=2` re-jitters the strokes every second drawing while the atoms move on every one,
@@ -123,10 +128,37 @@ pan. *Animation* scrubs the timeline; check every state, not just the first.
 box on the canvas and dims the rest; *Fit to frame* sets zoom and pan for the whole animation or this frame. The
 preview canvas is the frame: fractions of it are fractions of the rendered video, whatever the pixel size.
 
-**Save.** *Save scene JSON* (the coordinates, the chemistry, the camera including roll and the fit) and *Save
-style*. *Copy render command* puts the CLI line that renders exactly this on the clipboard, naming those two files.
+**Check.** *Checks* lists what the lint pass found on load: bonds that name missing atoms or are too long, arrows
+anchored on nothing, lone-pair tails without a lone pair, ids that fade out or enter between keyframes, a loop that
+closes by morphing. Hover the time slider in *Animation* to see what changes on the way to the next keyframe drawn
+over the frame (moves, breaks, forms, leaves, arrives, charges).
 
-Then the script route from "Rendering and encoding" on.
+**Chemistry.** Arrows, lone pairs and charges by clicking the drawing, when the recipe did not have them or you want
+one more: *arrow* mode, click the tail then the head; *lone pair* and *charge* modes click an atom. The edits go into
+the scene, and *Undo* takes them back.
+
+**Time.** In *Animation* every keyframe has its hold and transition in seconds, *dup* (an identical copy after it, to
+edit into a new state), ▲ ▼ and drag to reorder, and *cam*, which stores the current camera on the keyframe so the view
+moves there during the transition before and holds through it (the *hero* loops keep one camera; a slow push-in over a
+cycle is one *cam* on the first keyframe and another, zoomed, on the last).
+
+**Perspective.** *Suggest views* in *View* scores 120 orientations (rings face-on, reacting atoms unhidden and apart,
+wide, leaving groups up and right) and draws the best twelve; click one to take it, then *Fit to frame*. The CALB
+view in the recipe was found the same way by hand; the button gives a dozen starting points in a second.
+
+**Save.** *Save scene JSON* (the coordinates, the chemistry, the camera including roll and the fit, the keyframe
+cameras) and *Save style*. *Copy render command* puts the CLI line that renders exactly this on the clipboard, naming
+those two files.
+
+**Render.** *Render* makes one video file here, in the browser (AV1, VP9 or H.264, whichever it can encode; the size
+presets are the hero's), with a poster: enough to put on the page and look. For the site's three encodes with the
+tuned ffmpeg settings, the script route from "Rendering and encoding" on.
+
+**Look at it on the page.** `hero/mockup.html` draws a scene JSON live in the hero's slot with the engine, no render
+needed: serve the repository root (`python3 -m http.server 8000`) and open
+`http://localhost:8000/hero/mockup.html?scene=calb/calb_hero.json&look=dark-paper&set=show.labels=false,show.caption=false,show.stepLabel=false,annot=1.5,sphereScale=0.3`
+(the `set` list is `render.sh`'s `--set` flags), or *Live scene…* on the page and pick the file. *Phone* switches to
+`NAME_mobile.json` when it exists beside the scene.
 
 ## 4. What the engine adds for cycles and trajectories
 

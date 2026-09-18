@@ -38,7 +38,7 @@ def read_sdf(path):
         t = line.split()
         if len(t) >= 7 and t[0] == 'M' and t[1] == 'V30' and t[2].isdigit() and len(t[3]) <= 2 and not t[3].isdigit():
             atoms[int(t[2])] = dict(el=t[3], pos=[float(t[4]), float(t[5]), float(t[6])])
-        elif len(t) == 6 and t[0] == 'M' and t[1] == 'V30' and t[2].isdigit() and t[3].isdigit():
+        elif len(t) >= 6 and t[0] == 'M' and t[1] == 'V30' and all(x.isdigit() for x in t[2:6]):   # bond lines; some carry CFG=… (stereo) after the atoms
             bonds.append((int(t[4]), int(t[5]), int(t[3])))
     return atoms, bonds
 

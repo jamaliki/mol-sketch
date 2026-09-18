@@ -1,3 +1,4 @@
+<meta charset="utf-8">
 <title>Jamali Lab Hero</title>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600&family=Figtree:wght@400;600&display=swap">
 <style>
@@ -16,7 +17,8 @@ h1{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;letter-spacin
 .site-nav__menu{display:none;border:0;background:transparent;color:#f2efe8}
 .home-hero{position:relative;display:flex;min-height:100svh;align-items:flex-end;overflow:hidden;background:#0f172a;color:#fff}
 .hero-art{position:absolute;inset:0;isolation:isolate;overflow:hidden}
-.hero-art video{display:block;width:100%;height:100%;object-fit:cover;object-position:70% 40%}
+.hero-art video,.hero-art canvas{display:block;width:100%;height:100%;object-fit:cover;object-position:70% 40%}
+.hero-art canvas{position:absolute;inset:0;display:none}.home-hero.live .hero-art canvas{display:block}.home-hero.live .hero-art video{visibility:hidden}
 .hero-art::after{content:"";position:absolute;inset:0;background:linear-gradient(rgba(12,13,16,.3),rgba(12,13,16,.05) 38%,rgba(12,13,16,.7) 75%,#0c0d10);mix-blend-mode:multiply}
 .hero-copy{position:relative;z-index:10;margin-inline:auto;width:100%;max-width:1180px;padding:10rem 1.25rem 3.5rem}
 @media (min-width:640px){.hero-copy{padding-inline:2rem}}
@@ -32,13 +34,13 @@ h1{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;letter-spacin
 .btn--primary{background:var(--orange);color:#1a1408;box-shadow:0 10px 24px rgba(194,65,12,.16)}
 .btn--secondary{border-color:rgba(255,255,255,.42);color:#f2efe8}
 /* the phone: the site's own phone rules (max-width 767px), applied by class so the preview can show them at any window size */
-@media (max-width:767px){.site-nav__links{display:none}.site-nav__menu{display:inline-flex}.site-nav__inner{min-height:70px}.hero-art video{object-position:50% 35%}}
+@media (max-width:767px){.site-nav__links{display:none}.site-nav__menu{display:inline-flex}.site-nav__inner{min-height:70px}.hero-art video,.hero-art canvas{object-position:50% 35%}}
 .stage.phone{display:grid;place-items:center;min-height:100svh;padding:2rem 1rem;background:#1c2438}
 .stage.phone .device{width:390px;max-width:100%;height:844px;max-height:calc(100svh - 4rem);overflow:hidden;border-radius:38px;border:10px solid #0a0f1c;box-shadow:0 30px 60px rgba(0,0,0,.5);position:relative;background:#0f172a}
 .stage.phone .site-nav{position:absolute}
 .stage.phone .site-nav__links{display:none}.stage.phone .site-nav__menu{display:inline-flex}.stage.phone .site-nav__inner{min-height:70px}
 .stage.phone .home-hero{min-height:100%;height:100%}
-.stage.phone .hero-art video{object-position:50% 35%}
+.stage.phone .hero-art video,.stage.phone .hero-art canvas{object-position:50% 35%}
 .stage.phone .hero-copy{padding:10rem 1.25rem 3.5rem}
 .stage.phone .display-title{font-size:3.4rem}
 .stage.phone .hero-copy p{font-size:1.125rem}
@@ -57,6 +59,11 @@ h1{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;letter-spacin
 .switch button:focus-visible{outline:2px solid var(--orange);outline-offset:2px}
 .switch button[aria-pressed="true"]{background:var(--orange);color:#1a1408}
 .switch button[disabled]{opacity:.35;cursor:default}
+/* the live panel: a scene JSON drawn by the engine in the hero's slot, no render needed */
+.live-form{display:none;flex-direction:column;gap:.4rem;padding:.7rem .8rem;border-radius:.9rem;background:rgba(15,23,42,.94);border:1px solid rgba(242,239,232,.25);backdrop-filter:blur(10px);color:rgba(242,239,232,.85);font-size:.75rem;max-width:min(92vw,24rem)}
+.live-form.open{display:flex}.live-form label{display:flex;gap:.5rem;align-items:center;justify-content:space-between}
+.live-form input,.live-form select{font:inherit;color:#f2efe8;background:rgba(255,255,255,.08);border:1px solid rgba(242,239,232,.25);border-radius:.4rem;padding:.25rem .4rem;max-width:14rem}
+.live-form input[type=file]{max-width:13rem}.live-form .go{align-self:flex-end;background:var(--orange);color:#1a1408;border:0;border-radius:999px;padding:.45rem .9rem;font-weight:600;cursor:pointer}
 .switch small{color:rgba(242,239,232,.75);font-size:.72rem;background:rgba(15,23,42,.85);padding:.3rem .6rem;border-radius:.5rem;max-width:min(92vw,34rem);text-align:right}
 /* what follows the hero on the site: a strip of its paper, so the join reads */
 .after{background:var(--paper);color:var(--ink);padding:4.5rem 1.25rem;text-align:center;font-size:.9rem;color:var(--muted)}
@@ -74,6 +81,7 @@ h1{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;letter-spacin
     <video id="vid" autoplay muted loop playsinline preload="auto" poster="hero_dark_poster.jpg">
       <source id="src-mp4" src="hero_dark.mp4" type="video/mp4">
     </video>
+    <canvas id="live" width="960" height="540"></canvas>
   </div>
   <div class="hero-copy"><div>
     <h1 class="display-title">Designing the<br><span>molecules of life</span></h1>
@@ -93,7 +101,16 @@ h1{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;letter-spacin
     <button type="button" id="s-mech" aria-pressed="true" data-scene="mech">Serine hydrolase</button>
     <button type="button" id="s-calb" aria-pressed="false" data-scene="calb">CALB</button>
     <button type="button" id="s-chalk" aria-pressed="false" data-scene="chalk">CALB chalk</button>
+    <button type="button" id="s-live" aria-pressed="false" title="draw a scene JSON here with the engine, no render needed">Live scene…</button>
   </div>
+  <form class="live-form" id="live-form">
+    <label>scene JSON <input type="file" id="lf-scene" accept=".json"></label>
+    <label>or URL <input type="text" id="lf-url" placeholder="calb/calb_hero.json" size="22"></label>
+    <label>look <select id="lf-look"><option value="dark-paper">dark-paper</option><option value="chalkboard">chalkboard</option><option value="watercolour">watercolour</option><option value="ink-colour">ink-colour</option><option value="ink">ink</option></select></label>
+    <label>flags <input type="text" id="lf-set" placeholder="show.labels=false annot=1.5 …" size="22" title="the --set flags of hero/render.sh, space-separated"></label>
+    <button type="button" class="go" id="lf-go">Draw it</button>
+    <span id="lf-note">The engine draws the scene in the hero's slot at 12 drawings a second (or as fast as this machine goes) at half size. Needs the page served from the repo root: python3 -m http.server, then hero/mockup.html?scene=calb/calb_hero.json&look=dark-paper</span>
+  </form>
   <div class="seg" role="group" aria-label="Paper and device">
     <button type="button" id="p-dark" aria-pressed="true" data-paper="dark">Dark</button>
     <button type="button" id="p-cream" aria-pressed="false" data-paper="cream">Cream</button>
@@ -110,6 +127,7 @@ h1{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;letter-spacin
     chalk: {dark:{desktop:'hero_calb-chalk',mobile:'hero_calb-chalk-mobile'}},
   };
   const hero=document.getElementById('hero'),vid=document.getElementById('vid'),src=document.getElementById('src-mp4'),stage=document.getElementById('stage');
+  const PREFIX=/\/hero\/[^/]*$/.test(location.pathname)?'out/':'';   // in the repo the renders sit in hero/out; the published mock-up keeps them beside the page
   const st={scene:'mech',paper:'dark',phone:false};
   try{Object.assign(st,JSON.parse(localStorage.getItem('hero-mock')||'{}'))}catch(e){}
   function apply(){
@@ -120,13 +138,50 @@ h1{margin:0;font-family:"Bricolage Grotesque",system-ui,sans-serif;letter-spacin
     document.querySelectorAll('[data-paper]').forEach(b=>{b.setAttribute('aria-pressed',String(b.dataset.paper===st.paper));b.disabled=!FILES[st.scene][b.dataset.paper]});
     document.getElementById('d-phone').setAttribute('aria-pressed',String(st.phone));
     const f=FILES[st.scene][st.paper][st.phone?'mobile':'desktop'];
-    if(!src.getAttribute('src').startsWith(f+'.')){const t=vid.currentTime;src.src=f+'.mp4';vid.poster=f+'_poster.jpg';vid.load();
+    if(!src.getAttribute('src').startsWith(PREFIX+f+'.')){const t=vid.currentTime;src.src=PREFIX+f+'.mp4';vid.poster=PREFIX+f+'_poster.jpg';vid.load();
       vid.addEventListener('loadedmetadata',()=>{try{vid.currentTime=Math.min(t,vid.duration-0.1)}catch(e){}vid.play().catch(()=>{})},{once:true})}
     try{localStorage.setItem('hero-mock',JSON.stringify(st))}catch(e){}
   }
-  document.querySelectorAll('[data-scene]').forEach(b=>b.addEventListener('click',()=>{st.scene=b.dataset.scene;apply()}));
+  document.querySelectorAll('[data-scene]').forEach(b=>b.addEventListener('click',()=>{st.scene=b.dataset.scene;live.stop();apply()}));
   document.querySelectorAll('[data-paper]').forEach(b=>b.addEventListener('click',()=>{st.paper=b.dataset.paper;apply()}));
-  document.getElementById('d-phone').addEventListener('click',()=>{st.phone=!st.phone;apply()});
+  document.getElementById('d-phone').addEventListener('click',()=>{st.phone=!st.phone;apply();live.rephone()});
   apply();
+
+  /* live: the classic engine draws a scene JSON straight into the hero's slot, so framing, colours and timing can be
+     checked without rendering. A look is a cfg from ../looks/; the scene's camera wins over the look's; flags are the
+     --set flags of render.sh (app style paths), translated to the engine's cfg. */
+  const live={E:null,cfg:null,timer:0,frame:0,url:'',look:'',flags:'',
+    async rephone(){ // a scene loaded by URL has a phone twin when NAME_mobile.json exists beside it (the CLI's --write-view mobile.json)
+      if(!this.timer)return;const u=this.url;if(!u){this.resize();return}const alt=st.phone?u.replace(/(_mobile)?\.json$/,'_mobile.json'):u.replace(/_mobile\.json$/,'.json');
+      if(alt!==u){try{const r=await fetch(alt);if(r.ok){const sc=await r.json();this.stop();this.url=alt;await this.start(sc,this.look,this.flags);return}}catch(e){}}this.resize()},
+    stop(){if(this.timer)cancelAnimationFrame(this.timer);this.timer=0;hero.classList.remove('live');document.getElementById('s-live').setAttribute('aria-pressed','false')},
+    resize(){const c=document.getElementById('live');const phone=st.phone;c.width=phone?540:960;c.height=phone?960:540},
+    async start(scene,lookName,flags){
+      if(!this.E){const m=await import('../app/src/classic/engine.js');this.E=m.createClassic()}
+      const E=this.E;const look=await(await fetch('../looks/'+lookName+'.json')).json();
+      const cfg=JSON.parse(JSON.stringify({...E.DEFAULT_CFG,...look}));cfg.view={...cfg.view,...(scene.view||{})};cfg.stepEvery=2;cfg.boilEvery=2;
+      // render.sh's --set flags: app style paths → cfg
+      const setPath=(o,path,v)=>{const ks=path.split('.');let t=o;for(let i=0;i<ks.length-1;i++)t=t[ks[i]]=t[ks[i]]||{};t[ks[ks.length-1]]=v};
+      const val=x=>x==='true'?true:x==='false'?false:isNaN(+x)?x:+x;
+      for(const f of (flags||'').split(/\s+/).filter(Boolean)){const [k,x]=f.replace(/^--set\s*/,'').split('=');const v=val(x);
+        if(k.startsWith('show.')||k.startsWith('palette.'))setPath(cfg,k,v);else if(k==='annot')cfg.style.annot=v;else if(k==='boilHold')cfg.boilEvery=2*v;else if(k==='sphereScale'||k==='stickRadius'||k==='detail'||k==='textureScale'||k==='fill'||k==='mode')cfg.rep[k]=v;
+        else if(k.startsWith('line.'))cfg.style[{width:'inkWidth',rough:'rough',passes:'passes',hierarchy:'hierarchy',pressure:'pressure'}[k.slice(5)]||k.slice(5)]=v;else if(k.startsWith('paper.'))cfg.style[k.slice(6)]=v;else if(k==='shading')cfg.style.shading=v;else setPath(cfg,k,v)}
+      E.cfg=cfg;E.scene=scene;this.cfg=cfg;this.resize();hero.classList.add('live');document.getElementById('s-live').setAttribute('aria-pressed','true');document.querySelectorAll('[data-scene]').forEach(b=>b.setAttribute('aria-pressed','false'));
+      const c=document.getElementById('live'),x=c.getContext('2d');const total=E.TL.total;let last=0;this.frame=0;const note=document.getElementById('note');
+      const tick=t=>{if(t-last>=1000/12-2){last=t;const t0=performance.now();E.renderFrame(x,c.width,c.height,this.frame,1);const ms=performance.now()-t0;this.frame=(this.frame+2)%total;
+          note.textContent=`live: ${scene.name||'scene'} · ${lookName} · ${(this.frame/24).toFixed(1)} / ${(total/24).toFixed(1)} s · ${ms.toFixed(0)} ms per drawing at ${c.width}×${c.height}`}
+        this.timer=requestAnimationFrame(tick)};
+      this.timer=requestAnimationFrame(tick);
+    }};
+  const form=document.getElementById('live-form');
+  document.getElementById('s-live').addEventListener('click',()=>form.classList.toggle('open'));
+  document.getElementById('lf-go').addEventListener('click',async()=>{
+    const f=document.getElementById('lf-scene').files[0],u=document.getElementById('lf-url').value.trim();let scene;
+    try{scene=f?JSON.parse(await f.text()):u?await(await fetch(u)).json():null}catch(e){document.getElementById('note').textContent='could not read the scene: '+e.message;return}
+    if(!scene){document.getElementById('note').textContent='pick a scene JSON, or type its URL';return}
+    form.classList.remove('open');live.stop();live.url=f?'':u;live.look=document.getElementById('lf-look').value;live.flags=document.getElementById('lf-set').value;try{await live.start(scene,live.look,live.flags)}catch(e){document.getElementById('note').textContent='live scene failed: '+e.message+' (serve the repo root: python3 -m http.server)'}
+  });
+  const q=new URLSearchParams(location.search);
+  if(q.get('scene')){document.getElementById('lf-url').value=q.get('scene');if(q.get('look'))document.getElementById('lf-look').value=q.get('look');if(q.get('set'))document.getElementById('lf-set').value=q.get('set').split(',').join(' ');if(q.get('phone')){st.phone=true;apply()}document.getElementById('lf-go').click()}
 })();
 </script>

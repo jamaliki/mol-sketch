@@ -100,10 +100,14 @@ src/classic/   engine.js (the page's canvas renderer, verbatim), adapter.ts (Str
                camera → projector)
 src/ink/       strokes.ts (the stroke engine, ported from the page), paper.ts, regions.ts (label image →
                polygons), sketch.ts (the sketch pass)
-src/app/       panel.ts (controls generated from a schema), controls.ts (orbit)
+src/app/       panel.ts (controls generated from a schema), controls.ts (orbit), history.ts (undo), lint.ts (checks),
+               diff.ts (what changes between keyframes), author.ts (hit-testing and arrow / lone pair / charge edits),
+               views.ts (the view scorer), encode.ts (WebCodecs + mp4-muxer / webm-muxer)
 src/main.ts    wiring, render loop, window.TriadSketch for scripts
 cli/render.mjs headless renderer (Playwright + the built app)
-scripts/shot.mjs  development screenshots against the dev server
+scripts/shot.mjs  development screenshots against the dev server;  scripts/mech.mjs  the pixel-identity test of the classic engine;
+scripts/features.mjs  exercises lint, diffs, authoring, keyframe edits, keyframe cameras, suggested views, undo and
+               in-browser encoding headlessly;  scripts/viewsheet.mjs  a contact sheet of suggested views
 ```
 
 ## Colours
@@ -157,6 +161,54 @@ scene's own view; `--fit L,T,R,B` (percent of the frame) then sets zoom and pan 
 in the scene JSON and stops. A scene's `path` (a computed trajectory between two keyframes), `leave`, `asNext`,
 `exitDir` and `enterDir` (a cycle that closes with molecules exchanged) are in
 [../docs/scene-format.md](../docs/scene-format.md).
+
+## Editing a scene in the app
+
+Everything below writes into the loaded scene document, so *Save scene JSON* keeps it and the CLI renders it. *Undo* /
+*Redo* (Ctrl-Z, Ctrl-Shift-Z) cover style, camera, colours and these edits; a slider drag or a turn of the view is one
+step.
+
+**Checks.** On load (and after every edit) a lint pass lists what is probably wrong and what will happen that you might
+not expect: bonds naming missing atoms, bonds too long for their elements or listed twice, carbons without a bond,
+arrows anchored on atoms or lone pairs that are not there, a lone-pair tail on an atom with no lone pair, charges drawn
+bare, ids that fade out or enter between keyframes (a note when the cycle closes with `leave`, a warning otherwise), a
+loop that closes by morphing products back into the substrate. Click a line to go to that keyframe.
+
+**Animation.** Time is in seconds (the timeline runs at 24 frames a second, 12 drawings). Hovering the time slider
+draws what changes on the way to the next keyframe over the frame: orange rings on atoms that move (stronger the
+further), red dashes on bonds that break and rings on atoms that leave, green on bonds that form and atoms that arrive,
+yellow on bonds that change order and atoms whose charge changes; *show changes* keeps the overlay on. The keyframe list
+has each keyframe's name, hold and transition in seconds (edit them there; the loop length is under the list), *cam*,
+*dup*, ▲ ▼ and ✕, and rows drag to reorder. *dup* inserts an identical copy after a keyframe and hands it the original's
+motion to the next (its transition and `path`), so the original now leads to an identical state: duplicate, then edit
+the copy. *cam* stores the current camera on the keyframe (`view` in the JSON: yaw, pitch, roll, zoom, pan): the view
+holds it through the keyframe and moves to it, smoothly, during the transition before; keyframes without one keep the
+previous keyframe's camera, so one *cam* on keyframe 1 fixes the camera for the loop and a second on keyframe 4 makes
+the view travel there between 3 and 4. Scrubbing follows the keyframe cameras; turning the view previews a candidate,
+*cam* keeps it.
+
+**Chemistry.** Four modes: *look* (clicks do nothing), *arrow*, *lone pair*, *charge*. In arrow mode click the tail —
+an atom (its lone pair, when it has one) or the middle of a bond — then the head, an atom or a bond; Esc cancels. The
+arrow's side is chosen so its bow points away from the middle of the drawing; the list under the modes shows the
+keyframe's arrows with a bow field, a flip button and delete. Lone-pair mode toggles a lone pair on an atom, pointing
+away from its bonds. Charge mode cycles none → + → − → none. Edits apply to the keyframe you are on; in a transition
+the timeline steps back to that keyframe's hold first.
+
+**Suggest views** (in *View*) scores 120 orientations of the loaded scene — rings face-on (the mean and the worst:
+one ring seen edge-on is a line), the reacting atoms (arrow anchors, ends of bonds that break or form) not hidden by
+other atoms and apart from each other on the page, the drawing wider than tall (the preview's aspect sets the target),
+leaving groups going up and right — and draws the best twelve, distinct in direction, with the current style. Click one
+to take its yaw, pitch and roll (zoom and pan stay; with guides on, the drawing is refitted to the frame). The score is
+a heuristic; the thumbnails are the point.
+
+**Render.** The loop as a video file, made in the browser: pick a size (the presets, the canvas, or custom), a codec
+(AV1 › VP9 › H.264, whichever this browser encodes; *auto* takes the smallest), a quality (the *small* quantizers sit
+near the site's ffmpeg encodes), and *Render the loop*. WebCodecs encodes what the classic engine draws, a muxer
+writes MP4 (AV1, H.264) or WebM (VP9), and the file downloads; a progress bar shows the size so far and the estimate.
+*Save poster (JPEG)* is the first keyframe with its arrows drawn, at the output size; *Save this frame (PNG)* the frame
+on screen. The preview canvas keeps the chosen size's aspect (letterboxed), so a fit made in *Frame* is the fit of the
+file. Chrome and Edge have VideoEncoder; Safari 17 and Firefox partly. The CLI (`cli/render.mjs` + ffmpeg, `hero/render.sh`)
+remains the way to make all three encodes at once with the tuned encoders. Per-keyframe cameras render in both.
 
 ## Not in the app
 
