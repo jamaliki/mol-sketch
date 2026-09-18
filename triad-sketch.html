@@ -215,7 +215,7 @@ const DEFAULT_CFG={
 };
 let cfg=JSON.parse(JSON.stringify(DEFAULT_CFG));
 try{const s=localStorage.getItem('triad-sketch-cfg');if(s){const o=JSON.parse(s);cfg={...cfg,...o,view:{...cfg.view,...o.view},style:{...cfg.style,...o.style},show:{...cfg.show,...o.show},palette:{...cfg.palette,...o.palette},rep:{...cfg.rep,...(o.rep||{})}}}}catch(e){}
-function migrateCfg(){const v=cfg.view;if(v.fov===undefined)v.fov=v.perspective!==undefined?Math.round(8+v.perspective*40):20;if(v.fogStart===undefined)v.fogStart=0.45;if(v.spin===undefined)v.spin=0;if(v.pitchSwing===undefined)v.pitchSwing=0;delete v.perspective;delete v.depthGain;if(cfg.style.pressure===undefined)cfg.style.pressure=0.55;if(cfg.style.fillWobble===undefined)cfg.style.fillWobble=1;if(cfg.style.hatchDensity===undefined)cfg.style.hatchDensity=1.4;if(cfg.style.hierarchy===undefined)cfg.style.hierarchy=0.6;if(cfg.style.wash===undefined)cfg.style.wash=0.3;if(cfg.style.washSeed===undefined)cfg.style.washSeed=1;if(cfg.style.washLife===undefined)cfg.style.washLife=0.6;if(!cfg.palette.nucleic)cfg.palette.nucleic='#e0a23a';if(!cfg.palette.wash||cfg.palette.wash==='#c9b48a'||cfg.palette.wash==='#c9a97a'||cfg.palette.wash==='#c7d0d8')cfg.palette.wash=cfg.palette.paper&&luminance(cfg.palette.paper)>0.9?'#7fb2c9':'#d1a35b';if(cfg.show.construction===undefined)cfg.show.construction=false}
+function migrateCfg(){const v=cfg.view;if(v.fov===undefined)v.fov=v.perspective!==undefined?Math.round(8+v.perspective*40):20;if(v.fogStart===undefined)v.fogStart=0.45;if(v.spin===undefined)v.spin=0;if(v.roll===undefined)v.roll=0;if(v.pitchSwing===undefined)v.pitchSwing=0;delete v.perspective;delete v.depthGain;if(cfg.style.pressure===undefined)cfg.style.pressure=0.55;if(cfg.style.fillWobble===undefined)cfg.style.fillWobble=1;if(cfg.style.hatchDensity===undefined)cfg.style.hatchDensity=1.4;if(cfg.style.hierarchy===undefined)cfg.style.hierarchy=0.6;if(cfg.style.wash===undefined)cfg.style.wash=0.3;if(cfg.style.washSeed===undefined)cfg.style.washSeed=1;if(cfg.style.washLife===undefined)cfg.style.washLife=0.6;if(!cfg.palette.nucleic)cfg.palette.nucleic='#e0a23a';if(!cfg.palette.wash||cfg.palette.wash==='#c9b48a'||cfg.palette.wash==='#c9a97a'||cfg.palette.wash==='#c7d0d8')cfg.palette.wash=cfg.palette.paper&&luminance(cfg.palette.paper)>0.9?'#7fb2c9':'#d1a35b';if(cfg.show.construction===undefined)cfg.show.construction=false}
 migrateCfg();
 function saveCfg(){try{localStorage.setItem('triad-sketch-cfg',JSON.stringify(cfg))}catch(e){}}
 
@@ -323,11 +323,18 @@ function sampleState(frame){
     else { if(hasHold){arrowProg=1}else{arrowProg=easeOut(t/Math.max(lead,0.05))}
       arrowAlpha=1-smooth((t-(lead+0.12))/0.28); }
   }
-  const atoms=[];const ids=new Set([...Object.keys(Ki.atoms),...(isTrans?Object.keys(Kj.atoms):[])]);
-  const A={};
-  for(const id of ids){
-    const a=Ki.atoms[id],b=isTrans?Kj.atoms[id]:undefined;
-    let o;
+  /* Which atom of this keyframe is which atom of the next. By default an id matches itself. `asNext` renames an atom for the
+     match only (a proton that changed owner and must be next cycle's HG), `leave` lists groups or ids that exit instead of
+     matching (products going out while an identical substrate comes in). An entering atom whose id collides with a leaving
+     one is keyed with a trailing "'" for this frame. `exitDir` / `enterDir` (Å) are the keyframe-wide defaults for atoms
+     without their own exitTo / enterFrom. */
+  const leave=new Set(Ki.leave||[]),alias=Ki.asNext||{};
+  const leaving=id=>leave.size>0&&(leave.has(id)||(alias[id]===undefined&&leave.has(Ki.atoms[id].group||id.split(':')[0])));   // an aliased atom stays even if its group leaves
+  const nextOf={},prevOf={};                         // Ki id → Kj id it becomes, and back
+  if(isTrans)for(const id in Ki.atoms){if(leaving(id))continue;const n=alias[id]??id;if(Kj.atoms[n]&&!(n in prevOf)){nextOf[id]=n;prevOf[n]=id}}
+  const inKey=n=>prevOf[n]?prevOf[n]:(Ki.atoms[n]?n+"'":n);   // the key an entering Kj atom gets in this frame
+  const atoms=[];const A={};
+  const addA=(a,b,id)=>{let o;
     if(a&&b){
       o={id,el:a.el||b.el,pos:pathPos(Ki,id,a.pos,b.pos,tm),alpha:lerp(a.opacity??1,b.opacity??1,tm),r:a.r??b.r,color:a.color??b.color,label:a.label??b.label,labelDir:a.labelDir??b.labelDir,labelAuto:a.labelAuto,charges:[],lps:[]};
       const ca=chargeText(a.charge),cb=chargeText(b.charge);
@@ -336,23 +343,24 @@ function sampleState(frame){
       if(la.length===lb.length){la.forEach((d,i)=>o.lps.push({dir:lerp3(d,lb[i],tm),alpha:1}))}
       else{la.forEach(d=>o.lps.push({dir:d,alpha:1-tm}));lb.forEach(d=>o.lps.push({dir:d,alpha:tm}))}
     }else if(a){ // exiting (or holding)
-      const to=a.exitTo||a.pos;
+      const to=a.exitTo||(Ki.exitDir?[a.pos[0]+Ki.exitDir[0],a.pos[1]+Ki.exitDir[1],a.pos[2]+Ki.exitDir[2]]:a.pos);
       o={id,el:a.el,pos:isTrans?lerp3(a.pos,to,tm):a.pos,alpha:(a.opacity??1)*(isTrans?1-tm:1),r:a.r,color:a.color,label:a.label,labelDir:a.labelDir,labelAuto:a.labelAuto,charges:[],lps:[]};
       const c=chargeText(a.charge);if(c)o.charges.push({text:c,alpha:1});(a.lp||[]).forEach(d=>o.lps.push({dir:d,alpha:1}));
     }else{ // entering
-      const from=b.enterFrom||b.pos;
+      const from=b.enterFrom||(Kj.enterDir?[b.pos[0]+Kj.enterDir[0],b.pos[1]+Kj.enterDir[1],b.pos[2]+Kj.enterDir[2]]:b.pos);
       o={id,el:b.el,pos:lerp3(from,b.pos,tm),alpha:(b.opacity??1)*tm,r:b.r,color:b.color,label:b.label,labelDir:b.labelDir,labelAuto:b.labelAuto,charges:[],lps:[]};
       const c=chargeText(b.charge);if(c)o.charges.push({text:c,alpha:1});(b.lp||[]).forEach(d=>o.lps.push({dir:d,alpha:1}));
     }
     o.el=(o.el||'C').toUpperCase();
     const src=a||b;o.resn=src.resn;o.resi=src.resi;o.chain=src.chain;o.name=src.name??id;o.het=src.het;o.group=src.group;o.ss=src.ss;o.sphere=src.sphere;o.trace=src.trace;o.nucleic=src.nucleic;o.entity=src.entity;o.subunit=src.subunit;
-    atoms.push(o);A[id]=o;
-  }
-  // bonds
+    atoms.push(o);A[id]=o};
+  for(const id in Ki.atoms)addA(Ki.atoms[id],isTrans&&nextOf[id]?Kj.atoms[nextOf[id]]:undefined,id);
+  if(isTrans)for(const n in Kj.atoms)if(!prevOf[n])addA(undefined,Kj.atoms[n],inKey(n));
+  // bonds: Ki's by its ids, Kj's translated to this frame's keys
   const bonds=[];const Bi={},Bj={};
   const norm=b=>Array.isArray(b)?{a:b[0],b:b[1],order:b[2]??1}:{a:b.a,b:b.b,order:b.order??1};
   (Ki.bonds||[]).forEach(b=>{const o=norm(b);Bi[bkey(o.a,o.b)]=o});
-  if(isTrans)(Kj.bonds||[]).forEach(b=>{const o=norm(b);Bj[bkey(o.a,o.b)]=o});
+  if(isTrans)(Kj.bonds||[]).forEach(b=>{const o=norm(b);o.a=inKey(o.a);o.b=inKey(o.b);Bj[bkey(o.a,o.b)]=o});
   const keys=new Set([...Object.keys(Bi),...Object.keys(Bj)]);
   for(const k of keys){
     const bi=Bi[k],bj=Bj[k];const src=bi||bj;if(!A[src.a]||!A[src.b])continue;
@@ -362,8 +370,8 @@ function sampleState(frame){
       else if(bi.order===0||bj.order===0){bonds.push({a:bi.a,b:bi.b,order:bi.order,alpha:base*(1-tm),partial:0});bonds.push({a:bj.a,b:bj.b,order:bj.order,alpha:base*tm,partial:0})}
       else bonds.push({a:bi.a,b:bi.b,order:lerp(bi.order,bj.order,tm),alpha:base,partial:0});
     }else if(bi){ // a bond only in this keyframe: breaking (dotted) if one atom stays, but a molecule leaving whole keeps its bonds and just fades
-      const whole=isTrans&&!Kj.atoms[bi.a]&&!Kj.atoms[bi.b];bonds.push({a:bi.a,b:bi.b,order:bi.order,alpha:base,partial:isTrans&&!whole?(1-tm):0}) }
-    else{ const whole=!Ki.atoms[bj.a]&&!Ki.atoms[bj.b];bonds.push({a:bj.a,b:bj.b,order:bj.order,alpha:base,partial:whole?0:tm}) }
+      const whole=isTrans&&!nextOf[bi.a]&&!nextOf[bi.b];bonds.push({a:bi.a,b:bi.b,order:bi.order,alpha:base,partial:isTrans&&!whole?(1-tm):0}) }
+    else{ const whole=!nextOf[bj.a]&&!nextOf[bj.b];bonds.push({a:bj.a,b:bj.b,order:bj.order,alpha:base,partial:whole?0:tm}) }
   }
   // captions
   let capA=Ki.caption||'',capAa=1,capB='',capBa=0;
@@ -373,11 +381,11 @@ function sampleState(frame){
 
 /* ============================ projection ============================ */
 let FIT={cx:0,cy:0,cz:0,rx:0,ry:0,spanX:10,spanY:10,zspan:4,key:''};
-function rot3(p,cy,sy,cp,sp){const x=p[0]-FIT.cx,y=p[1]-FIT.cy,z=p[2]-FIT.cz;const x1=x*cy+z*sy,z1=-x*sy+z*cy;return[x1,y*cp-z1*sp,y*sp+z1*cp]}
-let VIEW_YAW=0,VIEW_PITCH=0; // effective angles for the frame being drawn (base + turntable)
+function rot3(p,cy,sy,cp,sp){const x=p[0]-FIT.cx,y=p[1]-FIT.cy,z=p[2]-FIT.cz;const x1=x*cy+z*sy,z1=-x*sy+z*cy;const y1=y*cp-z1*sp,z2=y*sp+z1*cp;if(!VIEW_ROLL)return[x1,y1,z2];const cr=Math.cos(VIEW_ROLL*Math.PI/180),sr=Math.sin(VIEW_ROLL*Math.PI/180);return[x1*cr-y1*sr,x1*sr+y1*cr,z2]} // yaw about y, pitch about x, then roll about the view axis
+let VIEW_YAW=0,VIEW_PITCH=0,VIEW_ROLL=0; // effective angles for the frame being drawn (base + turntable)
 function computeFit(){
   const spinning=cfg.view.spin!==0||cfg.view.pitchSwing!==0;
-  const key=scene.keyframes.length+'|'+(spinning?'sphere':VIEW_YAW+'|'+VIEW_PITCH)+'|'+(scene._rev||0);
+  const key=scene.keyframes.length+'|'+(spinning?'sphere':VIEW_YAW+'|'+VIEW_PITCH+'|'+VIEW_ROLL)+'|'+(scene._rev||0);
   if(FIT.key===key)return;
   let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9],c=0;
   for(const k of scene.keyframes)for(const id in k.atoms){const p=k.atoms[id].pos;for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],p[i]);mx[i]=Math.max(mx[i],p[i])}c++}
@@ -1098,7 +1106,7 @@ let PAPER_FILL=null;
 function paperFill(){return (isInk()&&PAPER_FILL)?PAPER_FILL:cfg.palette.paper}
 function renderFrame(ctx,W,H,frame,dpr){
   RF={W,H,dpr};
-  VIEW_YAW=cfg.view.yaw+cfg.view.spin*frame/Math.max(1,cfg.fps);VIEW_PITCH=cfg.view.pitch+cfg.view.pitchSwing*Math.sin(frame/Math.max(1,cfg.fps)*Math.PI*2*Math.max(1e-6,Math.abs(cfg.view.spin))/360);
+  VIEW_ROLL=cfg.view.roll||0;VIEW_YAW=cfg.view.yaw+cfg.view.spin*frame/Math.max(1,cfg.fps);VIEW_PITCH=cfg.view.pitch+cfg.view.pitchSwing*Math.sin(frame/Math.max(1,cfg.fps)*Math.PI*2*Math.max(1e-6,Math.abs(cfg.view.spin))/360);
   const drawn=Math.floor(frame/Math.max(1,cfg.stepEvery))*Math.max(1,cfg.stepEvery);
   const st=sampleState(drawn);
   const boil=Math.floor(drawn/Math.max(1,cfg.boilEvery));
@@ -1314,6 +1322,7 @@ function buildPanel(){
   const V=document.getElementById('sec-view');V.innerHTML='';
   slider(V,'yaw',()=>cfg.view.yaw,v=>cfg.view.yaw=v,-180,180,1,v=>v+'°');
   slider(V,'pitch',()=>cfg.view.pitch,v=>cfg.view.pitch=v,-90,90,1,v=>v+'°');
+  slider(V,'roll',()=>cfg.view.roll||0,v=>cfg.view.roll=v,-180,180,1,v=>v+'°');
   slider(V,'zoom',()=>cfg.view.zoom,v=>cfg.view.zoom=v,0.3,3,0.05,v=>v.toFixed(2)+'×');
   slider(V,'pan x',()=>cfg.view.panX,v=>cfg.view.panX=v,-0.5,0.5,0.01,v=>v.toFixed(2));
   slider(V,'pan y',()=>cfg.view.panY,v=>cfg.view.panY=v,-0.5,0.5,0.01,v=>v.toFixed(2));

@@ -38,7 +38,7 @@ function setFrame(f: number) {
 function loadScene(doc: SceneDoc, name: string) {
   sceneDoc = doc; const E = classic(); E.scene = doc; frame = 0; playing = false;
   if (doc.reps) style.reps = { ...doc.reps }; R.overrides = { ...(doc.groupColors || {}) };
-  if (doc.view) { const v = doc.view; R.camera.yaw = v.yaw ?? 0; R.camera.pitch = v.pitch ?? 0; R.camera.zoom = v.zoom ?? 1; R.camera.panX = v.panX ?? 0; R.camera.panY = v.panY ?? 0; if (v.fov !== undefined) { R.camera.fov = v.fov; style.view.fov = v.fov } if (v.fog !== undefined) style.view.fog = v.fog; if (v.fogStart !== undefined) style.view.fogStart = v.fogStart }
+  if (doc.view) { const v = doc.view; R.camera.yaw = v.yaw ?? 0; R.camera.pitch = v.pitch ?? 0; R.camera.roll = v.roll ?? 0; R.camera.zoom = v.zoom ?? 1; R.camera.panX = v.panX ?? 0; R.camera.panY = v.panY ?? 0; if (v.fov !== undefined) { R.camera.fov = v.fov; style.view.fov = v.fov } if (v.fog !== undefined) style.view.fog = v.fog; if (v.fogStart !== undefined) style.view.fogStart = v.fogStart }
   R.camera.base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   R.fitOverride = sceneFitPoints(doc); R.camera.capFrac = style.show.caption ? 0.13 : 0; R.camera.topFrac = style.show.stepLabel ? 0.05 : 0;
   panel.refresh(); setFrame(0); status(`scene: ${doc.keyframes.length} keyframes, ${timeline().total} frames`);
@@ -59,7 +59,7 @@ function sceneJson(): string {
   const doc: any = sceneDoc ? { ...sceneDoc } : (R.structure ? sceneFromStructure(R.structure, style, R.overrides, R.camera.base, new Float32Array(0)) : null);
   if (!doc) return '{}';
   doc.reps = { ...style.reps }; doc.groupColors = { ...R.overrides }; delete doc.fitPoints;
-  doc.view = { yaw: R.camera.yaw, pitch: R.camera.pitch, zoom: R.camera.zoom, panX: R.camera.panX, panY: R.camera.panY, fov: R.camera.fov, fog: style.view.fog, fogStart: style.view.fogStart };
+  doc.view = { yaw: R.camera.yaw, pitch: R.camera.pitch, roll: R.camera.roll, zoom: R.camera.zoom, panX: R.camera.panX, panY: R.camera.panY, fov: R.camera.fov, fog: style.view.fog, fogStart: style.view.fogStart };
   return JSON.stringify(doc, null, 1);
 }
 function runSketch(mode: RestMode = restMode) {
@@ -86,12 +86,13 @@ function status(msg?: string) {
   el.textContent = (msg ? msg + '\n' : '') + (s ? `${s.name || 'structure'}: ${s.count.toLocaleString()} atoms, ${s.residues.length.toLocaleString()} residues, ${s.chains.length} chains · ${st.instances.toLocaleString()} instances, ${st.triangles.toLocaleString()} triangles, built in ${st.buildMs.toFixed(0)} ms` : 'no structure');
 }
 
+let loadSeq = 0;   // every load bumps it; the start-up example only lands if nothing else loaded meanwhile
 async function loadText(text: string, name: string) {
-  const t0 = performance.now();
+  loadSeq++; const t0 = performance.now();
   if (/\.json$/i.test(name) || /^\s*\{/.test(text)) { loadScene(JSON.parse(text), name.replace(/\.json$/i, '')); return }
   sceneDoc = null; R.fitOverride = null; R.camera.capFrac = 0; R.camera.topFrac = 0; R.overrides = {};
   const s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, ''));
-  R.setStructure(s); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0;
+  R.setStructure(s); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.roll = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0;
   const hasPoly = s.residues.some(r => !r.het);
   if (!hasPoly) { style.reps = { sticks: 'all', cartoon: '', surface: '' } }
   rebuild(); status(`parsed in ${(performance.now() - t0).toFixed(0)} ms`);
@@ -109,6 +110,31 @@ async function loadFiles(fl: File[]) {
   loadStack(texts);
 }
 
+/* framing: fit what is drawn into a box given as fractions of the canvas (x right, y down) */
+export type FrameBox = { x0: number; y0: number; x1: number; y1: number };
+export const FRAME_PRESETS: Record<string, { box: FrameBox; note: string; size: [number, number] }> = {
+  'hero desktop': { box: { x0: 0.57, y0: 0.13, x1: 0.92, y1: 0.58 }, note: 'right of the headline, under the nav, 16:9', size: [1920, 1080] },
+  'hero phone': { box: { x0: 0.11, y0: 0.15, x1: 0.89, y1: 0.45 }, note: 'upper third of a 9:16 frame', size: [1080, 1920] },
+  'centred': { box: { x0: 0.08, y0: 0.08, x1: 0.92, y1: 0.92 }, note: 'the whole canvas with a margin', size: [1920, 1080] },
+};
+function framePoints(what: 'all' | 'frame'): Float32Array {
+  if (what === 'frame' || !sceneDoc) { const s = R.structure; if (!s) return new Float32Array(0); const out = new Float32Array(s.count * 3); for (let i = 0; i < s.count; i++) { out[i * 3] = s.x[i]; out[i * 3 + 1] = s.y[i]; out[i * 3 + 2] = s.z[i] } return out }
+  return R.fitOverride || new Float32Array(0);
+}
+function fitFrame(box: FrameBox, what: 'all' | 'frame' = 'all') { R.camera.fitTo(box, R.w, R.h, framePoints(what)); invalidate() }
+let guideBox: FrameBox | null = null;
+function showGuides(box: FrameBox | null) {
+  guideBox = box; let g = document.getElementById('guide'); if (!g) { g = document.createElement('div'); g.id = 'guide'; g.style.cssText = 'position:absolute;pointer-events:none;border:1px dashed #f97316;box-shadow:0 0 0 9999px rgba(0,0,0,.25);display:none'; stage.appendChild(g) }
+  if (!box) { g.style.display = 'none'; return }
+  g.style.display = 'block'; g.style.left = box.x0 * 100 + '%'; g.style.top = box.y0 * 100 + '%'; g.style.width = (box.x1 - box.x0) * 100 + '%'; g.style.height = (box.y1 - box.y0) * 100 + '%';
+}
+/** The command that renders what is on screen, for the terminal: the scene and style go out as files first. */
+function renderCommand(): string {
+  const name = (sceneDoc?.name || R.structure?.name || 'scene').replace(/[^\w.-]+/g, '_');
+  const input = sceneDoc ? name + '.json' : (R.structure?.name || 'structure') + '.pdb';
+  const cam = sceneDoc ? '' : ` --yaw ${R.camera.yaw.toFixed(1)} --pitch ${R.camera.pitch.toFixed(1)} --roll ${R.camera.roll.toFixed(1)} --zoom ${R.camera.zoom.toFixed(3)} --pan ${R.camera.panX.toFixed(3)},${R.camera.panY.toFixed(3)} --fov ${R.camera.fov}`;
+  return `node cli/render.mjs ${input} --style ${name}-style.json${cam} --size ${R.w}x${R.h} --frames ${sceneDoc ? 'drawn' : 1} --out out_${name}`;
+}
 /* panel */
 function applyLook(key: string) {
   const L = LOOKS[key]; if (!L) return; currentLook = key;
@@ -132,6 +158,7 @@ const panel = buildPanel(document.getElementById('controls')!, {
   reset: () => { style = cloneStyle(DEFAULT_STYLE); panel.refresh(); rebuild() },
   setDpr: (v: number) => { dpr = v; fit() },
   palettes: PALETTES,
+  framePresets: FRAME_PRESETS, fitFrame, showGuides, renderCommand, canvasSize: () => [R.w, R.h] as [number, number],
 });
 
 /** PNG of what is on screen: the sketch when it is shown, else the GPU frame */
@@ -148,7 +175,7 @@ function loop(t: number) {
   if (playing && sceneDoc) { playAcc += dt * 24; if (playAcc >= 2) { playAcc -= 2; setFrame(frame + 2); if (restMode === 'classic' && sceneFast) { dirty = false; R.render(style); runSketch('classic') } } }
   if (turntable) { R.camera.yaw = (R.camera.yaw + turntable * dt) % 360; if (pitchSwing) R.camera.pitch = pitchSwing * Math.sin(R.camera.yaw * Math.PI / 180); invalidate() }
   if (!sketchOn && live && t - lastLive > 1000 / 10) { lastLive = t; dirty = true }
-  if (dirty) { dirty = false; R.render(style); hud.textContent = `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°` }
+  if (dirty) { dirty = false; R.render(style); hud.textContent = `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°${R.camera.roll ? ' roll ' + R.camera.roll.toFixed(0) + '°' : ''} · zoom ${R.camera.zoom.toFixed(2)} pan ${R.camera.panX.toFixed(2)}, ${R.camera.panY.toFixed(2)}` }
   else if (sketchOn && R.structure && !turntable) {
     const rested = t - lastChange > 220; const period = Math.max(900, (sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs) * 3);
     if ((!sketchShown && rested) || (live && sketchShown && t - lastSketchAt > period)) {
@@ -159,7 +186,7 @@ function loop(t: number) {
   requestAnimationFrame(loop);
 }
 fit(); requestAnimationFrame(loop);
-loadUrl('examples/test_protein.pdb').catch(e => status(e.message));
+{ const seq = loadSeq; fetch('examples/test_protein.pdb').then(r => r.text()).then(t => { if (loadSeq === seq) loadText(t, 'test_protein.pdb') }).catch(e => status(e.message)) }
 
 /* scripting hook (used by the CLI and tests) */
 (window as any).TriadSketch = {
@@ -171,4 +198,5 @@ loadUrl('examples/test_protein.pdb').catch(e => status(e.message));
   renderClassic, classicEngine: () => classic(), seek: setFrame, loadScene, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
   classic: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch('classic'); return sketchStats.drawMs },
   setSketch: (v: boolean) => { sketchOn = v; invalidate() }, setRest: (m: RestMode) => { restMode = m; sketchOn = m !== 'preview'; invalidate() },
+  fitFrame, screenBox: (what: 'all' | 'frame' = 'all') => R.camera.screenBox(R.w, R.h, framePoints(what)), framePresets: FRAME_PRESETS, renderCommand,
 };

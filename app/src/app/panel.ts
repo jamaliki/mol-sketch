@@ -14,6 +14,10 @@ export interface PanelHost {
   savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadFiles: (f: File[]) => void; saveScene: () => void; loadExample: (n: string) => void; reset: () => void;
   setDpr: (v: number) => void;
   palettes: Record<string, Palette>;
+  framePresets: Record<string, { box: { x0: number; y0: number; x1: number; y1: number }; note: string; size: [number, number] }>;
+  fitFrame: (box: { x0: number; y0: number; x1: number; y1: number }, what: 'all' | 'frame') => void;
+  showGuides: (box: { x0: number; y0: number; x1: number; y1: number } | null) => void;
+  renderCommand: () => string; canvasSize: () => [number, number];
 }
 
 type Ctl =
@@ -71,6 +75,10 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     el('button', { onclick: H.reset }, 'Reset')));
   const dprSel = el('select', { onchange: (e: any) => H.setDpr(+e.target.value) }, ...['1', '2', '3'].map(o => el('option', { value: o }, o + '×'))) as HTMLSelectElement; dprSel.value = String(Math.min(2, Math.round(window.devicePixelRatio || 1)));
   row(D, 'resolution', dprSel);
+  const cmd = el('textarea', { readonly: '', rows: '3', style: 'width:100%;font:11px/1.35 ui-monospace,Menlo,monospace;background:#1a1917;color:var(--fg);border:1px solid var(--line);border-radius:4px;padding:4px;resize:vertical' }) as HTMLTextAreaElement;
+  const showCmd = () => { cmd.value = H.renderCommand() }; refreshers.push(showCmd);
+  D.append(el('div', { class: 'btns' }, el('button', { onclick: () => { showCmd(); navigator.clipboard?.writeText(cmd.value) } }, 'Copy render command'), el('span', { style: 'color:var(--dim);font-size:11px;align-self:center' }, 'save the scene JSON and the style first; the command renders exactly this')));
+  D.append(cmd);
   D.append(el('div', { id: 'status' }));
 
   /* transport (scenes) */
@@ -152,6 +160,9 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   const fov = el('input', { type: 'range', min: 0, max: 60, step: 1 }) as HTMLInputElement; const fovv = el('span', { class: 'val' });
   const showFov = () => { fov.value = String(H.camera.fov); fovv.textContent = H.camera.fov < 1 ? 'ortho' : H.camera.fov + '°' };
   fov.oninput = () => { H.camera.fov = +fov.value; H.style.view.fov = +fov.value; showFov(); H.redraw() }; refreshers.push(() => { H.camera.fov = H.style.view.fov; showFov() }); showFov(); row(V, 'perspective', fov, fovv);
+  const roll = el('input', { type: 'range', min: -180, max: 180, step: 1 }) as HTMLInputElement; const rollv = el('span', { class: 'val' });
+  const showRoll = () => { roll.value = String(H.camera.roll); rollv.textContent = H.camera.roll + '°' };
+  roll.oninput = () => { H.camera.roll = +roll.value; showRoll(); H.redraw() }; refreshers.push(showRoll); showRoll(); row(V, 'roll', roll, rollv);
   control(V, { t: 'range', label: 'fog', path: 'view.fog', min: 0, max: 1, step: 0.05 });
   control(V, { t: 'range', label: 'fog start', path: 'view.fogStart', min: 0, max: 1, step: 0.05 });
   control(V, { t: 'range', label: 'light angle', path: 'view.light', min: -180, max: 180, step: 5 });
@@ -164,7 +175,26 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   tt.oninput = () => { ttv.textContent = tt.value; H.onTurntable(+tt.value) }; row(V, 'turntable °/s', tt, ttv);
   const ps = el('input', { type: 'range', min: 0, max: 40, step: 1, value: 0 }) as HTMLInputElement; const psv = el('span', { class: 'val' }, '0');
   ps.oninput = () => { psv.textContent = ps.value; H.onPitchSwing(+ps.value) }; row(V, 'pitch swing °', ps, psv);
-  V.append(el('div', { class: 'btns' }, el('button', { onclick: () => { H.camera.yaw = 0; H.camera.pitch = 0; H.camera.zoom = 1; H.camera.panX = 0; H.camera.panY = 0; H.redraw() } }, 'Reset view')));
+  V.append(el('div', { class: 'btns' }, el('button', { onclick: () => { H.camera.yaw = 0; H.camera.pitch = 0; H.camera.roll = 0; H.camera.zoom = 1; H.camera.panX = 0; H.camera.panY = 0; H.redraw() } }, 'Reset view')));
+
+  /* frame: fit what is drawn into a box of the canvas, for a hero or any layout with text beside the drawing */
+  const Fr = section('Frame', false);
+  const presetSel = el('select', {}, ...Object.keys(H.framePresets).map(k => el('option', { value: k }, k + ' — ' + H.framePresets[k].note)), el('option', { value: '' }, 'custom')) as HTMLSelectElement;
+  const num = (v: number) => { const i = el('input', { type: 'number', min: 0, max: 100, step: 1, value: String(Math.round(v * 100)), style: 'width:40px;padding:2px 3px' }) as HTMLInputElement; return i };
+  const b0 = H.framePresets[Object.keys(H.framePresets)[0]].box; const L0 = num(b0.x0), T0 = num(b0.y0), R0 = num(b0.x1), B0 = num(b0.y1);
+  const box = () => ({ x0: +L0.value / 100, y0: +T0.value / 100, x1: +R0.value / 100, y1: +B0.value / 100 });
+  const guides = el('input', { type: 'checkbox' }) as HTMLInputElement;
+  const updateGuides = () => H.showGuides(guides.checked ? box() : null);
+  presetSel.onchange = () => { const p = H.framePresets[presetSel.value]; if (p) { L0.value = String(Math.round(p.box.x0 * 100)); T0.value = String(Math.round(p.box.y0 * 100)); R0.value = String(Math.round(p.box.x1 * 100)); B0.value = String(Math.round(p.box.y1 * 100)) } updateGuides() };
+  for (const i of [L0, T0, R0, B0]) i.oninput = () => { presetSel.value = ''; updateGuides() };
+  guides.onchange = updateGuides;
+  const what = el('select', {}, el('option', { value: 'all' }, 'the whole animation'), el('option', { value: 'frame' }, 'this frame only')) as HTMLSelectElement;
+  row(Fr, 'preset', presetSel);
+  const boxRow = el('div', { class: 'row' }, el('label', {}, 'box % l t r b'), el('div', { style: 'grid-column:2/4;display:flex;gap:3px;flex-wrap:wrap' }, L0, T0, R0, B0)); Fr.append(boxRow);
+  row(Fr, 'fit', what);
+  row(Fr, 'show guides', guides);
+  Fr.append(el('div', { class: 'btns' }, el('button', { onclick: () => { H.fitFrame(box(), what.value as 'all' | 'frame'); H.redraw() } }, 'Fit to frame')));
+  Fr.append(el('div', { style: 'color:var(--dim);font-size:11px' }, 'Fit sets zoom and pan only; turn the view first. The canvas here is the preview: the frame is fractions of it, so what you fit at 16:9 renders the same at 1920×1080. Set the size the site will use in the CLI (--size) or with the resolution below the canvas.'));
   V.append(el('div', { id: 'help', style: 'color:var(--dim);font-size:11px;margin-top:4px' }, 'drag: rotate · shift-drag / right-drag: pan · wheel: zoom · arrows: nudge · r: reset · drop a file to load'));
 
   const refresh = () => refreshers.forEach(f => f());

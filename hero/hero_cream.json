@@ -19,9 +19,10 @@
   "zoom": 0.55,
   "panX": 0.253,
   "panY": -0.15,
-  "fov": 25,
+  "fov": 20,
   "fog": 0.3,
-  "fogStart": 0.4
+  "fogStart": 0.4,
+  "roll": 0
  },
  "keyframes": [
   {

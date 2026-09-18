@@ -66,10 +66,13 @@ To make a figure like the mechanism example from your own coordinates, see
 [docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): load a PDB stack as keyframes, cut the view down,
 save the scene JSON, add arrows, charges and captions, render.
 
-## The website hero
+## The website hero, and animating your own mechanism
 
-[`hero/`](hero) renders the mechanism as the front-page loop of the lab website: no text, the hero's framing, the site's
-colours on dark or cream paper, and a mock-up of the page with both. `cd hero && ./render.sh dark`.
+[`hero/`](hero) renders the mechanisms as the front-page loop of the lab website: the schematic serine hydrolase and
+CALB / pNPA from computed coordinates, on dark paper or as chalk, for desktop and phone, with a mock-up of the page.
+`cd hero && ./render.sh calb`. [docs/hero-workflow.md](docs/hero-workflow.md) is the route from a set of computed
+states to such a loop: `tools/mech2scene.py` builds the scene from a recipe, the app or the CLI frames it, `render.sh`
+renders and encodes it.
 
 ## Looks
 

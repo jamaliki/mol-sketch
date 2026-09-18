@@ -18,8 +18,11 @@ SOFTWARE="" ./render.sh dark                  # on a machine with a GPU
 `render.sh` is the whole recipe: the scene file (the mechanism with the hero's camera and residue colours), the look
 (`dark-paper` or `chalkboard`, both in `looks/` and in the app, or `watercolour` with the site's palette for cream),
 the `--set` flags that remove text and, for the demo, the chemistry, and the ffmpeg lines that encode AV1, VP9 and
-H.264 and the poster. `mockup.html` is the page with every variant behind a switch,
-and a phone frame.
+H.264 and the poster. `mockup.html` is the page with every variant behind a switch, and a phone frame.
+
+To do the same for another mechanism: [`../docs/hero-workflow.md`](../docs/hero-workflow.md). In short, a recipe and
+`tools/mech2scene.py` make the scene, `node cli/render.mjs scene.json --size 1920x1080 --fit 57,13,92,58 --write-view`
+frames it for the hero (`--fit 11,15,89,45` at 1080x1920 for phones), and a `case` line in `render.sh` renders it.
 
 ## On the page
 
@@ -73,7 +76,8 @@ gradient with `mix-blend-mode: normal` (`mockup.html` has the exact rules).
 
 ## Composition
 
-The molecule sits in the video at x 57–92 %, y 13–58 % (its centre at 74 %, 36 %). That clears the fixed nav (9 % of a
+The molecule sits in the video at x 57–92 %, y 13–58 % (its centre at 74 %, 36 %): this is the `--fit 57,13,92,58` box,
+and the *hero desktop* preset in the app's *Frame* section; the phone box is `11,15,89,45`. That clears the fixed nav (9 % of a
 900 px viewport) and the headline, which at 1440×900 starts at 50 % of the height and runs to 50 % of the width on
 its first line and 74 % on its second. With `object-position: 70% 40%` the crop at 16:10 and 4:3 is taken mostly from
 the empty left of the frame, so the drawing keeps its place beside the headline instead of sliding under it; at 4:3 the

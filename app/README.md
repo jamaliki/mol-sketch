@@ -15,8 +15,13 @@ npm run build          # static bundle in dist/
 npm run render -- public/examples/1A8O.pdb --look watercolour --size 1920x1440 --out out   # headless PNGs (classic engine)
 ```
 
-Drag a PDB, mmCIF or scene JSON file onto the canvas, or pick an example. Drag to rotate, shift-drag or right-drag to
-pan, wheel to zoom, arrow keys to nudge, `r` to reset. The *Looks* buttons apply the same looks as the
+Drag a PDB, mmCIF or scene JSON file onto the canvas, or pick an example. Drag to rotate, the *roll* slider in *View* to
+turn the picture about the view axis, shift-drag or right-drag to pan, wheel to zoom, arrow keys to nudge, `r` to reset.
+*Frame* fits what is drawn into a box of the canvas (a preset for the website's hero, desktop or phone, or any box in
+percent) with guides you can switch on; *Copy render command* in *Data* puts the CLI line that renders exactly what is
+on screen on the clipboard, naming the scene and style files that *Save scene JSON* and *Save style* write.
+[../docs/hero-workflow.md](../docs/hero-workflow.md) is the route from computed states to a looping video, both in the app
+and by script. The *Looks* buttons apply the same looks as the
 files in `../looks`; every other control edits one field of the style, which is saved in the browser and
 can be exported/imported as JSON (*Save style* / *Load style*).
 
@@ -132,7 +137,15 @@ selections, colour overrides and camera, which replace the current ones on load.
 ```bash
 npm run render -- public/examples/mechanism.json --look watercolour --frames drawn --out out   # every drawing
 npm run render -- public/examples/mechanism.json --look ink-colour --frames keyframes --out kf  # one per step
+npm run render -- scene.json --size 1920x1080 --fit 57,13,92,58 --write-view                   # frame it for a page, store the camera
 ```
+
+The CLI's camera flags: `--yaw --pitch --roll --zoom --fov --pan X,Y`, given only when they should override the
+scene's own view; `--fit L,T,R,B` (percent of the frame) then sets zoom and pan so the drawing fills that box,
+`--fit-what frame` measures the current frame instead of every keyframe, and `--write-view [FILE]` stores the result
+in the scene JSON and stops. A scene's `path` (a computed trajectory between two keyframes), `leave`, `asNext`,
+`exitDir` and `enterDir` (a cycle that closes with molecules exchanged) are in
+[../docs/scene-format.md](../docs/scene-format.md).
 
 ## Not in the app
 

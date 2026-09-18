@@ -8,7 +8,7 @@ timing, and where atoms enter from and leave to.
 ```jsonc
 {
   "name": "Serine hydrolase mechanism",
-  "view": { "yaw": 0, "pitch": 0, "zoom": 1, "panX": 0, "panY": 0, "fov": 25, "fog": 0.35, "fogStart": 0.4 },
+  "view": { "yaw": 0, "pitch": 0, "roll": 0, "zoom": 1, "panX": 0, "panY": 0, "fov": 25, "fog": 0.35, "fogStart": 0.4 },
   "reps": { "sticks": "all", "cartoon": "", "surface": "" },
   "groupColors": { "SER195": "#f2e85a", "HIS57": "#7cbf72", "ASP102": "#5fc9c9", "subunit:L": "#e6a45a" },
   "keyframes": [
@@ -40,7 +40,7 @@ timing, and where atoms enter from and leave to.
 | key | meaning |
 |---|---|
 | `name` | shown in the SVG title |
-| `view` | optional camera applied when the scene loads (same keys as the *View* panel) |
+| `view` | optional camera applied when the scene loads: `yaw`, `pitch`, `roll` (degrees; roll turns the picture about the view axis, after yaw and pitch), `zoom`, `panX`, `panY` (fractions of the canvas), `fov`, `fog`, `fogStart`. The CLI's `--fit … --write-view` fills in zoom and pan for a target box |
 | `reps` | the three selections: `sticks`, `cartoon`, `surface` (empty string = off) |
 | `groupColors` | colour overrides, keyed by residue (`SER195`), chain ID (`A`), `subunit:S/L/T/X`, `entity:<id>` |
 | `keyframes` | the list below, in order |
@@ -58,6 +58,9 @@ timing, and where atoms enter from and leave to.
 | `bonds` | list of `[a, b, order]` or `{a, b, order}`; order `0` is a hydrogen bond (dotted), `2`/`3` draw valence sticks |
 | `arrows` | curly arrows shown while leaving this keyframe |
 | `path` | optional list of intermediate poses, each a map of atom id → `[x, y, z]`, walked in order on the way to the next keyframe (a computed trajectory instead of a straight line; atoms missing from a pose move straight) |
+| `leave` | groups or ids that exit during the transition instead of matching same-named atoms in the next keyframe (products going out while an identical substrate comes in); their bonds fade whole |
+| `asNext` | map id → id: an atom that matches a differently named atom in the next keyframe (the proton now on Ser that is next cycle's HG) |
+| `exitDir`, `enterDir` | `[dx, dy, dz]` in Å: the default `exitTo` for atoms leaving this keyframe, and the default `enterFrom` for atoms arriving in it, when they have none of their own |
 
 The last keyframe transitions back to the first when looping.
 

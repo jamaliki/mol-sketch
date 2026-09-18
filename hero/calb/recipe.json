@@ -1,0 +1,48 @@
+{
+  "name": "CALB / p-nitrophenyl acetate, motif_01 (mechazyme)",
+  "atoms": {
+    "1": "C1", "2": "O2", "3": "CM3", "4": "O4", "5": "CZ", "6": "CE1",
+    "7": "CD1", "8": "CG", "9": "CD2", "10": "CE2", "11": "N", "12": "O1",
+    "13": "O3", "21": "HG", "60": "OW", "61": "HW1", "62": "HW2", "20": "OG",
+    "22": "CB", "23": "CA", "40": "CG", "41": "ND1", "42": "CE1", "43": "NE2",
+    "44": "CD2", "45": "HD1", "46": "CA", "47": "CB", "80": "CA", "81": "CB",
+    "82": "CG", "83": "CD", "84": "OE1", "85": "NE2"
+  },
+  "groups": {
+    "ACE": [1, 2, 3],
+    "PNP": [4, 5, 6, 7, 8, 9, 10, 11, 12, 13],
+    "WAT": [60, 61, 62],
+    "SER105": [20, 21, 22, 23],
+    "HIS224": [40, 41, 42, 43, 44, 45, 46, 47],
+    "GLN106": [80, 81, 82, 83, 84, 85]
+  },
+  "residues": { "ACE": ["ACE", 1], "PNP": ["PNP", 1], "WAT": ["HOH", 1], "SER105": ["SER", 105], "HIS224": ["HIS", 224], "GLN106": ["GLN", 106] },
+  "het": ["ACE", "PNP", "WAT"],
+  "cut": [23, 46],
+  "hydrogens": "polar",
+  "hideCharges": [11, 12, 13],
+  "enterAt": {"WAT": 2},
+  "hbondMax": 2.4,
+  "hold": 30,
+  "transition": 60,
+  "names": ["Michaelis complex", "Tetrahedral intermediate 1", "Acyl-enzyme", "Tetrahedral intermediate 2", "Acetic acid and Ser alkoxide", "Resting state"],
+  "captions": [
+    "Ser105 attacks the ester carbonyl; His224 takes the serine proton.",
+    "The tetrahedral intermediate collapses; p-nitrophenol leaves with the proton His was holding.",
+    "Water attacks the acyl-enzyme; His224 takes a proton from it.",
+    "The second tetrahedral intermediate collapses and expels the serine alkoxide.",
+    "His224 returns the proton to Ser105: acetic acid, p-nitrophenol, enzyme restored.",
+    "Resting state: products present, catalytic residues regenerated."
+  ],
+  "lonePairs": { "0": [43], "1": [2, 4], "2": [43], "3": [2], "4": [20] },
+  "arrows": {
+    "0": [ { "from": ["lp", 43], "to": ["bond", 43, 21] }, { "from": ["bond", 20, 21], "to": ["atom", 1] }, { "from": ["bond", 1, 2], "to": ["atom", 2] } ],
+    "1": [ { "from": ["lp", 2], "to": ["bond", 1, 2] }, { "from": ["bond", 1, 4], "to": ["atom", 4] }, { "from": ["lp", 4], "to": ["bond", 4, 21] }, { "from": ["bond", 43, 21], "to": ["atom", 43] } ],
+    "2": [ { "from": ["lp", 43], "to": ["bond", 43, 61] }, { "from": ["bond", 60, 61], "to": ["atom", 1] }, { "from": ["bond", 1, 2], "to": ["atom", 2] } ],
+    "3": [ { "from": ["lp", 2], "to": ["bond", 1, 2] }, { "from": ["bond", 1, 20], "to": ["atom", 20] } ],
+    "4": [ { "from": ["lp", 20], "to": ["bond", 20, 61] }, { "from": ["bond", 43, 61], "to": ["atom", 43] } ]
+  },
+  "loop": { "site": "SER105:OG", "leave": ["ACE", "PNP", "WAT"], "leaveAtoms": ["SER105:HG"], "asNext": {"WAT:HW1": "SER105:HG"}, "exitDistance": 6, "enterDistance": 7, "enterTurn": 100, "transition": 48 },
+  "view": {"yaw": 175, "pitch": -20, "roll": 96, "fov": 20, "fog": 0.2, "fogStart": 0.4},
+  "colors": {"SER105": "#f97316", "HIS224": "#fbbf24", "GLN106": "#8a8580", "ACE": "#d6d3d1", "PNP": "#7dd3fc", "WAT": "#d6d3d1"}
+}

@@ -6,15 +6,19 @@ compiled 14-arrow mechanism, and the rigid-fragment trajectory between the state
 animation is one of theirs; the drawing adds nothing to the coordinates.
 
 ```bash
-python3 build_scene.py data/motif_01 calb_hero.json --yaw 175 --pitch -20 --roll 96   # the scene (view C)
-cd .. && ./render.sh calb            # 1920x1080 on dark paper  → out/hero_calb.{mp4,webm}, poster
+python3 ../../tools/mech2scene.py data/motif_01 recipe.json calb_hero.json               # the scene from the recipe
+(cd ../../app && node cli/render.mjs ../hero/calb/calb_hero.json --size 1920x1080 --fit 57,13,92,58 --write-view)   # frame it
+cp calb_hero.json calb_hero_mobile.json && (cd ../../app && node cli/render.mjs ../hero/calb/calb_hero_mobile.json --size 1080x1920 --fit 11,15,89,45 --write-view)
+cd .. && ./render.sh calb            # 1920x1080 on dark paper  → out/hero_calb.{av1.mp4,webm,mp4}, poster
           ./render.sh calb-chalk      # the same as chalk on the board
           ./render.sh calb-mobile     # 1080x1920 for phones;  calb-chalk-mobile likewise
 ```
 
-`data/` holds exactly what the build reads: the six `state_0k.sdf` (positions, bond orders, formal charges),
-`atom_key.json` (serial → atom map, name, element, charge, per state), the 201-frame `chimerax/trajectory.pdb` with
-its `trajectory_serials.json`, and mechazyme's own README and NOTES, which are the source for everything below.
+`recipe.json` is every decision below in 48 lines; [`../../docs/hero-workflow.md`](../../docs/hero-workflow.md)
+documents its keys and the whole route. `data/` holds exactly what the build reads: the six `state_0k.sdf`
+(positions, bond orders, formal charges), `atom_key.json` (serial → atom map, name, element, charge, per state), the
+201-frame `chimerax/trajectory.pdb` with its `trajectory_serials.json`, and mechazyme's own README and NOTES, which
+are the source for everything below.
 
 ## What is drawn, and what is not
 
@@ -46,20 +50,20 @@ it enters (state 2), arriving from where the trajectory parks it in states 0–1
 
 ## The loop
 
-State 5 is the resting enzyme with both products still present. A seventh keyframe, the same pose with the product
-atoms under retired ids and the proton now on Ser renamed to next cycle's HG, lets the cycle close honestly: acetic
-acid and p-nitrophenol drift out along the site's exit line, a fresh pNPA drifts in from another direction, and Ser,
-His and Gln are already regenerated. Without it the engine would morph the products back into the substrate.
-Timing: each state holds 30 frames (arrows draw in the last 40 %), each step takes 60, the products leave over 48;
-530 frames, 265 drawings, 22 s at 12 fps.
+State 5 is the resting enzyme with both products still present. The last keyframe's `leave` (the product groups and
+the proton that left with the phenol) and `asNext` (the proton now on Ser is next cycle's HG) let the cycle close
+honestly: acetic acid and p-nitrophenol drift out along the site's exit line (`exitDir`), a fresh pNPA drifts in from
+that line turned 100° in the picture plane (`enterDir`), and Ser, His and Gln are already regenerated. Without them
+the engine would morph the products back into the substrate. Timing: each state holds 30 frames (arrows draw in the
+last 40 %), each step takes 60, the products leave over 48; 528 frames, 264 drawings, 22 s at 12 fps.
 
 ## The view
 
-`--yaw 175 --pitch -20 --roll 96` is baked into the coordinates as one rigid rotation (roll is what the camera's
-yaw and pitch alone cannot give), so the scene loads at yaw 0, pitch 0 and the app's orbit starts from it. It was
-chosen from a scored search over orientations: His224's imidazole and the phenyl face-on, Gln106 behind the
+The recipe's `view` is yaw 175, pitch −20, roll 96, the camera's own three angles (roll turns the picture about the
+view axis; with it any orientation is reachable). It was chosen from a scored search over orientations: His224's imidazole and the phenyl face-on, Gln106 behind the
 reacting atoms rather than in front of them, the core wide rather than tall, and the phenol leaving to the upper
-right, away from the headline. The arrow sides are chosen in that projection to bow away from the drawing's centre.
+right, away from the headline. The arrow sides are chosen in that projection to bow away from the drawing's centre. Zoom and pan come from
+`--fit` (the hero's box for desktop, the upper third for phones) and are stored in the scene by `--write-view`.
 
 ## Colours
 
