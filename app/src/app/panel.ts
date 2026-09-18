@@ -104,6 +104,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   control(Rp, { t: 'range', label: 'cartoon scale', path: 'cartoonScale', min: 0.4, max: 2.5, step: 0.05, geom: true });
   control(Rp, { t: 'range', label: 'surface probe', path: 'probe', min: 0, max: 3, step: 0.1, geom: true });
   control(Rp, { t: 'select', label: 'detail', path: 'detail', options: ['auto', 'full'] });
+  control(Rp, { t: 'select', label: 'texture', path: 'textureScale', options: ['screen', 'object'] });
 
   /* colour */
   const C = section('Colour');

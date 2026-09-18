@@ -21,7 +21,7 @@ export function cfgFromStyle(style: Style, cam: { yaw: number; pitch: number; ro
       lightAngle: style.view.light, shading: style.shading, pencilFill: style.pencilFill, grain: style.paper.grain, font: style.font, labelSize: style.labelSize, captionSize: style.captionSize, annot: style.annot ?? 1 },
     show: { ...D.show, ...style.show, construction: style.construction, caption: scene && style.show.caption, stepLabel: scene && style.show.stepLabel },
     palette: { ...D.palette, ...style.palette },
-    rep: { ...D.rep, detail: style.detail || 'auto', mode: style.mode, fill: style.fill, colorBy: style.colorBy, stickRadius: style.stickRadius, sphereScale: style.sphereScale, sideChainHelper: style.sideChainHelper, cartoonScale: style.cartoonScale, cartoonColor: style.cartoonColor, probe: style.probe, surfaceColor },
+    rep: { ...D.rep, detail: style.detail || 'auto', textureScale: style.textureScale || 'screen', mode: style.mode, fill: style.fill, colorBy: style.colorBy, stickRadius: style.stickRadius, sphereScale: style.sphereScale, sideChainHelper: style.sideChainHelper, cartoonScale: style.cartoonScale, cartoonColor: style.cartoonColor, probe: style.probe, surfaceColor },
   };
 }
 

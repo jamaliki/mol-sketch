@@ -33,7 +33,7 @@ const DEFAULT_CFG={
   style:{rough:1.1,passes:2,pressure:0.55,fillWobble:1,hatchDensity:1.4,hierarchy:0.6,wash:0.3,washSeed:1,washLife:0.6,inkWidth:1.5,ballScale:1,bondWidth:2.1,hatchSpacing:5,hatchAngle:-40,lightAngle:-125,shading:0.65,pencilFill:0.55,grain:0.6,font:'Caveat',labelSize:19,captionSize:24,contextAlpha:0.5,annot:1},
   show:{H:true,lonePairs:true,charges:true,arrows:true,labels:true,hbonds:true,context:false,caption:true,stepLabel:true,colorBonds:false,resLabels:false,valence:true,construction:false},
   palette:{...PRESETS['PyMOL flat']},
-  rep:{detail:'auto',mode:'sticks',fill:'flat',colorBy:'group',stickRadius:0.2,sphereScale:0.4,sideChainHelper:true,cartoonScale:1,cartoonColor:'ss',probe:1.4,surfaceScale:1,surfaceOpacity:1,surfaceColor:'carbon'},
+  rep:{detail:'auto',textureScale:'screen',mode:'sticks',fill:'flat',colorBy:'group',stickRadius:0.2,sphereScale:0.4,sideChainHelper:true,cartoonScale:1,cartoonColor:'ss',probe:1.4,surfaceScale:1,surfaceOpacity:1,surfaceColor:'carbon'},
   pdbFrames:2
 };
 let cfg=JSON.parse(JSON.stringify(DEFAULT_CFG));
@@ -205,7 +205,8 @@ function sampleState(frame){
 /* ============================ projection ============================ */
 let FIT={cx:0,cy:0,cz:0,rx:0,ry:0,spanX:10,spanY:10,zspan:4,key:''};
 function rot3(p,cy,sy,cp,sp){const x=p[0]-FIT.cx,y=p[1]-FIT.cy,z=p[2]-FIT.cz;const x1=x*cy+z*sy,z1=-x*sy+z*cy;const y1=y*cp-z1*sp,z2=y*sp+z1*cp;if(!VIEW_ROLL)return[x1,y1,z2];const cr=Math.cos(VIEW_ROLL*Math.PI/180),sr=Math.sin(VIEW_ROLL*Math.PI/180);return[x1*cr-y1*sr,x1*sr+y1*cr,z2]} // yaw about y, pitch about x, then roll about the view axis
-let VIEW_YAW=0,VIEW_PITCH=0,VIEW_ROLL=0; // effective angles for the frame being drawn (base + turntable)
+let VIEW_YAW=0,VIEW_PITCH=0,VIEW_ROLL=0;
+let TEX=1; // texture scale for the frame: 1 = marks in screen pixels; with rep.textureScale 'object' they follow the drawing's scale, so the hatching stays the same relative to an atom however large or small it is on the page // effective angles for the frame being drawn (base + turntable)
 function computeFit(){
   const spinning=cfg.view.spin!==0||cfg.view.pitchSwing!==0;
   const key=scene.keyframes.length+'|'+(spinning?'sphere':VIEW_YAW+'|'+VIEW_PITCH+'|'+VIEW_ROLL)+'|'+(scene._rev||0);
@@ -521,42 +522,42 @@ function anchorPoint(an,st,proj,other){
 function fogged(col,fog){return mix(col,cfg.palette.paper,clamp(fog*cfg.view.fog*0.7,0,0.7))}
 /* Pen rendering of a sphere: hatch that thins toward the light and cross-hatches in the shadow, highlight left bare. */
 function penSphere(ctx,x,y,r,col,el,seed,o){
-  const S=cfg.style,P=cfg.palette;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=o.d||1;const dens=S.hatchDensity;
+  const S=cfg.style,P=cfg.palette;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=(o.d||1)*TEX,dw=(o.d||1)*Math.max(TEX,0.75);const dens=S.hatchDensity; // spacing follows the texture scale fully, widths stop at 0.75 px or the hatch fades to grey
   const colour=cfg.rep.fill==='ink colour'||isPencil()||isWC();const dk=isWC()&&luminance(P.paper)<=0.5;const ink=fogged(colour?mix(col,P.hatch,isPencil()?0.45:isWC()?(dk?0.35:0.6):0.15):P.hatch,fog); // on dark paper the pigment shades gently, or it goes to mud
   const la=S.lightAngle*Math.PI/180;const light=[Math.cos(la),Math.sin(la)];const ang=S.hatchAngle*Math.PI/180;
   const hs=S.hatchSpacing*Math.max(0.7,d)/dens;const a=(0.55+0.45*fk)*(colour?0.9:0.75)*(isWC()?(dk?0.3:0.45):1);
   if(el==='N'&&r<14){ // stipple with a density gradient
     const rng=mulberry32(seed+5);const n=Math.round(r*r*3.2/(hs*hs)*dens*2);ctx.save();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.clip();ctx.fillStyle=rgba(ink,a);
-    for(let i=0;i<n;i++){const t=Math.sqrt(rng()),th=rng()*Math.PI*2;const px=Math.cos(th)*t*r,py=Math.sin(th)*t*r;const lit=(px*light[0]+py*light[1])/r;if(rng()<(lit+1)/2*0.9)continue;ctx.beginPath();ctx.arc(x+px,y+py,0.8*d,0,Math.PI*2);ctx.fill()}
+    for(let i=0;i<n;i++){const t=Math.sqrt(rng()),th=rng()*Math.PI*2;const px=Math.cos(th)*t*r,py=Math.sin(th)*t*r;const lit=(px*light[0]+py*light[1])/r;if(rng()<(lit+1)/2*0.9)continue;ctx.beginPath();ctx.arc(x+px,y+py,0.8*dw,0,Math.PI*2);ctx.fill()}
     ctx.restore();return}
-  hatchCircle(ctx,x,y,r,ang,hs,{seed:seed+11,width:0.9*d,color:ink,alpha:a*0.8,light,thr:r*0.45});
-  hatchCircle(ctx,x,y,r,ang+0.25,hs*0.8,{seed:seed+12,width:0.9*d,color:ink,alpha:a*0.8,light,thr:-r*0.1});
-  hatchCircle(ctx,x,y,r,ang+1.35,hs*0.85,{seed:seed+13,width:0.85*d,color:ink,alpha:a*0.7,light,thr:-r*0.5});
+  hatchCircle(ctx,x,y,r,ang,hs,{seed:seed+11,width:0.9*dw,color:ink,alpha:a*0.8,light,thr:r*0.45});
+  hatchCircle(ctx,x,y,r,ang+0.25,hs*0.8,{seed:seed+12,width:0.9*dw,color:ink,alpha:a*0.8,light,thr:-r*0.1});
+  hatchCircle(ctx,x,y,r,ang+1.35,hs*0.85,{seed:seed+13,width:0.85*dw,color:ink,alpha:a*0.7,light,thr:-r*0.5});
 }
 /* Pen rendering of a stick: strokes along the axis, denser toward the shadow edge, a bare highlight strip, cross strokes in the shadow. Caller has clipped to the capsule. */
 function penStick(ctx,ax,ay,mx,my,R,col,el,seed,o){
-  const S=cfg.style,P=cfg.palette;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=o.d||1;const dens=S.hatchDensity;
+  const S=cfg.style,P=cfg.palette;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=(o.d||1)*TEX,dw=(o.d||1)*Math.max(TEX,0.75);const dens=S.hatchDensity; // spacing follows the texture scale fully, widths stop at 0.75 px or the hatch fades to grey
   const colour=cfg.rep.fill==='ink colour'||isPencil()||isWC();const dk=isWC()&&luminance(P.paper)<=0.5;const ink=fogged(colour?mix(col,P.hatch,isPencil()?0.45:isWC()?(dk?0.35:0.6):0.15):P.hatch,fog);
   const ux=mx-ax,uy=my-ay,L=Math.hypot(ux,uy)||1,tx=ux/L,ty=uy/L,nx=-ty,ny=tx;
   const la=S.lightAngle*Math.PI/180;const litSign=(nx*Math.cos(la)+ny*Math.sin(la))>0?1:-1; // +n side faces the light?
   const rng=mulberry32(seed+21);const hs=S.hatchSpacing*Math.max(0.7,d)/dens;const a=(0.55+0.45*fk)*(colour?1.0:0.8)*(isWC()?(dk?0.3:0.45):1);
   if(el==='H'){ // hydrogens: two faint strokes only
-    for(const t of[-0.45,0.2]){sketchLine(ctx,[[ax+nx*t*R-tx*R*0.6,ay+ny*t*R-ty*R*0.6],[mx+nx*t*R,my+ny*t*R]],{seed:seed+Math.round(t*10),passes:1,width:0.7*d,color:fogged(P.hatch,fog),alpha:0.35*(0.5+0.5*fk),ampScale:0.5,step:5,overshoot:false})}return}
+    for(const t of[-0.45,0.2]){sketchLine(ctx,[[ax+nx*t*R-tx*R*0.6,ay+ny*t*R-ty*R*0.6],[mx+nx*t*R,my+ny*t*R]],{seed:seed+Math.round(t*10),passes:1,width:0.7*dw,color:fogged(P.hatch,fog),alpha:0.35*(0.5+0.5*fk),ampScale:0.5,step:5,overshoot:false})}return}
   if(el==='N'){ // stipple gradient
     const n=Math.round((L+2*R)*2*R/(hs*hs)*1.6*dens);ctx.fillStyle=rgba(ink,a);
-    for(let i=0;i<n;i++){const s=-R+rng()*(L+2*R),t=(rng()*2-1);const lit=t*litSign;if(rng()<(lit+1)/2*0.85)continue;ctx.beginPath();ctx.arc(ax+tx*s+nx*t*R,ay+ty*s+ny*t*R,0.8*d,0,Math.PI*2);ctx.fill()}return}
+    for(let i=0;i<n;i++){const s=-R+rng()*(L+2*R),t=(rng()*2-1);const lit=t*litSign;if(rng()<(lit+1)/2*0.85)continue;ctx.beginPath();ctx.arc(ax+tx*s+nx*t*R,ay+ty*s+ny*t*R,0.8*dw,0,Math.PI*2);ctx.fill()}return}
   const step=hs*0.6/R;
   for(let t=-1+step*0.5+(rng()-0.5)*step*0.4;t<1;t+=step){
     const lit=t*litSign;if(lit>0.42)continue;                 // bare highlight strip
     if(lit>0&&rng()<lit*0.9)continue;                          // thinning toward the light
     const tone=clamp(0.55-lit*0.5,0.3,1);
     const s0=-R*0.7+rng()*R*0.5,s1=L-rng()*R*0.4;              // strokes start inside the cap and stop short of the midpoint sometimes
-    sketchLine(ctx,[[ax+tx*s0+nx*t*R,ay+ty*s0+ny*t*R],[ax+tx*s1+nx*t*R,ay+ty*s1+ny*t*R]],{seed:seed+Math.round(t*100),passes:1,width:(0.9+0.45*tone)*d*LW.inner,color:ink,alpha:Math.min(1,a*(0.35+tone)),ampScale:0.6,step:5,overshoot:false});
+    sketchLine(ctx,[[ax+tx*s0+nx*t*R,ay+ty*s0+ny*t*R],[ax+tx*s1+nx*t*R,ay+ty*s1+ny*t*R]],{seed:seed+Math.round(t*100),passes:1,width:(0.9+0.45*tone)*dw*LW.inner,color:ink,alpha:Math.min(1,a*(0.35+tone)),ampScale:0.6,step:5,overshoot:false});
   }
   // cross strokes in the shadow third
   const cs=hs*0.9;for(let sx=-R*0.5+rng()*cs;sx<L;sx+=cs+(rng()-0.5)*cs*0.4){const t0=-0.98*litSign,t1=-0.35*litSign;
-    sketchLine(ctx,[[ax+tx*sx+nx*t0*R,ay+ty*sx+ny*t0*R],[ax+tx*(sx+R*0.35)+nx*t1*R,ay+ty*(sx+R*0.35)+ny*t1*R]],{seed:seed+Math.round(sx*7)+500,passes:1,width:0.8*d,color:ink,alpha:a*0.65,ampScale:0.5,step:4,overshoot:false})}
-  if(el==='S'||el==='P'){for(let sx=-R*0.5+rng()*cs;sx<L;sx+=cs){sketchLine(ctx,[[ax+tx*sx+nx*R*0.9,ay+ty*sx+ny*R*0.9],[ax+tx*(sx+R*0.5)-nx*R*0.9,ay+ty*(sx+R*0.5)-ny*R*0.9]],{seed:seed+Math.round(sx*5)+900,passes:1,width:0.8*d,color:ink,alpha:a*0.6,ampScale:0.4,step:4,overshoot:false})}}
+    sketchLine(ctx,[[ax+tx*sx+nx*t0*R,ay+ty*sx+ny*t0*R],[ax+tx*(sx+R*0.35)+nx*t1*R,ay+ty*(sx+R*0.35)+ny*t1*R]],{seed:seed+Math.round(sx*7)+500,passes:1,width:0.8*dw,color:ink,alpha:a*0.65,ampScale:0.5,step:4,overshoot:false})}
+  if(el==='S'||el==='P'){for(let sx=-R*0.5+rng()*cs;sx<L;sx+=cs){sketchLine(ctx,[[ax+tx*sx+nx*R*0.9,ay+ty*sx+ny*R*0.9],[ax+tx*(sx+R*0.5)-nx*R*0.9,ay+ty*(sx+R*0.5)-ny*R*0.9]],{seed:seed+Math.round(sx*5)+900,passes:1,width:0.8*dw,color:ink,alpha:a*0.6,ampScale:0.4,step:4,overshoot:false})}}
 }
 /* fill colour for the current fill mode: flat colour, a pale wash, or bare paper (ink) */
 const isInk=()=>cfg.rep.fill==='ink'||cfg.rep.fill==='ink colour'||cfg.rep.fill==='pencil'||cfg.rep.fill==='watercolour'||cfg.rep.fill==='chalk';
@@ -588,12 +589,12 @@ function watercolourShape(ctx,pts,col,seed,o){
 const LW={get outer(){return 1+0.45*cfg.style.hierarchy},get inner(){return 1-0.45*cfg.style.hierarchy},get faint(){return 0.5-0.15*cfg.style.hierarchy}};
 /* coloured-pencil scribble fill inside the current clip: back-and-forth strokes, two layers, ragged edges */
 function scribbleFill(ctx,x0,y0,x1,y1,col,seed,o){
-  const S=cfg.style;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=o.d||1;const rng=mulberry32(seed+303);
+  const S=cfg.style;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=(o.d||1)*TEX,dw=(o.d||1)*Math.max(TEX,0.75);const rng=mulberry32(seed+303);
   const ch=isChalk();const c=fogged(ch?mix(col,'#ffffff',0.18):col,fog);const cx=(x0+x1)/2,cy=(y0+y1)/2,R=Math.hypot(x1-x0,y1-y0)/2+3;
   const layers=ch?[[S.hatchAngle*Math.PI/180+0.9,S.hatchSpacing*0.45,0.9],[S.hatchAngle*Math.PI/180-0.6,S.hatchSpacing*0.55,0.55]]:[[S.hatchAngle*Math.PI/180+0.9,S.hatchSpacing*0.55,0.55],[S.hatchAngle*Math.PI/180-0.5,S.hatchSpacing*0.75,0.35]];
   for(const [ang,sp,al] of layers){const dx=Math.cos(ang),dy=Math.sin(ang),nx=-dy,ny=dx;const pts=[];let flip=1;
     for(let dd=-R;dd<R;dd+=sp*(0.8+0.4*rng())){const e0=-R*(0.9+0.2*rng()),e1=R*(0.9+0.2*rng());pts.push([cx+nx*dd+dx*e0*flip,cy+ny*dd+dy*e0*flip]);pts.push([cx+nx*dd+dx*e1*flip,cy+ny*dd+dy*e1*flip]);flip=-flip}
-    if(pts.length>3)sketchLine(ctx,pts,{seed:seed+Math.round(ang*100),passes:1,width:(ch?(2.2+1.2*rng()):(1.1+0.6*rng()))*d,color:c,alpha:al*(0.6+0.4*fk),ampScale:ch?0.6:0.9,step:6,overshoot:false,pressure:ch?0.95:0.8})}
+    if(pts.length>3)sketchLine(ctx,pts,{seed:seed+Math.round(ang*100),passes:1,width:(ch?(2.2+1.2*rng()):(1.1+0.6*rng()))*dw,color:c,alpha:al*(0.6+0.4*fk),ampScale:ch?0.6:0.9,step:6,overshoot:false,pressure:ch?0.95:0.8})}
 }
 /* what pigment darkens toward: the ink on light paper, near-black on dark paper (where the ink is pale) */
 function shadeInk(){const P=cfg.palette;return luminance(P.paper)>0.5?P.ink:mix(P.paper,'#000000',0.75)}
@@ -602,7 +603,7 @@ function fillFor(col){const m=cfg.rep.fill;if(isInk())return cfg.palette.paper;i
 function elementPattern(ctx,el,x0,y0,x1,y1,seed,o){
   if(!isInk()||el==='H')return;
   const colour=cfg.rep.fill==='ink colour';if(el==='C'&&!colour)return;
-  const S=cfg.style,P=cfg.palette;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=o.d||1;
+  const S=cfg.style,P=cfg.palette;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=(o.d||1)*TEX;
   const ink=fogged(colour&&o.col?mix(o.col,P.hatch,0.15):P.hatch,fog);const hs=S.hatchSpacing*Math.max(0.7,d);
   const rng=mulberry32(seed+99);const w=x1-x0,h=y1-y0;
   if(el==='N'||el==='P'){const n=Math.round(w*h/(hs*hs*(el==='N'?0.9:0.5)));ctx.fillStyle=rgba(ink,(colour?0.95:0.8)*(0.5+0.5*fk));
@@ -617,7 +618,7 @@ function shade(col,k){return k>=0?mix(col,'#ffffff',k):mix(col,shadeInk(),-k)}
 
 /* flat ball: solid fill, pencil shadow on the far side, sketched outline */
 function drawFlatBall(ctx,x,y,r,col,o){
-  const P=cfg.palette,S=cfg.style;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=o.d||1;
+  const P=cfg.palette,S=cfg.style;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=(o.d||1)*TEX;
   const la=S.lightAngle*Math.PI/180;const light=[Math.cos(la),Math.sin(la)];
   ctx.save();ctx.globalAlpha=o.alpha??1;
   if(o.outlineFirst)sketchCircle(ctx,x,y,r,{seed:o.seed+4,width:S.inkWidth*d*(0.75+0.25*fk)*0.9,color:fogged(P.ink,fog),alpha:(0.55+0.4*fk)*(o.outlineAlpha??1),passes:o.passes});
@@ -636,7 +637,7 @@ function capsulePts(ax,ay,mx,my,R,Rm){
   pts.push([ax-nx*R,ay-ny*R],[mx-nx*Rm,my-ny*Rm]);return{pts,tx,ty,nx,ny};
 }
 function drawHalfStick(ctx,ax,ay,mx,my,R,col,o){
-  const P=cfg.palette,S=cfg.style;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=o.d||1;const Rm=o.Rm??R;
+  const P=cfg.palette,S=cfg.style;const fog=o.fog||0,fk=1-fog*cfg.view.fog,d=(o.d||1)*TEX;const Rm=o.Rm??R;
   const {pts,tx,ty,nx,ny}=capsulePts(ax,ay,mx,my,R,Rm);
   ctx.save();ctx.globalAlpha=o.alpha??1;
   if(o.partial>0&&o.partial<1){ // forming / breaking: dotted outline only
@@ -930,12 +931,12 @@ let PAPER_FILL=null;
 function paperFill(){return (isInk()&&PAPER_FILL)?PAPER_FILL:cfg.palette.paper}
 function renderFrame(ctx,W,H,frame,dpr){
   RF={W,H,dpr};
-  VIEW_ROLL=cfg.view.roll||0;VIEW_YAW=cfg.view.yaw+cfg.view.spin*frame/Math.max(1,cfg.fps);VIEW_PITCH=cfg.view.pitch+cfg.view.pitchSwing*Math.sin(frame/Math.max(1,cfg.fps)*Math.PI*2*Math.max(1e-6,Math.abs(cfg.view.spin))/360);
+  TEX=1;VIEW_ROLL=cfg.view.roll||0;VIEW_YAW=cfg.view.yaw+cfg.view.spin*frame/Math.max(1,cfg.fps);VIEW_PITCH=cfg.view.pitch+cfg.view.pitchSwing*Math.sin(frame/Math.max(1,cfg.fps)*Math.PI*2*Math.max(1e-6,Math.abs(cfg.view.spin))/360);
   const drawn=Math.floor(frame/Math.max(1,cfg.stepEvery))*Math.max(1,cfg.stepEvery);
   const st=sampleState(drawn);
   const boil=Math.floor(drawn/Math.max(1,cfg.boilEvery));
   const seedBase=boil*7919;
-  computeFit();const proj=makeProjector(W,H);
+  computeFit();const proj=makeProjector(W,H);TEX=cfg.rep.textureScale==='object'?clamp(proj.pxPerA/48,0.35,6):1;
   const P=cfg.palette,S=cfg.style,SH=cfg.show;
   ctx.save();ctx.setTransform(dpr,0,0,dpr,0,0);
   const pc=paper(W,H,dpr,boil);ctx.drawImage(pc,0,0,W,H)
