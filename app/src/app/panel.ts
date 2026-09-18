@@ -18,7 +18,7 @@ export interface PanelHost {
   fitFrame: (box: { x0: number; y0: number; x1: number; y1: number }, what: 'all' | 'frame') => void;
   showGuides: (box: { x0: number; y0: number; x1: number; y1: number } | null) => void;
   renderCommand: () => string; canvasSize: () => [number, number];
-  groupPalettes: Record<string, { colors: string[]; source: string }>;
+  groupPalettes: Record<string, { colors: string[]; source: string; family: string }>;
   groups: () => { key: string }[]; groupColor: (k: string) => string; setGroupColor: (k: string, v: string | null) => void; hasOverride: (k: string) => boolean;
 }
 
@@ -138,12 +138,22 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   swatchGroup('paper and marks', ['paper', 'ink', 'hatch', 'wash', 'arrow', 'charge', 'label', 'context', 'accent']);
   swatchGroup('elements', ['C', 'N', 'O', 'H', 'S', 'P', 'X'], true);
   swatchGroup('cartoon and surface', ['helix', 'sheet', 'loop', 'nucleic', 'surface'], true);
-  // group palettes: the colours residues and molecules get in order of appearance
+  // group palettes: the colours residues and molecules get in order of appearance — tiles in three families; hover previews, click keeps
   C.append(el('div', { class: 'subhead' }, 'group palette (residues, chains, molecules in order)'));
-  const gstrips = el('div', { class: 'strips' }); C.append(gstrips); const gstripEls: HTMLElement[] = [];
-  for (const name of Object.keys(H.groupPalettes)) { const gp = H.groupPalettes[name]; const st = el('div', { class: 'strip', title: gp.source }, el('div', { class: 'chips' }, ...gp.colors.map(c => { const i = el('i'); i.style.background = c; return i })), el('span', {}, name)); st.dataset.name = name;
-    st.onclick = () => { H.style.groupPalette = name === 'Triad' ? null : gp.colors.slice(); H.style.groupPaletteName = name; refresh(); H.rebuild() }; gstrips.append(st); gstripEls.push(st) }
-  refreshers.push(() => gstripEls.forEach(e => e.classList.toggle('on', e.dataset.name === (H.style.groupPaletteName || 'Triad'))));
+  const tiles: HTMLElement[] = []; let kept: { name: string; colors: string[] | null } | null = null;
+  const applyPal = (name: string, colors: string[]) => { H.style.groupPalette = name === 'Triad' ? null : colors.slice(); H.style.groupPaletteName = name; H.rebuild() };
+  const families: [string, string, string][] = [['drawing', 'for drawings', 'the engine and the lab site'], ['safe', 'colour-blind safe', 'Okabe–Ito, Paul Tol, Tableau'], ['studies', 'studies', 'jamaliki / design-corner']];
+  for (const [fam, title, note] of families) {
+    C.append(el('div', { class: 'famhead' }, el('span', { class: 'subhead', style: 'margin:0' }, title), el('small', {}, note)));
+    const grid = el('div', { class: 'paltiles' }); C.append(grid);
+    for (const name of Object.keys(H.groupPalettes)) { const gp = H.groupPalettes[name]; if (gp.family !== fam) continue;
+      const t = el('div', { class: 'paltile', title: name + ' — ' + gp.source }, el('div', { class: 'bands' }, ...gp.colors.map(c => { const i = el('i'); i.style.background = c; return i })), el('span', {}, name)); t.dataset.name = name;
+      t.onmouseenter = () => { if (!kept) kept = { name: H.style.groupPaletteName, colors: H.style.groupPalette }; applyPal(name, gp.colors) };
+      t.onmouseleave = () => { if (kept) { H.style.groupPalette = kept.colors; H.style.groupPaletteName = kept.name; kept = null; H.rebuild() } };
+      t.onclick = () => { kept = null; applyPal(name, gp.colors); refresh() };
+      grid.append(t); tiles.push(t) }
+  }
+  refreshers.push(() => tiles.forEach(e => e.classList.toggle('on', e.dataset.name === (H.style.groupPaletteName || 'Triad'))));
   // the groups of what is loaded, each with its colour now; click to override, right-click to let the palette decide again
   C.append(el('div', { class: 'subhead' }, 'groups in this file (right-click: back to the palette)'));
   const gsw = el('div', { class: 'swatches' }); C.append(gsw);

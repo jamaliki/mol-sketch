@@ -112,7 +112,8 @@ The *Colour* section shows every colour as a swatch: click one to pick (the hex 
 paper-and-ink presets as strips. Below them the *group palette* is the list of colours residues, chains and molecules
 receive in the order they appear when nothing names their colour: the engine's own, the lab website's, Okabe–Ito and
 Paul Tol's colour-blind-safe sets, Tableau, and the studies from jamaliki/design-corner (`src/palettes.ts`; a name in
-the style's `groupPaletteName`, the colours in `groupPalette`). Under that, the groups of the loaded file with the
+the style's `groupPaletteName`, the colours in `groupPalette`), as tiles in three families; hovering a tile previews it on
+the drawing, clicking keeps it. Under that, the groups of the loaded file with the
 colour each has now: click to override it (that is the scene's `groupColors`), right-click to hand it back to the
 palette. The same palette applies in the classic engine (`cfg.groupPalette`) and the page.
 
