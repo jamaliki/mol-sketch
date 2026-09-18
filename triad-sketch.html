@@ -210,7 +210,7 @@ const DEFAULT_CFG={
   style:{rough:1.1,passes:2,pressure:0.55,fillWobble:1,hatchDensity:1.4,hierarchy:0.6,wash:0.3,washSeed:1,washLife:0.6,inkWidth:1.5,ballScale:1,bondWidth:2.1,hatchSpacing:5,hatchAngle:-40,lightAngle:-125,shading:0.65,pencilFill:0.55,grain:0.6,font:'Caveat',labelSize:19,captionSize:24,contextAlpha:0.5,annot:1},
   show:{H:true,lonePairs:true,charges:true,arrows:true,labels:true,hbonds:true,context:false,caption:true,stepLabel:true,colorBonds:false,resLabels:false,valence:true,construction:false},
   palette:{...PRESETS['PyMOL flat']},
-  rep:{mode:'sticks',fill:'flat',colorBy:'group',stickRadius:0.2,sphereScale:0.4,sideChainHelper:true,cartoonScale:1,cartoonColor:'ss',probe:1.4,surfaceScale:1,surfaceOpacity:1,surfaceColor:'carbon'},
+  rep:{detail:'auto',mode:'sticks',fill:'flat',colorBy:'group',stickRadius:0.2,sphereScale:0.4,sideChainHelper:true,cartoonScale:1,cartoonColor:'ss',probe:1.4,surfaceScale:1,surfaceOpacity:1,surfaceColor:'carbon'},
   pdbFrames:2
 };
 let cfg=JSON.parse(JSON.stringify(DEFAULT_CFG));
@@ -674,12 +674,12 @@ function carbonColor(a){const P=cfg.palette,mode=cfg.rep.colorBy;
   const key=mode==='chain'?('chain:'+(a.chain||'')):(a.group||((a.resn||'')+(a.resi??'')));
   if(scene.groupColors&&scene.groupColors[mode==='chain'?(a.chain||''):key])return scene.groupColors[mode==='chain'?(a.chain||''):key];
   if(mode==='group')return P.C;
-  return GROUP_PALETTE[groupIndex(key)%GROUP_PALETTE.length];
+  const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[groupIndex(key)%GP.length];
 }
 const SUBUNIT_COLS={S:'#9cc27a',L:'#e6a45a',T:'#c96d8a',X:'#b8b4a8'};
 function subunitColor(a){const k=a.subunit||'X';if(scene.groupColors&&scene.groupColors['subunit:'+k])return scene.groupColors['subunit:'+k];return SUBUNIT_COLS[k]||SUBUNIT_COLS.X}
-function entityColor(a){const e=a.entity||('chain:'+(a.chain||''));if(scene.groupColors&&scene.groupColors['entity:'+e])return scene.groupColors['entity:'+e];return GROUP_PALETTE[groupIndex('entity:'+e)%GROUP_PALETTE.length]}
-function chainColor(a){const c=a.chain||'';if(scene.groupColors&&scene.groupColors[c])return scene.groupColors[c];return GROUP_PALETTE[groupIndex('chain:'+c)%GROUP_PALETTE.length]}
+function entityColor(a){const e=a.entity||('chain:'+(a.chain||''));if(scene.groupColors&&scene.groupColors['entity:'+e])return scene.groupColors['entity:'+e];const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[groupIndex('entity:'+e)%GP.length]}
+function chainColor(a){const c=a.chain||'';if(scene.groupColors&&scene.groupColors[c])return scene.groupColors[c];const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[groupIndex('chain:'+c)%GP.length]}
 function atomColor(a){if(a.color)return cfg.palette[a.color]||a.color;if(a.el==='C')return carbonColor(a);return cfg.palette[a.el]||cfg.palette.X}
 
 /* ============================ frame render ============================ */
@@ -927,7 +927,7 @@ function buildSurface(items,st,pos,atoms,proj,seedBase,lowDetail){
       patches.sort((a,b)=>a.z-b.z);
       let zmin=1e9,zmax=-1e9,xmin=1e9,xmax=-1e9,ymin=1e9,ymax=-1e9;for(const p of patches){zmin=Math.min(zmin,p.z);zmax=Math.max(zmax,p.z);xmin=Math.min(xmin,p.x);xmax=Math.max(xmax,p.x);ymin=Math.min(ymin,p.y);ymax=Math.max(ymax,p.y)}
       const zs=Math.max(1e-6,zmax-zmin);const la=cfg.style.lightAngle*Math.PI/180;const lx=Math.cos(la),ly=Math.sin(la);const R=Math.max(xmax-xmin,ymax-ymin)/2||1;const cx=(xmin+xmax)/2,cy=(ymin+ymax)/2;
-      const many=patches.length>600;
+      const many=cfg.rep.detail!=='full'&&patches.length>600;
       for(const p of patches){const depth=(zmax-p.z)/zs;const lit=((p.x-cx)*lx+(p.y-cy)*ly)/R; // lit>0 faces the light
         const tone=clamp(0.3+0.6*depth-0.2*lit,0.15,1);
         x.save();x.globalAlpha=p.alpha;x.beginPath();p.h.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]));x.closePath();x.fillStyle='#ffffff';x.globalCompositeOperation='destination-out';x.fill();x.globalCompositeOperation='source-over';
@@ -1128,7 +1128,7 @@ function renderFrame(ctx,W,H,frame,dpr){
   const stickIds=new Set(stickAtoms.map(a=>a.id));
   const stickBonds=st.bonds.filter(b=>stickIds.has(b.a)&&stickIds.has(b.b));
   const surfAtoms=reps.surface&&reps.surface.trim()?st.atoms.filter(a=>selF(a)&&(SH.H||a.el!=='H')):[];
-  const items=[];const lowDetail=(stickAtoms.length+surfAtoms.length)>260;
+  const items=[];const lowDetail=cfg.rep.detail!=='full'&&(stickAtoms.length+surfAtoms.length)>260;   // 'full': every atom gets the whole treatment however many there are
   if(cfg.rep.mode==='sticks')buildSticks(items,st,pos,stickAtoms,stickBonds,proj,seedBase,lowDetail);else buildBallStick(items,st,pos,stickAtoms,stickBonds,proj,seedBase,lowDetail);
   if(cartoonOn)buildCartoon(items,st,pos,st.atoms,selC,proj,seedBase,lowDetail);
   if(surfAtoms.length)buildSurface(items,st,pos,surfAtoms,proj,seedBase,lowDetail);
@@ -1280,6 +1280,7 @@ function buildPanel(){
   textField(R,'surface',()=>scene.reps.surface,v=>scene.reps.surface=v,'polymer and not hydro');
   select(R,'stick style',()=>cfg.rep.mode,v=>cfg.rep.mode=v,['sticks','ballstick']);
   select(R,'fill',()=>cfg.rep.fill,v=>cfg.rep.fill=v,['flat','wash','pencil','chalk','watercolour','ink','ink colour']);
+  select(R,'detail',()=>cfg.rep.detail||'auto',v=>cfg.rep.detail=v,['auto','full']);
   select(R,'carbons',()=>cfg.rep.colorBy,v=>cfg.rep.colorBy=v,['group','element','residue','chain','subunit','entity']);
   slider(R,'stick radius',()=>cfg.rep.stickRadius,v=>cfg.rep.stickRadius=v,0.1,0.5,0.01,v=>v.toFixed(2)+' Å');
   slider(R,'sphere size',()=>cfg.rep.sphereScale,v=>cfg.rep.sphereScale=v,0,1,0.05,v=>v.toFixed(2));

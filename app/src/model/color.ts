@@ -16,7 +16,7 @@ export class ColorScheme {
   constructor(private s: Structure, private style: Style, private overrides: Record<string, string> = {}) {
     for (const ch of s.chains) { if (!this.chainIdx.has(ch.id)) this.chainIdx.set(ch.id, this.chainIdx.size); const e = ch.entity || 'chain:' + ch.id; if (!this.entityIdx.has(e)) this.entityIdx.set(e, this.entityIdx.size) }
   }
-  private auto(i: number) { return GROUP_PALETTE[i % GROUP_PALETTE.length] }
+  private auto(i: number) { const gp = this.style.groupPalette && this.style.groupPalette.length ? this.style.groupPalette : GROUP_PALETTE; return gp[i % gp.length] }
   /** Colour of a residue under the carbon scheme (colorBy). */
   residueCarbon(r: Residue): string {
     const o = this.overrides; const P = this.style.palette;

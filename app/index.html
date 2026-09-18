@@ -41,6 +41,19 @@
   .looks { display:grid; grid-template-columns:1fr 1fr; gap:5px; margin:6px 0 }
   .looks button { text-align:left; padding:6px 8px } .looks button b { display:block } .looks button span { color:var(--dim); font-size:11px }
   .looks button.on { border-color:var(--acc); background:#3d3524 }
+  .swatches { display:flex; flex-wrap:wrap; gap:6px 8px; margin:4px 0 8px }
+  .sw { display:flex; flex-direction:column; align-items:center; gap:2px; width:38px; cursor:pointer }
+  .sw i { display:block; width:26px; height:26px; border-radius:6px; border:1px solid rgba(255,255,255,.18); box-shadow:inset 0 0 0 1px rgba(0,0,0,.25) }
+  .sw.on i { outline:2px solid var(--acc); outline-offset:1px }
+  .sw span { font-size:10px; color:var(--dim); max-width:38px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap }
+  .sw.auto i { opacity:.85 } .sw input { position:absolute; width:0; height:0; opacity:0 }
+  .subhead { color:var(--dim); font-size:11px; margin:8px 0 2px; text-transform:uppercase; letter-spacing:.4px }
+  .strips { display:flex; flex-direction:column; gap:4px; margin:4px 0 6px; max-height:230px; overflow-y:auto; padding-right:4px }
+  .strip { display:flex; align-items:center; gap:6px; padding:3px 4px; border-radius:5px; cursor:pointer; border:1px solid transparent }
+  .strip:hover { border-color:var(--line) } .strip.on { border-color:var(--acc); background:#3d3524 }
+  .strip .chips { display:flex; gap:2px } .strip .chips i { width:14px; height:14px; border-radius:3px; display:block }
+  .strip span { font-size:11px; color:var(--fg) } .strip small { font-size:10px; color:var(--dim); margin-left:auto }
+  .hexrow { display:flex; gap:6px; align-items:center; margin:2px 0 6px } .hexrow input { width:92px; font:11px ui-monospace,Menlo,monospace }
 </style>
 </head>
 <body>

@@ -106,6 +106,16 @@ cli/render.mjs headless renderer (Playwright + the built app)
 scripts/shot.mjs  development screenshots against the dev server
 ```
 
+## Colours
+
+The *Colour* section shows every colour as a swatch: click one to pick (the hex field edits the selected swatch), the
+paper-and-ink presets as strips. Below them the *group palette* is the list of colours residues, chains and molecules
+receive in the order they appear when nothing names their colour: the engine's own, the lab website's, Okabe–Ito and
+Paul Tol's colour-blind-safe sets, Tableau, and the studies from jamaliki/design-corner (`src/palettes.ts`; a name in
+the style's `groupPaletteName`, the colours in `groupPalette`). Under that, the groups of the loaded file with the
+colour each has now: click to override it (that is the scene's `groupColors`), right-click to hand it back to the
+palette. The same palette applies in the classic engine (`cfg.groupPalette`) and the page.
+
 ## Style fields
 
 `fill` watercolour | ink colour | ink | pencil | chalk | flat | wash. `annot` scales lone pairs, charges and arrow heads. `shading`, `pencilFill`, `fillWobble`,
@@ -114,7 +124,7 @@ scripts/shot.mjs  development screenshots against the dev server
 `cartoonScale`, `probe`. `line` width, rough (wobble), passes, hierarchy (silhouettes heavier than
 interior lines), pressure, alpha. `hatch` spacing, angle, density. `water` layers, wobble, ring,
 granulation, tone. `paper` grain, wash, washSeed, washLife, washScale. `view` fov (0 = orthographic),
-fog, fogStart, light. `boilEvery` frames between re-jitters; `boilHold` drawings per re-jitter for scenes (2 keeps the motion on every drawing and the stroke jitter on every second one, which roughly halves a video's bitrate).
+fog, fogStart, light. `boilEvery` frames between re-jitters; `boilHold` drawings per re-jitter for scenes (2 keeps the motion on every drawing and the stroke jitter on every second one, which roughly halves a video's bitrate). `groupPalette` / `groupPaletteName`: see Colours.
 
 The CLI's `--set path=value` addresses these by dotted path, e.g. `--set reps.surface=polymer --set
 line.width=2 --set palette.paper=#ffffff`.

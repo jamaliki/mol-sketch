@@ -18,6 +18,8 @@ export interface PanelHost {
   fitFrame: (box: { x0: number; y0: number; x1: number; y1: number }, what: 'all' | 'frame') => void;
   showGuides: (box: { x0: number; y0: number; x1: number; y1: number } | null) => void;
   renderCommand: () => string; canvasSize: () => [number, number];
+  groupPalettes: Record<string, { colors: string[]; source: string }>;
+  groups: () => { key: string }[]; groupColor: (k: string) => string; setGroupColor: (k: string, v: string | null) => void; hasOverride: (k: string) => boolean;
 }
 
 type Ctl =
@@ -101,6 +103,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   control(Rp, { t: 'range', label: 'cut spheres', path: 'sphereScale', min: 0, max: 1, step: 0.05, geom: true });
   control(Rp, { t: 'range', label: 'cartoon scale', path: 'cartoonScale', min: 0.4, max: 2.5, step: 0.05, geom: true });
   control(Rp, { t: 'range', label: 'surface probe', path: 'probe', min: 0, max: 3, step: 0.1, geom: true });
+  control(Rp, { t: 'select', label: 'detail', path: 'detail', options: ['auto', 'full'] });
 
   /* colour */
   const C = section('Colour');
@@ -112,10 +115,40 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   control(C, { t: 'select', label: 'carbons by', path: 'colorBy', options: ['residue', 'element', 'chain', 'subunit', 'entity'], geom: true });
   control(C, { t: 'select', label: 'cartoon by', path: 'cartoonColor', options: ['ss', 'carbon'], geom: true });
   control(C, { t: 'select', label: 'surface by', path: 'surfaceColor', options: ['subunit', 'chain', 'entity', 'residue', 'single'], geom: true });
-  const pal = el('select', {}, el('option', { value: '' }, 'palette preset…'), ...Object.keys(H.palettes).map(o => el('option', { value: o }, o))) as HTMLSelectElement;
-  pal.onchange = () => { if (pal.value) { H.style.palette = { ...H.palettes[pal.value] }; refresh(); H.rebuild() } pal.value = '' }; row(C, 'preset', pal);
-  for (const k of ['paper', 'ink', 'hatch', 'wash']) control(C, { t: 'color', label: k, path: 'palette.' + k });
-  for (const k of ['C', 'N', 'O', 'S', 'P', 'H', 'X', 'helix', 'sheet', 'loop', 'nucleic', 'surface']) control(C, { t: 'color', label: k, path: 'palette.' + k, geom: true });
+  /* swatches: one square per colour, click to pick, the hex field edits the selected one */
+  let selected: { get: () => string; set: (v: string) => void; label: string } | null = null;
+  const hexIn = el('input', { type: 'text', placeholder: '#rrggbb', spellcheck: 'false' }) as HTMLInputElement; const hexLabel = el('span', { style: 'color:var(--dim);font-size:11px' }, 'click a swatch');
+  hexIn.oninput = () => { if (selected && /^#[0-9a-f]{6}$/i.test(hexIn.value)) { selected.set(hexIn.value.toLowerCase()); refresh(); H.redraw() } };
+  const swatch = (parent: HTMLElement, label: string, get: () => string, set: (v: string) => void, opts: { auto?: () => boolean; clear?: () => void } = {}) => {
+    const inp = el('input', { type: 'color' }) as HTMLInputElement; const i = el('i'); const d = el('div', { class: 'sw', title: label }, i, el('span', {}, label), inp);
+    const show = () => { const v = get(); i.style.background = v; inp.value = v; d.classList.toggle('auto', !!opts.auto?.()); d.classList.toggle('on', selected?.label === label); if (selected?.label === label) { hexIn.value = v; hexLabel.textContent = label + (opts.auto?.() ? ' (automatic)' : '') } };
+    d.onclick = (e) => { if (e.target === inp) return; selected = { get, set, label }; refresh(); inp.click() };
+    d.oncontextmenu = (e) => { e.preventDefault(); if (opts.clear) { opts.clear(); refresh() } };
+    inp.oninput = () => { set(inp.value); show(); H.redraw() }; inp.onchange = () => { set(inp.value); refresh() };
+    refreshers.push(show); show(); parent.append(d); return d;
+  };
+  const stylePal = (key: string, geom = false) => [() => (H.style.palette as any)[key] as string, (v: string) => { (H.style.palette as any)[key] = v; if (geom) H.rebuild() }] as const;
+  const swatchGroup = (title: string, keys: string[], geom = false) => { C.append(el('div', { class: 'subhead' }, title)); const g = el('div', { class: 'swatches' }); C.append(g); for (const k of keys) { const [get, set] = stylePal(k, geom); swatch(g, k, get, set) } };
+  // paper presets as strips
+  C.append(el('div', { class: 'subhead' }, 'paper and ink presets'));
+  const pstrips = el('div', { class: 'strips', style: 'max-height:none' }); C.append(pstrips);
+  for (const name of Object.keys(H.palettes)) { const P = H.palettes[name]; const st = el('div', { class: 'strip' }, el('div', { class: 'chips' }, ...['paper', 'ink', 'C', 'N', 'O', 'wash'].map(k => { const i = el('i'); i.style.background = (P as any)[k]; return i })), el('span', {}, name)); st.onclick = () => { H.style.palette = { ...P }; refresh(); H.rebuild() }; pstrips.append(st) }
+  C.append(el('div', { class: 'hexrow' }, hexIn, hexLabel));
+  swatchGroup('paper and marks', ['paper', 'ink', 'hatch', 'wash', 'arrow', 'charge', 'label', 'context', 'accent']);
+  swatchGroup('elements', ['C', 'N', 'O', 'H', 'S', 'P', 'X'], true);
+  swatchGroup('cartoon and surface', ['helix', 'sheet', 'loop', 'nucleic', 'surface'], true);
+  // group palettes: the colours residues and molecules get in order of appearance
+  C.append(el('div', { class: 'subhead' }, 'group palette (residues, chains, molecules in order)'));
+  const gstrips = el('div', { class: 'strips' }); C.append(gstrips); const gstripEls: HTMLElement[] = [];
+  for (const name of Object.keys(H.groupPalettes)) { const gp = H.groupPalettes[name]; const st = el('div', { class: 'strip', title: gp.source }, el('div', { class: 'chips' }, ...gp.colors.map(c => { const i = el('i'); i.style.background = c; return i })), el('span', {}, name)); st.dataset.name = name;
+    st.onclick = () => { H.style.groupPalette = name === 'Triad' ? null : gp.colors.slice(); H.style.groupPaletteName = name; refresh(); H.rebuild() }; gstrips.append(st); gstripEls.push(st) }
+  refreshers.push(() => gstripEls.forEach(e => e.classList.toggle('on', e.dataset.name === (H.style.groupPaletteName || 'Triad'))));
+  // the groups of what is loaded, each with its colour now; click to override, right-click to let the palette decide again
+  C.append(el('div', { class: 'subhead' }, 'groups in this file (right-click: back to the palette)'));
+  const gsw = el('div', { class: 'swatches' }); C.append(gsw);
+  let gswKeys = '';
+  refreshers.push(() => { const gs = H.groups(); const key = gs.map(g => g.key).join('|'); if (key === gswKeys) return; gswKeys = key; gsw.innerHTML = '';
+    for (const g of gs) swatch(gsw, g.key, () => H.groupColor(g.key), v => H.setGroupColor(g.key, v), { auto: () => !H.hasOverride(g.key), clear: () => H.setGroupColor(g.key, null) }) });
 
   /* annotations */
   const An = section('Annotations', false);

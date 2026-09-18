@@ -34,6 +34,10 @@ export interface Style {
   water: { layers: number; wobble: number; ring: number; granulation: number; tone: number };
   view: { fov: number; fog: number; fogStart: number; light: number };
   boilEvery: number; boilHold: number;
+  /** auto: past 260 drawn atoms strokes get one pass and no scribble, past 600 surface patches fewer layers and no ring; full: the whole treatment always */
+  detail: 'auto' | 'full';
+  /** the colours handed to residues / chains / molecules in order of appearance; null = the engine's own */
+  groupPalette: string[] | null; groupPaletteName: string;
 }
 
 export const PALETTES: Record<string, Palette> = {
@@ -62,7 +66,7 @@ export const DEFAULT_STYLE: Style = {
   paper: { grain: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1 },
   water: { layers: 3, wobble: 1, ring: 0.6, granulation: 0.5, tone: 0.6 },
   view: { fov: 20, fog: 0.5, fogStart: 0.45, light: -125 },
-  boilEvery: 3, boilHold: 1,
+  boilEvery: 3, boilHold: 1, detail: 'auto', groupPalette: null, groupPaletteName: 'Triad',
 };
 
 export function cloneStyle(s: Style): Style { return JSON.parse(JSON.stringify(s)) }

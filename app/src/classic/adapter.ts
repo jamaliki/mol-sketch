@@ -14,14 +14,14 @@ export function cfgFromStyle(style: Style, cam: { yaw: number; pitch: number; ro
   const D = classic().DEFAULT_CFG;
   const surfaceColor = style.surfaceColor === 'residue' ? 'carbon' : style.surfaceColor;
   return {
-    ...D, fps: 24, stepEvery: scene ? 2 : 1, boilEvery: (scene ? 2 : 1) * Math.max(1, Math.round(style.boilHold ?? 1)), arrowLead: 0.2, pdbFrames: 2,
+    ...D, groupPalette: style.groupPalette && style.groupPalette.length ? style.groupPalette : null, fps: 24, stepEvery: scene ? 2 : 1, boilEvery: (scene ? 2 : 1) * Math.max(1, Math.round(style.boilHold ?? 1)), arrowLead: 0.2, pdbFrames: 2,
     view: { yaw: cam.yaw, pitch: cam.pitch, roll: cam.roll || 0, zoom: cam.zoom, panX: cam.panX, panY: cam.panY, fov: cam.fov, fog: style.view.fog, fogStart: style.view.fogStart, spin: 0, pitchSwing: 0 },
     style: { ...D.style, rough: style.line.rough, passes: style.line.passes, pressure: style.line.pressure, fillWobble: style.fillWobble, hatchDensity: style.hatch.density, hierarchy: style.line.hierarchy,
       wash: style.paper.wash, washSeed: style.paper.washSeed, washLife: style.paper.washLife, inkWidth: style.line.width, hatchSpacing: style.hatch.spacing, hatchAngle: style.hatch.angle,
       lightAngle: style.view.light, shading: style.shading, pencilFill: style.pencilFill, grain: style.paper.grain, font: style.font, labelSize: style.labelSize, captionSize: style.captionSize, annot: style.annot ?? 1 },
     show: { ...D.show, ...style.show, construction: style.construction, caption: scene && style.show.caption, stepLabel: scene && style.show.stepLabel },
     palette: { ...D.palette, ...style.palette },
-    rep: { ...D.rep, mode: style.mode, fill: style.fill, colorBy: style.colorBy, stickRadius: style.stickRadius, sphereScale: style.sphereScale, sideChainHelper: style.sideChainHelper, cartoonScale: style.cartoonScale, cartoonColor: style.cartoonColor, probe: style.probe, surfaceColor },
+    rep: { ...D.rep, detail: style.detail || 'auto', mode: style.mode, fill: style.fill, colorBy: style.colorBy, stickRadius: style.stickRadius, sphereScale: style.sphereScale, sideChainHelper: style.sideChainHelper, cartoonScale: style.cartoonScale, cartoonColor: style.cartoonColor, probe: style.probe, surfaceColor },
   };
 }
 

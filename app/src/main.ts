@@ -3,6 +3,8 @@ import { Renderer } from './render/renderer';
 import { parseStructure } from './model/parse';
 import { DEFAULT_STYLE, PALETTES, cloneStyle, mergeStyle, type Style } from './style';
 import { LOOKS } from './looks';
+import { GROUP_PALETTES } from './palettes';
+import { GROUP_PALETTE } from './model/color';
 import { buildPanel } from './app/panel';
 import { OrbitControls } from './app/controls';
 import { drawSketch } from './ink/sketch';
@@ -95,7 +97,7 @@ async function loadText(text: string, name: string) {
   R.setStructure(s); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.roll = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0;
   const hasPoly = s.residues.some(r => !r.het);
   if (!hasPoly) { style.reps = { sticks: 'all', cartoon: '', surface: '' } }
-  rebuild(); status(`parsed in ${(performance.now() - t0).toFixed(0)} ms`);
+  rebuild(); panel.refresh(); status(`parsed in ${(performance.now() - t0).toFixed(0)} ms`);
 }
 async function loadUrl(url: string) { const r = await fetch(url); if (!r.ok) throw new Error('fetch ' + url + ' ' + r.status); await loadText(await r.text(), url.split('/').pop() || url) }
 
@@ -135,6 +137,24 @@ function renderCommand(): string {
   const cam = sceneDoc ? '' : ` --yaw ${R.camera.yaw.toFixed(1)} --pitch ${R.camera.pitch.toFixed(1)} --roll ${R.camera.roll.toFixed(1)} --zoom ${R.camera.zoom.toFixed(3)} --pan ${R.camera.panX.toFixed(3)},${R.camera.panY.toFixed(3)} --fov ${R.camera.fov}`;
   return `node cli/render.mjs ${input} --style ${name}-style.json${cam} --size ${R.w}x${R.h} --frames ${sceneDoc ? 'drawn' : 1} --out out_${name}`;
 }
+/* the groups of what is loaded (residues, molecules, chains) and their colours, for the panel's swatches */
+function groups(): { key: string }[] {
+  if (sceneDoc) { const seen: string[] = []; for (const k of sceneDoc.keyframes) for (const id in k.atoms) { const a = k.atoms[id]; const g = a.group || ((a.resn || '') + (a.resi ?? '')); if (!seen.includes(g)) seen.push(g) } return seen.map(key => ({ key })) }
+  const s = R.structure; if (!s) return [];
+  const out: { key: string }[] = [];
+  if (s.chains.length > 1) for (const ch of s.chains) out.push({ key: ch.id });
+  for (const r of s.residues) if (r.het && out.length < 40) out.push({ key: r.resn + r.resi + (r.chain ? '.' + r.chain : '') });
+  return out;
+}
+function autoIndex(key: string): number {
+  if (sceneDoc) return groups().findIndex(g => g.key === key);
+  const s = R.structure; if (!s) return 0;
+  const ci = s.chains.findIndex(c => c.id === key); if (ci >= 0) return ci;
+  const r = s.residues.find(r => r.resn + r.resi + (r.chain ? '.' + r.chain : '') === key); return r ? r.index : 0;
+}
+function groupColor(key: string): string { if (R.overrides[key]) return R.overrides[key]; const gp = style.groupPalette && style.groupPalette.length ? style.groupPalette : GROUP_PALETTE; return gp[Math.max(0, autoIndex(key)) % gp.length] }
+function setGroupColor(key: string, v: string | null) { if (v) R.overrides[key] = v; else delete R.overrides[key]; if (sceneDoc) sceneDoc.groupColors = { ...R.overrides }; rebuild() }
+
 /* panel */
 function applyLook(key: string) {
   const L = LOOKS[key]; if (!L) return; currentLook = key;
@@ -159,6 +179,7 @@ const panel = buildPanel(document.getElementById('controls')!, {
   setDpr: (v: number) => { dpr = v; fit() },
   palettes: PALETTES,
   framePresets: FRAME_PRESETS, fitFrame, showGuides, renderCommand, canvasSize: () => [R.w, R.h] as [number, number],
+  groupPalettes: GROUP_PALETTES, groups, groupColor, setGroupColor, hasOverride: (k: string) => !!R.overrides[k],
 });
 
 /** PNG of what is on screen: the sketch when it is shown, else the GPU frame */
