@@ -33,7 +33,7 @@ export interface Style {
   paper: { grain: number; wash: number; washSeed: number; washLife: number; washScale: number };
   water: { layers: number; wobble: number; ring: number; granulation: number; tone: number };
   view: { fov: number; fog: number; fogStart: number; light: number };
-  boilEvery: number;
+  boilEvery: number; boilHold: number;
 }
 
 export const PALETTES: Record<string, Palette> = {
@@ -62,7 +62,7 @@ export const DEFAULT_STYLE: Style = {
   paper: { grain: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1 },
   water: { layers: 3, wobble: 1, ring: 0.6, granulation: 0.5, tone: 0.6 },
   view: { fov: 20, fog: 0.5, fogStart: 0.45, light: -125 },
-  boilEvery: 3,
+  boilEvery: 3, boilHold: 1,
 };
 
 export function cloneStyle(s: Style): Style { return JSON.parse(JSON.stringify(s)) }

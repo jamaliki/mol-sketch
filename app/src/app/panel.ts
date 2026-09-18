@@ -156,6 +156,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   control(V, { t: 'range', label: 'fog start', path: 'view.fogStart', min: 0, max: 1, step: 0.05 });
   control(V, { t: 'range', label: 'light angle', path: 'view.light', min: -180, max: 180, step: 5 });
   control(V, { t: 'range', label: 'boil every', path: 'boilEvery', min: 1, max: 12, step: 1 });
+  control(V, { t: 'range', label: 'boil hold', path: 'boilHold', min: 1, max: 4, step: 1 });
   const restSel = el('select', { onchange: (e: any) => H.onRest(e.target.value) }, ...[['classic', 'classic (exact, slower)'], ['sketch', 'sketch (fast)'], ['preview', 'preview only']].map(([v, t]) => el('option', { value: v }, t))) as HTMLSelectElement; restSel.value = 'classic'; row(V, 'at rest', restSel);
   V.append(el('div', { class: 'btns' }, el('button', { onclick: H.renderNow }, 'Render now (classic)')));
   const liveIn = el('input', { type: 'checkbox', checked: '' }) as HTMLInputElement; liveIn.onchange = () => H.onLive(liveIn.checked); row(V, 'breathing', liveIn);

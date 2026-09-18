@@ -109,7 +109,7 @@ scripts/shot.mjs  development screenshots against the dev server
 `cartoonScale`, `probe`. `line` width, rough (wobble), passes, hierarchy (silhouettes heavier than
 interior lines), pressure, alpha. `hatch` spacing, angle, density. `water` layers, wobble, ring,
 granulation, tone. `paper` grain, wash, washSeed, washLife, washScale. `view` fov (0 = orthographic),
-fog, fogStart, light. `boilEvery` frames between re-jitters.
+fog, fogStart, light. `boilEvery` frames between re-jitters; `boilHold` drawings per re-jitter for scenes (2 keeps the motion on every drawing and the stroke jitter on every second one, which roughly halves a video's bitrate).
 
 The CLI's `--set path=value` addresses these by dotted path, e.g. `--set reps.surface=polymer --set
 line.width=2 --set palette.paper=#ffffff`.

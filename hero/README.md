@@ -17,8 +17,8 @@ SOFTWARE="" ./render.sh dark                  # on a machine with a GPU
 
 `render.sh` is the whole recipe: the scene file (the mechanism with the hero's camera and residue colours), the look
 (`dark-paper` or `chalkboard`, both in `looks/` and in the app, or `watercolour` with the site's palette for cream),
-the `--set` flags that remove text and, for the demo, the chemistry, and the ffmpeg lines that encode H.264 (every
-browser), VP9 (smaller, first choice) and the poster. `mockup.html` is the page with every variant behind a switch,
+the `--set` flags that remove text and, for the demo, the chemistry, and the ffmpeg lines that encode AV1, VP9 and
+H.264 and the poster. `mockup.html` is the page with every variant behind a switch,
 and a phone frame.
 
 ## On the page
@@ -28,10 +28,18 @@ contrast-[1.6] saturate-[1.65]`), which were tuned for that footage and would cr
 
 ```html
 <video loop playsinline muted autoplay preload="none" poster="/assets/hero_dark_poster.jpg" class="h-full w-full object-cover">
-  <source src="/assets/hero_dark.webm" type="video/webm">
+  <source src="/assets/hero_dark.av1.mp4" type="video/mp4; codecs=av01.0.08M.08">
+  <source src="/assets/hero_dark.webm" type="video/webm; codecs=vp09.00.40.08">
   <source src="/assets/hero_dark.mp4" type="video/mp4">
 </video>
 ```
+
+Three encodes of every loop, listed smallest first; a browser takes the first `type` it can play. AV1 is about a
+third the size of the H.264 file (Chrome, Firefox, Edge, Safari 17 on hardware with an AV1 decoder), VP9 about half
+(everything else current), H.264 is the fallback. Two other things keep the files small: the strokes re-jitter every
+second drawing while the atoms still move on every one (`boilHold=2`; `BOILHOLD=1 ./render.sh …` for the nervier
+boil), and the quality settings (AV1 crf 40, VP9 crf 38, H.264 crf 24) were chosen by looking at 1:1 crops of the
+strokes, which the site then shows under a darkening gradient.
 
 and in the CSS, `.hero-art video { object-position: 70% 40%; }` instead of `60% 40%`. The overlay gradient stays.
 
@@ -47,7 +55,7 @@ does it: give the video no sources, and
   const m = matchMedia('(max-width: 767px)').matches;          // the site's own phone breakpoint
   const f = m ? '/assets/hero_dark-mobile' : '/assets/hero_dark';
   v.poster = f + '_poster.jpg';
-  for (const [ext, type] of [['webm', 'video/webm'], ['mp4', 'video/mp4']]) {
+  for (const [ext, type] of [['av1.mp4', 'video/mp4; codecs=av01.0.08M.08'], ['webm', 'video/webm; codecs=vp09.00.40.08'], ['mp4', 'video/mp4']]) {
     const s = document.createElement('source'); s.src = f + '.' + ext; s.type = type; v.append(s);
   }
   v.load();

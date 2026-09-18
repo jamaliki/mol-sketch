@@ -12,6 +12,7 @@ name=${1:-dark}; here="$(cd "$(dirname "$0")" && pwd)"; out=${2:-$here/.frames/$
 NOTEXT="--set show.labels=false --set show.resLabels=false --set show.caption=false --set show.stepLabel=false"
 NOCHEM="--set show.arrows=false --set show.charges=false --set show.lonePairs=false"
 CHEM="--set show.arrows=true --set show.charges=true --set show.lonePairs=true --set annot=1.5 --set sphereScale=0.3"
+HOLD="--set boilHold=${BOILHOLD:-2}"   # strokes re-jitter every 2nd drawing (motion still every drawing): a third off the file size; BOILHOLD=1 for the nervier boil
 CREAM="--set palette.paper=#f2efe8 --set palette.ink=#0f172a --set palette.hatch=#0f172a --set palette.C=#57534e --set palette.N=#4f6fb5 --set palette.O=#ea580c --set palette.H=#faf9f5 --set palette.wash=#f97316 --set paper.wash=0.2"
 case "$name" in
   dark)              scene=$here/hero_dark.json;             look=dark-paper;  size=1920x1080; extra="$NOCHEM" ;;
@@ -23,9 +24,11 @@ case "$name" in
   calb-chalk-mobile) scene=$here/calb/calb_hero_mobile.json; look=chalkboard;  size=1080x1920; extra="$CHEM" ;;
   *) echo "unknown name $name"; exit 1 ;;
 esac
-node cli/render.mjs "$scene" --look "$look" $NOTEXT $extra --size "$size" --frames drawn --out "$out" $SOFTWARE
+node cli/render.mjs "$scene" --look "$look" $NOTEXT $HOLD $extra --size "$size" --frames drawn --out "$out" $SOFTWARE
 mkdir -p "$here/out"
-ffmpeg -y -loglevel error -framerate 12 -pattern_type glob -i "$out/frame_*.png" -c:v libx264 -preset slow -crf 20 -pix_fmt yuv420p -movflags +faststart "$here/out/hero_$name.mp4"
-ffmpeg -y -loglevel error -framerate 12 -pattern_type glob -i "$out/frame_*.png" -c:v libvpx-vp9 -b:v 0 -crf 33 -row-mt 1 -pix_fmt yuv420p "$here/out/hero_$name.webm"
-ffmpeg -y -loglevel error -i "$out/frame_0028.png" -q:v 3 "$here/out/hero_${name}_poster.jpg"
-echo "→ $here/out/hero_$name.{mp4,webm}, hero_${name}_poster.jpg"
+# three encodes, smallest first: AV1 (Chrome, Firefox, Edge, Safari 17+ on hardware with a decoder), VP9, H.264 for the rest
+ffmpeg -y -loglevel error -framerate 12 -pattern_type glob -i "$out/frame_*.png" -c:v libsvtav1 -crf 40 -preset 4 -svtav1-params tune=0 -pix_fmt yuv420p -movflags +faststart "$here/out/hero_$name.av1.mp4"
+ffmpeg -y -loglevel error -framerate 12 -pattern_type glob -i "$out/frame_*.png" -c:v libvpx-vp9 -b:v 0 -crf 38 -row-mt 1 -deadline good -cpu-used 1 -pix_fmt yuv420p "$here/out/hero_$name.webm"
+ffmpeg -y -loglevel error -framerate 12 -pattern_type glob -i "$out/frame_*.png" -c:v libx264 -preset slow -crf 24 -pix_fmt yuv420p -movflags +faststart "$here/out/hero_$name.mp4"
+ffmpeg -y -loglevel error -i "$out/frame_0028.png" -q:v 4 "$here/out/hero_${name}_poster.jpg"
+ls -la "$here/out/hero_$name".* | awk '{printf "%8.2f MB  %s\n", $5/1048576, $9}'

@@ -14,7 +14,7 @@ export function cfgFromStyle(style: Style, cam: { yaw: number; pitch: number; zo
   const D = classic().DEFAULT_CFG;
   const surfaceColor = style.surfaceColor === 'residue' ? 'carbon' : style.surfaceColor;
   return {
-    ...D, fps: 24, stepEvery: scene ? 2 : 1, boilEvery: scene ? 2 : 1, arrowLead: 0.2, pdbFrames: 2,
+    ...D, fps: 24, stepEvery: scene ? 2 : 1, boilEvery: (scene ? 2 : 1) * Math.max(1, Math.round(style.boilHold ?? 1)), arrowLead: 0.2, pdbFrames: 2,
     view: { yaw: cam.yaw, pitch: cam.pitch, zoom: cam.zoom, panX: cam.panX, panY: cam.panY, fov: cam.fov, fog: style.view.fog, fogStart: style.view.fogStart, spin: 0, pitchSwing: 0 },
     style: { ...D.style, rough: style.line.rough, passes: style.line.passes, pressure: style.line.pressure, fillWobble: style.fillWobble, hatchDensity: style.hatch.density, hierarchy: style.line.hierarchy,
       wash: style.paper.wash, washSeed: style.paper.washSeed, washLife: style.paper.washLife, inkWidth: style.line.width, hatchSpacing: style.hatch.spacing, hatchAngle: style.hatch.angle,
