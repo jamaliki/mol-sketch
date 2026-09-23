@@ -4,13 +4,13 @@ const server=http.createServer((req,res)=>{let p=decodeURIComponent(req.url.spli
 await new Promise(r=>server.listen(0,'127.0.0.1',r)); const port=server.address().port;
 const b=await chromium.launch({executablePath:process.env.CHROMIUM,args:['--use-gl=angle','--use-angle=swiftshader','--enable-unsafe-swiftshader']});
 const p=await b.newPage({viewport:{width:1300,height:900}}); const errs=[]; p.on('pageerror',e=>errs.push(e.message));
-await p.goto(`http://127.0.0.1:${port}/`); await p.waitForFunction(()=>window.TriadSketch&&window.TriadSketch.renderer.structure,null,{timeout:30000});
+await p.goto(`http://127.0.0.1:${port}/`); await p.waitForFunction(()=>window.MolSketch&&window.MolSketch.renderer.structure,null,{timeout:30000});
 const scene=fs.readFileSync(process.argv[2],'utf8');
-const out=await p.evaluate(async(t)=>{const T=window.TriadSketch;T.setLive(false);T.setSketch(false);await T.loadText(t,'s.json');T.setSize(1920,1080);
+const out=await p.evaluate(async(t)=>{const T=window.MolSketch;T.setLive(false);T.setSketch(false);await T.loadText(t,'s.json');T.setSize(1920,1080);
   const before=T.screenBox('all'); T.fitFrame({x0:0.57,y0:0.13,x1:0.92,y1:0.58},'all'); const after=T.screenBox('all');
   const cam=T.camera; const c1={zoom:cam.zoom,panX:cam.panX,panY:cam.panY};
   cam.roll=30; const rolled=T.screenBox('all'); T.fitFrame({x0:0.57,y0:0.13,x1:0.92,y1:0.58},'all'); const after2=T.screenBox('all');
   return {before,after,c1,rolled,after2,cmd:T.renderCommand()}},scene);
 console.log(JSON.stringify(out,null,1)); console.log('errors',errs);
-await p.evaluate(()=>{const T=window.TriadSketch;T.seek(28);T.classic(28)}); fs.writeFileSync('/tmp/hero/fit_roll30.png',Buffer.from((await p.evaluate(()=>window.TriadSketch.png())).split(',')[1],'base64'));
+await p.evaluate(()=>{const T=window.MolSketch;T.seek(28);T.classic(28)}); fs.writeFileSync('/tmp/hero/fit_roll30.png',Buffer.from((await p.evaluate(()=>window.MolSketch.png())).split(',')[1],'base64'));
 await b.close(); server.close();

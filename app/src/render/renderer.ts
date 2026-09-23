@@ -17,6 +17,8 @@ export class Renderer {
   camera = new Camera();
   structure: Structure | null = null;
   overrides: Record<string, string> = {};
+  /** figure labels the author placed: { text, at?: atom id, x?, y? (canvas fractions), dx, dy (px), size? } */
+  labels: { text: string; at?: string; x?: number; y?: number; dx: number; dy: number; size?: number }[] = [];
   /** centre of the fitted box (what is drawn); the sketch pass measures its pixel scale here */
   focus: [number, number, number] = [0, 0, 0];
   frameInfo: Frame | null = null;

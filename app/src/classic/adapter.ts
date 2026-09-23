@@ -28,7 +28,7 @@ export function cfgFromStyle(style: Style, cam: { yaw: number; pitch: number; ro
 
 /** A one-keyframe scene from a Structure, with the atom ids the old loader used (so seeds, and thus the drawing, match the page).
     Positions are rotated by `base` (the PCA orientation) so the engine's yaw/pitch act on the same frame as the app's camera. */
-export function sceneFromStructure(s: Structure, style: Style, overrides: Record<string, string>, base: Float32Array, fitPoints: Float32Array) {
+export function sceneFromStructure(s: Structure, style: Style, overrides: Record<string, string>, base: Float32Array, fitPoints: Float32Array, labels: any[] = []) {
   const rot = (x: number, y: number, z: number) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
   const atoms: Record<string, any> = {}; const ids: string[] = [];
   for (const res of s.residues) {
@@ -43,14 +43,14 @@ export function sceneFromStructure(s: Structure, style: Style, overrides: Record
   }
   const bonds: [string, string, number][] = []; for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], 1]);
   const fp = new Float32Array(fitPoints.length); for (let i = 0; i < fitPoints.length; i += 3) { const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]); fp[i] = r[0]; fp[i + 1] = r[1]; fp[i + 2] = r[2] }
-  return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, fitPoints: fp, keyframes: [{ name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }] };
+  return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: fp, keyframes: [{ name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }] };
 }
 
 /** Draw the current structure with the classic engine onto a 2D context of the renderer's pixel size. Returns ms. */
 export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style: Style, boil: number, dpr = 1): number {
   const t0 = performance.now(); const E = classic(); const s = R.structure; if (!s) return 0;
   E.cfg = cfgFromStyle(style, R.camera, false);
-  E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints);
+  E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels); (E.scene as any)._src = s;   // which structure it was built from
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, R.w, R.h); ctx.restore();
   E.renderFrame(ctx, R.w / dpr, R.h / dpr, boil, dpr);
   return performance.now() - t0;
@@ -60,7 +60,7 @@ export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style:
 export function renderScene(ctx: CanvasRenderingContext2D, R: Renderer, style: Style, doc: any, frame: number, dpr = 1): number {
   const t0 = performance.now(); const E = classic();
   E.cfg = cfgFromStyle(style, R.camera, true);
-  doc.reps = { ...style.reps }; doc.groupColors = { ...R.overrides };   // the style is the source of truth once loaded
+  doc.reps = { ...style.reps }; doc.groupColors = { ...R.overrides }; doc.labels = R.labels;   // the style is the source of truth once loaded
   if (E.scene !== doc) E.scene = doc;
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, R.w, R.h); ctx.restore();
   E.renderFrame(ctx, R.w / dpr, R.h / dpr, frame, dpr);

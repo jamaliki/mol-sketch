@@ -1,5 +1,5 @@
 {
-  "name": "triad-sketch",
+  "name": "molsketch",
   "version": "0.1.0",
   "description": "Hand-drawn molecular illustration renderer: sticks, cartoon and surface in pencil, ink and watercolour, from PDB/mmCIF or a keyframed scene.",
   "private": true,

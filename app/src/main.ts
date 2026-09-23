@@ -1,4 +1,4 @@
-/* App entry: renderer + orbit controls + panel. Also exposes window.TriadSketch for scripts and the CLI. */
+/* App entry: renderer + orbit controls + panel. Also exposes window.MolSketch for scripts and the CLI. */
 import { Renderer } from './render/renderer';
 import { parseStructure } from './model/parse';
 import { DEFAULT_STYLE, PALETTES, cloneStyle, mergeStyle, type Style } from './style';
@@ -58,7 +58,7 @@ let lintItems: LintItem[] = [];
 function relint() { lintItems = sceneDoc ? lintScene(sceneDoc) : []; panel.refreshChecks?.() }
 function loadScene(doc: SceneDoc, name: string) {
   sceneDoc = doc; const E = classic(); E.scene = doc; frame = 0; playing = false; pendingTail = null;
-  if (doc.reps) style.reps = { ...doc.reps }; R.overrides = { ...(doc.groupColors || {}) };
+  if (doc.reps) style.reps = { ...doc.reps }; R.overrides = { ...(doc.groupColors || {}) }; R.labels = (doc.labels || []).map((l: any) => ({ ...l })); selLabel = -1;
   if (doc.view) { const v = doc.view; R.camera.yaw = v.yaw ?? 0; R.camera.pitch = v.pitch ?? 0; R.camera.roll = v.roll ?? 0; R.camera.zoom = v.zoom ?? 1; R.camera.panX = v.panX ?? 0; R.camera.panY = v.panY ?? 0; if (v.fov !== undefined) { R.camera.fov = v.fov; style.view.fov = v.fov } if (v.fog !== undefined) style.view.fog = v.fog; if (v.fogStart !== undefined) style.view.fogStart = v.fogStart }
   R.camera.base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   R.fitOverride = sceneFitPoints(doc); R.camera.capFrac = style.show.caption ? 0.13 : 0; R.camera.topFrac = style.show.stepLabel ? 0.05 : 0;
@@ -80,7 +80,7 @@ function loadStack(files: { name: string; text: string }[]) {
 function sceneJson(): string {
   const doc: any = sceneDoc ? { ...sceneDoc } : (R.structure ? sceneFromStructure(R.structure, style, R.overrides, R.camera.base, new Float32Array(0)) : null);
   if (!doc) return '{}';
-  doc.reps = { ...style.reps }; doc.groupColors = { ...R.overrides }; delete doc.fitPoints;
+  doc.reps = { ...style.reps }; doc.groupColors = { ...R.overrides }; doc.labels = R.labels.map(l => ({ ...l })); delete doc.fitPoints;
   doc.view = { yaw: R.camera.yaw, pitch: R.camera.pitch, roll: R.camera.roll, zoom: R.camera.zoom, panX: R.camera.panX, panY: R.camera.panY, fov: R.camera.fov, fog: style.view.fog, fogStart: style.view.fogStart };
   return JSON.stringify(doc, null, 1);
 }
@@ -110,9 +110,9 @@ function redraw() { margins(); invalidate(); save() }
 
 /* undo: snapshots of style, camera, colour overrides and (for keyframe edits) the keyframes */
 const history = new History(
-  (withScene): Snapshot => ({ label: '', at: performance.now(), style: JSON.stringify(style), cam: [R.camera.yaw, R.camera.pitch, R.camera.roll, R.camera.zoom, R.camera.panX, R.camera.panY, R.camera.fov], overrides: JSON.stringify(R.overrides), keyframes: withScene && sceneDoc ? JSON.stringify(sceneDoc.keyframes) : null, frame }),
+  (withScene): Snapshot => ({ label: '', at: performance.now(), style: JSON.stringify(style), cam: [R.camera.yaw, R.camera.pitch, R.camera.roll, R.camera.zoom, R.camera.panX, R.camera.panY, R.camera.fov], overrides: JSON.stringify(R.overrides), labels: JSON.stringify(R.labels), keyframes: withScene && sceneDoc ? JSON.stringify(sceneDoc.keyframes) : null, frame }),
   (s) => {
-    style = mergeStyle(DEFAULT_STYLE, JSON.parse(s.style)); const c = s.cam; R.camera.yaw = c[0]; R.camera.pitch = c[1]; R.camera.roll = c[2]; R.camera.zoom = c[3]; R.camera.panX = c[4]; R.camera.panY = c[5]; R.camera.fov = c[6]; R.overrides = JSON.parse(s.overrides);
+    style = mergeStyle(DEFAULT_STYLE, JSON.parse(s.style)); const c = s.cam; R.camera.yaw = c[0]; R.camera.pitch = c[1]; R.camera.roll = c[2]; R.camera.zoom = c[3]; R.camera.panX = c[4]; R.camera.panY = c[5]; R.camera.fov = c[6]; R.overrides = JSON.parse(s.overrides); R.labels = JSON.parse(s.labels || '[]'); selLabel = -1; closeLabelEditor(false);
     if (s.keyframes && sceneDoc) { sceneDoc.keyframes = JSON.parse(s.keyframes); classic().scene = sceneDoc; R.fitOverride = sceneFitPoints(sceneDoc); relint() }
     pendingTail = null; panel.refresh(); rebuild(); if (sceneDoc) setFrame(s.keyframes ? s.frame : frame);
   },
@@ -142,7 +142,7 @@ let loadSeq = 0;   // every load bumps it; the start-up example only lands if no
 async function loadText(text: string, name: string) {
   loadSeq++; const t0 = performance.now();
   if (/\.json$/i.test(name) || /^\s*\{/.test(text)) { loadScene(JSON.parse(text), name.replace(/\.json$/i, '')); return }
-  sceneDoc = null; R.fitOverride = null; R.camera.capFrac = 0; R.camera.topFrac = 0; R.overrides = {}; lintItems = []; history.clear();
+  sceneDoc = null; R.fitOverride = null; R.camera.capFrac = 0; R.camera.topFrac = 0; R.overrides = {}; R.labels = []; selLabel = -1; lintItems = []; history.clear();
   const s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, ''));
   R.setStructure(s); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.roll = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0;
   const hasPoly = s.residues.some(r => !r.het);
@@ -190,9 +190,11 @@ function showGuides(box: FrameBox | null) {
   g.style.display = 'block'; g.style.left = (cl + box.x0 * cw) + 'px'; g.style.top = (ct + box.y0 * ch) + 'px'; g.style.width = (box.x1 - box.x0) * cw + 'px'; g.style.height = (box.y1 - box.y0) * ch + 'px';
 }
 /** The command that renders what is on screen, for the terminal: the scene and style go out as files first. */
+/** the name the saved files take: scene JSON, style, render command */
+function docName() { return (sceneDoc?.name || R.structure?.name || 'scene').replace(/[^\w.-]+/g, '_') }
 function renderCommand(): string {
-  const name = (sceneDoc?.name || R.structure?.name || 'scene').replace(/[^\w.-]+/g, '_');
-  const input = sceneDoc ? name + '.json' : (R.structure?.name || 'structure') + '.pdb';
+  const name = docName(); const asScene = !!sceneDoc || R.labels.length > 0;   // placed labels travel in the scene JSON
+  const input = asScene ? name + '.json' : (R.structure?.name || 'structure') + '.pdb';
   const cam = sceneDoc ? '' : ` --yaw ${R.camera.yaw.toFixed(1)} --pitch ${R.camera.pitch.toFixed(1)} --roll ${R.camera.roll.toFixed(1)} --zoom ${R.camera.zoom.toFixed(3)} --pan ${R.camera.panX.toFixed(3)},${R.camera.panY.toFixed(3)} --fov ${R.camera.fov}`;
   const size = renderSize ? `${renderSize[0]}x${renderSize[1]}` : `${R.w}x${R.h}`;
   return `node cli/render.mjs ${input} --style ${name}-style.json${cam} --size ${size} --frames ${sceneDoc ? 'drawn' : 1} --out out_${name}`;
@@ -248,6 +250,7 @@ let showChanges = false; let hoverChanges = false; let diffNote = '';
 function projectNow() { const E = classic(); E.cfg = cfgFromStyle(style, R.camera, true); return E.projectFrame(R.w / dpr, R.h / dpr, frame) }
 function drawOverlay() {
   ovCanvas.width = R.w; ovCanvas.height = R.h; ovCtx.clearRect(0, 0, R.w, R.h);
+  drawLabelMarks();
   if (!sceneDoc) return;
   const want = showChanges || hoverChanges || pendingTail || authorMode !== 'off';
   if (!(showChanges || hoverChanges)) diffNote = '';
@@ -307,6 +310,108 @@ function editArrow(j: number, what: 'flip' | 'delete' | 'bulge', v?: number) {
   canvas.addEventListener('pointerleave', () => { if (hoverHit) { hoverHit = null; drawOverlay() } });
 }
 
+
+/* ---------- figure labels: click to place (on an atom it follows the atom), drag to move, double-click to edit ---------- */
+let labelMode = false; let selLabel = -1; let hoverLabel = -1;
+let editor: { input: HTMLInputElement; i: number; isNew: boolean } | null = null;
+type LBox = ReturnType<ReturnType<typeof classic>['figLabelBoxes']>[number];
+/** the engine's scene for what is loaded, with the current labels (a structure's is rebuilt only when the structure changes) */
+function structScene(E: ReturnType<typeof classic>) {
+  if (sceneDoc) { E.scene = sceneDoc; sceneDoc.labels = R.labels; return }
+  if ((E.scene as any)?._src !== R.structure) { E.scene = sceneFromStructure(R.structure!, style, R.overrides, R.camera.base, R.fitPoints, R.labels); (E.scene as any)._src = R.structure }
+  (E.scene as any).labels = R.labels; E.scene.reps = { ...style.reps };
+}
+/** the labels' boxes as drawn now (canvas px) */
+function labelBoxes(): LBox[] {
+  if (!R.labels.length || !R.structure) return [];
+  const E = classic(); E.cfg = cfgFromStyle(style, R.camera, !!sceneDoc);
+  structScene(E);
+  if (style.show.noLabels || style.show.figLabels === false) return [];
+  return E.figLabelBoxes(R.w / dpr, R.h / dpr, frame);
+}
+function labelAt(x: number, y: number): number { const bs = labelBoxes(); for (let k = bs.length - 1; k >= 0; k--) { const b = bs[k]; if (Math.abs(x - b.x) <= b.w / 2 + 5 && Math.abs(y - b.y) <= b.h / 2 + 3) return b.i } return -1 }
+function drawLabelMarks() {
+  if (selLabel < 0 && hoverLabel < 0) return; const bs = labelBoxes();
+  ovCtx.save(); ovCtx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  for (const b of bs) { if (b.i !== selLabel && b.i !== hoverLabel) continue; if (editor && editor.i === b.i) continue;
+    ovCtx.strokeStyle = b.i === selLabel ? '#f97316' : 'rgba(249,115,22,.6)'; ovCtx.lineWidth = 1.2; ovCtx.setLineDash(b.i === selLabel ? [] : [3, 3]);
+    ovCtx.strokeRect(b.x - b.w / 2 - 5, b.y - b.h / 2 - 3, b.w + 10, b.h + 6);
+    if (b.anchored) { ovCtx.setLineDash([]); ovCtx.beginPath(); ovCtx.arc(b.ax, b.ay, 3, 0, Math.PI * 2); ovCtx.fillStyle = '#f97316'; ovCtx.fill() } }
+  ovCtx.restore();
+}
+function labelWhere(l: { at?: string }): string { if (!l.at) return 'on the canvas'; const m = /^([A-Za-z0-9]+?)(-?\d+)(?:\.(\w+))?:(.+)$/.exec(l.at); return m ? `${m[1]}${m[2]}${m[3] ? ' ' + m[3] : ''} · ${m[4]}` : l.at }
+function labelsChanged(msg?: string) { if (sceneDoc) sceneDoc.labels = R.labels; invalidate(); panel.refresh(); if (msg) status(msg) }
+function setLabelText(i: number, t: string) { const l = R.labels[i]; if (!l) return; if (!t.trim()) { deleteLabel(i); return } mark('label text'); l.text = t; labelsChanged() }
+function setLabelSize(i: number, v: number) { const l = R.labels[i]; if (!l) return; mark('label size'); l.size = v; labelsChanged() }
+function deleteLabel(i: number) { if (!R.labels[i]) return; mark('delete label'); R.labels.splice(i, 1); selLabel = -1; hoverLabel = -1; labelsChanged('label deleted · Ctrl-Z brings it back') }
+function clearLabels() { if (!R.labels.length) return; mark('remove all labels'); R.labels = []; selLabel = -1; labelsChanged('all placed labels removed · Ctrl-Z brings them back') }
+function setLabelMode(v: boolean) { labelMode = v; if (v && authorMode !== 'off') setAuthorMode('off'); stage.classList.toggle('labeling', v); panel.refresh(); if (v) status('click the drawing where the label goes: on an atom it follows the atom (Esc to stop)') }
+/** where a click puts a new label: a drawn atom, else the residue's Cα under a ribbon, else the canvas itself */
+function labelAnchor(x: number, y: number): { at?: string; x?: number; y?: number; text: string } {
+  const E = classic(); E.cfg = cfgFromStyle(style, R.camera, !!sceneDoc); structScene(E);
+  const { st, proj } = E.projectFrame(R.w / dpr, R.h / dpr, frame); const reps = style.reps;
+  const selS = E.compileSel(reps.sticks || ''), selC = E.compileSel(reps.cartoon || '');
+  let best: any = null, bd = Infinity;
+  for (const a of st.atoms) { if (a.alpha < 0.3) continue; const drawn = selS(a); const ca = a.name === 'CA' && !a.het && selC(a); if (!drawn && !ca) continue;
+    const p = proj.proj(a.pos); const r = drawn ? Math.max(9, style.stickRadius * 2 * proj.pxPerA * p.d) : Math.max(14, 1.8 * proj.pxPerA * p.d * style.cartoonScale);
+    const d = Math.hypot(p.x - x, p.y - y); if (d < r && d - (drawn ? 4 : 0) < bd) { bd = d - (drawn ? 4 : 0); best = a } }
+  if (!best) return { x: x / (R.w / dpr), y: y / (R.h / dpr), text: 'label' };
+  const name = best.label && !best.labelAuto ? best.label : best.resn ? `${best.resn[0]}${best.resn.slice(1).toLowerCase()}${best.resi}` : best.label || best.el;
+  return { at: best.id, text: name };
+}
+function placeLabel(x: number, y: number, keep: boolean) {
+  const an = labelAnchor(x, y); mark('add label');
+  const l: any = an.at ? { text: an.text, at: an.at, dx: 0, dy: -Math.round(style.labelSize * 1.2) } : { text: an.text, x: an.x, y: an.y, dx: 0, dy: 0 };
+  R.labels.push(l); selLabel = R.labels.length - 1; if (!keep) setLabelMode(false); labelsChanged(); openLabelEditor(selLabel, true);
+}
+function openLabelEditor(i: number, isNew = false) {
+  closeLabelEditor(true); const b = labelBoxes().find(b => b.i === i); const l = R.labels[i]; if (!l) return;
+  const input = document.createElement('input'); input.className = 'lbl-edit'; input.value = l.text; input.spellcheck = false;
+  const cr = canvas.getBoundingClientRect(), sr = stage.getBoundingClientRect(); const fs = Math.round(style.labelSize * (l.size || 1));
+  const bx = b ? b.x : 0, by = b ? b.y : 0; input.style.left = (cr.left - sr.left + bx) + 'px'; input.style.top = (cr.top - sr.top + by) + 'px'; input.style.fontSize = fs + 'px';
+  input.style.fontFamily = style.font === 'Plain sans' ? '"IBM Plex Sans", system-ui, sans-serif' : `"${style.font}", "Caveat", cursive`;
+  const size = () => { input.style.width = Math.max(60, (input.value.length + 2) * fs * 0.55) + 'px' }; size(); input.oninput = size;
+  input.onkeydown = e => { e.stopPropagation(); if (e.key === 'Enter') closeLabelEditor(true); else if (e.key === 'Escape') closeLabelEditor(false) };
+  input.onblur = () => closeLabelEditor(true);
+  editor = { input, i, isNew }; stage.append(input); input.focus(); input.select(); drawOverlay();
+}
+function closeLabelEditor(commit: boolean) {
+  if (!editor) return; const { input, i, isNew } = editor; editor = null; input.onblur = null; input.remove();
+  const l = R.labels[i]; if (!l) return;
+  if (commit && input.value.trim()) { if (input.value !== l.text) { if (!isNew) mark('label text'); l.text = input.value } labelsChanged() }
+  else if (isNew || !input.value.trim()) { R.labels.splice(i, 1); selLabel = -1; labelsChanged() }
+  else drawOverlay();
+}
+{ // labels take the pointer before the orbit controls do: a drag on a label moves the label, not the molecule
+  let drag: { i: number; x0: number; y0: number; l0: any; moved: boolean } | null = null; let down: { x: number; y: number } | null = null;
+  const at = (e: PointerEvent | MouseEvent) => { const r = canvas.getBoundingClientRect(); return [e.clientX - r.left, e.clientY - r.top] };
+  stage.addEventListener('pointerdown', e => {
+    if (e.target !== canvas || e.button !== 0) return; const [x, y] = at(e); down = { x: e.clientX, y: e.clientY };
+    const i = labelAt(x, y); if (i < 0) { if (selLabel >= 0) { selLabel = -1; drawOverlay() } return }
+    e.stopPropagation(); e.preventDefault(); selLabel = i; drag = { i, x0: e.clientX, y0: e.clientY, l0: { ...R.labels[i] }, moved: false }; stage.setPointerCapture(e.pointerId); drawOverlay();
+  }, true);
+  stage.addEventListener('pointermove', e => {
+    if (drag) { const l = R.labels[drag.i]; if (!l) return; const ddx = e.clientX - drag.x0, ddy = e.clientY - drag.y0; if (!drag.moved && Math.hypot(ddx, ddy) < 3) return;
+      if (!drag.moved) { mark('move label'); drag.moved = true }
+      if (l.at) { l.dx = drag.l0.dx + ddx; l.dy = drag.l0.dy + ddy } else { l.x = drag.l0.x + ddx / (R.w / dpr); l.y = drag.l0.y + ddy / (R.h / dpr) }
+      labelsChanged(); return }
+    if (e.target !== canvas || controls.dragging || !R.labels.length) return; const [x, y] = at(e); const h = labelAt(x, y);
+    stage.classList.toggle('onlabel', h >= 0); if (h !== hoverLabel) { hoverLabel = h; drawOverlay() }
+  }, true);
+  stage.addEventListener('pointerup', e => {
+    if (drag) { const d = drag; drag = null; stage.releasePointerCapture(e.pointerId); if (d.moved) history.settle(); e.stopPropagation(); return }
+    if (labelMode && down && e.target === canvas && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 4) { const [x, y] = at(e); placeLabel(x, y, e.shiftKey) }
+    down = null;
+  }, true);
+  stage.addEventListener('dblclick', e => { const [x, y] = at(e); const i = labelAt(x, y); if (i >= 0) { e.stopPropagation(); openLabelEditor(i) } }, true);
+  stage.addEventListener('contextmenu', e => { const [x, y] = at(e); const i = labelAt(x, y); if (i >= 0) { e.preventDefault(); e.stopPropagation(); deleteLabel(i) } }, true);
+  window.addEventListener('keydown', e => { const t = (e.target as HTMLElement)?.tagName; if (t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT' || e.ctrlKey || e.metaKey) return;
+    if ((e.key === 'Delete' || e.key === 'Backspace') && selLabel >= 0) { e.preventDefault(); deleteLabel(selLabel) }
+    else if (e.key === 'Enter' && selLabel >= 0) { e.preventDefault(); openLabelEditor(selLabel) }
+    else if (e.key === 'Escape' && labelMode) setLabelMode(false)
+    else if (e.key === 'l' || e.key === 'L') setLabelMode(!labelMode) });
+}
+
 /* ---------- suggest views ---------- */
 async function suggest(onProgress: (msg: string) => void): Promise<ViewSuggestion[]> {
   if (!sceneDoc) return [];
@@ -336,13 +441,13 @@ function drawFrameTo(ctx: CanvasRenderingContext2D, W: number, H: number, f: num
   const E = classic(); const drawn = Math.floor(f / 2) * 2;
   let cam: any = { ...camOf(), fov: R.camera.fov };
   if (sceneDoc && sceneDoc.keyframes.some(k => k.view)) { E.cfg = cfgFromStyle(style, cam, true); const v = E.viewAt(drawn); if (v) cam = { ...v, fov: R.camera.fov } }
-  E.cfg = cfgFromStyle(style, cam, !!sceneDoc); if (sceneDoc) { if (E.scene !== sceneDoc) E.scene = sceneDoc } else E.scene = sceneFromStructure(R.structure!, style, R.overrides, R.camera.base, R.fitPoints);
+  E.cfg = cfgFromStyle(style, cam, !!sceneDoc); if (sceneDoc) { if (E.scene !== sceneDoc) E.scene = sceneDoc } else E.scene = sceneFromStructure(R.structure!, style, R.overrides, R.camera.base, R.fitPoints, R.labels);
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.restore();
   E.renderFrame(ctx, W, H, f, 1);
 }
 async function renderToFile(o: { width: number; height: number; codec: CodecName; quality: Quality; onProgress: (done: number, total: number, bytes: number, eta: number) => void }): Promise<{ name: string; bytes: number; seconds: number; codecString: string }> {
   const frames: number[] = []; if (sceneDoc) { for (let f = 0; f < timeline().total; f += 2) frames.push(f) } else for (let f = 0; f < 24; f += 2) frames.push(f);
-  const name = (sceneDoc?.name || R.structure?.name || 'triad-sketch').replace(/[^\w.-]+/g, '_'); renderCancel = false; const t0 = performance.now();
+  const name = (sceneDoc?.name || R.structure?.name || 'molsketch').replace(/[^\w.-]+/g, '_'); renderCancel = false; const t0 = performance.now();
   const wasLive = live; live = false; sketchOn = false;   // no on-screen sketches while the engine is busy with the file
   try {
     const res = await renderVideo({ width: o.width, height: o.height, fps: FPS / 2, codec: o.codec, quality: o.quality, frames, draw: drawFrameTo, cancelled: () => renderCancel, onProgress: (d, n, b) => { const el = (performance.now() - t0) / 1000; o.onProgress(d, n, b, d ? el / d * (n - d) : 0) } });
@@ -352,7 +457,7 @@ async function renderToFile(o: { width: number; height: number; codec: CodecName
 }
 function savePoster(width: number, height: number, f = frame, type: 'image/jpeg' | 'image/png' = 'image/jpeg') {
   const c = document.createElement('canvas'); c.width = width; c.height = height; const ctx = c.getContext('2d', { willReadFrequently: true })!; drawFrameTo(ctx, width, height, f);
-  const name = (sceneDoc?.name || R.structure?.name || 'triad-sketch').replace(/[^\w.-]+/g, '_');
+  const name = (sceneDoc?.name || R.structure?.name || 'molsketch').replace(/[^\w.-]+/g, '_');
   const a = document.createElement('a'); a.href = c.toDataURL(type, 0.86); a.download = `${name}_${sceneDoc ? 'frame' + f : 'poster'}.${type === 'image/png' ? 'png' : 'jpg'}`; a.click();
   classic().cfg = cfgFromStyle(style, R.camera, !!sceneDoc); if (sceneDoc) classic().scene = sceneDoc; invalidate();
 }
@@ -372,13 +477,15 @@ const panel = buildPanel(document.getElementById('controls')!, {
   onLive: v => { live = v; invalidate() }, onTurntable: v => { turntable = v; invalidate() }, onPitchSwing: v => { pitchSwing = v },
   onRest: (v: string) => { restMode = v as RestMode; sketchOn = v !== 'preview'; invalidate() },
   renderNow: () => { R.render(style); runSketch('classic'); hud.textContent = `classic ${sketchStats.drawMs.toFixed(0)} ms · ${R.w}×${R.h}` },
-  savePng: () => { const a = document.createElement('a'); a.href = snapshot(); a.download = `${R.structure?.name || 'triad-sketch'}.png`; a.click() },
-  saveStyle: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(style, null, 1)); a.download = 'triad-sketch-style.json'; a.click() },
+  savePng: () => { const a = document.createElement('a'); a.href = snapshot(); a.download = `${sceneDoc?.name || R.structure?.name || 'molsketch'}.png`; a.click() },
+  saveStyle: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(style, null, 1)); a.download = `${docName()}-style.json`; a.click() },
   loadStyle: async (f: File) => { mark('load style'); style = mergeStyle(DEFAULT_STYLE, JSON.parse(await f.text())); panel.refresh(); rebuild() },
   loadFile: async (f: File) => { await loadText(await f.text(), f.name) }, loadFiles,
-  saveScene: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(sceneJson()); a.download = (sceneDoc?.name || R.structure?.name || 'scene') + '.json'; a.click() },
+  saveScene: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(sceneJson()); a.download = docName() + '.json'; a.click() },
   loadExample: (name: string) => loadUrl('examples/' + name).catch(e => status(e.message)),
   fetchPdb,
+  figLabels: () => R.labels.map((l, i) => ({ i, text: l.text, where: labelWhere(l), size: l.size || 1 })), setLabelText, setLabelSize, deleteLabel, clearLabels,
+  setLabelMode: (v: boolean) => setLabelMode(v), labelMode: () => labelMode,
   play: (v: boolean) => { playing = v }, isPlaying: () => playing, seek: (f: number) => { playing = false; setFrame(f) }, step: (d: number) => { playing = false; setFrame(frame + d) },
   reset: () => { mark('reset style'); style = cloneStyle(DEFAULT_STYLE); panel.refresh(); rebuild() },
   setDpr: (v: number) => { dpr = v; fit() },
@@ -431,7 +538,7 @@ fit(); requestAnimationFrame(loop);
 { const seq = loadSeq; fetch('examples/test_protein.pdb').then(r => r.text()).then(t => { if (loadSeq === seq) loadText(t, 'test_protein.pdb') }).catch(e => status(e.message)) }
 
 /* scripting hook (used by the CLI and tests) */
-(window as any).TriadSketch = {
+const api = {
   get style() { return style }, set style(v: Style) { style = mergeStyle(DEFAULT_STYLE, v); panel.refresh(); rebuild() },
   applyLook, loadText, loadUrl, fetchPdb, render: () => { R.render(style); return R.stats.frameMs }, renderer: R, camera: R.camera,
   setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
@@ -443,3 +550,5 @@ fit(); requestAnimationFrame(loop);
   fitFrame, screenBox: (what: 'all' | 'frame' = 'all') => R.camera.screenBox(R.w, R.h, framePoints(what)), framePresets: FRAME_PRESETS, renderCommand,
   history, lint: () => lintItems, suggest, adoptView, renderToFile, drawFrameTo, keyframes, setKeyView, setKeyTiming, duplicateKey, deleteKey, moveKey, setAuthorMode, authorClick, arrowsOf, editArrow, keyDiff: (i: number) => sceneDoc ? keyDiff(sceneDoc, i) : null, setPreviewAspect, projectNow,
 };
+(window as any).MolSketch = api; (window as any).TriadSketch = api;   // the old name, for scripts written before the rename
+

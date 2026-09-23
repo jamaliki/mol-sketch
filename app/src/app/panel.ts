@@ -15,7 +15,10 @@ export interface PanelHost {
   camera: Camera;
   onLive: (v: boolean) => void; onTurntable: (v: number) => void; onPitchSwing: (v: number) => void; onRest: (v: string) => void; renderNow: () => void;
   play: (v: boolean) => void; isPlaying: () => boolean; seek: (f: number) => void; step: (d: number) => void;
-  savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadFiles: (f: File[]) => void; saveScene: () => void; loadExample: (n: string) => void; fetchPdb: (id: string) => Promise<void>; reset: () => void;
+  savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadFiles: (f: File[]) => void; saveScene: () => void; loadExample: (n: string) => void; fetchPdb: (id: string) => Promise<void>;
+  /* figure labels */
+  figLabels: () => { i: number; text: string; where: string; size: number }[]; setLabelText: (i: number, t: string) => void; setLabelSize: (i: number, v: number) => void;
+  deleteLabel: (i: number) => void; clearLabels: () => void; setLabelMode: (v: boolean) => void; labelMode: () => boolean; reset: () => void;
   setDpr: (v: number) => void;
   palettes: Record<string, Palette>;
   framePresets: Record<string, { box: { x0: number; y0: number; x1: number; y1: number }; note: string; size: [number, number] }>;
@@ -147,6 +150,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
 
   const Look = tab('look', 'Look', 'the drawing style: looks, what is drawn, fills and lines');
   const Col = tab('colour', 'Colour', 'palettes, colour schemes and every colour');
+  const Lab = tab('labels', 'Labels', 'labels you place, and which of the automatic ones show');
   const View = tab('view', 'View', 'camera, depth, framing and motion');
   const Scn = tab('scene', 'Scene', 'keyframes, arrows and checks of a mechanism scene');
   const Exp = tab('export', 'Export', 'pictures, video, files and the render command');
@@ -168,7 +172,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   const toastErr = (m: string) => { const t = document.getElementById('toast'); if (!t) return; t.textContent = m; t.classList.add('on', 'err'); setTimeout(() => t.classList.remove('on', 'err'), 5000) };
   const undoB = el('button', { class: 'icon', onclick: H.undo, title: 'Undo (Ctrl-Z)', 'aria-label': 'undo' }, svg('M5.5 3 2.5 6l3 3M2.5 6H10a3.5 3.5 0 0 1 0 7H7')) as HTMLButtonElement, redoB = el('button', { class: 'icon', onclick: H.redo, title: 'Redo (Ctrl-Shift-Z)', 'aria-label': 'redo' }, svg('M10.5 3l3 3-3 3M13.5 6H6a3.5 3.5 0 0 0 0 7h3')) as HTMLButtonElement;
   const helpB = el('button', { class: 'icon', title: 'Mouse and keyboard (?)', 'aria-label': 'help', onclick: () => toggleHelp() }, '?');
-  top.append(el('div', { class: 'brand' }, 'Triad Sketch'),
+  top.append(el('div', { class: 'brand' }, 'MolSketch'),
     el('button', { class: 'primary', title: 'PDB, mmCIF or a scene JSON; several structure files become an animation, one keyframe each. You can also drop files on the drawing.', onclick: () => fileIn.click() }, 'Open…'), fileIn, ex, pdbForm,
     el('div', { id: 'fileinfo', class: 'fileinfo' }), el('div', { class: 'spacer' }),
     el('div', { class: 'cluster' }, undoB, redoB), el('span', { class: 'sep' }),
@@ -181,7 +185,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   const stage = document.getElementById('stage');
   const help = el('div', { class: 'help', role: 'dialog', 'aria-label': 'mouse and keyboard' },
     el('b', {}, 'Mouse and keyboard'),
-    ...([['drag', 'rotate'], ['shift-drag · right-drag', 'pan'], ['wheel', 'zoom'], ['arrow keys', 'nudge the view'], ['r', 'reset the view'], ['Ctrl-Z · Ctrl-Shift-Z', 'undo · redo'], ['/', 'find a setting'], ['space · , · .', 'play · step back · step on (scenes)'], ['drop files', 'open a structure or scene; several make an animation']] as [string, string][]).map(([k, v]) => el('div', { class: 'kv' }, el('kbd', {}, k), el('span', {}, v))),
+    ...([['drag', 'rotate'], ['shift-drag · right-drag', 'pan'], ['wheel', 'zoom'], ['arrow keys', 'nudge the view'], ['r', 'reset the view'], ['Ctrl-Z · Ctrl-Shift-Z', 'undo · redo'], ['/', 'find a setting'], ['L', 'add a label; drag one to move it, double-click to edit, Delete to remove'], ['space · , · .', 'play · step back · step on (scenes)'], ['drop files', 'open a structure or scene; several make an animation']] as [string, string][]).map(([k, v]) => el('div', { class: 'kv' }, el('kbd', {}, k), el('span', {}, v))),
     el('button', { onclick: () => toggleHelp(false) }, 'Close'));
   stage?.append(help);
   const toggleHelp = (v?: boolean) => { help.classList.toggle('on', v ?? !help.classList.contains('on')) };
@@ -221,7 +225,6 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     control(g, { t: 'range', label: 'line weight', path: 'engrave.width', min: 0.1, max: 2, step: 0.05, when: engraved });
     control(g, { t: 'range', label: 'strand thickness', path: 'engrave.strandThickness', min: 0, max: 1.2, step: 0.05, when: engraved });
     control(g, { t: 'range', label: 'coil width', path: 'engrave.coilWidth', min: 0.5, max: 2.5, step: 0.05, when: engraved });
-    control(g, { t: 'check', label: 'α/β labels', path: 'engrave.labels', when: engraved });
   }
   {
     const g = group(Look, 'Surface', { keys: 'probe' }); showWhen(g, surfaceOn);
@@ -235,11 +238,10 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     control(g, { t: 'range', label: 'fill wobble', path: 'fillWobble', min: 0, max: 2, step: 0.05, when: () => !fillIs('ink', 'ink colour') });
   }
   {
-    const g = group(Look, 'Labels & marks', { open: false, keys: 'annotations hydrogens lone pairs charges arrows caption font' });
-    for (const [k, label] of [['labels', 'labels'], ['resLabels', 'residue labels'], ['arrows', 'arrows'], ['H', 'hydrogens'], ['lonePairs', 'lone pairs'], ['charges', 'charges'], ['hbonds', 'H-bonds'], ['valence', 'valence'], ['caption', 'caption'], ['stepLabel', 'step label']]) control(g, { t: 'check', label, path: 'show.' + k });
-    control(g, { t: 'select', label: 'font', path: 'font', options: ['Caveat', 'Patrick Hand', 'Kalam', 'Plain sans'] });
-    control(g, { t: 'range', label: 'label size', path: 'labelSize', min: 10, max: 40, step: 1 });
+    const g = group(Look, 'Marks', { open: false, keys: 'annotations hydrogens lone pairs charges arrows caption' });
+    for (const [k, label] of [['arrows', 'arrows'], ['H', 'hydrogens'], ['lonePairs', 'lone pairs'], ['charges', 'charges'], ['hbonds', 'H-bonds'], ['valence', 'valence'], ['caption', 'caption'], ['stepLabel', 'step label']]) control(g, { t: 'check', label, path: 'show.' + k });
     control(g, { t: 'range', label: 'caption size', path: 'captionSize', min: 12, max: 48, step: 1 });
+    g.append(note('Labels have their own tab.'));
   }
   {
     const g = group(Look, 'Lines', { open: false, keys: 'ink pen stroke roughness width' });
@@ -303,8 +305,8 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     const tiles: HTMLElement[] = []; let kept: { name: string; colors: string[] | null; ss: string[] } | null = null;
     const SS = ['helix', 'sheet', 'loop'] as const;
     const getSS = () => SS.map(k => H.style.palette[k]); const setSS = (v: string[]) => SS.forEach((k, i) => { H.style.palette[k] = v[i] });
-    const applyPal = (name: string, colors: string[]) => { H.style.groupPalette = name === 'Triad' ? null : colors.slice(); H.style.groupPaletteName = name;
-      if (H.style.cartoonStyle === 'engraved') { const base = H.looks[H.currentLook()]?.style.palette; if (name !== 'Triad') setSS(ribbonColours(colors, H.style.palette.paper, H.style.palette.ink)); else if (base) setSS(SS.map(k => base[k] ?? H.style.palette[k])) }
+    const applyPal = (name: string, colors: string[]) => { H.style.groupPalette = name === 'MolSketch' ? null : colors.slice(); H.style.groupPaletteName = name;
+      if (H.style.cartoonStyle === 'engraved') { const base = H.looks[H.currentLook()]?.style.palette; if (name !== 'MolSketch') setSS(ribbonColours(colors, H.style.palette.paper, H.style.palette.ink)); else if (base) setSS(SS.map(k => base[k] ?? H.style.palette[k])) }
       H.rebuild() };
     const families: [string, string, string][] = [['drawing', 'For drawings', 'the engine and the lab site'], ['safe', 'Colour-blind safe', 'Okabe–Ito, Paul Tol, Tableau'], ['studies', 'Studies', 'jamaliki / design-corner']];
     for (const [fam, title, sub] of families) {
@@ -317,7 +319,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
         t.onclick = () => { const k = kept; kept = null; if (k) { H.style.groupPalette = k.colors; H.style.groupPaletteName = k.name; setSS(k.ss) } H.mark('group palette ' + name); applyPal(name, gp.colors); refresh() };
         grid.append(t); tiles.push(t) }
     }
-    refreshers.push(() => tiles.forEach(e => e.classList.toggle('on', e.dataset.name === (H.style.groupPaletteName || 'Triad'))));
+    refreshers.push(() => tiles.forEach(e => e.classList.toggle('on', e.dataset.name === (H.style.groupPaletteName || 'MolSketch'))));
   }
   {
     // the groups of what is loaded, each with its colour now; click to override, right-click to let the palette decide again
@@ -342,6 +344,50 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     for (const name of Object.keys(H.palettes)) { const P = H.palettes[name]; const st = el('div', { class: 'strip' }, el('div', { class: 'chips' }, ...['paper', 'ink', 'C', 'N', 'O', 'helix', 'sheet', 'wash'].map(k => { const i = el('i'); i.style.background = (P as any)[k]; return i })), el('span', {}, name)); st.onclick = () => { H.mark('palette ' + name); H.style.palette = { ...P }; refresh(); H.rebuild() }; pstrips.append(st) }
   }
   function showWhenNow(e: HTMLElement, v: boolean) { e.style.display = v ? '' : 'none' }
+
+
+  /* ================= Labels ================= */
+  const addBtns: HTMLButtonElement[] = [];
+  const addLabelBtn = (cls = '') => { const b = el('button', { class: cls, title: 'then click the drawing: on an atom the label follows it as the molecule turns (L)', onclick: () => H.setLabelMode(!H.labelMode()) }, '+ Add label') as HTMLButtonElement; addBtns.push(b); return b };
+  refreshers.push(() => addBtns.forEach(b => { b.classList.toggle('on', H.labelMode()); b.textContent = H.labelMode() ? 'Click the drawing…' : '+ Add label' }));
+  {
+    const g = group(Lab, 'Your labels', { keys: 'add place text annotate custom figure' });
+    g.append(el('div', { class: 'btns' }, addLabelBtn('primary')));
+    g.append(note('Click the drawing to place one; on an atom (or a ribbon) it follows that residue. Drag to move, double-click to edit, right-click or Delete to remove.'));
+    const list = el('div', { class: 'lbllist' }); g.append(list);
+    const clearB = el('button', { onclick: () => H.clearLabels() }, 'Remove all') as HTMLButtonElement; const clearRow = el('div', { class: 'btns' }, clearB); g.append(clearRow);
+    let key = '';
+    refreshers.push(() => { const ls = H.figLabels(); clearRow.style.display = ls.length ? '' : 'none'; const k = JSON.stringify(ls); if (k === key) return; key = k; list.innerHTML = '';
+      if (!ls.length) list.append(note('None yet.'));
+      for (const l of ls) { const t = el('input', { type: 'text', value: l.text, spellcheck: 'false', 'aria-label': 'label text' }) as HTMLInputElement; t.onchange = () => H.setLabelText(l.i, t.value);
+        const sz = el('select', { title: 'size', 'aria-label': 'size' }, ...[['0.75', 'S'], ['1', 'M'], ['1.4', 'L'], ['2', 'XL']].map(([v, n]) => el('option', { value: v }, n))) as HTMLSelectElement;
+        sz.value = String([0.75, 1, 1.4, 2].reduce((b, v) => Math.abs(v - l.size) < Math.abs(b - l.size) ? v : b, 1)); sz.onchange = () => H.setLabelSize(l.i, +sz.value);
+        list.append(el('div', { class: 'lbl' }, t, sz, el('button', { title: 'delete', onclick: () => H.deleteLabel(l.i) }, '✕'), el('span', { class: 'where' }, l.where))) } });
+  }
+  {
+    const g = group(Lab, 'Show', { keys: 'hide labels alpha beta helix strand residue atom secondary structure' });
+    const allIn = el('input', { type: 'checkbox' }) as HTMLInputElement; allIn.onchange = () => { H.mark('labels'); H.style.show.noLabels = !allIn.checked; H.redraw(); refresh() };
+    refreshers.push(() => { allIn.checked = !H.style.show.noLabels }); const ar = row(g, 'all labels', allIn); ar.title = 'every label at once: the switch on the drawing does the same';
+    const sub = (e: HTMLElement) => showWhen(e, () => !S().show.noLabels);
+    const n0 = g.children.length;
+    control(g, { t: 'check', label: 'placed labels', path: 'show.figLabels', tip: 'the labels you added' });
+    control(g, { t: 'check', label: 'atom labels', path: 'show.labels', tip: 'names a scene gives its atoms, such as His57' });
+    control(g, { t: 'check', label: 'residue labels', path: 'show.resLabels', tip: 'every residue drawn as sticks, by name and number' });
+    control(g, { t: 'check', label: 'α/β labels', path: 'engrave.labels', when: engraved, tip: 'α1, β1… on the engraved ribbons' });
+    for (const r of Array.from(g.children).slice(n0) as HTMLElement[]) { const w = vis.find(v => v[0] === r); if (w) { const f = w[1]; w[1] = () => f() && !S().show.noLabels; r.style.display = w[1]() ? '' : 'none' } else sub(r) }
+  }
+  {
+    const g = group(Lab, 'Text', { keys: 'font size colour color' });
+    control(g, { t: 'select', label: 'font', path: 'font', options: ['Caveat', 'Patrick Hand', 'Kalam', 'Plain sans'] });
+    control(g, { t: 'range', label: 'label size', path: 'labelSize', min: 10, max: 40, step: 1 });
+    control(g, { t: 'color', label: 'colour', path: 'palette.label' });
+  }
+  /* on the drawing: add a label, hide every label */
+  if (stage) {
+    const eyeB = el('button', { title: 'show or hide every label', onclick: () => { H.mark('labels'); H.style.show.noLabels = !H.style.show.noLabels; H.redraw(); refresh() } }) as HTMLButtonElement;
+    refreshers.push(() => { eyeB.textContent = H.style.show.noLabels ? 'Labels off' : 'Labels on'; eyeB.classList.toggle('off', H.style.show.noLabels) });
+    stage.append(el('div', { class: 'stagetools' }, addLabelBtn(), eyeB));
+  }
 
   /* ================= View ================= */
   {

@@ -2,7 +2,7 @@
    overrides, and, when the change touches the scene (keyframe edits: arrows, lone pairs, charges, timing, order, cameras),
    the scene's keyframes too. Continuous edits (a slider being dragged, a view being turned) coalesce: a new snapshot with
    the same label within `coalesceMs` of the last one is skipped, so one Ctrl-Z undoes the whole drag. */
-export interface Snapshot { label: string; at: number; style: string; cam: number[]; overrides: string; keyframes: string | null; frame: number }
+export interface Snapshot { label: string; at: number; style: string; cam: number[]; overrides: string; labels?: string; keyframes: string | null; frame: number }
 
 export class History {
   private undo: Snapshot[] = []; private redo: Snapshot[] = [];

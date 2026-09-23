@@ -9,6 +9,7 @@ export interface Classic {
   sampleState(frame: number): SampledState;
   locate(frame: number): { seg: { kf: number; type: string; start: number; len: number }; t: number };
   projectFrame(W: number, H: number, frame: number): { st: SampledState; proj: Projector; drawn: number };
+  figLabelBoxes(W: number, H: number, frame: number): { i: number; ax: number; ay: number; x: number; y: number; w: number; h: number; fs: number; alpha: number; anchored: boolean; text: string }[];
   viewAt(frame: number): ClassicView | null;
   buildTimeline(): void; demoScene(): any; compileSel(s: string): (a: any) => boolean;
   DEFAULT_CFG: any; PRESETS: any; GROUP_PALETTE: string[]; SUBUNIT_COLS: string[];

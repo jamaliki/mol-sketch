@@ -5,7 +5,7 @@
 export interface GroupPalette { colors: string[]; source: string; family: 'drawing' | 'safe' | 'studies' }
 
 export const GROUP_PALETTES: Record<string, GroupPalette> = {
-  'Triad': { colors: ['#f2e85a', '#7cbf72', '#5fc9c9', '#a98ad6', '#f0a050', '#d9a3c9', '#8fb8a8', '#b5c95a', '#c9a27a', '#9ad0b8'], source: 'the engine: no blues or reds, those belong to N and O', family: 'drawing' },
+  'MolSketch': { colors: ['#f2e85a', '#7cbf72', '#5fc9c9', '#a98ad6', '#f0a050', '#d9a3c9', '#8fb8a8', '#b5c95a', '#c9a27a', '#9ad0b8'], source: 'the engine: no blues or reds, those belong to N and O', family: 'drawing' },
   'Jamali Lab': { colors: ['#f97316', '#fbbf24', '#7dd3fc', '#a8a29e', '#d6d3d1', '#86efac', '#c4b5fd', '#fda4af'], source: 'the lab website: orange, amber, sky, stone', family: 'drawing' },
   'Okabe–Ito': { colors: ['#E69F00', '#56B4E9', '#009E73', '#F0E442', '#0072B2', '#D55E00', '#CC79A7', '#999999'], source: 'Okabe & Ito 2008, colour-blind safe', family: 'safe' },
   'Tol bright': { colors: ['#4477AA', '#EE6677', '#228833', '#CCBB44', '#66CCEE', '#AA3377', '#BBBBBB'], source: 'Paul Tol, colour-blind safe', family: 'safe' },

@@ -934,9 +934,9 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
       }
     }
   }
-  if(R.ssLabels){for(const lb of labels){const p=proj.proj(lb.pos);items.push({z:p.z+2,draw:(ctx)=>{ctx.save();ctx.globalAlpha=lb.alpha;
+  if(R.ssLabels&&!cfg.show.noLabels){for(const lb of labels){const p=proj.proj(lb.pos);items.push({z:p.z+2,draw:(ctx)=>{ctx.save();ctx.globalAlpha=lb.alpha;
     const fs=Math.max(9,Math.round(0.8*proj.pxPerA*p.d*K));ctx.font=`italic ${fs}px 'Times New Roman', Times, serif`;ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.lineWidth=3;ctx.strokeStyle=paperFill();ctx.strokeText(lb.txt,p.x,p.y);ctx.fillStyle=P.label;ctx.fillText(lb.txt,p.x,p.y);ctx.restore()}})}}
+    if(ctx.strokeText){ctx.lineWidth=3;ctx.strokeStyle=paperFill();ctx.strokeText(lb.txt,p.x,p.y)}ctx.fillStyle=P.label;ctx.fillText(lb.txt,p.x,p.y);ctx.restore()}})}}
 }
 function buildCartoon(items,st,pos,atoms,sel,proj,seedBase,lowDetail){
   if(cfg.rep.cartoonStyle==='engraved')return buildCartoonEngraved(items,atoms,sel,proj,seedBase);
@@ -1090,6 +1090,27 @@ function frameView(frame){ // the camera for a frame: cfg.view (plus turntable) 
 /* The sampled state of a frame and the projector renderFrame would use for it on a W×H canvas: for hit-testing atoms and bonds on
    screen, overlays, and view scoring. proj.proj(pos) gives {x,y} in the canvas's CSS pixels. */
 function projectFrame(W,H,frame){frameView(frame);const drawn=Math.floor(frame/Math.max(1,cfg.stepEvery))*Math.max(1,cfg.stepEvery);const st=sampleState(drawn);computeFit();return {st,proj:makeProjector(W,H),drawn}}
+/* Figure labels (scene.labels): text the author places while making the figure. Each is pinned to an atom ({at: id},
+   so it turns with the molecule) or to the canvas ({x, y} as fractions); dx, dy (px) move the text off its anchor, and
+   once it is off far enough a leader runs back to the anchor. Drawn over everything, with a paper halo. */
+function labelFont(fs){const S=cfg.style;return `${S.font==='Plain sans'?'600':'500'} ${fs}px ${S.font==='Plain sans'?'"IBM Plex Sans", system-ui, sans-serif':`"${S.font}", "Caveat", cursive`}`}
+function figLabelLayout(ctx,st,proj,W,H){const L=(scene&&scene.labels)||[];const out=[];if(!L.length)return out;const A={};for(const a of st.atoms)A[a.id]=a;
+  L.forEach((l,i)=>{let ax,ay,alpha=1;
+    if(l.at){const a=A[l.at];if(!a||a.alpha<0.05)return;const p=proj.proj(a.pos);ax=p.x;ay=p.y;alpha=a.alpha}else{ax=(l.x??0.5)*W;ay=(l.y??0.5)*H}
+    const fs=Math.max(6,Math.round(cfg.style.labelSize*(l.size||1)));ctx.font=labelFont(fs);const text=String(l.text||'');
+    out.push({i,ax,ay,x:ax+(l.dx||0),y:ay+(l.dy||0),w:ctx.measureText(text).width,h:fs*1.15,fs,alpha,anchored:!!l.at,text})});
+  return out}
+function drawFigLabels(ctx,boxes,seedBase){const P=cfg.palette,S=cfg.style;
+  for(const b of boxes){ctx.save();ctx.globalAlpha=b.alpha;
+    if(b.anchored){const vx=b.ax-b.x,vy=b.ay-b.y,hw=b.w/2+4,hh=b.h/2+2;const t=Math.min(hw/Math.max(Math.abs(vx),1e-6),hh/Math.max(Math.abs(vy),1e-6));const L=Math.hypot(vx,vy);
+      if(t<1&&L*(1-t)>10){const ex=b.x+vx*t,ey=b.y+vy*t;const k=Math.max(0,(L-4)/L);   // stop short of the atom
+        sketchLine(ctx,[[ex,ey],[b.x+vx*k,b.y+vy*k]],{seed:seedBase+7001+b.i*13,width:Math.max(0.7,S.inkWidth*0.6),color:P.label,alpha:0.85,ampScale:0.5,overshoot:false,step:4})}}
+    ctx.font=labelFont(b.fs);ctx.textAlign='center';ctx.textBaseline='middle';
+    if(ctx.strokeText){ctx.lineJoin='round';ctx.lineWidth=Math.max(2.5,b.fs*0.22);ctx.strokeStyle=P.paper;ctx.strokeText(b.text,b.x,b.y)}
+    ctx.fillStyle=P.label;ctx.fillText(b.text,b.x,b.y);ctx.restore()}}
+/** the figure labels' boxes on a canvas of W×H at this frame, for picking them in the app */
+let MEASURE=null;
+function figLabelBoxes(W,H,frame){const {st,proj}=projectFrame(W,H,frame);if(!MEASURE)MEASURE=document.createElement('canvas').getContext('2d');return figLabelLayout(MEASURE,st,proj,W,H)}
 function renderFrame(ctx,W,H,frame,dpr){
   RF={W,H,dpr};
   TEX=1;frameView(frame);
@@ -1134,7 +1155,7 @@ function renderFrame(ctx,W,H,frame,dpr){
         ctx.fillStyle=rgba(P.charge,c.alpha);ctx.fillText(c.text,cx,cy+0.5);
         sketchCircle(ctx,cx,cy,cr,{seed:seed+50+i,width:1,color:P.charge,alpha:0.85*c.alpha,passes:1,wobScale:1.5})});
       ctx.restore()}
-    if(SH.labels&&a.label&&(!a.labelAuto||SH.resLabels)){const d=a.labelDir||[0.7,-0.7];const L=Math.hypot(d[0],d[1])||1;
+    if(SH.labels&&!SH.noLabels&&a.label&&(!a.labelAuto||SH.resLabels)){const d=a.labelDir||[0.7,-0.7];const L=Math.hypot(d[0],d[1])||1;
       ctx.save();ctx.globalAlpha=a.alpha*0.92;ctx.font=`${S.font==='Plain sans'?'600':'500'} ${S.labelSize}px ${fontFam}`;ctx.fillStyle=P.label;
       ctx.textAlign=d[0]>0.25?'left':d[0]<-0.25?'right':'center';ctx.textBaseline=d[1]>0.25?'top':d[1]<-0.25?'bottom':'middle';
       ctx.fillText(a.label,p.x+d[0]/L*(r+9),p.y+d[1]/L*(r+9));ctx.restore()}
@@ -1146,11 +1167,12 @@ function renderFrame(ctx,W,H,frame,dpr){
       drawArrow(ctx,from,to,{seed:seedBase+900+i*31,width:S.inkWidth*1.15*(S.annot||1),scale:S.annot||1,color:P.arrow,alpha:st.arrowAlpha,bulge:ar.bulge??0.4,curl:(ar.curl||0)*proj.pxPerA,side:ar.side??1,prog:st.arrowProg});
     });
   }
+  if(!SH.noLabels&&SH.figLabels!==false)drawFigLabels(ctx,figLabelLayout(ctx,st,proj,W,H),seedBase);
   if(SH.caption){ctx.save();ctx.font=`500 ${S.captionSize}px ${fontFam}`;ctx.fillStyle=P.ink;ctx.textBaseline='bottom';ctx.textAlign='left';
     const margin=22,maxW=W-margin*2;
     for(const c of st.captions){if(!c.text||c.alpha<=0.01)continue;ctx.globalAlpha=c.alpha;wrapText(ctx,c.text,margin,H-margin,maxW,S.captionSize*1.15)}
     ctx.restore()}
-  if(SH.stepLabel){ctx.save();ctx.font=`500 ${Math.round(S.captionSize*0.8)}px ${fontFam}`;ctx.fillStyle=rgba(P.ink,0.75);ctx.textBaseline='top';ctx.textAlign='left';
+  if(SH.stepLabel&&(scene.keyframes||[]).length>1){ctx.save();ctx.font=`500 ${Math.round(S.captionSize*0.8)}px ${fontFam}`;ctx.fillStyle=rgba(P.ink,0.75);ctx.textBaseline='top';ctx.textAlign='left';
     ctx.fillText(`${st.stepIdx+1}. ${st.stepName}`,22,18);ctx.restore()}
   // paper grain over everything, so fills sit in the paper rather than on it
   if(S.grain>0){ctx.save();const light=luminance(P.paper)>0.5;ctx.globalCompositeOperation=light?'multiply':'screen';ctx.globalAlpha=clamp(0.55*S.grain,0,1);ctx.drawImage(grainOverlay(W,H,dpr,light),0,0,W,H);ctx.restore()}
@@ -1186,7 +1208,7 @@ return {
   get cfg(){return cfg}, set cfg(v){cfg=v;migrateCfg()},
   get scene(){return scene}, set scene(v){scene=v;FIT.key='';buildTimeline()},
   get TL(){return TL},
-  renderFrame, sampleState, locate, buildTimeline, demoScene, compileSel, projectFrame, viewAt,
+  renderFrame, sampleState, locate, buildTimeline, demoScene, compileSel, projectFrame, figLabelBoxes, viewAt,
   DEFAULT_CFG, PRESETS, GROUP_PALETTE, SUBUNIT_COLS,
   invalidatePaper(){paperCache.key='';baseCache.key='';grainCache.key=''},
 };

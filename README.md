@@ -1,6 +1,6 @@
-# Triad Sketch
+# MolSketch
 
-Hand-drawn molecular illustration, frame by frame. Triad Sketch takes atomic coordinates (PDB, mmCIF, or a
+Hand-drawn molecular illustration, frame by frame. MolSketch takes atomic coordinates (PDB, mmCIF, or a
 keyframed scene with curly arrows, charges and captions) and draws them the way an illustrator would:
 ball-and-stick or PyMOL-style sticks, secondary-structure cartoons and molecular surfaces, in coloured
 pencil, pen-and-ink or watercolour, on textured paper, with lines that "boil" from frame to frame so an

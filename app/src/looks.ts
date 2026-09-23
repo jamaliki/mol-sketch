@@ -26,14 +26,14 @@ export const LOOKS: Record<string, Look> = {
   },
   engraved: {
     name: 'Engraved', note: 'line-shaded ribbons, black on white, after MOLSCRIPT (Kraulis 1991)',
-    style: { fill: 'ink', cartoonStyle: 'engraved', engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: true }, cartoonScale: 1,
+    style: { fill: 'ink', cartoonStyle: 'engraved', engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: false }, cartoonScale: 1,
       palette: { ...PALETTES['PyMOL flat'], paper: '#ffffff', ink: '#000000', hatch: '#000000', label: '#000000', charge: '#000000' },
       line: { width: 1.6, rough: 0.15, passes: 1, pressure: 0, hierarchy: 0.3, alpha: 1 } as any, shading: 0, fillWobble: 0, construction: false,
       paper: { grain: 0, wash: 0 } as any, view: { fog: 0, fov: 0 } as any },
   },
   'engraved-colour': {
     name: 'Engraved colour', note: 'the engraved ribbons with colour only in the lines: white faces, fewer, heavier coloured lines',
-    style: { fill: 'ink colour', cartoonStyle: 'engraved', engrave: { lines: 5, width: 1.1, strandThickness: 0.6, coilWidth: 1.25, labels: true }, cartoonScale: 1,
+    style: { fill: 'ink colour', cartoonStyle: 'engraved', engrave: { lines: 5, width: 1.1, strandThickness: 0.6, coilWidth: 1.25, labels: false }, cartoonScale: 1,
       palette: { ...PALETTES['PyMOL flat'], paper: '#ffffff', ink: '#000000', hatch: '#000000', label: '#000000', charge: '#000000', helix: '#d6453d', sheet: '#2f6fb5', loop: '#1e1e1e' },
       line: { width: 1.6, rough: 0.15, passes: 1, pressure: 0, hierarchy: 0.3, alpha: 1 } as any, shading: 0, fillWobble: 0, construction: false,
       paper: { grain: 0, wash: 0 } as any, view: { fog: 0, fov: 0 } as any },

@@ -1,7 +1,7 @@
 /* Scene documents (the page's keyframed JSON) in the app: a Structure for the GPU preview from a sampled state. */
 import { Structure, type AtomRecord } from '../model/structure';
 
-export interface SceneDoc { name?: string; reps?: { sticks: string; cartoon: string; surface: string }; groupColors?: Record<string, string>; view?: any; keyframes: any[]; fitPoints?: Float32Array }
+export interface SceneDoc { name?: string; reps?: { sticks: string; cartoon: string; surface: string }; groupColors?: Record<string, string>; labels?: any[]; view?: any; keyframes: any[]; fitPoints?: Float32Array }
 
 /** All keyframe atom positions, for a camera that does not jump between frames. */
 export function sceneFitPoints(doc: SceneDoc): Float32Array {

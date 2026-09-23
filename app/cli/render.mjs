@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Headless batch renderer for the Triad Sketch app.
+/* Headless batch renderer for the MolSketch app.
 
    node cli/render.mjs input.pdb|input.cif|scene.json [more.pdb …] [options]
                       several structure files (sorted by name) become a stack: one keyframe each
@@ -46,32 +46,32 @@ const [W, H] = opt.size.split('x').map(Number);
 const page = await browser.newPage({ viewport: { width: Math.min(W, 4096) + 300, height: Math.min(H, 4096) } });
 page.on('pageerror', e => console.error('page error:', e.message));
 await page.goto(`http://127.0.0.1:${port}/`);
-await page.waitForFunction(() => window.TriadSketch, null, { timeout: 60000 });
-await page.waitForFunction(() => window.TriadSketch.renderer.structure, null, { timeout: 30000 }).catch(() => {});   // the start-up example must land before ours, or it replaces it
-if (inputs.length > 1) { const files = inputs.map(f => ({ name: path.basename(f), text: fs.readFileSync(f, 'utf8') })); await page.evaluate(files => { window.TriadSketch.setLive(false); window.TriadSketch.setSketch(false); window.TriadSketch.loadStack(files) }, files) }
-else { const text = fs.readFileSync(input, 'utf8'); await page.evaluate(async ([t, n]) => { window.TriadSketch.setLive(false); window.TriadSketch.setSketch(false); await window.TriadSketch.loadText(t, n) }, [text, path.basename(input)]) }
-if (opt.look) await page.evaluate(k => window.TriadSketch.applyLook(k), opt.look);
-if (opt.style) { const st = JSON.parse(fs.readFileSync(opt.style, 'utf8')); await page.evaluate(s => { window.TriadSketch.style = s }, st) }
-if (opt.set.length) await page.evaluate(sets => { const T = window.TriadSketch; const st = JSON.parse(JSON.stringify(T.style));
+await page.waitForFunction(() => window.MolSketch, null, { timeout: 60000 });
+await page.waitForFunction(() => window.MolSketch.renderer.structure, null, { timeout: 30000 }).catch(() => {});   // the start-up example must land before ours, or it replaces it
+if (inputs.length > 1) { const files = inputs.map(f => ({ name: path.basename(f), text: fs.readFileSync(f, 'utf8') })); await page.evaluate(files => { window.MolSketch.setLive(false); window.MolSketch.setSketch(false); window.MolSketch.loadStack(files) }, files) }
+else { const text = fs.readFileSync(input, 'utf8'); await page.evaluate(async ([t, n]) => { window.MolSketch.setLive(false); window.MolSketch.setSketch(false); await window.MolSketch.loadText(t, n) }, [text, path.basename(input)]) }
+if (opt.look) await page.evaluate(k => window.MolSketch.applyLook(k), opt.look);
+if (opt.style) { const st = JSON.parse(fs.readFileSync(opt.style, 'utf8')); await page.evaluate(s => { window.MolSketch.style = s }, st) }
+if (opt.set.length) await page.evaluate(sets => { const T = window.MolSketch; const st = JSON.parse(JSON.stringify(T.style));
   for (const kv of sets) { const i = kv.indexOf('='); const ks = kv.slice(0, i).split('.'); let raw = kv.slice(i + 1); let v = raw; if (raw === 'true') v = true; else if (raw === 'false') v = false; else if (raw !== '' && !isNaN(+raw)) v = +raw;
     let o = st; for (let j = 0; j < ks.length - 1; j++) { o[ks[j]] = o[ks[j]] || {}; o = o[ks[j]] } o[ks[ks.length - 1]] = v }
   T.style = st }, opt.set);
 // a look or style applied after the scene resets the camera's field of view to the style's; the scene's own view wins, then the flags
-await page.evaluate(() => { const T = window.TriadSketch; const v = T.scene && T.scene.view; if (v) { T.camera.yaw = v.yaw ?? 0; T.camera.pitch = v.pitch ?? 0; T.camera.roll = v.roll ?? 0; T.camera.zoom = v.zoom ?? 1; T.camera.panX = v.panX ?? 0; T.camera.panY = v.panY ?? 0; if (v.fov !== undefined) { T.camera.fov = v.fov; const st = JSON.parse(JSON.stringify(T.style)); st.view.fov = v.fov; T.style = st } } });
-await page.evaluate(([w, h, yaw, pitch, roll, zoom, fov, pan]) => { const T = window.TriadSketch; T.setSize(w, h); if (!isNaN(yaw)) T.camera.yaw = yaw; if (!isNaN(pitch)) T.camera.pitch = pitch; if (!isNaN(roll)) T.camera.roll = roll; if (!isNaN(zoom)) T.camera.zoom = zoom; if (!isNaN(fov)) T.camera.fov = fov; if (pan) { const [x, y] = pan.split(',').map(Number); T.camera.panX = x; T.camera.panY = y } }, [W, H, opt.yaw, opt.pitch, opt.roll, opt.zoom, opt.fov, opt.pan]);
+await page.evaluate(() => { const T = window.MolSketch; const v = T.scene && T.scene.view; if (v) { T.camera.yaw = v.yaw ?? 0; T.camera.pitch = v.pitch ?? 0; T.camera.roll = v.roll ?? 0; T.camera.zoom = v.zoom ?? 1; T.camera.panX = v.panX ?? 0; T.camera.panY = v.panY ?? 0; if (v.fov !== undefined) { T.camera.fov = v.fov; const st = JSON.parse(JSON.stringify(T.style)); st.view.fov = v.fov; T.style = st } } });
+await page.evaluate(([w, h, yaw, pitch, roll, zoom, fov, pan]) => { const T = window.MolSketch; T.setSize(w, h); if (!isNaN(yaw)) T.camera.yaw = yaw; if (!isNaN(pitch)) T.camera.pitch = pitch; if (!isNaN(roll)) T.camera.roll = roll; if (!isNaN(zoom)) T.camera.zoom = zoom; if (!isNaN(fov)) T.camera.fov = fov; if (pan) { const [x, y] = pan.split(',').map(Number); T.camera.panX = x; T.camera.panY = y } }, [W, H, opt.yaw, opt.pitch, opt.roll, opt.zoom, opt.fov, opt.pan]);
 if (opt.fit) { const v = opt.fit.split(',').map(Number); const f = v.map(x => (Math.max(...v) > 1 ? x / 100 : x)); const box = { x0: f[0], y0: f[1], x1: f[2], y1: f[3] };
-  const got = await page.evaluate(([box, what]) => { const T = window.TriadSketch; T.fitFrame(box, what); const b = T.screenBox(what); return { zoom: T.camera.zoom, panX: T.camera.panX, panY: T.camera.panY, box: b } }, [box, opt.fitWhat]);
+  const got = await page.evaluate(([box, what]) => { const T = window.MolSketch; T.fitFrame(box, what); const b = T.screenBox(what); return { zoom: T.camera.zoom, panX: T.camera.panX, panY: T.camera.panY, box: b } }, [box, opt.fitWhat]);
   console.log(`fit: zoom ${got.zoom.toFixed(3)} pan ${got.panX.toFixed(3)},${got.panY.toFixed(3)} → drawing at ${(got.box.x0 * 100).toFixed(1)}–${(got.box.x1 * 100).toFixed(1)} % × ${(got.box.y0 * 100).toFixed(1)}–${(got.box.y1 * 100).toFixed(1)} %`) }
-if (opt.writeView !== undefined) { const view = await page.evaluate(() => { const c = window.TriadSketch.camera; const st = window.TriadSketch.style; return { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: c.fov, fog: st.view.fog, fogStart: st.view.fogStart } });
+if (opt.writeView !== undefined) { const view = await page.evaluate(() => { const c = window.MolSketch.camera; const st = window.MolSketch.style; return { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: c.fov, fog: st.view.fog, fogStart: st.view.fogStart } });
   const target = opt.writeView === true ? input : opt.writeView; if (!/\.json$/i.test(target)) { console.error('--write-view needs a scene JSON'); process.exit(1) }
   const doc = JSON.parse(fs.readFileSync(target === input ? input : input, 'utf8')); doc.view = { ...(doc.view || {}), ...view }; fs.writeFileSync(target, JSON.stringify(doc)); console.log('view written to', target, JSON.stringify(view)); await browser.close(); server.close(); process.exit(0) }
 fs.mkdirSync(opt.out, { recursive: true });
-const isScene = await page.evaluate(() => !!window.TriadSketch.scene);
+const isScene = await page.evaluate(() => !!window.MolSketch.scene);
 // which frames
 let frames = [];
 if (opt.turntable) { for (let f = 0; f < opt.turntable; f++) frames.push(f) }
 else if (isScene) {
-  const tl = await page.evaluate(() => { const T = window.TriadSketch.classicEngine().TL; return { total: T.total, segs: T.segs } });
+  const tl = await page.evaluate(() => { const T = window.MolSketch.classicEngine().TL; return { total: T.total, segs: T.segs } });
   const spec = opt.frames || 'drawn';
   if (spec === 'all') for (let f = 0; f < tl.total; f++) frames.push(f);
   else if (spec === 'drawn') for (let f = 0; f < tl.total; f += 2) frames.push(f);
@@ -81,7 +81,7 @@ else if (isScene) {
 } else { const n = +(opt.frames || 1); for (let f = 0; f < n; f++) frames.push(f) }
 const t0 = Date.now(); let k = 0;
 for (const f of frames) {
-  const png = await page.evaluate(([f, n, tt, swing, yaw0, pitch0, engine, isScene]) => { const T = window.TriadSketch;
+  const png = await page.evaluate(([f, n, tt, swing, yaw0, pitch0, engine, isScene]) => { const T = window.MolSketch;
     if (tt) { T.camera.yaw = (isNaN(yaw0) ? 0 : yaw0) + 360 * f / n; T.camera.pitch = (isNaN(pitch0) ? 0 : pitch0) + swing * Math.sin(2 * Math.PI * f / n) }
     if (isScene) T.seek(f);
     if (engine === 'preview') { T.render(); return T.png() } if (engine === 'classic') T.classic(f); else T.sketch(f); return T.png() }, [f, opt.turntable, opt.turntable, opt.swing, opt.yaw, opt.pitch, opt.engine, isScene]);

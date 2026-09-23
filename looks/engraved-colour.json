@@ -17,7 +17,7 @@
   "engraveWidth": 1.1,
   "strandThickness": 0.6,
   "coilWidth": 1.25,
-  "ssLabels": true
+  "ssLabels": false
  },
  "style": {
   "rough": 0.15,
