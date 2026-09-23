@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-/* Triad Sketch command-line renderer.
+/* MolSketch command-line renderer.
    Runs the same page headlessly and writes PNG or SVG frames.
 
    node render.js input [input …] [options]
@@ -36,15 +36,15 @@ if(!inputs.length){console.error('No input. Try: node render.js examples/test_pr
   // inputs
   const jsons=inputs.filter(f=>/\.json$/i.test(f)),structs=inputs.filter(f=>!/\.json$/i.test(f));
   await page.evaluate(()=>{try{localStorage.clear()}catch(e){}});
-  if(jsons.length){const sc=JSON.parse(fs.readFileSync(jsons[0],'utf8'));await page.evaluate(sc=>{TriadSketch.scene=sc},sc)}
+  if(jsons.length){const sc=JSON.parse(fs.readFileSync(jsons[0],'utf8'));await page.evaluate(sc=>{MolSketch.scene=sc},sc)}
   if(structs.length){const files=structs.sort((a,b)=>a.localeCompare(b,undefined,{numeric:true})).map(f=>({name:path.basename(f),text:fs.readFileSync(f,'utf8')}));
-    await page.evaluate(files=>{TriadSketch.loadPdbTexts(files)},files)}
-  if(opt.settings){const st=JSON.parse(fs.readFileSync(opt.settings,'utf8'));await page.evaluate(st=>{const c=TriadSketch.cfg;TriadSketch.cfg={...c,...st,view:{...c.view,...st.view},style:{...c.style,...st.style},show:{...c.show,...st.show},palette:{...c.palette,...st.palette},rep:{...c.rep,...(st.rep||{})}}},st)}
-  const [W,H]=opt.size.split('x').map(Number);await page.evaluate(([w,h])=>TriadSketch.setCanvasSize(w,h),[W,H]);
+    await page.evaluate(files=>{MolSketch.loadPdbTexts(files)},files)}
+  if(opt.settings){const st=JSON.parse(fs.readFileSync(opt.settings,'utf8'));await page.evaluate(st=>{const c=MolSketch.cfg;MolSketch.cfg={...c,...st,view:{...c.view,...st.view},style:{...c.style,...st.style},show:{...c.show,...st.show},palette:{...c.palette,...st.palette},rep:{...c.rep,...(st.rep||{})}}},st)}
+  const [W,H]=opt.size.split('x').map(Number);await page.evaluate(([w,h])=>MolSketch.setCanvasSize(w,h),[W,H]);
   for(const kv of opt.set){const i=kv.indexOf('=');const k=kv.slice(0,i),raw=kv.slice(i+1);let v=raw;if(raw==='true')v=true;else if(raw==='false')v=false;else if(raw!==''&&!isNaN(+raw))v=+raw;
-    await page.evaluate(([k,v])=>{const parts=k.split('.');const target=(parts[0]==='reps'||parts[0]==='groupColors'||parts[0]==='view'&&false)?TriadSketch.scene:TriadSketch.cfg;let o=target;for(let i=0;i<parts.length-1;i++){o[parts[i]]=o[parts[i]]||{};o=o[parts[i]]}o[parts[parts.length-1]]=v;TriadSketch.buildPanel();TriadSketch.rebuild();TriadSketch.redraw()},[k,v])}
-  if(opt.turntable){await page.evaluate(n=>{const c=TriadSketch.cfg;c.view.spin=360*c.fps/n;TriadSketch.redraw()},opt.turntable);if(opt.frames==='all')opt.frames='0-'+(opt.turntable-1)}
-  const info=await page.evaluate(()=>({total:TriadSketch.TL.total,step:Math.max(1,TriadSketch.cfg.stepEvery),segs:TriadSketch.TL.segs.map(s=>({kf:s.kf,type:s.type,start:s.start,len:s.len,name:TriadSketch.scene.keyframes[s.kf].name}))}));
+    await page.evaluate(([k,v])=>{const parts=k.split('.');const target=(parts[0]==='reps'||parts[0]==='groupColors'||parts[0]==='view'&&false)?MolSketch.scene:MolSketch.cfg;let o=target;for(let i=0;i<parts.length-1;i++){o[parts[i]]=o[parts[i]]||{};o=o[parts[i]]}o[parts[parts.length-1]]=v;MolSketch.buildPanel();MolSketch.rebuild();MolSketch.redraw()},[k,v])}
+  if(opt.turntable){await page.evaluate(n=>{const c=MolSketch.cfg;c.view.spin=360*c.fps/n;MolSketch.redraw()},opt.turntable);if(opt.frames==='all')opt.frames='0-'+(opt.turntable-1)}
+  const info=await page.evaluate(()=>({total:MolSketch.TL.total,step:Math.max(1,MolSketch.cfg.stepEvery),segs:MolSketch.TL.segs.map(s=>({kf:s.kf,type:s.type,start:s.start,len:s.len,name:MolSketch.scene.keyframes[s.kf].name}))}));
   if(opt.list){console.log(JSON.stringify(info,null,1));await browser.close();fs.unlinkSync(tmp);return}
   let frames=[];const spec=opt.frames;
   if(spec==='all')for(let f=0;f<info.total;f++)frames.push(f);
@@ -55,12 +55,12 @@ if(!inputs.length){console.error('No input. Try: node render.js examples/test_pr
   fs.mkdirSync(opt.out,{recursive:true});
   const t0=Date.now();let n=0;
   for(const f of frames){
-    if(opt.format==='svg'){const svg=await page.evaluate(([f,s])=>TriadSketch.renderSVG(f,s),[f,opt.scale]);fs.writeFileSync(path.join(opt.out,`frame_${String(f).padStart(4,'0')}.svg`),svg)}
-    else{const data=await page.evaluate(([f,s])=>{const c=document.createElement('canvas');c.width=TriadSketch.CW()*s;c.height=TriadSketch.CH()*s;const x=c.getContext('2d');TriadSketch.renderFrame(x,TriadSketch.CW(),TriadSketch.CH(),f,s);return c.toDataURL('image/png')},[f,opt.scale]);
+    if(opt.format==='svg'){const svg=await page.evaluate(([f,s])=>MolSketch.renderSVG(f,s),[f,opt.scale]);fs.writeFileSync(path.join(opt.out,`frame_${String(f).padStart(4,'0')}.svg`),svg)}
+    else{const data=await page.evaluate(([f,s])=>{const c=document.createElement('canvas');c.width=MolSketch.CW()*s;c.height=MolSketch.CH()*s;const x=c.getContext('2d');MolSketch.renderFrame(x,MolSketch.CW(),MolSketch.CH(),f,s);return c.toDataURL('image/png')},[f,opt.scale]);
       fs.writeFileSync(path.join(opt.out,`frame_${String(f).padStart(4,'0')}.png`),Buffer.from(data.split(',')[1],'base64'))}
     n++;if(n%10===0||n===frames.length)process.stdout.write(`\r${n}/${frames.length} frames  ${((Date.now()-t0)/1000).toFixed(1)}s`)}
   process.stdout.write('\n');
-  const fps=await page.evaluate(()=>TriadSketch.cfg.fps);
+  const fps=await page.evaluate(()=>MolSketch.cfg.fps);
   if(opt.format==='png')console.log(`Assemble:  ffmpeg -framerate ${fps} -pattern_type glob -i '${opt.out}/frame_*.png' -c:v libx264 -pix_fmt yuv420p -crf 16 out.mp4`);
   await browser.close();fs.unlinkSync(tmp);
 })();

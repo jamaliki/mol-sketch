@@ -43,6 +43,7 @@ timing, and where atoms enter from and leave to.
 | `view` | optional camera applied when the scene loads: `yaw`, `pitch`, `roll` (degrees; roll turns the picture about the view axis, after yaw and pitch), `zoom`, `panX`, `panY` (fractions of the canvas), `fov`, `fog`, `fogStart`. The CLI's `--fit … --write-view` fills in zoom and pan for a target box |
 | `reps` | the three selections: `sticks`, `cartoon`, `surface` (empty string = off) |
 | `groupColors` | colour overrides, keyed by residue (`SER195`), chain ID (`A`), `subunit:S/L/T/X`, `entity:<id>` |
+| `labels` | labels placed on the figure: `{ "text", "at": atom id, "dx", "dy" }` follows that atom (the text sits `dx`, `dy` px off it, with a leader once it is far enough), or `{ "text", "x", "y" }` stays at that fraction of the canvas; optional `"size"` scales the label size |
 | `keyframes` | the list below, in order |
 | `fromPdb` | set by the PDB loader; lets *frames per PDB* rewrite `hold`/`transition` |
 

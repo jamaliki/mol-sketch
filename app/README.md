@@ -1,6 +1,6 @@
-# Triad Sketch — interactive renderer
+# MolSketch — interactive renderer
 
-The interactive version of Triad Sketch: the same hand-drawn looks, in an app where you orbit, zoom and
+The interactive version of MolSketch: the same hand-drawn looks, in an app where you orbit, zoom and
 change the look while watching. A WebGL2 renderer resolves the geometry and its visibility in a few
 milliseconds; while you drag you see a fast per-pixel approximation of the look, and when the view rests
 the original stroke engine redraws the frame with real strokes — pressure, overshoot, hatching,
@@ -15,15 +15,31 @@ npm run build          # static bundle in dist/
 npm run render -- public/examples/1A8O.pdb --look watercolour --size 1920x1440 --out out   # headless PNGs (classic engine)
 ```
 
-Drag a PDB, mmCIF or scene JSON file onto the canvas, or pick an example. Drag to rotate, the *roll* slider in *View* to
-turn the picture about the view axis, shift-drag or right-drag to pan, wheel to zoom, arrow keys to nudge, `r` to reset.
-*Frame* fits what is drawn into a box of the canvas (a preset for the website's hero, desktop or phone, or any box in
-percent) with guides you can switch on; *Copy render command* in *Data* puts the CLI line that renders exactly what is
-on screen on the clipboard, naming the scene and style files that *Save scene JSON* and *Save style* write.
+Drag a PDB, mmCIF or scene JSON file onto the canvas, use *Open…* / *Examples* in the top bar, or type a PDB ID
+(e.g. `1A8O`) and *Fetch* to load that entry from RCSB as mmCIF. Drag to rotate, shift-drag or
+right-drag to pan, wheel to zoom, arrow keys to nudge, `r` to reset; `?` shows every shortcut.
+
+The top bar holds what is used every time: open, examples, undo / redo, *Save PNG* (the screen as it is) and *Export…*.
+The side panel has one tab per task, and a search box (`/`) that finds any setting across all of them:
+
+- **Look**: the looks (the same as the files in `../looks`), what to draw (sticks, cartoon, surface, with one-click
+  choices or any selection), fill, marks, and collapsed fine tuning for lines, hatching, watercolour and paper.
+- **Colour**: what colours by what, the group palettes (engraved ribbons take their first three colours for helix,
+  sheet and coil), per-group overrides, every swatch, and the paper-and-ink presets.
+- **Labels**: labels you place (*+ Add label* or `L`, then click the drawing: on an atom or a ribbon the label follows
+  that residue; drag to move, double-click to edit, right-click or Delete to remove), which automatic labels show
+  (atom, residue, α/β), and their font, size and colour. *Labels on / off* on the drawing hides every label at once.
+  Placed labels are saved in the scene JSON and drawn in every export.
+- **View**: camera, fog and light, suggested views, *Frame* (fit the drawing into a box of the canvas, e.g. the website's
+  hero, with guides), motion (turntable, boiling) and the engine.
+- **Scene** (with a scene loaded): checks, keyframes and their timing, and arrows / lone pairs / charges by clicking.
+  The timeline under the drawing plays, steps and jumps to keyframes.
+- **Export**: a PNG or poster at a chosen size, the loop as a video, scene and style files, and *Copy render command*,
+  the CLI line that renders exactly what is on screen from the files *Save scene JSON* and *Save style* write.
+
 [../docs/hero-workflow.md](../docs/hero-workflow.md) is the route from computed states to a looping video, both in the app
-and by script. The *Looks* buttons apply the same looks as the
-files in `../looks`; every other control edits one field of the style, which is saved in the browser and
-can be exported/imported as JSON (*Save style* / *Load style*).
+and by script. Every control edits one field of the style, which is saved in the browser and can be exported / imported
+as JSON.
 
 ## How it works
 
@@ -103,7 +119,7 @@ src/ink/       strokes.ts (the stroke engine, ported from the page), paper.ts, r
 src/app/       panel.ts (controls generated from a schema), controls.ts (orbit), history.ts (undo), lint.ts (checks),
                diff.ts (what changes between keyframes), author.ts (hit-testing and arrow / lone pair / charge edits),
                views.ts (the view scorer), encode.ts (WebCodecs + mp4-muxer / webm-muxer)
-src/main.ts    wiring, render loop, window.TriadSketch for scripts
+src/main.ts    wiring, render loop, window.MolSketch for scripts
 cli/render.mjs headless renderer (Playwright + the built app)
 scripts/shot.mjs  development screenshots against the dev server;  scripts/mech.mjs  the pixel-identity test of the classic engine;
 scripts/features.mjs  exercises lint, diffs, authoring, keyframe edits, keyframe cameras, suggested views, undo and

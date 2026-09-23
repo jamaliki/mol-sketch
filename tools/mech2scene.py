@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""mech2scene: a Triad Sketch scene from computed reaction states, driven by a recipe.
+"""mech2scene: a MolSketch scene from computed reaction states, driven by a recipe.
 
     python3 tools/mech2scene.py STATES_DIR recipe.json out.json
 

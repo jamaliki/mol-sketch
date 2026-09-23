@@ -1,6 +1,6 @@
-# Triad Sketch
+# MolSketch
 
-Hand-drawn molecular illustration, frame by frame. Triad Sketch takes atomic coordinates (PDB, mmCIF, or a
+Hand-drawn molecular illustration, frame by frame. MolSketch takes atomic coordinates (PDB, mmCIF, or a
 keyframed scene with curly arrows, charges and captions) and draws them the way an illustrator would:
 ball-and-stick or PyMOL-style sticks, secondary-structure cartoons and molecular surfaces, in coloured
 pencil, pen-and-ink or watercolour, on textured paper, with lines that "boil" from frame to frame so an
@@ -91,6 +91,8 @@ this README. [docs/looks.md](docs/looks.md) documents each one, setting by setti
 | `looks/chalkboard.json` | chalk on the same navy: dusty fills, soft white line, the board's tooth |
 | `looks/assembly-surface.json` | watercolour surface coloured by subunit, for large complexes |
 | `looks/assembly-cartoon.json` | tube/ribbon cartoon coloured by subunit, thin pen, heavy fog |
+| `looks/engraved.json` | line-shaded ribbons, black on white, after MOLSCRIPT figures |
+| `looks/engraved-colour.json` | the same with colour only in the lines: five heavier coloured lines per face |
 
 ```bash
 node render.js examples/mechanism.json --settings looks/watercolour.json --frames drawn --out out

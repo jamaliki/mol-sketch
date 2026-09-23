@@ -13,11 +13,17 @@ export interface Style {
   fill: Fill;
   mode: 'sticks' | 'ballstick';
   sphereScale: number;       // cut-point spheres in sticks mode
-  show: { H: boolean; lonePairs: boolean; charges: boolean; arrows: boolean; labels: boolean; resLabels: boolean; hbonds: boolean; caption: boolean; stepLabel: boolean; valence: boolean };
+  show: { H: boolean; lonePairs: boolean; charges: boolean; arrows: boolean; labels: boolean; resLabels: boolean; hbonds: boolean; caption: boolean; stepLabel: boolean; valence: boolean;
+    /** figLabels: the labels placed by hand · noLabels: every label off at once (atom, residue, α/β and placed ones) */
+    figLabels: boolean; noLabels: boolean };
   font: 'Caveat' | 'Patrick Hand' | 'Kalam' | 'Plain sans'; labelSize: number; captionSize: number; annot: number;
   palette: Palette;
   colorBy: ColorBy;          // carbon / cartoon-by-carbon / surface-by-residue schemes
-  cartoonColor: 'ss' | 'carbon';
+  cartoonColor: 'ss' | 'carbon' | 'rainbow';   // rainbow: blue → red along each chain (engraved cartoon; elsewhere as ss)
+  /** sketch: the hand-drawn ribbons of the fill mode; engraved: line-shaded ribbons in the manner of MOLSCRIPT (Kraulis 1991),
+      white faces with lines running along the ribbon, inked strand sides, paper-white coils. Classic engine only. */
+  cartoonStyle: 'sketch' | 'engraved';
+  engrave: { lines: number; width: number; strandThickness: number; coilWidth: number; labels: boolean };
   surfaceColor: 'single' | 'residue' | 'chain' | 'subunit' | 'entity';
   reps: { sticks: string; cartoon: string; surface: string };   // selections
   stickRadius: number;       // Å
@@ -52,11 +58,13 @@ export const PALETTES: Record<string, Palette> = {
 export const DEFAULT_STYLE: Style = {
   fill: 'watercolour',
   mode: 'sticks', sphereScale: 0.4,
-  show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, resLabels: false, hbonds: true, caption: true, stepLabel: true, valence: true },
+  show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, resLabels: false, hbonds: true, caption: true, stepLabel: true, valence: true, figLabels: true, noLabels: false },
   font: 'Caveat', labelSize: 19, captionSize: 24, annot: 1,
   palette: { ...PALETTES['Colored pencil'] },
   colorBy: 'residue',
   cartoonColor: 'ss',
+  cartoonStyle: 'sketch',
+  engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: false },
   surfaceColor: 'subunit',
   reps: { sticks: 'hetatm and not water', cartoon: 'polymer', surface: '' },
   stickRadius: 0.2,
@@ -68,7 +76,7 @@ export const DEFAULT_STYLE: Style = {
   paper: { grain: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1 },
   water: { layers: 3, wobble: 1, ring: 0.6, granulation: 0.5, tone: 0.6 },
   view: { fov: 20, fog: 0.5, fogStart: 0.45, light: -125 },
-  boilEvery: 3, boilHold: 1, detail: 'auto', textureScale: 'screen', groupPalette: null, groupPaletteName: 'Triad',
+  boilEvery: 3, boilHold: 1, detail: 'auto', textureScale: 'screen', groupPalette: null, groupPaletteName: 'MolSketch',
 };
 
 export function cloneStyle(s: Style): Style { return JSON.parse(JSON.stringify(s)) }
@@ -80,6 +88,7 @@ export function mergeStyle(base: Style, part: any): Style {
     if (part[k] && typeof part[k] === 'object' && !Array.isArray(part[k])) out[k] = { ...out[k], ...part[k] };
     else out[k] = part[k];
   }
+  if (out.groupPaletteName === 'Triad') out.groupPaletteName = 'MolSketch';   // the engine's palette, from before the rename
   return out;
 }
 
