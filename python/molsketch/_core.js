@@ -166,11 +166,6 @@
     pts.n = vbs.n = wts.n = 0;
     return [off, len];
   }
-  function takeRuns() {
-    const r = RUNS.slice(0, runsN);
-    runsN = 0;
-    return r;
-  }
   var f32 = Math.fround;
   var HEX = /^[0-9a-f]+$/;
   var RGB = /^rgba?\(\s*([^)]*)\)$/;
@@ -213,7 +208,10 @@
     const r = Math.round(x);
     return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
   }
-  var canvases = /* @__PURE__ */ new Map();
+  var pending = /* @__PURE__ */ new Set();
+  var alive = /* @__PURE__ */ new Map();
+  var pendingOps = 0;
+  var nextSnap = 1;
   var measureFn = (_f, t) => t.length * 8;
   function setMeasure(f2) {
     measureFn = f2;
@@ -275,11 +273,15 @@
     }
   };
   var Pattern = class {
-    constructor(id, snap2, rep) {
-      __publicField(this, "id", id);
+    /** `src` is held so the canvas (and its snapshot, on the host) lives as long as the pattern */
+    constructor(src, snap2, rep) {
+      __publicField(this, "src", src);
       __publicField(this, "snap", snap2);
       __publicField(this, "rep", rep);
       __publicField(this, "m", [1, 0, 0, 1, 0, 0]);
+    }
+    get id() {
+      return this.src.id;
     }
     setTransform(t) {
       this.m = t ? [t.a, t.b, t.c, t.d, t.e, t.f] : [1, 0, 0, 1, 0, 0];
@@ -313,13 +315,6 @@
   var SPECS = [];
   var nextPaint = 1;
   var EPOCH = 0;
-  function takePaints() {
-    const s = SPECS;
-    SPECS = [];
-    PAINTS = /* @__PURE__ */ new Map();
-    EPOCH++;
-    return s;
-  }
   var RecCanvas = class {
     constructor() {
       __publicField(this, "id");
@@ -330,13 +325,29 @@
       __publicField(this, "ctx", null);
       /** the op count when another canvas last took this one's picture: ops before it are never rewritten */
       __publicField(this, "frozen", 0);
+      __publicField(this, "lastMark", 0);
+      __publicField(this, "markAt", -1);
       this.id = nextId++;
-      canvases.set(this.id, this);
+      alive.set(this.id, new WeakRef(this));
       this.push(["size", 300, 150]);
     }
     push(op) {
+      if (!this.ops.length) pending.add(this);
       this.ops.push(op);
       this.total++;
+      pendingOps++;
+    }
+    /** a snapshot of this canvas as it is now, for another canvas to draw or pattern with: a marker in its ops (one per
+       state: a canvas unchanged since its last snapshot gives that one again) */
+    mark() {
+      this.settle();
+      if (this.markAt === this.total) return this.lastMark;
+      const sid = nextSnap++;
+      this.push(["snap", sid]);
+      this.frozen = this.total;
+      this.lastMark = sid;
+      this.markAt = this.total;
+      return sid;
     }
     resize() {
       this.ctx?.settle();
@@ -795,10 +806,12 @@
     fill(rule = "nonzero") {
       const eo = rule === "evenodd", p = this.pid(false);
       if (!this.fuse(eo ? 1 : 0, p)) this.op("fill", eo ? "evenodd" : "nonzero", p);
+      handOver();
     }
     stroke() {
       const p = this.pid(true);
       if (!this.fuse(2, p)) this.op("stroke", p);
+      handOver();
     }
     /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op, and
        such draws one after another in the same state as one op too:
@@ -824,10 +837,16 @@
       this.op("clip", rule === "evenodd" ? "evenodd" : "nonzero");
     }
     fillRect(x, y, w, h) {
-      if (fin(x, y, w, h)) this.op("fillRect", this.pid(false), x, y, w, h);
+      if (fin(x, y, w, h)) {
+        this.op("fillRect", this.pid(false), x, y, w, h);
+        handOver();
+      }
     }
     strokeRect(x, y, w, h) {
-      if (fin(x, y, w, h)) this.op("strokeRect", this.pid(true), x, y, w, h);
+      if (fin(x, y, w, h)) {
+        this.op("strokeRect", this.pid(true), x, y, w, h);
+        handOver();
+      }
     }
     clearRect(x, y, w, h) {
       if (fin(x, y, w, h)) this.op("clearRect", x, y, w, h);
@@ -843,6 +862,7 @@
       if (!fin(x, y) || maxW !== void 0 && !fin(maxW)) return;
       const s = this.s;
       this.op("text", stroke ? "stroke" : "fill", String(t), x, y, maxW ?? null, this.pid(stroke), s.font, s.textAlign, s.textBaseline);
+      handOver();
     }
     measureText(t) {
       return { width: measureFn(this.s.font, String(t)) };
@@ -852,16 +872,13 @@
       if (!(img instanceof RecCanvas)) throw new TypeError("drawImage: only canvases can be drawn headless");
       if (!(n.length === 2 || n.length === 4 || n.length === 8) || !fin(...n)) return;
       if (img.width === 0 || img.height === 0) throw new Error("InvalidStateError: drawImage of an empty canvas");
-      const s = this.s;
-      img.settle();
-      img.frozen = img.total;
-      this.op("img", img.id, img.total, s.globalAlpha, s.globalCompositeOperation, s.imageSmoothingEnabled, s.filter, ...n);
+      const s = this.s, sid = img.mark();
+      this.op("img", img.id, sid, s.globalAlpha, s.globalCompositeOperation, s.imageSmoothingEnabled, s.filter, ...n);
+      handOver();
     }
     createPattern(img, rep) {
       if (!(img instanceof RecCanvas)) throw new TypeError("createPattern: only canvases headless");
-      img.settle();
-      img.frozen = img.total;
-      return new Pattern(img.id, img.total, rep || "repeat");
+      return new Pattern(img, img.mark(), rep || "repeat");
     }
     createLinearGradient() {
       throw new Error("gradients are not recorded headless");
@@ -870,17 +887,51 @@
       throw new Error("gradients are not recorded headless");
     }
   };
-  function flush() {
-    for (const c of canvases.values()) c.settle();
-    const out = {};
-    for (const [id, c] of canvases) if (c.ops.length) {
-      out[id] = { start: c.total - c.ops.length, ops: c.ops };
+  var STREAM_OPS = 2e4;
+  var STREAM_BYTES = 4 << 20;
+  var stream = null;
+  var held = [];
+  function setStream(f2) {
+    stream = f2;
+  }
+  function takeChunk() {
+    for (const c of pending) c.settle();
+    const canvases = {};
+    for (const c of pending) {
+      canvases[c.id] = { start: c.total - c.ops.length, ops: c.ops };
       c.ops = [];
     }
-    return out;
+    pending.clear();
+    pendingOps = 0;
+    const dead = [];
+    for (const [id, r] of alive) if (!r.deref()) {
+      dead.push(id);
+      alive.delete(id);
+    }
+    const runs = RUNS.slice(0, runsN);
+    runsN = 0;
+    const paints = SPECS;
+    SPECS = [];
+    return { canvases, paints, runs, dead };
+  }
+  function emit() {
+    const c = takeChunk();
+    if (held.length || !stream || !stream(c)) held.push(c);
+  }
+  function handOver() {
+    if (stream && (pendingOps >= STREAM_OPS || runsN >= STREAM_BYTES)) emit();
+  }
+  function endRender() {
+    emit();
+    PAINTS = /* @__PURE__ */ new Map();
+    EPOCH++;
+    return held.splice(0);
+  }
+  function flush() {
+    return takeChunk();
   }
   function release(id) {
-    canvases.delete(id);
+    alive.delete(id);
   }
   var document2 = { createElement(tag) {
     if (tag !== "canvas") throw new Error("headless: only canvases");
@@ -5537,14 +5588,22 @@
     const ctx = c.getContext("2d");
     const R = { structure: f2.structure, camera: f2.camera, overrides: f2.overrides, fitPoints: f2.fitPoints, labels: f2.labels, w: c.width, h: c.height };
     const t0 = Date.now();
-    if (f2.scene) {
-      sceneFrame(f2);
-      renderScene(ctx, R, f2.style, f2.scene, f2.frame, f2.dpr);
-    } else renderClassic(ctx, R, f2.style, f2.frame, f2.dpr);
-    const ops = flush();
+    try {
+      if (f2.scene) {
+        sceneFrame(f2);
+        renderScene(ctx, R, f2.style, f2.scene, f2.frame, f2.dpr);
+      } else renderClassic(ctx, R, f2.style, f2.frame, f2.dpr);
+    } catch (e) {
+      release(c.id);
+      if (e && typeof e === "object") {
+        e.canvas = c.id;
+        e.chunks = endRender();
+      } else endRender();
+      throw e;
+    }
     release(c.id);
-    const runs = takeRuns(), paints = takePaints();
-    return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, canvases: ops, runs, paints };
+    const chunks = endRender();
+    return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, chunks };
   }
   function info(spec) {
     const f2 = settle(spec);
@@ -5660,5 +5719,5 @@
     const log = [];
     g.console = { log: (...a) => log.push(a.join(" ")), warn: (...a) => log.push(a.join(" ")), error: (...a) => log.push(a.join(" ")), _log: log };
   }
-  g.MolSketchCore = { ...core_exports, flush, version: "0.1.0" };
+  g.MolSketchCore = { ...core_exports, flush, setStream, version: "0.1.0" };
 })();

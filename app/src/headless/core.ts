@@ -14,7 +14,7 @@ import { sceneFitPoints, type SceneDoc } from '../classic/scene';
 import { selectAtoms } from '../model/selection';
 import { pcaBasis } from '../render/pca';
 import { pocketSel, frameSite, labelSite, type FigLabel, type SiteHost } from '../app/site';
-import { RecCanvas, flush, release, setMeasure, takeRuns, takePaints } from './canvas';
+import { RecCanvas, endRender, release, setMeasure } from './canvas';
 
 export type Camera = { yaw: number; pitch: number; roll: number; zoom: number; panX: number; panY: number; fov?: number | null };
 export interface FigureSpec {
@@ -149,10 +149,15 @@ export function render(spec: FigureSpec, measure?: (font: string, text: string) 
   const f = settle(spec); const c = new RecCanvas(); c.width = Math.round(f.W * f.dpr); c.height = Math.round(f.H * f.dpr);
   const ctx = c.getContext('2d') as any; const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: c.width, h: c.height };
   const t0 = Date.now();
-  if (f.scene) { sceneFrame(f); renderScene(ctx, R, f.style, f.scene, f.frame, f.dpr) }
-  else renderClassic(ctx, R, f.style, f.frame, f.dpr);
-  const ops = flush(); release(c.id); const runs = takeRuns(), paints = takePaints();
-  return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, canvases: ops, runs, paints };
+  try {
+    if (f.scene) { sceneFrame(f); renderScene(ctx, R, f.style, f.scene, f.frame, f.dpr) }
+    else renderClassic(ctx, R, f.style, f.frame, f.dpr);
+  } catch (e: any) {   // what was recorded still goes to the host, which keeps its canvases in step with these
+    release(c.id); if (e && typeof e === 'object') { e.canvas = c.id; e.chunks = endRender() } else endRender();
+    throw e;
+  }
+  release(c.id); const chunks = endRender();   // the recording, as chunks the host's stream did not already take
+  return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, chunks };
 }
 
 /** the settled figure, for the SDK to show: style, camera, timeline, counts */

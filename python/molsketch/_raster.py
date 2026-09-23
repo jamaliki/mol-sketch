@@ -4,6 +4,7 @@ colours with the global alpha folded in, linear image sampling, the paper's blur
 from __future__ import annotations
 
 import functools
+import json
 import math
 import re
 import struct
@@ -98,49 +99,102 @@ def _mat(m):
     return skia.Matrix.MakeAll(m[0], m[2], m[4], m[1], m[3], m[5], 0, 0, 1)
 
 
+class _Live:
+    """a canvas as the host keeps it: its pixels so far, the replay drawing on them (and the transform it holds), and
+    the ops received but not drawn yet"""
+    __slots__ = ("cid", "surface", "replay", "q", "i", "n")
+
+    def __init__(self, cid: int):
+        self.cid = cid; self.surface = None; self.replay = None; self.q: list = []; self.i = 0; self.n = 0
+
+
 class Raster:
-    """keeps every recorded canvas's ops (they arrive in pieces, render by render) and rasterises any of them as it was
-    at a given op count; results are cached, so a canvas the engine reuses (the paper) is drawn once"""
+    """the recorded canvases, drawn as their ops arrive (in chunks, while the engine is still drawing). A canvas
+    another one draws or patterns with is snapshot where the recording marks it; the engine's long-lived canvases (the
+    paper) stay, the ones it drops go"""
 
     def __init__(self, text: TextEngine):
-        self.ops: dict[int, list] = {}          # ops recorded after the canvas's base
-        self.base: dict[int, tuple[int, skia.Image | None, int, int]] = {}   # ops folded into a snapshot: (count, image, w, h)
-        self.cache: dict[int, tuple[int, skia.Image]] = {}
-        self.shaders: dict[tuple, skia.Shader] = {}
+        self.live: dict[int, _Live] = {}
+        self.snaps: dict[int, skia.Image | None] = {}         # snapshot id → the canvas as it was then
+        self.snap_of: dict[int, list[int]] = {}                # canvas → its snapshots' ids
+        self.shaders: dict[tuple, skia.Paint] = {}
         self.specs: dict[int, list] = {}                      # the recorder's paint table, by id (see canvas.ts)
         self.paints: dict[int, skia.Paint | None] = {}        # and the paints made from it
         self.templates: dict[tuple, skia.Paint] = {}         # paints without their colour, by the rest of the spec
         self.text = text
 
-    def add(self, canvases: dict, runs: bytes | None = None, paints: list | None = None):
-        """take a render's ops; its path runs (P and F ops: offsets into `runs`, serialised SkPaths) become Skia paths
-        now, while the bytes are at hand; `paints` is the render's part of the paint table, id then spec"""
-        if paints: self.specs.update(zip(paints[0::2], paints[1::2]))
-        for cid, c in canvases.items():
-            cid = int(cid); lst = self.ops.setdefault(cid, []); n0 = self.base.get(cid, (0,))[0]
-            if c["start"] != n0 + len(lst): raise RuntimeError(f"canvas {cid}: ops out of order ({c['start']} after {n0 + len(lst)})")
-            ops = c["ops"]
-            if runs is not None:
-                mv = memoryview(runs)
-                for i, o in enumerate(ops):
-                    k = o[0]
-                    if k == "P": ops[i] = ("P", _read_path(mv[o[1]:o[1] + o[2]]), o[3], o[4])
-                    elif k == "F": ops[i] = ("F", o[1], o[2], [(_read_path(mv[o[j]:o[j] + o[j + 1]]), o[j + 2]) for j in range(3, len(o), 3)])
-            lst.extend(ops)
+    # ---- chunks in ----
+    def feed(self, js: str | dict, runs: bytes):
+        """take a chunk (see canvas.ts): its ops queued on their canvases, path runs read into Skia paths, then drawn"""
+        d = json.loads(js) if isinstance(js, str) else js
+        p = d["paints"]
+        if p: self.specs.update(zip(p[0::2], p[1::2]))
+        mv = memoryview(runs); fed = []
+        for cid, c in d["canvases"].items():
+            cid = int(cid); lv = self.live.get(cid)
+            if lv is None: lv = self.live[cid] = _Live(cid)
+            if c["start"] != lv.n: raise RuntimeError(f"canvas {cid}: ops out of order ({c['start']} after {lv.n})")
+            ops = c["ops"]; lv.n += len(ops)
+            for i, o in enumerate(ops):
+                k = o[0]
+                if k == "F": ops[i] = ("F", o[1], o[2], [(_read_path(mv[o[j]:o[j] + o[j + 1]]), o[j + 2]) for j in range(3, len(o), 3)])
+                elif k == "P": ops[i] = ("P", _read_path(mv[o[1]:o[1] + o[2]]), o[3], o[4])
+            if lv.i: lv.q = lv.q[lv.i:]; lv.i = 0
+            lv.q.extend(ops); fed.append(lv)
+        for lv in fed: self._pump(lv)
+        for cid in d["dead"]: self.drop(cid)
 
-    def forget(self, cid: int):
-        self.ops.pop(cid, None); self.cache.pop(cid, None); self.base.pop(cid, None)
+    def _pump(self, lv: _Live, until: int | None = None):
+        """draw a canvas's queued ops (up to and including snapshot `until`)"""
+        q = lv.q; end = len(q)
+        if until is not None:
+            end = next((j + 1 for j in range(lv.i, len(q)) if q[j][0] == "snap" and q[j][1] == until), None)
+            if end is None: raise RuntimeError(f"canvas {lv.cid}: snapshot {until} was never recorded")
+        while lv.i < end:
+            o = q[lv.i]
+            if o[0] == "size":   # a fresh, transparent bitmap, and fresh state
+                w, h = o[1], o[2]; lv.i += 1
+                lv.surface = skia.Surface.MakeRaster(skia.ImageInfo.MakeN32Premul(w, h), 0, PROPS) if w > 0 and h > 0 else None   # PROPS: Chrome's canvas text weight on the Mac
+                lv.replay = _Replay(self, lv, lv.surface.getCanvas(), w, h) if lv.surface is not None else None
+                continue
+            if lv.replay is None:   # an empty canvas: nothing to draw, but its snapshots exist (empty)
+                if o[0] == "snap": self._snapped(lv, o[1])
+                lv.i += 1; continue
+            lv.i = lv.replay.run(q, lv.i, end)
 
-    def compact(self):
-        """fold every canvas's ops into a snapshot, so a canvas the engine keeps (the paper) costs an image, not its ops"""
-        for cid in list(self.ops):
-            if not self.ops[cid]: continue
-            n = self.base.get(cid, (0,))[0] + len(self.ops[cid]); img = self.image(cid)
-            w, h = (img.width(), img.height()) if img is not None else (0, 0)
-            self.base[cid] = (n, img, w, h); self.ops[cid] = []; self.cache[cid] = (n, img) if img is not None else None
-            if self.cache[cid] is None: del self.cache[cid]
-        self.specs.clear(); self.paints.clear()   # no op left refers to them
+    def _snapped(self, lv: _Live, sid: int):
+        self.snaps[sid] = lv.surface.makeImageSnapshot() if lv.surface is not None else None   # copy-on-write: free until drawn on
+        self.snap_of.setdefault(lv.cid, []).append(sid)
 
+    # ---- images out ----
+    def snapshot(self, cid: int, sid: int) -> skia.Image | None:
+        """canvas `cid` as snapshot `sid` recorded it (drawing its queued ops that far, if they are not yet)"""
+        try: return self.snaps[sid]
+        except KeyError: pass
+        lv = self.live.get(cid)
+        if lv is None: raise RuntimeError(f"snapshot {sid} of canvas {cid}: the canvas is gone")
+        self._pump(lv, sid)
+        return self.snaps[sid]
+
+    def image(self, cid: int) -> skia.Image | None:
+        """a canvas as it is, every op received drawn"""
+        lv = self.live.get(cid)
+        if lv is None: return None
+        self._pump(lv)
+        return lv.surface.makeImageSnapshot() if lv.surface is not None else None
+
+    def drop(self, cid: int):
+        """a canvas gone: its pixels and snapshots"""
+        self.live.pop(cid, None)
+        for sid in self.snap_of.pop(cid, ()):
+            self.snaps.pop(sid, None)
+            for k in [k for k in self.shaders if k[1] == sid]: del self.shaders[k]
+
+    def end_render(self):
+        """the render's paints: no op still to draw refers to them"""
+        self.specs.clear(); self.paints.clear()
+
+    # ---- paints ----
     def paint(self, pid: int) -> skia.Paint | None:
         """the paint of an id (shared: whoever changes it copies it first); None when its pattern has no pixels"""
         try: return self.paints[pid]
@@ -160,12 +214,12 @@ class Raster:
             else: p.setColor(skia.Color(round(r * 255), round(g * 255), round(b * 255), round(a * alpha * 255)))
             return p
         pat, snap, rep, m, smooth, alpha, comp, filt = spec[1:9]; pen = spec[9:15] if kind == 3 else None
-        # a pattern: the source canvas as it was when the pattern was made; the shader lives on a cached paint, since
+        # a pattern: the source canvas as snapshot `snap` holds it; the shader lives on a cached paint, since
         # skia-python's setShader on an image shader costs tens of milliseconds and copying a paint that holds one nothing
         key = (pat, snap, rep, tuple(m), smooth)
         sh = self.shaders.get(key)
         if sh is None:
-            img = self.image(pat, snap)
+            img = self.snapshot(pat, snap)
             if img is None: return None
             tile = skia.TileMode.kRepeat
             tx = tile if rep in ("repeat", "repeat-x") else skia.TileMode.kDecal
@@ -173,26 +227,6 @@ class Raster:
             sh = self.shaders[key] = skia.Paint(AntiAlias=True, Shader=img.makeShader(tx, ty, LINEAR if smooth else skia.SamplingOptions(), _mat(m)))
         p = skia.Paint(sh); p.setAlphaf(alpha)
         return _finish(p, comp, filt, pen)
-
-    def image(self, cid: int, upto: int | None = None) -> skia.Image | None:
-        ops = self.ops.get(cid, []); n0, bimg, bw, bh = self.base.get(cid, (0, None, 0, 0))
-        n = n0 + len(ops) if upto is None else upto
-        hit = self.cache.get(cid)
-        if hit and hit[0] == n: return hit[1]
-        if n < n0: raise RuntimeError(f"canvas {cid} as it was at op {n} is no longer kept")
-        k = n - n0   # replay ops[0:k] on top of the base (or on a fresh bitmap after the last resize)
-        resets = [i for i in range(k) if ops[i][0] == "size"]
-        if resets: start = resets[-1]; w, h = ops[start][1], ops[start][2]; first = start + 1; under = None
-        elif n0: w, h, first, under = bw, bh, 0, bimg
-        else: return None
-        if w <= 0 or h <= 0: return None
-        surface = skia.Surface.MakeRaster(skia.ImageInfo.MakeN32Premul(w, h), 0, PROPS)   # Chrome's canvas text weight on the Mac: LCD-rendered, kept grey
-        if under is not None:
-            p = skia.Paint(); p.setBlendMode(skia.BlendMode.kSrc); surface.getCanvas().drawImage(under, 0, 0, skia.SamplingOptions(), p)
-        _Replay(self, surface.getCanvas(), w, h).run(ops, first, k)
-        img = surface.makeImageSnapshot().makeRasterImage()   # its own pixels: shaders and draws of it stay cheap
-        self.cache[cid] = (n, img)
-        return img
 
 
 def _finish(p: skia.Paint, comp: str, filt: str, pen) -> skia.Paint:
@@ -220,8 +254,8 @@ class _Replay:
     """one canvas's ops replayed onto a Skia canvas. The only state kept is the transform (and Skia's clip, through
     save and restore): every draw carries its paint"""
 
-    def __init__(self, raster: Raster, canvas: skia.Canvas, w: int = 0, h: int = 0):
-        self.r = raster; self.c = canvas; self.w = w; self.h = h; self.m = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0); self.stack: list[tuple] = []
+    def __init__(self, raster: Raster, live: _Live, canvas: skia.Canvas, w: int = 0, h: int = 0):
+        self.r = raster; self.live = live; self.c = canvas; self.w = w; self.h = h; self.m = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0); self.stack: list[tuple] = []
         self.path = skia.Path()   # in the space of the matrix it was built under (Blink moves it when the matrix changes)
         self.has_close = False
         self.handed = None   # the path is an F op's own (read from memory): copied before anything changes it
@@ -276,7 +310,8 @@ class _Replay:
         self.path.arcTo(x1, y1, x2, y2, r)
 
     # ---- the loop ----
-    def run(self, ops, i0, i1):
+    def run(self, ops, i0, i1) -> int:
+        """replay ops[i0:i1], stopping at a resize (for the canvas to handle); returns where it stopped"""
         c = self.c; paint = self.r.paint
         for i in range(i0, i1):
             o = ops[i]; k = o[0]
@@ -345,8 +380,10 @@ class _Replay:
             elif k == "text":
                 p = paint(o[6])
                 if p is not None: self.r.text.draw(c, o[2], o[3], o[4], o[7], o[8], o[9], o[5], skia.Paint(p))
-            elif k == "size": raise RuntimeError("resize inside a replay")
+            elif k == "snap": self.r._snapped(self.live, o[1])
+            elif k == "size": return i
             else: raise RuntimeError(f"unknown op {k}")
+        return i1
 
     def _draw_path(self, p):
         if p.getStyle() == skia.Paint.kStroke_Style and self.has_close and _treat_as_hairline(self.m, p.getStrokeWidth()):
@@ -367,7 +404,7 @@ class _Replay:
 
     def _image(self, o):
         _, cid, snap, alpha, comp, smooth, filt, *n = o
-        img = self.r.image(cid, snap)
+        img = self.r.snapshot(cid, snap)
         if img is None: return
         sampling = LINEAR if smooth else skia.SamplingOptions()
         sigma = _blur_sigma(filt)

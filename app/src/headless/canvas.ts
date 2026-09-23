@@ -12,7 +12,8 @@
      fill rule paint / stroke paint / clip rule
      fillRect paint x y w h / strokeRect paint … / clearRect x y w h
      text kind(fill|stroke) s x y maxWidth|null paint font align baseline
-     img id snap alpha composite smoothing filter … (the 2, 4 or 8 drawImage numbers)   snap: the source's op count then
+     img id snap alpha composite smoothing filter … (the 2, 4 or 8 drawImage numbers)   snap: the source's snapshot
+     snap id                        this canvas as it is now is snapshot `id` (drawn or patterned by another canvas)
    Paints are ids into the render's paint table (see Paints). */
 
 import { arcTo, type ArcSink } from './skarc';
@@ -56,7 +57,7 @@ function writeRun(pts: Stream<Float32Array>, vbs: Stream<Uint8Array>, wts: Strea
   runsN = off + len; pts.n = vbs.n = wts.n = 0;
   return [off, len];
 }
-export function takeRuns() { const r = RUNS.slice(0, runsN); runsN = 0; return r }
+
 const f32 = Math.fround;
 
 /** a CSS colour as float RGBA (0..1): #hex, rgb()/rgba(), transparent and a few names; null if Chrome would ignore it */
@@ -88,7 +89,10 @@ const NAMED: Record<string, number[]> = { black: [0, 0, 0], white: [255, 255, 25
   gray: [128, 128, 128], grey: [128, 128, 128], yellow: [255, 255, 0], orange: [255, 165, 0] };
 /** Python's round(): halves to even */
 function roundHalfEven(x: number) { const r = Math.round(x); return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r }
-export const canvases = new Map<number, RecCanvas>();
+/* Canvases: those with ops not yet handed over, and every canvas by weak reference, so the host hears of the ones
+   the engine has let go (their pixels can go too) */
+const pending = new Set<RecCanvas>(), alive = new Map<number, WeakRef<RecCanvas>>();
+let pendingOps = 0, nextSnap = 1;
 /** width of `text` in the CSS `font`, as the host measures it (set by the host before rendering) */
 let measureFn: (font: string, text: string) => number = (_f, t) => t.length * 8;
 export function setMeasure(f: (font: string, text: string) => number) { measureFn = f }
@@ -114,7 +118,9 @@ export class DOMMatrix {
 
 class Pattern {
   m: M6 = [1, 0, 0, 1, 0, 0];
-  constructor(public id: number, public snap: number, public rep: string) { }
+  /** `src` is held so the canvas (and its snapshot, on the host) lives as long as the pattern */
+  constructor(public src: RecCanvas, public snap: number, public rep: string) { }
+  get id() { return this.src.id }
   setTransform(t?: DOMMatrix) { this.m = t ? [t.a, t.b, t.c, t.d, t.e, t.f] : [1, 0, 0, 1, 0, 0] }
 }
 
@@ -134,14 +140,21 @@ const fresh = (): State => ({ m: [1, 0, 0, 1, 0, 0], fillStyle: '#000000', strok
      stroke pattern  3 pat snap rep m smoothing alpha composite filter width cap join miter dash dashOffset
    Ids are never reused; a state keeps its paints' ids for the render they were made in (the epoch). */
 let PAINTS = new Map<string, number>(), SPECS: any[] = [], nextPaint = 1, EPOCH = 0;
-export function takePaints() { const s = SPECS; SPECS = []; PAINTS = new Map(); EPOCH++; return s }
 
 export class RecCanvas {
   id: number; private w = 300; private h = 150; ops: Op[] = []; total = 0; private ctx: RecContext | null = null;
-  constructor() { this.id = nextId++; canvases.set(this.id, this); this.push(['size', 300, 150]) }
+  constructor() { this.id = nextId++; alive.set(this.id, new WeakRef(this)); this.push(['size', 300, 150]) }
   /** the op count when another canvas last took this one's picture: ops before it are never rewritten */
-  frozen = 0;
-  push(op: Op) { this.ops.push(op); this.total++ }
+  frozen = 0; private lastMark = 0; private markAt = -1;
+  push(op: Op) { if (!this.ops.length) pending.add(this); this.ops.push(op); this.total++; pendingOps++ }
+  /** a snapshot of this canvas as it is now, for another canvas to draw or pattern with: a marker in its ops (one per
+     state: a canvas unchanged since its last snapshot gives that one again) */
+  mark(): number {
+    this.settle();
+    if (this.markAt === this.total) return this.lastMark;
+    const sid = nextSnap++; this.push(['snap', sid]); this.frozen = this.total; this.lastMark = sid; this.markAt = this.total;
+    return sid;
+  }
   private resize() { this.ctx?.settle(); this.push(['size', this.w, this.h]); this.ctx?.reset() }
   /** every op so far pushed (a pending run included): before another canvas snapshots this one */
   settle() { this.ctx?.settle() }
@@ -325,8 +338,8 @@ export class RecContext {
     this.emitLine(x + w, y); this.emitLine(x + w, y + h); this.emitLine(x, y + h);
     this.VBS.push(5); this.run!.close = true; this.closed = true;
   }
-  fill(rule: string = 'nonzero') { const eo = rule === 'evenodd', p = this.pid(false); if (!this.fuse(eo ? 1 : 0, p)) this.op('fill', eo ? 'evenodd' : 'nonzero', p) }
-  stroke() { const p = this.pid(true); if (!this.fuse(2, p)) this.op('stroke', p) }
+  fill(rule: string = 'nonzero') { const eo = rule === 'evenodd', p = this.pid(false); if (!this.fuse(eo ? 1 : 0, p)) this.op('fill', eo ? 'evenodd' : 'nonzero', p); handOver() }
+  stroke() { const p = this.pid(true); if (!this.fuse(2, p)) this.op('stroke', p); handOver() }
   /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op, and
      such draws one after another in the same state as one op too:
        F mode (0 fill, 1 even-odd fill, 2 stroke) paint then, per path, offset length hasClose */
@@ -343,8 +356,8 @@ export class RecContext {
     return true;
   }
   clip(rule: string = 'nonzero') { this.opened(); this.op('clip', rule === 'evenodd' ? 'evenodd' : 'nonzero') }
-  fillRect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) this.op('fillRect', this.pid(false), x, y, w, h) }
-  strokeRect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) this.op('strokeRect', this.pid(true), x, y, w, h) }
+  fillRect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) { this.op('fillRect', this.pid(false), x, y, w, h); handOver() } }
+  strokeRect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) { this.op('strokeRect', this.pid(true), x, y, w, h); handOver() } }
   clearRect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) this.op('clearRect', x, y, w, h) }
 
   /* text: shaped and drawn by the host; measured through it too */
@@ -352,7 +365,7 @@ export class RecContext {
   strokeText(t: string, x: number, y: number, maxW?: number) { this.text(true, t, x, y, maxW) }
   private text(stroke: boolean, t: string, x: number, y: number, maxW?: number) {
     if (!fin(x, y) || (maxW !== undefined && !fin(maxW))) return;
-    const s = this.s; this.op('text', stroke ? 'stroke' : 'fill', String(t), x, y, maxW ?? null, this.pid(stroke), s.font, s.textAlign, s.textBaseline);
+    const s = this.s; this.op('text', stroke ? 'stroke' : 'fill', String(t), x, y, maxW ?? null, this.pid(stroke), s.font, s.textAlign, s.textBaseline); handOver();
   }
   measureText(t: string) { return { width: measureFn(this.s.font, String(t)) } }
 
@@ -361,24 +374,43 @@ export class RecContext {
     if (!(img instanceof RecCanvas)) throw new TypeError('drawImage: only canvases can be drawn headless');
     if (!(n.length === 2 || n.length === 4 || n.length === 8) || !fin(...n)) return;
     if (img.width === 0 || img.height === 0) throw new Error('InvalidStateError: drawImage of an empty canvas');
-    const s = this.s; img.settle(); img.frozen = img.total;
-    this.op('img', img.id, img.total, s.globalAlpha, s.globalCompositeOperation, s.imageSmoothingEnabled, s.filter, ...n);
+    const s = this.s, sid = img.mark();
+    this.op('img', img.id, sid, s.globalAlpha, s.globalCompositeOperation, s.imageSmoothingEnabled, s.filter, ...n); handOver();
   }
   createPattern(img: any, rep: string | null) {
     if (!(img instanceof RecCanvas)) throw new TypeError('createPattern: only canvases headless');
-    img.settle(); img.frozen = img.total; return new Pattern(img.id, img.total, rep || 'repeat');
+    return new Pattern(img, img.mark(), rep || 'repeat');
   }
   createLinearGradient(): never { throw new Error('gradients are not recorded headless') }
   createRadialGradient(): never { throw new Error('gradients are not recorded headless') }
 }
 
-/** the ops recorded since the last flush, per canvas, and forget them here (the host keeps them) */
-export function flush(): Record<number, { start: number; ops: Op[] }> {
-  for (const c of canvases.values()) c.settle();
-  const out: Record<number, { start: number; ops: Op[] }> = {};
-  for (const [id, c] of canvases) if (c.ops.length) { out[id] = { start: c.total - c.ops.length, ops: c.ops }; c.ops = [] }
-  return out;
+/* Handing ops to the host: a chunk is every canvas's new ops, the paint specs and path runs they refer to, and the
+   canvases gone since the last one. While the engine draws, chunks go out as they fill (at a draw, so fused ops stay
+   whole) through the host's stream if it has one; what the stream cannot take waits for the end of the render. */
+export interface Chunk { canvases: Record<number, { start: number; ops: Op[] }>; paints: any[]; runs: Uint8Array; dead: number[] }
+const STREAM_OPS = 20000, STREAM_BYTES = 4 << 20;
+let stream: ((c: Chunk) => boolean) | null = null; const held: Chunk[] = [];
+/** the host's stream: takes a chunk (and returns true) or declines it */
+export function setStream(f: ((c: Chunk) => boolean) | null) { stream = f }
+function takeChunk(): Chunk {
+  for (const c of pending) c.settle();
+  const canvases: Chunk['canvases'] = {};
+  for (const c of pending) { canvases[c.id] = { start: c.total - c.ops.length, ops: c.ops }; c.ops = [] }
+  pending.clear(); pendingOps = 0;
+  const dead: number[] = [];
+  for (const [id, r] of alive) if (!r.deref()) { dead.push(id); alive.delete(id) }
+  const runs = RUNS.slice(0, runsN); runsN = 0;
+  const paints = SPECS; SPECS = [];
+  return { canvases, paints, runs, dead };
 }
-/** a canvas the host no longer needs (a finished frame): drop it */
-export function release(id: number) { canvases.delete(id) }
+function emit() { const c = takeChunk(); if (held.length || !stream || !stream(c)) held.push(c) }
+/** after a draw: hand over what has built up, if enough has */
+function handOver() { if (stream && (pendingOps >= STREAM_OPS || runsN >= STREAM_BYTES)) emit() }
+/** the end of a render: the last chunk out, and the chunks the stream did not take (for the host to pull) */
+export function endRender(): Chunk[] { emit(); PAINTS = new Map(); EPOCH++; return held.splice(0) }
+/** everything recorded so far, as one chunk (no stream) */
+export function flush(): Chunk { return takeChunk() }
+/** a canvas the host no longer needs (a finished frame): the host drops it itself */
+export function release(id: number) { alive.delete(id) }
 export const document = { createElement(tag: string) { if (tag !== 'canvas') throw new Error('headless: only canvases'); return new RecCanvas() } };
