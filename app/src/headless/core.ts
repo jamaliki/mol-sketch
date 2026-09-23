@@ -14,7 +14,7 @@ import { sceneFitPoints, type SceneDoc } from '../classic/scene';
 import { selectAtoms } from '../model/selection';
 import { pcaBasis } from '../render/pca';
 import { pocketSel, frameSite, labelSite, type FigLabel, type SiteHost } from '../app/site';
-import { RecCanvas, flush, release, setMeasure, takeRuns } from './canvas';
+import { RecCanvas, flush, release, setMeasure, takeRuns, takePaints } from './canvas';
 
 export type Camera = { yaw: number; pitch: number; roll: number; zoom: number; panX: number; panY: number; fov?: number | null };
 export interface FigureSpec {
@@ -151,8 +151,8 @@ export function render(spec: FigureSpec, measure?: (font: string, text: string) 
   const t0 = Date.now();
   if (f.scene) { sceneFrame(f); renderScene(ctx, R, f.style, f.scene, f.frame, f.dpr) }
   else renderClassic(ctx, R, f.style, f.frame, f.dpr);
-  const ops = flush(); release(c.id); const runs = takeRuns();
-  return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, canvases: ops, runs };
+  const ops = flush(); release(c.id); const runs = takeRuns(), paints = takePaints();
+  return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, canvases: ops, runs, paints };
 }
 
 /** the settled figure, for the SDK to show: style, camera, timeline, counts */

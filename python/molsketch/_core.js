@@ -190,12 +190,25 @@
       const num = (p) => /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/.test(p) ? Number(p) : NaN;
       const ch = parts.slice(0, 3).map((p) => p.endsWith("%") ? num(p.slice(0, -1)) * 2.55 : num(p));
       const a = parts.length === 4 ? parts[3].endsWith("%") ? num(parts[3].slice(0, -1)) / 100 : num(parts[3]) : 1;
-      if (ch.some(isNaN) || isNaN(a)) return str;
+      if (ch.some(isNaN) || isNaN(a)) return null;
       const c = ch.map((x) => Math.min(255, Math.max(0, roundHalfEven(x))));
       return [c[0] / 255, c[1] / 255, c[2] / 255, Math.min(1, Math.max(0, a))];
     }
-    return s === "transparent" ? [0, 0, 0, 0] : str;
+    if (s === "transparent") return [0, 0, 0, 0];
+    const n = NAMED[s];
+    return n ? [n[0] / 255, n[1] / 255, n[2] / 255, 1] : null;
   }
+  var NAMED = {
+    black: [0, 0, 0],
+    white: [255, 255, 255],
+    red: [255, 0, 0],
+    green: [0, 128, 0],
+    blue: [0, 0, 255],
+    gray: [128, 128, 128],
+    grey: [128, 128, 128],
+    yellow: [255, 255, 0],
+    orange: [255, 165, 0]
+  };
   function roundHalfEven(x) {
     const r = Math.round(x);
     return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
@@ -288,8 +301,25 @@
     filter: "none",
     imageSmoothingEnabled: true,
     lineDash: [],
-    lineDashOffset: 0
+    lineDashOffset: 0,
+    fillV: [0, 0, 0, 1],
+    strokeV: [0, 0, 0, 1],
+    fid: 0,
+    fidE: -1,
+    sid: 0,
+    sidE: -1
   });
+  var PAINTS = /* @__PURE__ */ new Map();
+  var SPECS = [];
+  var nextPaint = 1;
+  var EPOCH = 0;
+  function takePaints() {
+    const s = SPECS;
+    SPECS = [];
+    PAINTS = /* @__PURE__ */ new Map();
+    EPOCH++;
+    return s;
+  }
   var RecCanvas = class {
     constructor() {
       __publicField(this, "id");
@@ -359,6 +389,9 @@
       __publicField(this, "PTS", new Stream(new Float32Array(1 << 10)));
       __publicField(this, "VBS", new Stream(new Uint8Array(1 << 9)));
       __publicField(this, "WTS", new Stream(new Float32Array(1 << 6)));
+      /* save and restore reach the host only around what it keeps state for, the transform and the clip: a save is
+         recorded when one of those changes inside it (every save still open then), its restore only if it was */
+      __publicField(this, "saves", []);
       __publicField(this, "sink", {
         has: () => this.hasCur,
         lx: () => this.lx,
@@ -372,6 +405,7 @@
     reset() {
       this.s = fresh();
       this.stack = [];
+      this.saves = [];
       this.newPath();
     }
     newPath() {
@@ -473,13 +507,34 @@
     get knows() {
       return !this.hasCur || this.hasLast && (!this.closed || this.hasStart);
     }
-    /** a state property: consecutive ones share one op, S key value key value … */
-    setProp(k, v, rec = v) {
-      this.s[k] = v;
-      this.settle();
-      const ops = this.canvas.ops, last = ops[ops.length - 1];
-      if (last && last[0] === "S") last.push(k, rec);
-      else this.canvas.push(["S", k, rec]);
+    /** a state property: kept here, and the paints made from the state forgotten (draws carry what they need) */
+    setProp(k, v) {
+      const s = this.s;
+      s[k] = v;
+      s.fidE = s.sidE = -1;
+    }
+    /** the id of the paint this state fills (or strokes) with */
+    pid(stroke) {
+      const s = this.s;
+      if (stroke ? s.sidE === EPOCH : s.fidE === EPOCH) return stroke ? s.sid : s.fid;
+      const v = stroke ? s.strokeV : s.fillV, common = [s.globalAlpha, s.globalCompositeOperation, s.filter];
+      const spec = Array.isArray(v) ? [stroke ? 1 : 0, ...v, ...common] : [stroke ? 3 : 2, v.pat, v.snap, v.rep, v.m, s.imageSmoothingEnabled, ...common];
+      if (stroke) spec.push(s.lineWidth, s.lineCap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
+      const key = JSON.stringify(spec);
+      let id = PAINTS.get(key);
+      if (id === void 0) {
+        id = nextPaint++;
+        PAINTS.set(key, id);
+        SPECS.push(id, spec);
+      }
+      if (stroke) {
+        s.sid = id;
+        s.sidE = EPOCH;
+      } else {
+        s.fid = id;
+        s.fidE = EPOCH;
+      }
+      return id;
     }
     /* state */
     get fillStyle() {
@@ -495,11 +550,13 @@
       this.style("strokeStyle", v);
     }
     style(k, v) {
-      if (v instanceof Pattern) this.setProp(k, v, { pat: v.id, snap: v.snap, rep: v.rep, m: v.m });
-      else if (typeof v === "string") {
-        const c = parseColor(v);
-        if (c !== null) this.setProp(k, v, c);
-      }
+      let e = null;
+      if (v instanceof Pattern) e = { pat: v.id, snap: v.snap, rep: v.rep, m: v.m };
+      else if (typeof v === "string") e = parseColor(v);
+      if (e === null) return;
+      this.setProp(k, v);
+      if (k === "fillStyle") this.s.fillV = e;
+      else this.s.strokeV = e;
     }
     get lineWidth() {
       return this.s.lineWidth;
@@ -587,21 +644,29 @@
     }
     save() {
       this.stack.push({ ...this.s, lineDash: [...this.s.lineDash] });
-      this.op("save");
+      this.saves.push(false);
     }
     restore() {
       const t = this.stack.pop();
       if (!t) return;
       this.s = t;
-      this.op("restore");
+      if (this.saves.pop()) this.op("restore");
+    }
+    opened() {
+      for (let i = 0; i < this.saves.length; i++) if (!this.saves[i]) {
+        this.op("save");
+        this.saves[i] = true;
+      }
     }
     /* transform: the op carries the whole matrix, composed here in doubles as Chrome does */
     setM(m) {
+      const c = this.s.m;
+      if (m[0] === c[0] && m[1] === c[1] && m[2] === c[2] && m[3] === c[3] && m[4] === c[4] && m[5] === c[5]) return;
+      this.opened();
       this.s.m = m;
       this.op("m", ...m);
       if (this.hasCur) this.hasLast = this.hasStart = false;
     }
-    // the host moves the path into the new space
     setTransform(a, b, c, d, e, f2) {
       if (a === void 0) return this.setM([1, 0, 0, 1, 0, 0]);
       if (typeof a === "object") {
@@ -728,60 +793,56 @@
       this.closed = true;
     }
     fill(rule = "nonzero") {
-      const eo = rule === "evenodd";
-      if (!this.fuse(eo ? 1 : 0)) this.op("fill", eo ? "evenodd" : "nonzero");
+      const eo = rule === "evenodd", p = this.pid(false);
+      if (!this.fuse(eo ? 1 : 0, p)) this.op("fill", eo ? "evenodd" : "nonzero", p);
     }
     stroke() {
-      if (!this.fuse(2)) this.op("stroke");
+      const p = this.pid(true);
+      if (!this.fuse(2, p)) this.op("stroke", p);
     }
     /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op, and
        such draws one after another in the same state as one op too:
-         F mode (0 fill, 1 even-odd fill, 2 stroke) then, per path, offset length hasClose */
-    fuse(mode) {
+         F mode (0 fill, 1 even-odd fill, 2 stroke) paint then, per path, offset length hasClose */
+    fuse(mode, paint) {
       this.settle();
-      const c = this.canvas, ops = c.ops;
-      let j = ops.length - 1;
-      while (j >= 0 && ops[j][0] === "S") j--;
-      const pi = j;
-      if (pi < 0 || ops[pi][0] !== "P" || ops[pi][3]) return false;
-      j--;
-      while (j >= 0 && ops[j][0] === "S") j--;
-      const bi = j, at = c.total - ops.length;
-      if (bi < 0 || ops[bi][0] !== "begin" || at + bi < c.frozen) return false;
-      const P = ops[pi], sets = ops.slice(bi + 1, pi).concat(ops.slice(pi + 1)), run = [P[1], P[2], P[4]];
-      const prev = ops[bi - 1];
-      if (!sets.length && prev && prev[0] === "F" && prev[1] === mode && at + bi - 1 >= c.frozen) {
+      const c = this.canvas, ops = c.ops, pi = ops.length - 1, bi = pi - 1, at = c.total - ops.length;
+      if (bi < 0 || ops[pi][0] !== "P" || ops[pi][3] || ops[bi][0] !== "begin" || at + bi < c.frozen) return false;
+      const P = ops[pi], prev = ops[bi - 1];
+      if (prev && prev[0] === "F" && prev[1] === mode && prev[2] === paint && at + bi - 1 >= c.frozen) {
         ops.length = bi;
-        for (const v of run) prev.push(v);
+        prev.push(P[1], P[2], P[4]);
         c.total -= 2;
         return true;
       }
       ops.length = bi;
-      for (const o of sets) ops.push(o);
-      ops.push(["F", mode, ...run]);
+      ops.push(["F", mode, paint, P[1], P[2], P[4]]);
       c.total -= 1;
       return true;
     }
     clip(rule = "nonzero") {
+      this.opened();
       this.op("clip", rule === "evenodd" ? "evenodd" : "nonzero");
     }
     fillRect(x, y, w, h) {
-      if (fin(x, y, w, h)) this.op("fillRect", x, y, w, h);
+      if (fin(x, y, w, h)) this.op("fillRect", this.pid(false), x, y, w, h);
     }
     strokeRect(x, y, w, h) {
-      if (fin(x, y, w, h)) this.op("strokeRect", x, y, w, h);
+      if (fin(x, y, w, h)) this.op("strokeRect", this.pid(true), x, y, w, h);
     }
     clearRect(x, y, w, h) {
       if (fin(x, y, w, h)) this.op("clearRect", x, y, w, h);
     }
     /* text: shaped and drawn by the host; measured through it too */
     fillText(t, x, y, maxW) {
-      if (!fin(x, y) || maxW !== void 0 && !fin(maxW)) return;
-      this.op("text", "fill", String(t), x, y, maxW ?? null);
+      this.text(false, t, x, y, maxW);
     }
     strokeText(t, x, y, maxW) {
+      this.text(true, t, x, y, maxW);
+    }
+    text(stroke, t, x, y, maxW) {
       if (!fin(x, y) || maxW !== void 0 && !fin(maxW)) return;
-      this.op("text", "stroke", String(t), x, y, maxW ?? null);
+      const s = this.s;
+      this.op("text", stroke ? "stroke" : "fill", String(t), x, y, maxW ?? null, this.pid(stroke), s.font, s.textAlign, s.textBaseline);
     }
     measureText(t) {
       return { width: measureFn(this.s.font, String(t)) };
@@ -791,9 +852,10 @@
       if (!(img instanceof RecCanvas)) throw new TypeError("drawImage: only canvases can be drawn headless");
       if (!(n.length === 2 || n.length === 4 || n.length === 8) || !fin(...n)) return;
       if (img.width === 0 || img.height === 0) throw new Error("InvalidStateError: drawImage of an empty canvas");
+      const s = this.s;
       img.settle();
       img.frozen = img.total;
-      this.op("img", img.id, img.total, ...n);
+      this.op("img", img.id, img.total, s.globalAlpha, s.globalCompositeOperation, s.imageSmoothingEnabled, s.filter, ...n);
     }
     createPattern(img, rep) {
       if (!(img instanceof RecCanvas)) throw new TypeError("createPattern: only canvases headless");
@@ -5481,8 +5543,8 @@
     } else renderClassic(ctx, R, f2.style, f2.frame, f2.dpr);
     const ops = flush();
     release(c.id);
-    const runs = takeRuns();
-    return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, canvases: ops, runs };
+    const runs = takeRuns(), paints = takePaints();
+    return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, canvases: ops, runs, paints };
   }
   function info(spec) {
     const f2 = settle(spec);

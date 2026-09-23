@@ -98,10 +98,11 @@ class Engine:
                     r = json.loads(self.v8.call("__render", json.dumps(spec)))
                     r["canvases"] = {cid: {"start": start, "ops": self._pull(cid, n)} for cid, (start, n) in r["sizes"].items()}
                     runs = bytes(self.v8.eval("__runs()"))   # binary, not JSON (eval: call would encode it)
+                    paints = json.loads(self.v8.eval("JSON.stringify(__last.paints)"))
                     self.v8.call("__done")
                 except Exception as e:
                     raise CoreError(_js_message(e)) from None
-                self.raster.add(r["canvases"], runs)
+                self.raster.add(r["canvases"], runs, paints)
                 if not r["miss"] or attempt == 3: break
                 self.raster.forget(r["canvas"])   # a frame drawn with guessed text widths: measure them and draw it again
                 rows = [(f, t, self.text.measure(f, t)) for f, t in {(f, t) for f, t in r["miss"]}]
