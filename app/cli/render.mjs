@@ -3,7 +3,8 @@
 
    node cli/render.mjs input.pdb|input.cif|scene.json [more.pdb …] [options]
                       several structure files (sorted by name) become a stack: one keyframe each
-     --look NAME        watercolour | ink-colour | ink | engraved | assembly-surface | assembly-cartoon
+     --look NAME        watercolour | ink-colour | ink | dark-paper | chalkboard | engraved | engraved-colour |
+                        assembly-surface | assembly-cartoon
      --style FILE       a style JSON saved from the app (applied after --look)
      --set path=value   override one style field, repeatable (reps.cartoon=polymer line.width=2 palette.paper=#fff)
      --size WxH         output pixels (default 1920x1440)

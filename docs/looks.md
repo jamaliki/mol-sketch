@@ -241,7 +241,7 @@ node render.js 5P21.pdb --settings looks/engraved.json \
      --set reps.cartoon=polymer --set "reps.sticks=hetatm and not water" --set view.yaw=60 --set view.pitch=20 --frames 0
 ```
 
-The image is Ras with its nucleotide (the `ras.pdb` of the MolScript distribution). Secondary structure is MolSketch's
+The image is Ras with GppNHp and Mg²⁺ (PDB 5P21, the Ras of MOLSCRIPT's own examples). Secondary structure is MolSketch's
 own assignment (the file's HELIX/SHEET records, or the geometric one), so element boundaries can differ from a
 MolAuto script.
 

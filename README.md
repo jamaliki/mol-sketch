@@ -1,356 +1,216 @@
 # MolSketch
 
-Hand-drawn molecular illustration, frame by frame. MolSketch takes atomic coordinates (PDB, mmCIF, or a
-keyframed scene with curly arrows, charges and captions) and draws them the way an illustrator would:
-ball-and-stick or PyMOL-style sticks, secondary-structure cartoons and molecular surfaces, in coloured
-pencil, pen-and-ink or watercolour, on textured paper, with lines that "boil" from frame to frame so an
-animation feels drawn rather than rendered.
+Hand-drawn molecular illustration. MolSketch takes atomic coordinates (a PDB ID, a PDB or mmCIF file, or a keyframed
+mechanism with curly arrows, charges and captions) and draws them the way an illustrator would: sticks and
+ball-and-stick, cartoons and surfaces, in watercolour, pen and ink, coloured pencil, chalk, or the line-shaded ribbons
+of MOLSCRIPT, on paper, with lines that boil from frame to frame so an animation looks drawn rather than rendered.
 
-It is one self-contained HTML page (`triad-sketch.html`) plus a small Node script (`render.js`) that runs
-the same page headlessly to write PNG or SVG frames.
+![Ras with GppNHp, engraved colour, labelled](docs/img/labels.png)
 
-![Serine hydrolase mechanism, watercolour](docs/img/mechanism_watercolour.png)
-
-| | |
+| Serine hydrolase mechanism, watercolour | Ras, engraved |
 |---|---|
-| ![ink colour](docs/img/ink_colour.png) | ![pencil](docs/img/pencil.png) |
-| ![ribosome surface](docs/img/ribosome_surface_by_subunit.png) | ![ribosome cartoon](docs/img/ribosome_cartoon_by_subunit.png) |
-
-Every image above is reproduced by one command from a settings file in [`looks/`](looks); the commands, and
-what each setting does, are in [docs/looks.md](docs/looks.md). `./make-previews.sh` regenerates them all.
+| ![Serine hydrolase mechanism, watercolour](docs/img/mechanism_watercolour.png) | ![Ras, engraved](docs/img/engraved.png) |
+| **70S ribosome surface, by subunit** | **Pen and ink with coloured hatching** |
+| ![Ribosome surface by subunit](docs/img/ribosome_surface_by_subunit.png) | ![Pen and ink with coloured hatching](docs/img/ink_colour.png) |
 
 ## Contents
 
 - [Quick start](#quick-start)
+- [The app](#the-app)
 - [Looks](#looks)
-- [The page](#the-page)
+- [Engraved ribbons and palettes](#engraved-ribbons-and-palettes)
+- [Labels](#labels)
+- [Mechanisms and animation](#mechanisms-and-animation)
 - [The command line](#the-command-line)
-- [Inputs](#inputs)
-- [Representations and selections](#representations-and-selections)
-- [Fill modes and colour](#fill-modes-and-colour)
-- [Settings reference](#settings-reference)
-- [Exporting](#exporting)
-- [Performance](#performance)
-- [How it works](#how-it-works)
-- [Known limitations](#known-limitations)
+- [Inputs and selections](#inputs-and-selections)
+- [Repository layout](#repository-layout)
+- [Reproducing the images](#reproducing-the-images)
+- [Documentation](#documentation)
 
 ## Quick start
 
 ```bash
-git clone <this repo> && cd triad-sketch
-npm install                      # installs Playwright; Chromium downloads on first use
-
-# a still of a structure, watercolour cartoon + ligand sticks
-node render.js examples/test_protein.pdb --set rep.fill=watercolour --frames 0
-
-# the mechanism demo, every drawn frame as PNG, then a video
-node render.js examples/mechanism.json --frames drawn --out out
-ffmpeg -framerate 12 -pattern_type glob -i 'out/frame_*.png' -c:v libx264 -pix_fmt yuv420p -crf 16 mechanism.mp4
-
-# a ribosome surface coloured by subunit, square, 2160 px
-node render.js 6GZQ.cif --set reps.cartoon= --set reps.surface=polymer --set rep.surfaceColor=subunit \
-                        --set rep.fill=watercolour --size 1080x1080 --scale 2 --frames 0
+git clone git@github.com:jamaliki/triad-sketch.git && cd triad-sketch/app
+npm install
+npm run dev            # open http://localhost:5173
 ```
 
-Or just open `triad-sketch.html` in a browser: it loads with the serine hydrolase demo and every control on
-the right-hand panel.
+Type a PDB ID in the top bar (`5P21`, say) and press *Fetch*, pick a look, turn the molecule, and *Save PNG*. Drop a
+PDB, mmCIF or scene JSON file on the drawing to open your own; drop several structure files to animate between them.
 
-## Interactive app
+## The app
 
-[`app/`](app) is the interactive version: a WebGL2 preview while you rotate, and the canvas engine below,
-included verbatim, drawing the exact frame once the view rests. It loads structures and keyframed scenes, edits
-them (arrows, lone pairs and charges by clicking; keyframe timing, order and cameras; undo), checks them, suggests
-views, and renders a loop to a video file in the browser; it has its own [README](app/README.md) and a headless
-CLI. `cd app && npm install && npm run dev`. SVG output is still only in the page.
+![The app: Ras in engraved colour, with the Labels tab open](docs/img/app.png)
 
-To make a figure like the mechanism example from your own coordinates, see
-[docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): load a PDB stack as keyframes, cut the view down,
-save the scene JSON, add arrows, charges and captions, render.
+While you drag, a WebGL2 preview follows the mouse in a few milliseconds; when the view rests, the stroke engine
+redraws the exact frame with real strokes, hatching and watercolour. Cost follows the visible outline rather than the
+atom count, so a 144 000-atom ribosome settles in about a second.
 
-## The website hero, and animating your own mechanism
+- **Top bar**: *Open…*, *Examples*, fetch a PDB ID from RCSB, undo / redo, *Save PNG*, *Export…*, and `?` for every
+  shortcut.
+- **Look**: the looks, what to draw (sticks, cartoon, surface, each with one-click choices or any selection), fill,
+  marks, and fine tuning for lines, hatching, watercolour and paper.
+- **Colour**: what is coloured by what, the group palettes, per-residue or per-chain overrides, every swatch.
+- **Labels**: labels you place on the figure, which automatic labels show, and their font, size and colour.
+- **View**: camera, fog and light, suggested views, framing into a box of the canvas, turntable and boiling.
+- **Scene** (with a mechanism loaded): keyframes and their timing, curly arrows, lone pairs and charges by clicking,
+  and checks. A timeline under the drawing plays, steps and jumps between keyframes.
+- **Export**: a PNG or poster at any size, the loop as a video (AV1, VP9 or H.264, encoded in the browser), the scene
+  and style as JSON, and the command that renders exactly what is on screen from the terminal.
 
-[`hero/`](hero) renders the mechanisms as the front-page loop of the lab website: the schematic serine hydrolase and
-CALB / pNPA from computed coordinates, on dark paper or as chalk, for desktop and phone, with a mock-up of the page.
-`cd hero && ./render.sh calb`. [docs/hero-workflow.md](docs/hero-workflow.md) is the route from a set of computed
-states to such a loop: `tools/mech2scene.py` builds the scene from a recipe, the app or the CLI frames it, `render.sh`
-renders and encodes it.
+*Find a setting* (`/`) searches every tab. Every change can be undone, and the style is kept in the browser between
+visits. The app's own [README](app/README.md) covers how the renderers fit together.
 
 ## Looks
 
-`looks/*.json` are complete settings files, the format *Data › Save settings* writes. Pass one with
-`--settings` and add `--set` flags for the camera and the selections; the result is exactly the images in
-this README. [docs/looks.md](docs/looks.md) documents each one, setting by setting.
+A look sets everything at once; change anything afterwards. The app's *Looks* and the settings files in
+[`looks/`](looks) are the same set, documented setting by setting in [docs/looks.md](docs/looks.md).
 
-| file | what it is |
-|---|---|
-| `looks/watercolour.json` | translucent washes on cream paper; the default for finished work |
-| `looks/ink-colour.json` | pen and ink with coloured hatching, white paper |
-| `looks/ink.json` | the same in black ink only |
-| `looks/pencil.json` | coloured-pencil scribble fills with construction lines |
-| `looks/dark-paper.json` | watercolour on the website's navy: pale ink, pigment laid down, no wash |
-| `looks/chalkboard.json` | chalk on the same navy: dusty fills, soft white line, the board's tooth |
-| `looks/assembly-surface.json` | watercolour surface coloured by subunit, for large complexes |
-| `looks/assembly-cartoon.json` | tube/ribbon cartoon coloured by subunit, thin pen, heavy fog |
-| `looks/engraved.json` | line-shaded ribbons, black on white, after MOLSCRIPT figures |
-| `looks/engraved-colour.json` | the same with colour only in the lines: five heavier coloured lines per face |
+| look | | file |
+|---|---|---|
+| Watercolour | translucent washes on cream paper; the default for finished work | `looks/watercolour.json` |
+| Ink colour | pen and ink with coloured hatching on white | `looks/ink-colour.json` |
+| Ink | the same in black ink only | `looks/ink.json` |
+| Pencil | coloured-pencil scribble fills with construction lines (page only) | `looks/pencil.json` |
+| Dark paper | pastel pigment on the lab website's navy, pale ink, no wash | `looks/dark-paper.json` |
+| Chalkboard | chalk on the same navy: dusty fills, soft pitted lines | `looks/chalkboard.json` |
+| Engraved | line-shaded ribbons, black on white, after MOLSCRIPT (Kraulis 1991) | `looks/engraved.json` |
+| Engraved colour | the engraved ribbons with colour only in the lines | `looks/engraved-colour.json` |
+| Assembly surface | watercolour surface coloured by subunit, for large complexes | `looks/assembly-surface.json` |
+| Assembly cartoon | tubes and ribbons by subunit, thin pen, heavy fog | `looks/assembly-cartoon.json` |
 
-```bash
-node render.js examples/mechanism.json --settings looks/watercolour.json --frames drawn --out out
-node render.js 6GZQ.cif --settings looks/assembly-surface.json \
-     --set reps.cartoon= --set reps.sticks= --set reps.surface=polymer --size 900x900 --frames 0
-```
+| Pencil | Dark paper | Chalkboard |
+|---|---|---|
+| ![pencil](docs/img/pencil.png) | ![dark paper](docs/img/dark_paper.png) | ![chalkboard](docs/img/chalkboard.png) |
+| **Ink** | **Watercolour cartoon** | **Assembly cartoon** (70S ribosome) |
+| ![ink](docs/img/ink.png) | ![cartoon, watercolour](docs/img/protein_cartoon_watercolour.png) | ![ribosome cartoon by subunit](docs/img/ribosome_cartoon_by_subunit.png) |
 
-## The page
+## Engraved ribbons and palettes
 
-`triad-sketch.html` needs no server; open it from disk. Fonts (Caveat, Patrick Hand, Kalam, IBM Plex) and
-JSZip are fetched from Google Fonts and cdnjs, so the handwriting faces need a network connection; without
-one the page still works with fallback fonts.
+The engraved cartoon is a port of MOLSCRIPT's schematic geometry (helices along the local helix axis, smoothed strands
+with stepped arrowheads, Priestle-smoothed coils) drawn the way its PostScript figures were: every face is paper with
+lines running along it. As a face turns edge-on its lines thin out rather than fuse into a band, the colour they
+carried stays as a pale tint, and the edges of a helix seen end-on take the ribbon's dark shade, so a helix pointing
+at the viewer stays both coloured and legible. Where a helix turns over, its silhouette is inked.
 
-**Transport.** Play/pause (space), step one frame (←/→), jump between keyframes (⇧←/→), a scrubber with
-keyframe markers, loop and speed.
+![Ras, engraved colour](docs/img/engraved_colour.png)
 
-**Panels.**
+In engraved colour, a group palette colours the ribbons too: helix, sheet and coil take the first colours of the
+palette that stand out against the paper (contrast at least 2.2) and from each other (ΔE at least 25), in the
+palette's own order. Palettes whose first three already work are used as they are; pale ones skip to their stronger
+colours, and a colour is deepened toward the ink only when the palette runs out. There are 29 palettes, from the
+colour-blind-safe sets (Okabe–Ito, Paul Tol, Tableau) to the studies in *jamaliki/design-corner*.
 
-- *Representation* — the three selections (sticks, cartoon, surface), stick style, fill mode, colour schemes,
-  stick radius, sphere size, cartoon width, surface probe and opacity.
-- *Motion* — frames per second, "step every" (draw a new pose every N frames: 2 = animating on twos),
-  "boil every" (re-randomise the line jitter every N frames), arrow lead (how far ahead of the atom motion
-  the curly arrows appear).
-- *Line & shading* — roughness, passes, pen pressure, line hierarchy, ink and bond width, hatch spacing,
-  angle and density, light direction, shading, pencil fill, fill wobble, paper grain, watercolour wash
-  (amount, pattern, life), lettering font and sizes, pocket opacity.
-- *Palette* — a preset menu (PyMOL flat, Colored pencil, Ink + one colour, Blueprint, Chalkboard, Sepia
-  wash) and a swatch for every colour: paper, ink, shading, arrows, charges, labels, pocket, accent, each
-  element, helix/sheet/loop/nucleic, surface, wash.
-- *Show / hide* — hydrogens, construction lines, valence (double bonds), lone pairs, charges, arrows,
-  labels, residue labels, hydrogen bonds, pocket outline, caption, step title.
-- *View* — yaw, pitch, zoom, pan, field of view (0 = orthographic, 20 = PyMOL's default), depth fog and
-  where it starts.
-- *Export* — canvas size and resolution; PNG of the current frame, PNG sequence (zip), WebM video, SVG of the
-  current frame, SVG sequence (zip).
-- *Data* — load a scene JSON, load a PDB/mmCIF stack, save the scene JSON, save/load/reset settings, frames
-  per PDB, and the scene JSON format.
+| Coastal Harvest | Okabe–Ito | Tol muted |
+|---|---|---|
+| ![](docs/img/palette_coastal_harvest.png) | ![](docs/img/palette_okabe_ito.png) | ![](docs/img/palette_tol_muted.png) |
 
-Settings persist in the browser between visits. *Reset settings* returns to the defaults.
+## Labels
+
+Press *+ Add label* (or `L`) and click the drawing. On an atom or a ribbon the label is pinned to that residue, starts
+as its name (`Gly12`), and turns with the molecule; anywhere else it stays where it is on the canvas. Type the text,
+drag it off the atom (a leader runs back once it is far enough), double-click to edit, right-click or Delete to
+remove. *Labels on / off* on the drawing hides every label at once, and the Labels tab chooses which kinds show: the
+ones you placed, a scene's atom labels, residue labels, and α/β numbering on engraved ribbons (off by default).
+
+Placed labels are part of the figure: they are saved in the scene JSON (`labels`, see
+[docs/scene-format.md](docs/scene-format.md)) and drawn in every PNG, poster, video and CLI render.
+
+## Mechanisms and animation
+
+A scene is a list of keyframes, each with atoms, bonds, curly arrows, lone pairs, charges and a caption; MolSketch
+interpolates between them, draws bonds forming and breaking, and times the arrows ahead of the atoms. The example
+`examples/mechanism.json` is the serine hydrolase mechanism at the top of this page.
+
+- [docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): from your own coordinates to a mechanism figure: load a
+  PDB stack as keyframes, cut the view down, add arrows, charges and captions by clicking, render.
+- [docs/hero-workflow.md](docs/hero-workflow.md): from computed states to a looping video, as for the lab website's
+  front page ([`hero/`](hero), [`tools/mech2scene.py`](tools/mech2scene.py)).
+- [docs/scene-format.md](docs/scene-format.md): the scene JSON, field by field.
 
 ## The command line
 
-`render.js` launches Chromium through Playwright, loads the page, applies your inputs and settings, and
-writes frames. Output is pixel-identical to the page.
-
-```
-node render.js input [input …] [options]
-
-  input            scene .json, or one or more .pdb / .cif files (sorted by name → one keyframe each)
-  --out DIR        output folder (default ./out)
-  --format png|svg (default png)
-  --scale N        raster scale 1–4 (default 2): 960×720 canvas at scale 2 gives 1920×1440
-  --size WxH       canvas size in CSS px (default 960x720)
-  --frames SPEC    all | drawn | keyframes | N | A-B      (default all)
-                   drawn = one frame per new drawing (respects "step every"), no duplicates
-                   keyframes = the first frame of each keyframe's hold
-  --settings F     a settings JSON saved from the page (Data › Save settings)
-  --set path=val   override one setting; repeatable (see below)
-  --turntable N    render N frames of one full yaw rotation (sets view.spin = 360·fps/N); add
-                   --set view.pitchSwing=12 for a gentle nod. Fit uses the bounding sphere so the
-                   size does not breathe as the molecule turns; raise view.zoom to fill the frame
-  --list           print the timeline (keyframes, holds, transitions) and exit
-```
-
-`--set` addresses the settings object by dotted path. Anything under `rep`, `view`, `style`, `show`,
-`palette`, or the top-level motion keys (`fps`, `stepEvery`, `boilEvery`, `arrowLead`) is a setting. Two
-prefixes address the *scene* instead: `reps.sticks`, `reps.cartoon`, `reps.surface` (selections) and
-`groupColors.<key>` (colour overrides). Values are parsed as numbers or booleans when they look like one;
-quote strings with spaces: `--set reps.sticks="hetatm and not water"`. An empty value clears a selection:
-`--set reps.cartoon=`.
-
-Examples:
+The app renders headlessly with the same engine, so a file from the terminal matches what the app shows.
 
 ```bash
-node render.js frames/*.pdb --set reps.cartoon=polymer --set reps.sticks="hetatm and not water" \
-                            --set rep.fill="ink colour" --frames drawn
-node render.js examples/mechanism.json --format svg --frames keyframes --out svg
-node render.js 6GZQ.cif --set reps.cartoon=polymer --set reps.sticks= --set rep.cartoonColor=carbon \
-                        --set rep.colorBy=subunit --set style.inkWidth=0.5 --set view.fog=0.7 --set view.fogStart=0.3
-node render.js scene.json --settings my-look.json --frames 120-240 --out part2
-node render.js 6GZQ.cif --set reps.cartoon= --set reps.surface=polymer --set rep.surfaceColor=subunit \
-                        --set rep.fill=watercolour --set view.pitchSwing=12 --size 960x960 --turntable 72 --out turn
-ffmpeg -framerate 12 -pattern_type glob -i 'turn/frame_*.png' -c:v libx264 -pix_fmt yuv420p turntable.mp4
+cd app && npm run build                       # the CLI renders the built app
+curl -O https://files.rcsb.org/download/5P21.cif
+node cli/render.mjs 5P21.cif --look engraved-colour --set "reps.sticks=hetatm and not water" \
+                    --yaw 60 --pitch 20 --size 1600x1200 --out out
+node cli/render.mjs public/examples/mechanism.json --look watercolour --frames drawn --out mech
+node cli/render.mjs 6GZQ.cif --look assembly-surface --turntable 72 --size 1080x1080 --out turn
+                                              # 6GZQ: the 70S ribosome, from RCSB as above
 ```
 
-The easiest workflow is to find the look in the page, *Save settings*, and pass that file with
-`--settings`; use `--set` for the one or two things that change per render.
+`--style` takes a style saved from the app, `--set path=value` changes one field (`palette.helix=#de9151`,
+`line.width=2`), `--fit` frames the drawing into a box of the canvas, and `node cli/render.mjs --help` lists the rest.
+In the app, *Export › Command line* copies the exact command for what is on screen.
 
-## Inputs
+`render.js` at the top level drives the standalone page `triad-sketch.html` the same way and is the route to **SVG**:
+every line and fill as an editable vector path. It is documented, with the page's panels and every engine setting, in
+[docs/reference.md](docs/reference.md).
 
-### PDB and mmCIF
+## Inputs and selections
 
-One file → one keyframe. Several files (or a multi-MODEL PDB, or a multi-model mmCIF) → a stack of keyframes
-in filename order; each is held for `pdbFrames` frames (page: *frames per PDB*), and atoms are interpolated
-linearly between consecutive keyframes. Bonds that exist in one keyframe and not the next are drawn forming
-or breaking (dotted), and bond order changes are animated. This is the intended path for a mechanism made
-from a series of structures: write out the intermediates (and interpolated frames if you want your own
-easing) as a numbered set of files.
+- **PDB and mmCIF**: coordinates, alternate location A, secondary structure from the file or assigned from Cα
+  geometry, nucleic acids, and mmCIF entities (ribosome subunits S, L, T drive the *subunit* colouring). Several files
+  or a multi-model file become keyframes, matched atom by atom.
+- **Scene JSON**: keyframes with arrows, charges, lone pairs, captions, cameras and placed labels.
 
-What is read:
-
-- ATOM/HETATM coordinates, element (from the element column, else the atom name), alternate location A only,
-  residue name/number, chain (auth_asym_id in mmCIF).
-- CONECT records if present; otherwise bonds by covalent distance (a 2.2 Å grid, so large files load quickly).
-- Secondary structure from HELIX/SHEET (PDB) or `_struct_conf`/`_struct_sheet_range` (mmCIF). Without
-  either, helices and strands are assigned from Cα geometry with P-SEA-style distance and pseudo-angle rules.
-- Nucleic acids are recognised from their sugar-phosphate atoms; their trace atom is P (fallback C4′) and
-  they are drawn as tubes.
-- mmCIF entities: `_entity.pdbx_description` and `_entity_poly.pdbx_strand_id` give every chain an entity
-  id and, for ribosomes, a subunit (S for 30S/16S/18S/40S, L for 50S/23S/5S/28S/60S, T for tRNA/mRNA, X
-  otherwise). These drive the `entity` and `subunit` colour schemes and selections.
-- On load the stack is rotated by principal axes so its widest spread lies in the picture plane; adjust
-  under *View*.
-
-### Scene JSON
-
-A scene is a list of keyframes, each with atoms, bonds, curly arrows and a caption. Load a PDB stack in the
-page, *Save scene JSON*, and edit that file to add arrows, charges, lone pairs and labels; then render it
-with the script. The full format is in [docs/scene-format.md](docs/scene-format.md).
-
-## Representations and selections
-
-Three representations can be shown at once, each on its own selection:
-
-- **sticks** — PyMOL-style sticks (half-bonds coloured by element, small spheres at cut points) or
-  pencil ball-and-stick (`rep.mode`: `sticks` | `ballstick`). Curly arrows, charges, lone pairs and
-  labels attach to stick atoms.
-- **cartoon** — helices as ribbons (width along the helix axis, front and back faces shaded), strands as
-  arrows, loops as thin tubes, nucleic backbones as thicker tubes. With a cartoon shown, backbone atoms of
-  those residues are dropped from sticks (`rep.sideChainHelper`).
-- **surface** — Goodsell-style: each residue's van der Waals discs (plus half the probe radius) become one
-  patch; patches are painted back to front with depth-dependent tone and a light from the top-left, and the
-  outer silhouette gets a drying ring.
-
-Selections use a small PyMOL-like language:
+Each representation takes a selection in a PyMOL-like language:
 
 ```
 all  none  polymer  hetatm  water  protein  nucleic  backbone  sidechain  hydro
 resi 57+102+195   resi 190-200   resn SER+HIS   name CA+CB   chain A+B   elem C+N
-ss H+E   subunit S+L   entity 1+3   group SER195   id <atom id>
-and  or  not  ( … )
+ss H+E   subunit S+L   entity 1+3   and  or  not  ( … )
 ```
 
-Examples: `hetatm and not water`, `chain A and resi 50-120`, `polymer and not hydro`, `subunit L`.
+for example `hetatm and not water`, `chain A and resi 50-120`, `subunit L`.
 
-## Fill modes and colour
+## Repository layout
 
-`rep.fill` sets how shapes are filled; outlines are always ink.
-
-| mode | look |
+| path | what it is |
 |---|---|
-| `flat` | solid colour, PyMOL's flat-shaded illustrative look |
-| `wash` | a pale tint under the ink |
-| `pencil` | coloured-pencil scribble fills that stray past the line, three outline passes, construction lines suit this |
-| `watercolour` | stacked translucent layers with fractal edges, a darker drying ring and granulation, multiplied over the paper |
-| `ink` | paper only; nitrogen stippled, oxygen hatched, sulfur cross-hatched, carbon plain; a tick at each bond midpoint |
-| `ink colour` | as ink, but the hatching takes the element or residue colour and carbons get a sparse hatch in theirs |
+| [`app/`](app) | the interactive app (Vite + TypeScript, WebGL2) and its headless CLI, `app/cli/render.mjs` |
+| `triad-sketch.html` | the standalone page: the drawing engine with its own panels, no server needed |
+| `render.js` | renders the page headlessly to PNG or SVG |
+| [`looks/`](looks) | the looks as settings files |
+| [`examples/`](examples) | a mechanism scene, test structures, a synthetic 12k-atom assembly |
+| [`hero/`](hero) | the lab website's animated hero, scenes and render script |
+| [`tools/`](tools) | `mech2scene.py`: a scene from computed reaction states |
+| [`docs/`](docs) | the guides below, and the images in this README |
 
-Carbon colour (`rep.colorBy`): `group` (the scene's `groupColors`, else element grey), `element`, `residue`
-(auto palette), `chain`, `subunit`, `entity`. Heteroatoms always take their element colour; the automatic
-palettes contain no blues or reds so they never collide with N and O.
+## Reproducing the images
 
-Cartoon colour (`rep.cartoonColor`): `ss` (helix/sheet/loop/nucleic palette entries) or `carbon` (the
-scheme above). Surface colour (`rep.surfaceColor`): `single` (palette `surface`), `chain`, `subunit`,
-`entity`, `carbon`, `element`.
+The looks gallery comes from `./make-previews.sh` (the commands, look by look, are in [docs/looks.md](docs/looks.md)).
+The engraved images are Ras with GppNHp and Mg²⁺ (PDB 5P21) and 7SXY, rendered with the app's CLI from `app/` after
+`npm run build`:
 
-Overrides go in the scene's `groupColors`, keyed by residue (`SER195`), chain ID (`A`), `subunit:S`,
-`subunit:L`, `subunit:T`, or `entity:<id>`; e.g. `--set groupColors.subunit:L=#e6a45a`.
+```bash
+for look in engraved engraved-colour; do
+  node cli/render.mjs 5P21.cif --look $look --set "reps.sticks=hetatm and not water" \
+                      --yaw 60 --pitch 20 --size 1600x1200 --out $look
+done
+# palettes: the ribbon colours the app picks from Coastal Harvest
+# (Okabe–Ito gives #e69f00 #56b4e9 #009e73, Tol muted #cc6677 #332288 #117733)
+node cli/render.mjs 7SXY.cif --look engraved-colour --set reps.sticks= --zoom 1.15 --size 1200x900 \
+     --set palette.helix=#a799b7 --set palette.sheet=#47a8bd --set palette.loop=#de9151
+```
 
-## Settings reference
+The labelled figure is the same view of 5P21 with labels placed on Gly12 (P-loop), Tyr32 (Switch I),
+Gln61 (Switch II), the nucleotide and the magnesium ion, saved as a scene and rendered with `--look engraved-colour
+--set labelSize=30 --zoom 1.3`.
 
-Defaults in parentheses. Everything is reachable from `--set` and from the page.
+## Documentation
 
-**Motion** — `fps` (24), `stepEvery` (2: a new pose every second frame), `boilEvery` (2: re-jitter the
-lines every second frame), `arrowLead` (0.2: fraction of a transition during which the arrows draw before
-the atoms move), `pdbFrames` (2: frames per file in a PDB stack).
+- [app/README.md](app/README.md): the app, its renderers and its CLI
+- [docs/looks.md](docs/looks.md): every look, setting by setting, with the command that makes its image
+- [docs/scene-format.md](docs/scene-format.md): the scene JSON
+- [docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): a mechanism figure from your own structures
+- [docs/hero-workflow.md](docs/hero-workflow.md): computed states to a looping video
+- [docs/reference.md](docs/reference.md): the standalone page, `render.js`, every engine setting, performance, how
+  the drawing works, and known limitations
 
-**rep** — `mode` sticks|ballstick, `fill` (flat), `colorBy` (group), `stickRadius` Å (0.2),
-`sphereScale` (0.4), `sideChainHelper` (true), `cartoonColor` ss|carbon, `cartoonScale` (1),
-`surfaceColor` (single), `probe` Å (1.4), `surfaceScale` (1), `surfaceOpacity` (1).
+MolSketch was called Triad Sketch until September 2026; scripts that use `window.TriadSketch` still work.
 
-**view** — `yaw`, `pitch` degrees, `zoom` (1), `panX`, `panY` (fractions of the canvas), `fov` degrees
-(20; 0 = orthographic), `fog` (0.5), `fogStart` (0.45: fraction of the depth range before fog begins),
-`spin` degrees per second of turntable yaw (0 = off; the page's *turntable* slider), `pitchSwing` degrees
-of pitch oscillation per turn (0).
-
-**style** — `rough` (1.1: line jitter amplitude), `passes` (2: overdrawn strokes per line), `pressure`
-(0.55: pen-pressure width variation), `hierarchy` (0.6: silhouettes heavier, interior marks lighter),
-`inkWidth` (1.5), `bondWidth` (2.1, ball-and-stick only), `ballScale` (1, ball-and-stick only),
-`hatchSpacing` px (5), `hatchAngle` degrees (−40), `hatchDensity` (1.4), `lightAngle` degrees (−125),
-`shading` (0.65), `pencilFill` (0.55), `fillWobble` (1: how far fills stray from the ink), `grain` (0.6),
-`wash` (0.3: watercolour on the paper), `washSeed` (1), `washLife` (0.6: how much the wash breathes per boil),
-`contextAlpha` (0.5: pocket blob), `font` Caveat|Patrick Hand|Kalam|Plain sans, `labelSize` (19),
-`captionSize` (24), `annot` (1: scale of lone-pair dots, charge circles and arrow heads, for drawings whose
-atoms are small on the page).
-
-**show** — `H`, `construction`, `valence`, `colorBonds` (ball-and-stick), `lonePairs`, `charges`,
-`arrows`, `labels`, `resLabels`, `hbonds`, `context`, `caption`, `stepLabel`.
-
-**palette** — `paper`, `ink`, `hatch`, `arrow`, `charge`, `label`, `context`, `accent`, `C`, `N`, `O`,
-`H`, `S`, `P`, `X` (other elements), `helix`, `sheet`, `loop`, `nucleic`, `surface`, `wash`.
-
-## Exporting
-
-From the page (*Export*): PNG of the current frame, PNG sequence as a zip (one file per drawn frame,
-with a README giving the ffmpeg line), WebM video recorded in real time, SVG of the current frame, SVG
-sequence as a zip. Downloads go through the browser's save prompt.
-
-From the script: `--format png` or `--format svg`, then ffmpeg for video.
-
-**SVG.** Every line and fill is a vector path (strokes are drawn as filled polygons with varying width, so
-they stay editable). The paper, its grain and the watercolour layers are embedded as PNG images at `--scale`
-resolution. Blend modes use `mix-blend-mode: multiply`, which browsers and Inkscape honour; Illustrator
-flattens them, so for Illustrator either accept flat colour or rasterise the watercolour first. Expect
-2–6 MB per frame.
-
-## Performance
-
-Rough per-frame times on a laptop at 960×720, scale 2:
-
-| scene | flat / ink | watercolour |
-|---|---|---|
-| active site, 40 atoms | 10–20 ms | 0.3–0.4 s |
-| 300-residue protein, cartoon | 0.1 s | 1–2 s |
-| 70S ribosome (144k atoms), cartoon or surface | 3–5 s | 10–13 s |
-
-Loading a 144k-atom mmCIF takes about 90 s (bond search, secondary structure, principal axes). The page
-draws only when the frame changes; watercolour and "wash life" are the expensive parts, so scrub with
-`flat` and switch to `watercolour` to export. Above 260 stick atoms the renderer drops to one outline pass.
-
-## How it works
-
-Everything is 2D canvas. Per frame: interpolate the keyframes (positions, bond orders, charges, lone pairs,
-arrows with their own timing), rotate and project with a PyMOL-like camera (field of view sets the camera
-distance from the scene width), then build a painter's list of items — half-sticks, junction rings and
-fills, spheres, cartoon quads, surface patches — sorted by depth and drawn back to front.
-
-Every visible line is a "sketch stroke": the ideal polyline is resampled, offset by low-frequency noise
-plus a small random jitter and an overall bow, given a pen-pressure width profile, and filled as a polygon;
-a second pass at lower opacity overdraws it. The noise seed advances every `boilEvery` frames, so lines
-boil. Cartoon fills wobble on their own seed so they misregister from the ink.
-
-Watercolour is a stack of lightly deformed copies of a shape at low opacity, multiplied over the paper:
-where the copies agree the pigment builds, where they disagree the edge feathers, and their outlines pile
-into the drying ring. Long thin shapes are deformed without scaling; ribbon runs are painted into their own
-offscreen layer and revealed quad by quad so a nearer turn covers a farther one. Pools are painted into an
-offscreen layer at full strength and composited once, because canvas stores colour premultiplied by alpha
-and very low-alpha layers quantise to pink.
-
-Secondary structure, when not in the file, is assigned from Cα distances d2, d3, d4 and the pseudo-angles
-τ and α with P-SEA's thresholds, single gaps filled, runs shorter than four (helix) or three (strand)
-discarded, helices extended by one residue at each end.
-
-## Known limitations
-
-- Occlusion is painter's order per item, not per pixel: a very long stick crossing a ball at a different
-  depth can draw wrongly. Small scenes never show this; huge ones rarely do.
-- The surface is a 2D union of discs, not a rolled-probe surface; it is a drawing convention, not geometry.
-- Cartoon helices follow the Cα spline directly (PyMOL smooths them further).
-- No lighting on sticks beyond the pen shading; no shadows.
-- Playback of watercolour or pencil at 24 fps is not real time on most machines; export instead.
+MIT licence, © 2026 Kiarash Jamali.
