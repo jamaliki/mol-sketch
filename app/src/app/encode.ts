@@ -10,7 +10,7 @@ export type CodecName = 'av1' | 'vp9' | 'h264';
 export type Quality = 'small' | 'medium' | 'high';
 export interface RenderJob {
   width: number; height: number; fps: number; codec: CodecName; quality: Quality; frames: number[];
-  draw: (ctx: CanvasRenderingContext2D, W: number, H: number, frame: number) => void;
+  draw: (ctx: CanvasRenderingContext2D, W: number, H: number, frame: number) => void | Promise<void>;
   onProgress?: (done: number, total: number, bytes: number) => void;
   cancelled?: () => boolean;
 }
@@ -70,7 +70,7 @@ export async function renderVideo(job: RenderJob): Promise<RenderResult> {
   const n = job.frames.length; const us = Math.round(1e6 / fps);
   for (let i = 0; i < n; i++) {
     if (err) throw err; if (job.cancelled?.()) { encoder.close(); throw new Error('cancelled') }
-    job.draw(ctx, W, H, job.frames[i]);
+    await job.draw(ctx, W, H, job.frames[i]);
     const vf = new VideoFrame(canvas, { timestamp: i * us, duration: us });
     encoder.encode(vf, opts(i % (fps * 10) === 0)); vf.close();
     while (encoder.encodeQueueSize > 3) await new Promise(r => setTimeout(r, 5));   // keep the queue short: frames are big

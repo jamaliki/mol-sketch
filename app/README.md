@@ -41,6 +41,15 @@ The side panel has one tab per task, and a search box (`/`) that finds any setti
 and by script. Every control edits one field of the style, which is saved in the browser and can be exported / imported
 as JSON.
 
+## Drawing through the Python package
+
+`molsketch serve` (from [../python](../python)) serves this app and draws its figures: the rested frame, Save PNG,
+posters and every video frame are drawn by the Python package, from a figure spec the app sends
+(`src/app/sdk.ts`: the input once, then the full style, camera, labels, group colours, frame and size). The
+GPU preview still follows the mouse. The drawing core is `src/headless/core.ts`, built for the package by
+`scripts/build-python.mjs`; opened without the server (or with `?sdk=off`), the app draws with that same core in the
+browser. While developing, `npm run dev` finds a `molsketch serve` on localhost:8471 by itself.
+
 ## How it works
 
 Three renderers share one G-buffer. The GPU resolves what is visible; the classic engine or the sketch pass draws it.

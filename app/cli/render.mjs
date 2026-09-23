@@ -7,7 +7,8 @@
                         assembly-surface | assembly-cartoon
      --style FILE       a style JSON saved from the app (applied after --look)
      --set path=value   override one style field, repeatable (reps.cartoon=polymer line.width=2 palette.paper=#fff)
-     --size WxH         output pixels (default 1920x1440)
+     --size WxH         the canvas, in CSS pixels (default 1920x1440)
+     --scale N          pixel density: 2 draws the same figure at twice the pixels, as a Retina screen does (default 1)
      --yaw / --pitch / --roll / --zoom / --fov   camera;  --pan X,Y  pan as fractions of the canvas
      --fit L,T,R,B      after the camera: set zoom and pan so the drawing fills that box (percent or fractions of
                         the frame, x right, y down) — e.g. --fit 57,13,92,58 is the site's hero, --fit 11,15,89,45 a phone
@@ -28,7 +29,7 @@ const here = path.dirname(fileURLToPath(import.meta.url)); const dist = path.joi
 const argv = process.argv.slice(2); const inputs = []; const opt = { look: '', style: '', set: [], size: '1920x1440', yaw: NaN, pitch: NaN, roll: NaN, zoom: NaN, fov: NaN, pan: '', fit: '', fitWhat: 'all', writeView: undefined, turntable: 0, swing: 0, frames: '', out: 'out', software: false, engine: 'classic' };
 for (let i = 0; i < argv.length; i++) { const a = argv[i];
   if (a === '--look') opt.look = argv[++i]; else if (a === '--style') opt.style = argv[++i]; else if (a === '--set') opt.set.push(argv[++i]);
-  else if (a === '--size') opt.size = argv[++i]; else if (a === '--yaw') opt.yaw = +argv[++i]; else if (a === '--pitch') opt.pitch = +argv[++i]; else if (a === '--zoom') opt.zoom = +argv[++i]; else if (a === '--fov') opt.fov = +argv[++i]; else if (a === '--roll') opt.roll = +argv[++i]; else if (a === '--pan') opt.pan = argv[++i]; else if (a === '--fit') opt.fit = argv[++i]; else if (a === '--fit-what') opt.fitWhat = argv[++i]; else if (a === '--write-view') opt.writeView = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
+  else if (a === '--size') opt.size = argv[++i]; else if (a === '--scale') opt.scale = +argv[++i]; else if (a === '--yaw') opt.yaw = +argv[++i]; else if (a === '--pitch') opt.pitch = +argv[++i]; else if (a === '--zoom') opt.zoom = +argv[++i]; else if (a === '--fov') opt.fov = +argv[++i]; else if (a === '--roll') opt.roll = +argv[++i]; else if (a === '--pan') opt.pan = argv[++i]; else if (a === '--fit') opt.fit = argv[++i]; else if (a === '--fit-what') opt.fitWhat = argv[++i]; else if (a === '--write-view') opt.writeView = (argv[i + 1] && !argv[i + 1].startsWith('--')) ? argv[++i] : true;
   else if (a === '--turntable') opt.turntable = +argv[++i]; else if (a === '--swing') opt.swing = +argv[++i]; else if (a === '--frames') opt.frames = argv[++i]; else if (a === '--out') opt.out = argv[++i]; else if (a === '--software') opt.software = true; else if (a === '--engine') opt.engine = argv[++i];
   else if (a === '-h' || a === '--help') { console.log(fs.readFileSync(fileURLToPath(import.meta.url), 'utf8').split('*/')[0].replace('/*', '')); process.exit(0) }
   else inputs.push(a) }
@@ -43,11 +44,14 @@ await new Promise(r => server.listen(0, '127.0.0.1', r)); const port = server.ad
 
 const args = ['--ignore-gpu-blocklist']; if (opt.software) args.push('--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader');
 const browser = await chromium.launch({ args, executablePath: process.env.CHROMIUM || undefined });
-const [W, H] = opt.size.split('x').map(Number);
-const page = await browser.newPage({ viewport: { width: Math.min(W, 4096) + 300, height: Math.min(H, 4096) } });
+const [W, H] = opt.size.split('x').map(Number); const SCALE = opt.scale > 0 ? opt.scale : 1;
+const page = await browser.newPage({ viewport: { width: Math.min(W, 4096) + 300, height: Math.min(H, 4096) }, deviceScaleFactor: SCALE });
 page.on('pageerror', e => console.error('page error:', e.message));
 await page.goto(`http://127.0.0.1:${port}/`);
 await page.waitForFunction(() => window.MolSketch, null, { timeout: 60000 });
+// a canvas does not wait for web fonts: load every face the drawing can use before the first frame, or labels fall back
+await page.evaluate(async () => { const faces = ['500 20px Caveat', '600 20px Caveat', '400 20px "Patrick Hand"', '400 20px Kalam', '700 20px Kalam', '400 20px "IBM Plex Sans"', '500 20px "IBM Plex Sans"', '600 20px "IBM Plex Sans"'];
+  await Promise.all(faces.map(f => document.fonts.load(f, 'AaBb0123²⁺'))); await document.fonts.ready });
 await page.waitForFunction(() => window.MolSketch.renderer.structure, null, { timeout: 30000 }).catch(() => {});   // the start-up example must land before ours, or it replaces it
 if (inputs.length > 1) { const files = inputs.map(f => ({ name: path.basename(f), text: fs.readFileSync(f, 'utf8') })); await page.evaluate(files => { window.MolSketch.setLive(false); window.MolSketch.setSketch(false); window.MolSketch.loadStack(files) }, files) }
 else { const text = fs.readFileSync(input, 'utf8'); await page.evaluate(async ([t, n]) => { window.MolSketch.setLive(false); window.MolSketch.setSketch(false); await window.MolSketch.loadText(t, n) }, [text, path.basename(input)]) }
@@ -59,7 +63,7 @@ if (opt.set.length) await page.evaluate(sets => { const T = window.MolSketch; co
   T.style = st }, opt.set);
 // a look or style applied after the scene resets the camera's field of view to the style's; the scene's own view wins, then the flags
 await page.evaluate(() => { const T = window.MolSketch; const v = T.scene && T.scene.view; if (v) { T.camera.yaw = v.yaw ?? 0; T.camera.pitch = v.pitch ?? 0; T.camera.roll = v.roll ?? 0; T.camera.zoom = v.zoom ?? 1; T.camera.panX = v.panX ?? 0; T.camera.panY = v.panY ?? 0; if (v.fov !== undefined) { T.camera.fov = v.fov; const st = JSON.parse(JSON.stringify(T.style)); st.view.fov = v.fov; T.style = st } } });
-await page.evaluate(([w, h, yaw, pitch, roll, zoom, fov, pan]) => { const T = window.MolSketch; T.setSize(w, h); if (!isNaN(yaw)) T.camera.yaw = yaw; if (!isNaN(pitch)) T.camera.pitch = pitch; if (!isNaN(roll)) T.camera.roll = roll; if (!isNaN(zoom)) T.camera.zoom = zoom; if (!isNaN(fov)) T.camera.fov = fov; if (pan) { const [x, y] = pan.split(',').map(Number); T.camera.panX = x; T.camera.panY = y } }, [W, H, opt.yaw, opt.pitch, opt.roll, opt.zoom, opt.fov, opt.pan]);
+await page.evaluate(([w, h, yaw, pitch, roll, zoom, fov, pan, s]) => { const T = window.MolSketch; if (s !== 1) T.setDpr(s); T.setSize(Math.round(w * s), Math.round(h * s)); if (!isNaN(yaw)) T.camera.yaw = yaw; if (!isNaN(pitch)) T.camera.pitch = pitch; if (!isNaN(roll)) T.camera.roll = roll; if (!isNaN(zoom)) T.camera.zoom = zoom; if (!isNaN(fov)) T.camera.fov = fov; if (pan) { const [x, y] = pan.split(',').map(Number); T.camera.panX = x; T.camera.panY = y } }, [W, H, opt.yaw, opt.pitch, opt.roll, opt.zoom, opt.fov, opt.pan, SCALE]);
 if (opt.fit) { const v = opt.fit.split(',').map(Number); const f = v.map(x => (Math.max(...v) > 1 ? x / 100 : x)); const box = { x0: f[0], y0: f[1], x1: f[2], y1: f[3] };
   const got = await page.evaluate(([box, what]) => { const T = window.MolSketch; T.fitFrame(box, what); const b = T.screenBox(what); return { zoom: T.camera.zoom, panX: T.camera.panX, panY: T.camera.panY, box: b } }, [box, opt.fitWhat]);
   console.log(`fit: zoom ${got.zoom.toFixed(3)} pan ${got.panX.toFixed(3)},${got.panY.toFixed(3)} → drawing at ${(got.box.x0 * 100).toFixed(1)}–${(got.box.x1 * 100).toFixed(1)} % × ${(got.box.y0 * 100).toFixed(1)}–${(got.box.y1 * 100).toFixed(1)} %`) }

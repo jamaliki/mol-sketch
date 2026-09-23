@@ -16,6 +16,7 @@ of MOLSCRIPT, on paper, with lines that boil from frame to frame so an animation
 ## Contents
 
 - [Quick start](#quick-start)
+- [Python](#python)
 - [The app](#the-app)
 - [Looks](#looks)
 - [Engraved ribbons and palettes](#engraved-ribbons-and-palettes)
@@ -37,6 +38,22 @@ npm run dev            # open http://localhost:5173
 
 Type a PDB ID in the top bar (`5P21`, say) and press *Fetch*, pick a look, turn the molecule, and *Save PNG*. Drop a
 PDB, mmCIF or scene JSON file on the drawing to open your own; drop several structure files to animate between them.
+
+## Python
+
+The same figures from Python, with no browser: the package runs the app's own drawing engine in an embedded V8 and
+draws with Skia, so a figure made in Python matches the app to the pixel (see [python/README.md](python/README.md)).
+
+```python
+import molsketch as ms
+
+fig = ms.fetch("2PTN").look("engraved-colour").site("resi 57+102+195").frame_site().label_site()
+fig.save("trypsin.png", scale=2)
+ms.load("mechanism.json").look("chalkboard").animate("loop.mp4")
+```
+
+`pip install ./python`, then `molsketch render …` from the terminal, or `molsketch serve` for the app itself with every
+figure drawn by the package.
 
 ## The app
 

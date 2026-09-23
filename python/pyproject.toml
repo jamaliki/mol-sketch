@@ -1,0 +1,36 @@
+[build-system]
+requires = ["setuptools>=69"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "molsketch"
+version = "0.1.0"
+description = "Hand-drawn molecular figures: engraved ribbons, watercolour, chalk, pen and ink. The MolSketch app's engine, without a browser."
+readme = "README.md"
+requires-python = ">=3.10"
+license = "MIT"
+authors = [{ name = "Kiarash Jamali" }]
+keywords = ["molecular graphics", "protein", "illustration", "PDB", "mmCIF", "MOLSCRIPT", "figures"]
+classifiers = ["Programming Language :: Python :: 3", "Topic :: Scientific/Engineering :: Chemistry", "Topic :: Scientific/Engineering :: Visualization", "Framework :: Jupyter"]
+dependencies = [
+  "mini-racer>=0.12",     # the drawing core (the app's own code) runs in an embedded V8
+  "skia-python>=144",     # and is rasterised by Skia, as Chrome's canvas is
+  "uharfbuzz>=0.40",      # text shaped as Chrome shapes it
+  "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+pil = ["pillow"]
+test = ["pytest"]
+
+[project.scripts]
+molsketch = "molsketch.__main__:main"
+
+[project.urls]
+Homepage = "https://github.com/jamaliki/mol-sketch"
+
+[tool.setuptools]
+packages = ["molsketch"]
+
+[tool.setuptools.package-data]
+molsketch = ["_core.js", "fonts/*", "app/**/*"]

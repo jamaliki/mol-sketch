@@ -1,0 +1,7 @@
+.venv/
+tests/.refs/
+*.egg-info/
+build/
+dist/
+__pycache__/
+molsketch/app/
