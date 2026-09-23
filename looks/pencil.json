@@ -11,7 +11,9 @@
   "probe": 1.4,
   "surfaceScale": 1,
   "surfaceOpacity": 1,
-  "surfaceColor": "carbon"
+  "surfaceColor": "carbon",
+  "cartoonStyle": "engraved",
+  "stickStyle": "auto"
  },
  "style": {
   "rough": 1.1,

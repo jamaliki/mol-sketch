@@ -5,6 +5,7 @@
 import type { Style, Palette } from '../style';
 import type { Camera } from '../render/camera';
 import { ribbonColours } from '../palettes';
+import { hand, handOf } from '../looks';
 
 export interface PanelHost {
   style: Style;
@@ -18,7 +19,9 @@ export interface PanelHost {
   savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadFiles: (f: File[]) => void; saveScene: () => void; loadExample: (n: string) => void; fetchPdb: (id: string) => Promise<void>;
   /* figure labels */
   figLabels: () => { i: number; text: string; where: string; size: number }[]; setLabelText: (i: number, t: string) => void; setLabelSize: (i: number, v: number) => void;
-  deleteLabel: (i: number) => void; clearLabels: () => void; setLabelMode: (v: boolean) => void; labelMode: () => boolean; reset: () => void;
+  deleteLabel: (i: number) => void; clearLabels: () => void; setLabelMode: (v: boolean) => void; labelMode: () => boolean;
+  /* active site */
+  pocketSel: (dist?: number) => string; frameSite: () => void; labelSite: () => void; reset: () => void;
   setDpr: (v: number) => void;
   palettes: Record<string, Palette>;
   framePresets: Record<string, { box: { x0: number; y0: number; x1: number; y1: number }; note: string; size: [number, number] }>;
@@ -158,7 +161,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   /* ---------- top bar: the things used every time ---------- */
   const top = document.getElementById('topbar') || root;
   const fileIn = el('input', { type: 'file', accept: '.pdb,.ent,.cif,.mmcif,.json', multiple: '', style: 'display:none', onchange: (e: any) => { const fl = Array.from(e.target.files as FileList); if (fl.length) H.loadFiles(fl); e.target.value = '' } }) as HTMLInputElement;
-  const examples: [string, string][] = [['mechanism.json', 'Serine hydrolase mechanism (scene)'], ['calb_pnpa.json', 'CALB with pNPA (scene)'], ['1A8O.pdb', '1A8O — HIV capsid domain'], ['1LCD.pdb', '1LCD — lac repressor headpiece'], ['test_protein.pdb', 'Test protein'], ['test_protein_rna.cif', 'Test protein with RNA'], ['6GZQ.cif', '6GZQ — ribosome (large)']];
+  const examples: [string, string][] = [['trypsin_active_site.json', 'Trypsin active site (engraved)'], ['mechanism.json', 'Serine hydrolase mechanism (scene)'], ['calb_pnpa.json', 'CALB with pNPA (scene)'], ['1A8O.pdb', '1A8O — HIV capsid domain'], ['1LCD.pdb', '1LCD — lac repressor headpiece'], ['test_protein.pdb', 'Test protein'], ['test_protein_rna.cif', 'Test protein with RNA'], ['6GZQ.cif', '6GZQ — ribosome (large)']];
   const ex = el('select', { class: 'examples', title: 'load an example', onchange: (e: any) => { if (e.target.value) H.loadExample(e.target.value); e.target.value = '' } }, el('option', { value: '' }, 'Examples'), ...examples.map(([v, t]) => el('option', { value: v }, t))) as HTMLSelectElement;
   const svg = (d: string) => { const e = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); e.setAttribute('viewBox', '0 0 16 16'); e.setAttribute('width', '15'); e.setAttribute('height', '15'); e.innerHTML = `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`; return e };
   // fetch from the PDB: type an ID, Enter or Fetch
@@ -212,8 +215,27 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     g.append(note('Selections: all · polymer · hetatm · protein · nucleic · resi 10-20 · resn SER+HIS · chain A · combined with and / or / not.'));
   }
   {
+    const g = group(Look, 'Active site', { keys: 'site pocket catalytic residues ligand binding focus cutaway context' });
+    const inp = el('input', { type: 'text', placeholder: 'resi 57+102+195', spellcheck: 'false' }) as HTMLInputElement;
+    const setSite = (v: string) => { H.mark('active site'); H.style.site.sel = v; H.rebuild(); refresh() };
+    inp.onchange = () => setSite(inp.value.trim());
+    const chips = el('div', { class: 'chips' },
+      el('button', { class: 'chip', title: 'no site', onclick: () => setSite('') }, 'none'),
+      el('button', { class: 'chip', title: 'every residue within 5 Å of the largest ligand, and the ligand', onclick: () => { const v = H.pocketSel(5); if (v) setSite(v) } }, 'around ligand'));
+    refreshers.push(() => { inp.value = S().site.sel || '' });
+    const r = el('div', { class: 'row sel', title: 'the residues (and ligand) to show in their protein: always sticks, larger, never hidden' }, el('label', {}, 'site'), el('div', { class: 'selbox' }, chips, inp)); g.append(r);
+    const on = () => !!S().site.sel.trim();
+    const acts = el('div', { class: 'btns' }, el('button', { title: 'turn the molecule so the site faces you, with as little of the protein in front of it as possible', onclick: () => H.frameSite() }, 'Frame the site'),
+      el('button', { title: 'a label on each residue of the site; drag them to tidy up', onclick: () => H.labelSite() }, 'Label the site')); g.append(showWhen(acts, on));
+    control(g, { t: 'check', label: 'cutaway', path: 'site.cutaway', when: () => on() && engraved(), tip: 'ribbon faces in front of the site fade in a window round it' });
+    control(g, { t: 'range', label: 'quiet the rest', path: 'site.quiet', min: 0, max: 1, step: 0.05, when: () => on() && engraved(), tip: 'how far the rest of the protein steps back' });
+    control(g, { t: 'range', label: 'site sticks', path: 'site.scale', min: 1, max: 2.4, step: 0.05, geom: true, when: on, tip: 'how much thicker the site is drawn than other sticks' });
+    g.append(note('The site stays in its protein: its side chains and ligand are drawn as bold sticks with a paper halo, and with the engraved cartoon the ribbons in front of it open up.'));
+  }
+  {
     const g = group(Look, 'Sticks', { keys: 'ball stick radius' }); showWhen(g, sticksOn);
     control(g, { t: 'select', label: 'drawn as', path: 'mode', options: ['sticks', 'ballstick'] });
+    control(g, { t: 'select', label: 'style', path: 'stickStyle', options: ['auto', 'engraved', 'sketch'], geom: true, tip: 'engraved: lines along each bond, like the ribbons · sketch: hand-drawn · auto: engraved when the ribbons are, so a mechanism drawn in sticks alone keeps its hand' });
     control(g, { t: 'range', label: 'stick radius', path: 'stickRadius', min: 0.08, max: 0.5, step: 0.01, geom: true });
     control(g, { t: 'range', label: 'cut spheres', path: 'sphereScale', min: 0, max: 1, step: 0.05, geom: true });
   }
@@ -244,7 +266,12 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     g.append(note('Labels have their own tab.'));
   }
   {
-    const g = group(Look, 'Lines', { open: false, keys: 'ink pen stroke roughness width' });
+    const g = group(Look, 'Lines', { open: false, keys: 'ink pen stroke roughness width hand wobble sketchy crisp' });
+    // the hand: one slider for how drawn the line is, from ruled (engraved) to loose; the four it sets are below it
+    const hIn = el('input', { type: 'range', min: 0, max: 1, step: 0.01 }) as HTMLInputElement; const hV = el('span', { class: 'val' });
+    const showH = () => { const h = handOf(H.style); hIn.value = String(h); hV.textContent = h.toFixed(2) };
+    hIn.oninput = () => { H.mark('hand'); const x = hand(+hIn.value); Object.assign(H.style.line, x.line); H.style.fillWobble = x.fillWobble; refresh(); H.redraw() }; hIn.onchange = () => H.settle();
+    refreshers.push(showH); showH(); const hr = row(g, 'hand', hIn, hV); hr.title = 'how hand-drawn the line is: 0 ruled, like an engraving, 1 a loose sketch (sets roughness, passes, pressure and fill wobble)';
     control(g, { t: 'range', label: 'width', path: 'line.width', min: 0.3, max: 4, step: 0.1 });
     control(g, { t: 'range', label: 'roughness', path: 'line.rough', min: 0, max: 3, step: 0.05 });
     control(g, { t: 'range', label: 'passes', path: 'line.passes', min: 1, max: 4, step: 1 });

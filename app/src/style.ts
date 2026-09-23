@@ -23,7 +23,12 @@ export interface Style {
   /** sketch: the hand-drawn ribbons of the fill mode; engraved: line-shaded ribbons in the manner of MOLSCRIPT (Kraulis 1991),
       white faces with lines running along the ribbon, inked strand sides, paper-white coils. Classic engine only. */
   cartoonStyle: 'sketch' | 'engraved';
+  /** sticks drawn as the ribbons are: auto (with engraved ribbons, so a mechanism in sticks alone keeps its hand), always, never */
+  stickStyle: 'auto' | 'sketch' | 'engraved';
   engrave: { lines: number; width: number; strandThickness: number; coilWidth: number; labels: boolean };
+  /** the active site: always drawn as sticks, larger; with the engraved cartoon, what lies in front of it fades (cutaway)
+      and the rest of the protein can be quieted so the site reads first */
+  site: { sel: string; cutaway: boolean; quiet: number; scale: number };
   surfaceColor: 'single' | 'residue' | 'chain' | 'subunit' | 'entity';
   reps: { sticks: string; cartoon: string; surface: string };   // selections
   stickRadius: number;       // Å
@@ -63,8 +68,9 @@ export const DEFAULT_STYLE: Style = {
   palette: { ...PALETTES['Colored pencil'] },
   colorBy: 'residue',
   cartoonColor: 'ss',
-  cartoonStyle: 'sketch',
+  cartoonStyle: 'engraved', stickStyle: 'auto',
   engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: false },
+  site: { sel: '', cutaway: true, quiet: 0.35, scale: 1.9 },
   surfaceColor: 'subunit',
   reps: { sticks: 'hetatm and not water', cartoon: 'polymer', surface: '' },
   stickRadius: 0.2,

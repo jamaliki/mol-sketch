@@ -17,13 +17,14 @@
   "engraveWidth": 0.45,
   "strandThickness": 0.6,
   "coilWidth": 1.25,
-  "ssLabels": false
+  "ssLabels": false,
+  "stickStyle": "auto"
  },
  "style": {
-  "rough": 0.15,
+  "rough": 0.14,
   "passes": 1,
-  "pressure": 0,
-  "fillWobble": 0,
+  "pressure": 0.06,
+  "fillWobble": 0.11,
   "hatchDensity": 1.4,
   "hierarchy": 0.3,
   "wash": 0,

@@ -4,6 +4,10 @@ The serine hydrolase mechanism as a 26-second loop for the front page of jamali-
 no arrows, framed for the hero's layout, on the site's own colours. Two papers: `hero_dark.json` on the hero's navy
 (`#0f172a`) and `hero_cream.json` on the site's paper (`#f2efe8`).
 
+The hero's looks are frozen in [`looks/`](looks) (`chalkboard.json`, `dark-paper.json`, `watercolour.json`: the app's
+looks as they were when the hero was made, applied after `--look`), so the app's looks can change without changing the
+website. To move the hero to a newer look, delete its file here or save a new one from the app (*Export › Save style*).
+
 ```bash
 cd app && npm install && npm run build        # once
 cd ../hero

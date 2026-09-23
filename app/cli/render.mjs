@@ -52,7 +52,7 @@ await page.waitForFunction(() => window.MolSketch.renderer.structure, null, { ti
 if (inputs.length > 1) { const files = inputs.map(f => ({ name: path.basename(f), text: fs.readFileSync(f, 'utf8') })); await page.evaluate(files => { window.MolSketch.setLive(false); window.MolSketch.setSketch(false); window.MolSketch.loadStack(files) }, files) }
 else { const text = fs.readFileSync(input, 'utf8'); await page.evaluate(async ([t, n]) => { window.MolSketch.setLive(false); window.MolSketch.setSketch(false); await window.MolSketch.loadText(t, n) }, [text, path.basename(input)]) }
 if (opt.look) await page.evaluate(k => window.MolSketch.applyLook(k), opt.look);
-if (opt.style) { const st = JSON.parse(fs.readFileSync(opt.style, 'utf8')); await page.evaluate(s => { window.MolSketch.style = s }, st) }
+if (opt.style) { const st = JSON.parse(fs.readFileSync(opt.style, 'utf8')); await page.evaluate(s => { const T = window.MolSketch; if (!s.reps) s.reps = T.style.reps; T.style = s }, st) }   // a style without reps keeps the scene's, as a look does
 if (opt.set.length) await page.evaluate(sets => { const T = window.MolSketch; const st = JSON.parse(JSON.stringify(T.style));
   for (const kv of sets) { const i = kv.indexOf('='); const ks = kv.slice(0, i).split('.'); let raw = kv.slice(i + 1); let v = raw; if (raw === 'true') v = true; else if (raw === 'false') v = false; else if (raw !== '' && !isNaN(+raw)) v = +raw;
     let o = st; for (let j = 0; j < ks.length - 1; j++) { o[ks[j]] = o[ks[j]] || {}; o = o[ks[j]] } o[ks[ks.length - 1]] = v }

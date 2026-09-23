@@ -24,7 +24,9 @@ case "$name" in
   calb-chalk-mobile) scene=$here/calb/calb_hero_mobile.json; look=chalkboard;  size=1080x1920; extra="$CHEM" ;;
   *) echo "unknown name $name"; exit 1 ;;
 esac
-node cli/render.mjs "$scene" --look "$look" $NOTEXT $HOLD $extra --size "$size" --frames drawn --out "$out" $SOFTWARE
+# the hero looks are frozen in hero/looks/: the app's looks can change without changing the website
+pin=(); [ -f "$here/looks/$look.json" ] && pin=(--style "$here/looks/$look.json")
+node cli/render.mjs "$scene" --look "$look" ${pin[@]+"${pin[@]}"} $NOTEXT $HOLD $extra --size "$size" --frames drawn --out "$out" $SOFTWARE
 mkdir -p "$here/out"
 # three encodes, smallest first: AV1 (Chrome, Firefox, Edge, Safari 17+ on hardware with a decoder), VP9, H.264 for the rest
 ffmpeg -y -loglevel error -framerate 12 -pattern_type glob -i "$out/frame_*.png" -c:v libsvtav1 -crf 40 -preset 4 -svtav1-params tune=0 -pix_fmt yuv420p -movflags +faststart "$here/out/hero_$name.av1.mp4"

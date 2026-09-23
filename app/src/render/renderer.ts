@@ -64,8 +64,9 @@ export class Renderer {
     let inst = 0, tris = 0;
     const shown = new Uint8Array(s.count);
     this.geom = { stickMask: null, surfaceMask: null, runs: [], scheme };
-    if (style.reps.sticks.trim()) {
-      const m = selectAtoms(s, style.reps.sticks); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildSticks(s, m, scheme, style); this.geom.stickMask = m;
+    const siteSel = style.site?.sel?.trim(); const stickSel = siteSel ? (style.reps.sticks.trim() ? `(${style.reps.sticks}) or (${siteSel})` : siteSel) : style.reps.sticks;   // the site is always sticks
+    if (stickSel.trim()) {
+      const m = selectAtoms(s, stickSel); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildSticks(s, m, scheme, style); this.geom.stickMask = m;
       this.batches.spheres.push(new SphereBatch(gl, this.progs.sphere, g.spheres, REP_STICKS)); this.batches.cyls.push(new CylinderBatch(gl, this.progs.cyl, g.cylinders, REP_STICKS));
       inst += g.spheres.length / 9 + g.cylinders.length / 12;
     }

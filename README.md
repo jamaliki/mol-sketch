@@ -63,6 +63,18 @@ visits. The app's own [README](app/README.md) covers how the renderers fit toget
 
 ## Looks
 
+**One grammar, several media.** Every look draws the same way and differs only in its medium. Ribbons are the engraved ones (MOLSCRIPT's geometry,
+colour carried in lines along each face), and sticks follow them: next to engraved ribbons a side chain or ligand is
+drawn with the same lines along each bond, so the whole figure reads as one drawing. A mechanism drawn only in sticks
+keeps its hand-drawn sticks (*sticks style: auto*; set it to *engraved* or *sketch* to choose). All looks share one
+pen (width 1.6, hierarchy 0.45; chalk keeps a broader stick, Assembly cartoon a thin one for huge complexes), and
+what makes a look loose or crisp is its **hand**, one number from 0 (a ruled, engraved line) to 1 (a loose sketch)
+that sets roughness, passes, pen pressure and fill wobble together: Engraved 0.08, Ink 0.55, Watercolour and Dark
+paper 0.6, Chalkboard 0.72. The medium supplies the rest: ink leaves the faces paper, chalk leaves them board, and
+watercolour lays a pale wash of the colour under darker lines.
+
+The *hand* slider is at the top of *Look › Lines*.
+
 A look sets everything at once; change anything afterwards. The app's *Looks* and the settings files in
 [`looks/`](looks) are the same set, documented setting by setting in [docs/looks.md](docs/looks.md).
 

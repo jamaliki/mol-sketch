@@ -28,7 +28,7 @@ if(!inputs.length){console.error('No input. Try: node render.js examples/test_pr
   const html=fs.readFileSync(path.join(__dirname,'triad-sketch.html'),'utf8');
   const wrapped='<!doctype html><html><head><meta charset="utf-8"></head><body>'+html+'</body></html>';
   const tmp=path.join(__dirname,'.triad-sketch.tmp.html');fs.writeFileSync(tmp,wrapped);
-  const browser=await chromium.launch();const page=await browser.newPage({viewport:{width:1400,height:900}});
+  const browser=await chromium.launch({executablePath:process.env.CHROMIUM||undefined});/* CHROMIUM: a browser of your own instead of Playwright's */const page=await browser.newPage({viewport:{width:1400,height:900}});
   page.on('pageerror',e=>console.error('page error:',e.message));
   await page.goto('file://'+tmp);await page.waitForTimeout(600);
   // fonts: give Google Fonts a moment if the machine is online
