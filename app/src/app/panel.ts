@@ -4,6 +4,7 @@
    · the timeline (#timeline) under the drawing, shown while a scene is loaded */
 import type { Style, Palette } from '../style';
 import type { Camera } from '../render/camera';
+import { ribbonColours } from '../palettes';
 
 export interface PanelHost {
   style: Style;
@@ -298,12 +299,12 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   {
     // group palettes: the colours residues and molecules get in order of appearance — hover previews, click keeps
     const g = group(Col, 'Palette', { keys: 'group palette okabe tol tableau colour-blind residues chains molecules' });
-    g.append(note('The colours residues, chains and molecules take in order. Hover to preview, click to keep. Engraved ribbons take the first three for helix, sheet and coil.'));
+    g.append(note('The colours residues, chains and molecules take in order. Hover to preview, click to keep. Engraved ribbons take three of them for helix, sheet and coil: the first that stand out on the paper and from each other.'));
     const tiles: HTMLElement[] = []; let kept: { name: string; colors: string[] | null; ss: string[] } | null = null;
     const SS = ['helix', 'sheet', 'loop'] as const;
     const getSS = () => SS.map(k => H.style.palette[k]); const setSS = (v: string[]) => SS.forEach((k, i) => { H.style.palette[k] = v[i] });
     const applyPal = (name: string, colors: string[]) => { H.style.groupPalette = name === 'Triad' ? null : colors.slice(); H.style.groupPaletteName = name;
-      if (H.style.cartoonStyle === 'engraved') { const base = H.looks[H.currentLook()]?.style.palette; if (name !== 'Triad') setSS(SS.map((_, i) => colors[i % colors.length])); else if (base) setSS(SS.map(k => base[k] ?? H.style.palette[k])) }
+      if (H.style.cartoonStyle === 'engraved') { const base = H.looks[H.currentLook()]?.style.palette; if (name !== 'Triad') setSS(ribbonColours(colors, H.style.palette.paper, H.style.palette.ink)); else if (base) setSS(SS.map(k => base[k] ?? H.style.palette[k])) }
       H.rebuild() };
     const families: [string, string, string][] = [['drawing', 'For drawings', 'the engine and the lab site'], ['safe', 'Colour-blind safe', 'Okabe–Ito, Paul Tol, Tableau'], ['studies', 'Studies', 'jamaliki / design-corner']];
     for (const [fam, title, sub] of families) {
