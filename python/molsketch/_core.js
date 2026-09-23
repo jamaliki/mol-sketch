@@ -9,20 +9,142 @@
   };
   var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
 
+  // src/headless/skarc.ts
+  var f = Math.fround;
+  var NEARLY_ZERO = f(1 / 4096);
+  var DEG = f(f(3.14159265) / 180);
+  var ROOT2_OVER2 = f(0.707106781);
+  var SINCOS_NEARLY_ZERO = f(1 / 65536);
+  var snap = (v) => Math.abs(v) <= SINCOS_NEARLY_ZERO ? 0 : v;
+  var sinS = (r) => snap(f(Math.sin(r)));
+  var cosS = (r) => snap(f(Math.cos(r)));
+  var nearlyEq = (a, b) => Math.abs(f(a - b)) <= NEARLY_ZERO;
+  var mid = (a, b) => f((a + b) * 0.5);
+  function arcTo(sink, l, t, r, b, start, sweep, forceMove) {
+    const w = f(r - l), h = f(b - t);
+    if (w < 0 || h < 0) return;
+    start = start % 360;
+    if (!sink.has()) forceMove = true;
+    const lx = sink.lx(), ly = sink.ly();
+    const addPt = (x2, y2) => {
+      if (forceMove) sink.move(x2, y2);
+      else if (!nearlyEq(lx, x2) || !nearlyEq(ly, y2)) sink.line(x2, y2);
+    };
+    const lone = (x2, y2) => forceMove ? sink.move(x2, y2) : sink.line(x2, y2);
+    if (sweep === 0 && (start === 0 || start === 360)) return lone(r, mid(t, b));
+    if (w === 0 && h === 0) return lone(r, t);
+    const startRad = f(start * DEG);
+    let stopRad = f(f(start + sweep) * DEG);
+    const sx = cosS(startRad), sy = sinS(startRad);
+    let ex = cosS(stopRad), ey = sinS(stopRad);
+    if (sx === ex && sy === ey) {
+      const sw = Math.abs(sweep);
+      if (sw < 360 && sw > 359) {
+        const d = f(Math.sign(sweep) * (1 / 512));
+        do {
+          stopRad = f(stopRad - d);
+          ex = cosS(stopRad);
+          ey = sinS(stopRad);
+        } while (sx === ex && sy === ey);
+      }
+    }
+    const cw = sweep > 0;
+    const cx = mid(l, r), cy = mid(t, b), hw = f(w * 0.5), hh = f(h * 0.5);
+    if (sx === ex && sy === ey) {
+      const end = f(f(start + sweep) * DEG), rx = f(w / 2), ry = f(h / 2);
+      return addPt(f(cx + f(rx * f(Math.cos(end)))), f(cy + f(ry * f(Math.sin(end)))));
+    }
+    let x = f(f(sx * ex) + f(sy * ey)), y = f(f(sx * ey) - f(sy * ex));
+    const absY = Math.abs(y);
+    const mapper = unitMap(sy, sx, cw, hw, hh, cx, cy);
+    if (absY <= NEARLY_ZERO && x > 0 && (y >= 0 && cw || y <= 0 && !cw)) {
+      const p = mapper(ex, ey, true);
+      return addPt(p[0], p[1]);
+    }
+    if (!cw) y = -y;
+    let quadrant = 0;
+    if (y === 0) quadrant = 2;
+    else if (x === 0) quadrant = y > 0 ? 1 : 3;
+    else {
+      if (y < 0) quadrant += 2;
+      if (x < 0 !== y < 0) quadrant += 1;
+    }
+    const Q = [[1, 0], [1, 1], [0, 1], [-1, 1], [-1, 0], [-1, -1], [0, -1], [1, -1]];
+    const conics = [];
+    for (let i = 0; i < quadrant; i++) conics.push([Q[i * 2], Q[i * 2 + 1], Q[i * 2 + 2], ROOT2_OVER2]);
+    const lastQ = Q[quadrant * 2];
+    const dot = f(f(lastQ[0] * x) + f(lastQ[1] * y));
+    if (dot < 1) {
+      let ox = f(lastQ[0] + x), oy = f(lastQ[1] + y);
+      const cosT2 = f(Math.sqrt(f(f(1 + dot) / 2)));
+      const len = f(1 / cosT2), mag = Math.sqrt(ox * ox + oy * oy), sc = len / mag;
+      ox = f(ox * sc);
+      oy = f(oy * sc);
+      if (!(isFinite(ox) && isFinite(oy)) || ox === 0 && oy === 0) {
+        ox = 0;
+        oy = 0;
+      }
+      if (f(lastQ[0] - ox) !== 0 || f(lastQ[1] - oy) !== 0) conics.push([lastQ, [ox, oy], [x, y], cosT2]);
+    }
+    const p0 = mapper(conics[0][0][0], conics[0][0][1], false);
+    addPt(p0[0], p0[1]);
+    for (const c of conics) {
+      const a = mapper(c[1][0], c[1][1], false), e = mapper(c[2][0], c[2][1], false);
+      if (c[3] === 1) sink.quad(a[0], a[1], e[0], e[1]);
+      else sink.conic(a[0], a[1], e[0], e[1], c[3]);
+    }
+  }
+  function unitMap(s, c, cw, hw, hh, cx, cy) {
+    let a = c, kx = f(-s), ky = s, d = c;
+    if (!cw) {
+      kx = f(-kx);
+      d = f(-d);
+    }
+    const rotId = a === 1 && kx === 0 && ky === 0 && d === 1;
+    const SX = rotId ? hw : f(hw * a), KX = rotId ? 0 : f(hw * kx), KY = rotId ? 0 : f(hh * ky), SY = rotId ? hh : f(hh * d);
+    const affine = KX !== 0 || KY !== 0;
+    const map = (x, y) => affine ? [f(f(f(x * SX) + f(y * KX)) + cx), f(f(f(y * SY) + f(x * KY)) + cy)] : [f(f(x * SX) + cx), f(f(y * SY) + cy)];
+    return (x, y, raw) => raw ? [f(f(x * hw) + cx), f(f(y * hh) + cy)] : map(x, y);
+  }
+
   // src/headless/canvas.ts
   var nextId = 1;
-  var PTS = [];
-  var VBS = [];
+  var Stream = class {
+    constructor(a) {
+      __publicField(this, "a", a);
+      __publicField(this, "n", 0);
+    }
+    push(v) {
+      if (this.n === this.a.length) this.grow();
+      this.a[this.n++] = v;
+    }
+    push2(x, y) {
+      if (this.n + 2 > this.a.length) this.grow();
+      this.a[this.n++] = x;
+      this.a[this.n++] = y;
+    }
+    grow() {
+      const b = new this.a.constructor(this.a.length * 2);
+      b.set(this.a);
+      this.a = b;
+    }
+    take() {
+      const r = this.a.slice(0, this.n);
+      this.n = 0;
+      return r;
+    }
+  };
+  var PTS = new Stream(new Float32Array(1 << 16));
+  var VBS = new Stream(new Uint8Array(1 << 15));
+  var WTS = new Stream(new Float32Array(1 << 12));
   function takeStreams() {
-    const p = new Float32Array(PTS), v = new Uint8Array(VBS);
-    PTS = [];
-    VBS = [];
-    return { points: p, verbs: v };
+    return { points: PTS.take(), verbs: VBS.take(), weights: WTS.take() };
   }
+  var f32 = Math.fround;
   var canvases = /* @__PURE__ */ new Map();
   var measureFn = (_f, t) => t.length * 8;
-  function setMeasure(f) {
-    measureFn = f;
+  function setMeasure(f2) {
+    measureFn = f2;
   }
   var COMPOSITE = /* @__PURE__ */ new Set([
     "source-over",
@@ -59,9 +181,9 @@
     textBaseline: /* @__PURE__ */ new Set(["top", "hanging", "middle", "alphabetic", "ideographic", "bottom"])
   };
   var fin = (...v) => v.every((x) => typeof x === "number" && isFinite(x));
-  var mul = (m, a, b, c, d, e, f) => (
+  var mul = (m, a, b, c, d, e, f2) => (
     // m · [a b c d e f], as canvas composes
-    [m[0] * a + m[2] * b, m[1] * a + m[3] * b, m[0] * c + m[2] * d, m[1] * c + m[3] * d, m[0] * e + m[2] * f + m[4], m[1] * e + m[3] * f + m[5]]
+    [m[0] * a + m[2] * b, m[1] * a + m[3] * b, m[0] * c + m[2] * d, m[1] * c + m[3] * d, m[0] * e + m[2] * f2 + m[4], m[1] * e + m[3] * f2 + m[5]]
   );
   var DOMMatrix2 = class _DOMMatrix {
     constructor(init) {
@@ -81,9 +203,9 @@
     }
   };
   var Pattern = class {
-    constructor(id, snap, rep) {
+    constructor(id, snap2, rep) {
       __publicField(this, "id", id);
-      __publicField(this, "snap", snap);
+      __publicField(this, "snap", snap2);
       __publicField(this, "rep", rep);
       __publicField(this, "m", [1, 0, 0, 1, 0, 0]);
     }
@@ -156,15 +278,31 @@
     }
   };
   var RecContext = class {
+    // moveAt: the run's trailing move, or -1
     constructor(canvas) {
       __publicField(this, "canvas", canvas);
       __publicField(this, "s", fresh());
       __publicField(this, "stack", []);
-      // the path as Skia would hold it: is there a current point, was the last verb a close, where did the contour start
+      // the path as Skia holds it, as far as the recorder knows: is there a current point, was the last verb a close, the
+      // contour's start (Skia's last move) and the last point, as float32 (null: made by an op the host builds, unknown here)
       __publicField(this, "hasCur", false);
       __publicField(this, "closed", false);
-      __publicField(this, "start", null);
+      __publicField(this, "hasStart", false);
+      __publicField(this, "sx", 0);
+      __publicField(this, "sy", 0);
+      __publicField(this, "hasLast", false);
+      __publicField(this, "lx", 0);
+      __publicField(this, "ly", 0);
       __publicField(this, "run", null);
+      __publicField(this, "sink", {
+        has: () => this.hasCur,
+        lx: () => this.lx,
+        ly: () => this.ly,
+        move: (x, y) => this.emitMove(x, y),
+        line: (x, y) => this.emitLine(x, y),
+        quad: (a, b, x, y) => this.emitQuad(a, b, x, y),
+        conic: (a, b, x, y, w) => this.emitConic(a, b, x, y, w)
+      });
     }
     reset() {
       this.s = fresh();
@@ -174,26 +312,100 @@
     newPath() {
       this.hasCur = false;
       this.closed = false;
-      this.start = null;
+      this.hasStart = false;
+      this.hasLast = false;
     }
-    /** end the current run of moves and lines as one P op */
+    /** end the current run of path verbs as one P op */
     settle() {
       const r = this.run;
       if (!r) return;
       this.run = null;
-      this.canvas.push(["P", r.p / 2, (PTS.length - r.p) / 2, r.v, VBS.length - r.v, r.cont]);
+      this.canvas.push(["P", r.p / 2, (PTS.n - r.p) / 2, r.v, VBS.n - r.v, r.cont, r.w, WTS.n - r.w]);
     }
     op(...o) {
       this.settle();
       this.canvas.push(o);
     }
-    runVerb(verb, x, y) {
-      if (!this.run) {
-        this.run = { p: PTS.length, v: VBS.length, cont: verb === 1 };
-        if (verb === 1) verb = 0;
+    /** an op the host builds the path with itself: what it leaves is unknown here */
+    hostOp(fresh2, ...o) {
+      this.op(...o);
+      this.hasCur = true;
+      this.closed = false;
+      this.hasLast = false;
+      if (fresh2) this.hasStart = false;
+    }
+    newRun(cont) {
+      this.run = { p: PTS.n, v: VBS.n, w: WTS.n, cont, moveAt: -1 };
+    }
+    /** Skia's moveTo: a move after a move replaces it */
+    emitMove(x, y) {
+      x = f32(x);
+      y = f32(y);
+      if (this.run && this.run.moveAt >= 0) {
+        PTS.a[this.run.moveAt] = x;
+        PTS.a[this.run.moveAt + 1] = y;
+      } else {
+        if (!this.run) this.newRun(false);
+        this.run.moveAt = PTS.n;
+        VBS.push(0);
+        PTS.push2(x, y);
       }
-      VBS.push(verb);
-      if (x !== void 0) PTS.push(x, y);
+      this.hasCur = true;
+      this.closed = false;
+      this.hasStart = this.hasLast = true;
+      this.sx = this.lx = x;
+      this.sy = this.ly = y;
+    }
+    /** a drawing verb (1 line, 2 quad, 3 conic, 4 cubic) from the current point; callers make sure `last` (and after a
+       close, `start`) is known. After a close Skia first moves to the contour's start; a run that continues a contour
+       begins with a move to the current point, which the host's extend joins without a line */
+    before() {
+      if (this.closed) {
+        if (this.run) this.run.moveAt = -1;
+        this.emitMove(this.sx, this.sy);
+      } else if (!this.run) {
+        this.newRun(true);
+        VBS.push(0);
+        PTS.push2(this.lx, this.ly);
+      }
+      this.run.moveAt = -1;
+      this.hasCur = true;
+      this.closed = false;
+    }
+    emitEnd(x, y) {
+      PTS.push2(x, y);
+      this.lx = PTS.a[PTS.n - 2];
+      this.ly = PTS.a[PTS.n - 1];
+      this.hasLast = true;
+    }
+    emitLine(x, y) {
+      this.before();
+      VBS.push(1);
+      this.emitEnd(x, y);
+    }
+    emitQuad(a, b, x, y) {
+      this.before();
+      VBS.push(2);
+      PTS.push2(a, b);
+      this.emitEnd(x, y);
+    }
+    emitConic(a, b, x, y, w) {
+      this.before();
+      VBS.push(3);
+      WTS.push(w);
+      PTS.push2(a, b);
+      this.emitEnd(x, y);
+    }
+    emitCubic(a, b, c, d, x, y) {
+      this.before();
+      VBS.push(4);
+      PTS.push2(a, b);
+      PTS.push2(c, d);
+      this.emitEnd(x, y);
+    }
+    /** can the next drawing verb be recorded here (the points it starts from are known)? */
+    get knows() {
+      return !this.hasCur || this.hasLast && (!this.closed || this.hasStart);
     }
     setProp(k, v, rec = v) {
       this.s[k] = v;
@@ -314,14 +526,16 @@
     setM(m) {
       this.s.m = m;
       this.op("m", ...m);
+      if (this.hasCur) this.hasLast = this.hasStart = false;
     }
-    setTransform(a, b, c, d, e, f) {
+    // the host moves the path into the new space
+    setTransform(a, b, c, d, e, f2) {
       if (a === void 0) return this.setM([1, 0, 0, 1, 0, 0]);
       if (typeof a === "object") {
         const t = a;
         return this.setM([t.a ?? 1, t.b ?? 0, t.c ?? 0, t.d ?? 1, t.e ?? 0, t.f ?? 0]);
       }
-      if (fin(a, b, c, d, e, f)) this.setM([a, b, c, d, e, f]);
+      if (fin(a, b, c, d, e, f2)) this.setM([a, b, c, d, e, f2]);
     }
     resetTransform() {
       this.setM([1, 0, 0, 1, 0, 0]);
@@ -329,8 +543,8 @@
     getTransform() {
       return new DOMMatrix2([...this.s.m]);
     }
-    transform(a, b, c, d, e, f) {
-      if (fin(a, b, c, d, e, f)) this.setM(mul(this.s.m, a, b, c, d, e, f));
+    transform(a, b, c, d, e, f2) {
+      if (fin(a, b, c, d, e, f2)) this.setM(mul(this.s.m, a, b, c, d, e, f2));
     }
     translate(x, y) {
       if (fin(x, y)) this.setM(mul(this.s.m, 1, 0, 0, 1, x, y));
@@ -350,87 +564,94 @@
       this.newPath();
     }
     closePath() {
-      if (!this.hasCur) return;
-      if (this.run) this.runVerb(5);
-      else this.op("close");
+      if (!this.hasCur || this.closed) return;
+      if (this.run) {
+        VBS.push(5);
+        this.run.moveAt = -1;
+      } else this.op("close");
       this.closed = true;
     }
-    // closing nothing does nothing
     moveTo(x, y) {
-      if (!fin(x, y)) return;
-      this.runVerb(0, x, y);
-      this.hasCur = true;
-      this.closed = false;
-      this.start = [x, y];
+      if (fin(x, y)) this.emitMove(x, y);
     }
     lineTo(x, y) {
       if (!fin(x, y)) return;
       if (!this.hasCur) return this.moveTo(x, y);
-      if (this.closed) {
-        if (!this.start) {
-          this.op("L", x, y);
-          this.closed = false;
-          return;
-        }
-        this.runVerb(0, this.start[0], this.start[1]);
+      if (!this.knows) {
+        this.op("L", x, y);
         this.closed = false;
+        this.hasLast = true;
+        this.lx = f32(x);
+        this.ly = f32(y);
+        return;
       }
-      this.runVerb(1, x, y);
-    }
-    curve() {
-      this.hasCur = true;
-      this.closed = false;
-      if (!this.start) this.start = null;
+      this.emitLine(x, y);
     }
     quadraticCurveTo(cx, cy, x, y) {
-      if (fin(cx, cy, x, y)) {
-        const fresh2 = !this.hasCur;
-        this.op("Q", cx, cy, x, y);
-        if (fresh2 || this.closed) this.start = null;
-        this.curve();
-      }
+      if (!fin(cx, cy, x, y)) return;
+      if (!this.hasCur) this.emitMove(cx, cy);
+      if (!this.knows) return this.hostOp(false, "Q", cx, cy, x, y);
+      this.emitQuad(cx, cy, x, y);
     }
     bezierCurveTo(a, b, c, d, x, y) {
-      if (fin(a, b, c, d, x, y)) {
-        const fresh2 = !this.hasCur;
-        this.op("C", a, b, c, d, x, y);
-        if (fresh2 || this.closed) this.start = null;
-        this.curve();
-      }
+      if (!fin(a, b, c, d, x, y)) return;
+      if (!this.hasCur) this.emitMove(a, b);
+      if (!this.knows) return this.hostOp(false, "C", a, b, c, d, x, y);
+      this.emitCubic(a, b, c, d, x, y);
     }
     arc(x, y, r, a0, a1, ccw = false) {
       if (!fin(x, y, r, a0, a1)) return;
       if (r < 0) throw new RangeError("IndexSizeError: arc radius is negative");
-      const fresh2 = !this.hasCur || this.closed;
-      this.op("A", x, y, r, a0, a1, !!ccw);
-      if (fresh2) this.start = null;
-      this.curve();
+      if (!this.knows) return this.hostOp(!this.hasCur || this.closed, "A", x, y, r, a0, a1, !!ccw);
+      this.addEllipse(x, y, r, r, a0, a1, !!ccw);
     }
     ellipse(x, y, rx, ry, rot, a0, a1, ccw = false) {
       if (!fin(x, y, rx, ry, rot, a0, a1)) return;
       if (rx < 0 || ry < 0) throw new RangeError("IndexSizeError: ellipse radius is negative");
-      const fresh2 = !this.hasCur || this.closed;
-      this.op("E", x, y, rx, ry, rot, a0, a1, !!ccw);
-      if (fresh2) this.start = null;
-      this.curve();
+      if (rot || !this.knows) return this.hostOp(!this.hasCur || this.closed, "E", x, y, rx, ry, rot, a0, a1, !!ccw);
+      this.addEllipse(x, y, rx, ry, a0, a1, !!ccw);
     }
     arcTo(x1, y1, x2, y2, r) {
       if (!fin(x1, y1, x2, y2, r)) return;
       if (r < 0) throw new RangeError("IndexSizeError");
-      const fresh2 = !this.hasCur || this.closed;
-      this.op("T", x1, y1, x2, y2, r);
-      if (fresh2) this.start = null;
-      this.curve();
+      this.hostOp(!this.hasCur || this.closed, "T", x1, y1, x2, y2, r);
+    }
+    /** Blink's arc: its angles adjusted (AdjustArcAngles), then Skia's arcTo on the oval, a whole turn as two halves */
+    addEllipse(x, y, rx, ry, a0, a1, ccw) {
+      const T = 2 * Math.PI;
+      if (a0 >= T || a0 <= -T) {
+        const ns = a0 % T;
+        a1 += ns - a0;
+        a0 = ns;
+      }
+      if (a0 < 0) {
+        a0 += T;
+        a1 += T;
+      }
+      if (!ccw && a1 - a0 >= T) a1 = a0 + T;
+      else if (ccw && a0 - a1 >= T) a1 = a0 - T;
+      else if (!ccw && a0 > a1) a1 = a0 + (T - (a0 - a1) % T);
+      else if (ccw && a0 < a1) a1 = a0 - (T - (a1 - a0) % T);
+      const DEG2 = 180 / Math.PI, start = a0 * DEG2, sweep = (a1 - a0) * DEG2;
+      const l = f32(x - rx), t = f32(y - ry), r = f32(x + rx), b = f32(y + ry);
+      const move = !this.hasCur, sink = this.sink;
+      if (Math.abs(sweep - 360) < 1e-4) {
+        arcTo(sink, l, t, r, b, f32(start), 180, move);
+        arcTo(sink, l, t, r, b, f32(start + 180), 180, false);
+      } else if (Math.abs(sweep + 360) < 1e-4) {
+        arcTo(sink, l, t, r, b, f32(start), -180, move);
+        arcTo(sink, l, t, r, b, f32(start - 180), -180, false);
+      } else arcTo(sink, l, t, r, b, f32(start), f32(sweep), move);
     }
     rect(x, y, w, h) {
-      if (fin(x, y, w, h)) {
-        this.op("R", x, y, w, h);
-        this.hasCur = true;
-        this.closed = true;
-        this.start = [x, y];
-      }
+      if (!fin(x, y, w, h)) return;
+      this.emitMove(x, y);
+      this.emitLine(x + w, y);
+      this.emitLine(x + w, y + h);
+      this.emitLine(x, y + h);
+      VBS.push(5);
+      this.closed = true;
     }
-    // a closed contour from (x, y)
     fill(rule = "nonzero") {
       this.op("fill", rule === "evenodd" ? "evenodd" : "nonzero");
     }
@@ -1137,8 +1358,8 @@
   var lab = (h) => {
     const [r, g2, b] = rgb(h).map(lin);
     const X = (0.4124 * r + 0.3576 * g2 + 0.1805 * b) / 0.95047, Y = 0.2126 * r + 0.7152 * g2 + 0.0722 * b, Z = (0.0193 * r + 0.1192 * g2 + 0.9505 * b) / 1.08883;
-    const f = (t) => t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116;
-    return [116 * f(Y) - 16, 500 * (f(X) - f(Y)), 200 * (f(Y) - f(Z))];
+    const f2 = (t) => t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116;
+    return [116 * f2(Y) - 16, 500 * (f2(X) - f2(Y)), 200 * (f2(Y) - f2(Z))];
   };
   var deltaE = (a, b) => {
     const p = lab(a), q = lab(b);
@@ -1207,8 +1428,8 @@
         this.n = n;
       }
       at(t) {
-        const i = Math.floor(t), f = t - i, a = this.v[(i % this.n + this.n) % this.n], b = this.v[((i + 1) % this.n + this.n) % this.n];
-        const u = (1 - Math.cos(f * Math.PI)) / 2;
+        const i = Math.floor(t), f2 = t - i, a = this.v[(i % this.n + this.n) % this.n], b = this.v[((i + 1) % this.n + this.n) % this.n];
+        const u = (1 - Math.cos(f2 * Math.PI)) / 2;
         return a * (1 - u) + b * u;
       }
     }
@@ -1466,18 +1687,18 @@
     let TL = { segs: [], total: 0 };
     function buildTimeline() {
       const segs = [];
-      let f = 0;
+      let f2 = 0;
       const n = scene.keyframes.length;
       scene.keyframes.forEach((k, i) => {
         const hold = Math.max(0, k.hold ?? 24), tr = Math.max(0, k.transition ?? 48);
-        if (hold > 0) segs.push({ kf: i, type: "hold", start: f, len: hold });
-        f += hold;
+        if (hold > 0) segs.push({ kf: i, type: "hold", start: f2, len: hold });
+        f2 += hold;
         const last = i === n - 1;
-        if (tr > 0 && (!last || n > 1)) segs.push({ kf: i, type: "trans", start: f, len: tr });
-        if (tr > 0 && (!last || n > 1)) f += tr;
+        if (tr > 0 && (!last || n > 1)) segs.push({ kf: i, type: "trans", start: f2, len: tr });
+        if (tr > 0 && (!last || n > 1)) f2 += tr;
       });
-      if (!segs.length) segs.push({ kf: 0, type: "hold", start: 0, len: 1 }), f = 1;
-      TL = { segs, total: f };
+      if (!segs.length) segs.push({ kf: 0, type: "hold", start: 0, len: 1 }), f2 = 1;
+      TL = { segs, total: f2 };
     }
     function locate(frame) {
       frame = (frame % TL.total + TL.total) % TL.total;
@@ -1500,11 +1721,11 @@
       const n = P.length + 1;
       const s = t * n;
       const i = Math.floor(s);
-      const f = s - i;
+      const f2 = s - i;
       const at = (k) => k <= 0 ? p0 : k >= n ? p1 : P[k - 1][id] || null;
       const q0 = at(i), q1 = at(i + 1);
       if (!q0 || !q1) return lerp3(p0, p1, t);
-      return lerp3(q0, q1, f);
+      return lerp3(q0, q1, f2);
     }
     function sampleState(frame) {
       const n = scene.keyframes.length;
@@ -1657,8 +1878,8 @@
       let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9], c = 0;
       const fitPts = [];
       if (scene.fitPoints) {
-        const f = scene.fitPoints;
-        for (let i = 0; i < f.length; i += 3) fitPts.push([f[i], f[i + 1], f[i + 2]]);
+        const f2 = scene.fitPoints;
+        for (let i = 0; i < f2.length; i += 3) fitPts.push([f2[i], f2[i + 1], f2[i + 2]]);
       } else {
         for (const k of scene.keyframes) for (const id in k.atoms) fitPts.push(k.atoms[id].pos);
       }
@@ -2078,7 +2299,7 @@
     }
     function hslToHex(h, s, l) {
       h = (h % 360 + 360) % 360 / 360;
-      const f = (p, q, t) => {
+      const f2 = (p, q, t) => {
         if (t < 0) t += 1;
         if (t > 1) t -= 1;
         if (t < 1 / 6) return p + (q - p) * 6 * t;
@@ -2091,9 +2312,9 @@
         r = g2 = b = l;
       } else {
         const q = l < 0.5 ? l * (1 + s) : l + s - l * s, p = 2 * l - q;
-        r = f(p, q, h + 1 / 3);
-        g2 = f(p, q, h);
-        b = f(p, q, h - 1 / 3);
+        r = f2(p, q, h + 1 / 3);
+        g2 = f2(p, q, h);
+        b = f2(p, q, h - 1 / 3);
       }
       return "#" + [r, g2, b].map((v) => Math.round(v * 255).toString(16).padStart(2, "0")).join("");
     }
@@ -2296,8 +2517,8 @@
           return e;
         }
         if (tl === "not" || tl === "!") {
-          const f2 = factor();
-          return (a) => !f2(a);
+          const f3 = factor();
+          return (a) => !f3(a);
         }
         switch (tl) {
           case "all":
@@ -2384,26 +2605,26 @@
         }
       }
       function term() {
-        let f2 = factor();
+        let f3 = factor();
         while (peek() && (peek().toLowerCase() === "and" || peek() === "&")) {
           next();
-          const g2 = factor(), f0 = f2;
-          f2 = (a) => f0(a) && g2(a);
+          const g2 = factor(), f0 = f3;
+          f3 = (a) => f0(a) && g2(a);
         }
-        return f2;
+        return f3;
       }
       function expr() {
-        let f2 = term();
+        let f3 = term();
         while (peek() && (peek().toLowerCase() === "or" || peek() === "|")) {
           next();
-          const g2 = term(), f0 = f2;
-          f2 = (a) => f0(a) || g2(a);
+          const g2 = term(), f0 = f3;
+          f3 = (a) => f0(a) || g2(a);
         }
-        return f2;
+        return f3;
       }
-      const f = str ? expr() : () => false;
-      selCache[str] = f;
-      return f;
+      const f2 = str ? expr() : () => false;
+      selCache[str] = f2;
+      return f2;
     }
     const GROUP_PALETTE = ["#f2e85a", "#7cbf72", "#5fc9c9", "#a98ad6", "#f0a050", "#d9a3c9", "#8fb8a8", "#b5c95a", "#c9a27a", "#9ad0b8"];
     let groupIdx = {}, groupIdxKey = "";
@@ -2855,9 +3076,9 @@
         ctx.save();
         ctx.clip();
         const L = Math.hypot(mx - ax, my - ay);
-        for (const f of [0.5, 0.78]) {
-          const off = R * f * side;
-          sketchLine(ctx, [[ax + nx * off - tx * R * 0.3, ay + ny * off - ty * R * 0.3], [mx + nx * off, my + ny * off]], { seed: o.seed + 7 + Math.round(f * 10), passes: 1, width: 0.9 * d, color: fogged(cfg.rep.fill === "ink colour" ? mix(col2, P.hatch, 0.4) : P.hatch, fog), alpha: 0.35 * S.shading * (0.5 + 0.5 * fk), ampScale: 0.5, step: 5, overshoot: false });
+        for (const f2 of [0.5, 0.78]) {
+          const off = R * f2 * side;
+          sketchLine(ctx, [[ax + nx * off - tx * R * 0.3, ay + ny * off - ty * R * 0.3], [mx + nx * off, my + ny * off]], { seed: o.seed + 7 + Math.round(f2 * 10), passes: 1, width: 0.9 * d, color: fogged(cfg.rep.fill === "ink colour" ? mix(col2, P.hatch, 0.4) : P.hatch, fog), alpha: 0.35 * S.shading * (0.5 + 0.5 * fk), ampScale: 0.5, step: 5, overshoot: false });
         }
         ctx.restore();
       }
@@ -2924,9 +3145,9 @@
       ctx.strokeStyle = fogged(T.hatch, fog);
       ctx.beginPath();
       for (let k = 1; k <= n; k++) {
-        const f = 2 * k / (n + 1) - 1;
-        ctx.moveTo(x0 + nx * R * f * 0.8, y0 + ny * R * f * 0.8);
-        ctx.lineTo(x1 + nx * Rm * f * 0.8, y1 + ny * Rm * f * 0.8);
+        const f2 = 2 * k / (n + 1) - 1;
+        ctx.moveTo(x0 + nx * R * f2 * 0.8, y0 + ny * R * f2 * 0.8);
+        ctx.lineTo(x1 + nx * Rm * f2 * 0.8, y1 + ny * Rm * f2 * 0.8);
       }
       ctx.stroke();
       ctx.lineWidth = wInk;
@@ -3337,8 +3558,8 @@
         items.push({ z: p.z + 0.02, draw: (ctx) => drawFlatBall(ctx, p.x, p.y, r, col2, { seed, fog: p.fog, d: p.d, alpha: a.alpha, fillAlpha: cfg.rep.surfaceOpacity, outlineFirst: true, outlineAlpha: 0.6, passes: lowDetail ? 1 : void 0 }) });
       }
     }
-    function v3(a, b, f) {
-      return [a[0] + b[0] * f, a[1] + b[1] * f, a[2] + b[2] * f];
+    function v3(a, b, f2) {
+      return [a[0] + b[0] * f2, a[1] + b[1] * f2, a[2] + b[2] * f2];
     }
     function sub3(a, b) {
       return [a[0] - b[0], a[1] - b[1], a[2] - b[2]];
@@ -3413,7 +3634,7 @@
       const SEG = 6, N = Math.max(0, Math.round(R.engraveLines ?? 8)), lw0 = R.engraveWidth ?? 0.45;
       const coilR = 0.2 * K * (R.coilWidth ?? 1.25), helixW = 1.2 * K, strandW = 1 * K, thick = 0.5 * (R.strandThickness ?? 0.6) * K;
       const wInk = S.inkWidth * LW.outer;
-      const add = (a, b, f = 1) => [a[0] + b[0] * f, a[1] + b[1] * f, a[2] + b[2] * f], mid = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], scl = (a, f) => [a[0] * f, a[1] * f, a[2] * f];
+      const add = (a, b, f2 = 1) => [a[0] + b[0] * f2, a[1] + b[1] * f2, a[2] + b[2] * f2], mid2 = (a, b) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2, (a[2] + b[2]) / 2], scl = (a, f2) => [a[0] * f2, a[1] * f2, a[2] * f2];
       const herm = (p0, p1, v0, v1, t) => {
         const t2 = t * t, t3 = t2 * t;
         const h1 = 2 * t3 - 3 * t2 + 1, h2 = t3 - 2 * t2 + t, h3 = -2 * t3 + 3 * t2, h4 = t3 - t2;
@@ -3427,7 +3648,7 @@
       const priestle = (pts, steps) => {
         for (let s = 0; s < steps; s++) {
           const tmp = pts.map((p) => p.slice());
-          for (let i = 1; i < pts.length - 1; i++) tmp[i] = mid(mid(pts[i - 1], pts[i + 1]), pts[i]);
+          for (let i = 1; i < pts.length - 1; i++) tmp[i] = mid2(mid2(pts[i - 1], pts[i + 1]), pts[i]);
           for (let i = 1; i < pts.length - 1; i++) pts[i] = tmp[i];
         }
       };
@@ -3439,11 +3660,11 @@
       const HA = 32 * Math.PI / 180, HB = -11 * Math.PI / 180, HH = 4.7;
       const ssCol = (t) => t === "H" ? P.helix : t === "E" ? P.sheet : P.loop;
       const hsv = (h, s, v) => {
-        const f = (k) => {
+        const f2 = (k) => {
           const q = (k + h * 6) % 6;
           return v - v * s * Math.max(0, Math.min(q, 4 - q, 1));
         };
-        return "#" + [f(5), f(3), f(1)].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("");
+        return "#" + [f2(5), f2(3), f2(1)].map((x) => Math.round(x * 255).toString(16).padStart(2, "0")).join("");
       };
       const mode = R.fill, colourMode = R.cartoonColor || "ss";
       const tone = engraveTone;
@@ -3515,9 +3736,9 @@
             ctx.strokeStyle = hatch;
             ctx.beginPath();
             for (const k of hl.ks) {
-              const f = k / (N + 1);
-              ctx.moveTo(lerp(q[0][0], q[3][0], f), lerp(q[0][1], q[3][1], f));
-              ctx.lineTo(lerp(q[1][0], q[2][0], f), lerp(q[1][1], q[2][1], f));
+              const f2 = k / (N + 1);
+              ctx.moveTo(lerp(q[0][0], q[3][0], f2), lerp(q[0][1], q[3][1], f2));
+              ctx.lineTo(lerp(q[1][0], q[2][0], f2), lerp(q[1][1], q[2][1], f2));
             }
             ctx.stroke();
           }
@@ -3617,7 +3838,7 @@
           } else if (e.t === "E" && idx.length >= 3) {
             const p = idx.map((i) => pts[i].slice()), m = p.length;
             const nm = new Array(m);
-            for (let i = 1; i < m - 1; i++) nm[i] = norm3(sub3(p[i], mid(p[i - 1], p[i + 1])));
+            for (let i = 1; i < m - 1; i++) nm[i] = norm3(sub3(p[i], mid2(p[i - 1], p[i + 1])));
             nm[0] = nm[1];
             nm[m - 1] = nm[m - 2];
             priestle(p, 2);
@@ -3660,7 +3881,7 @@
               secs.push(box(pos, nrm, side, strandW, thick));
               secs.push({ ...box(pos, nrm, side, 1.5 * strandW, thick), step: true });
               const d1 = dir2, d2 = norm3(sub3(p[m - 1], p[m - 2]));
-              const dm = mid(d1, d2), pm = mid(p[m - 2], p[m - 1]), nn = norm3(mid(nm[m - 2], nm[m - 1])), sd = norm3(cross3(nn, dm));
+              const dm = mid2(d1, d2), pm = mid2(p[m - 2], p[m - 1]), nn = norm3(mid2(nm[m - 2], nm[m - 1])), sd = norm3(cross3(nn, dm));
               secs.push(box(pm, nn, sd, 0.75 * strandW, thick));
               secs.push(box(p[m - 1], nm[m - 1], sd, 0, thick));
             }
@@ -3939,9 +4160,9 @@
             j0 = j1 + 1;
           }
         }
-        const fr = [0.18, 0.38, 0.62, 0.82].map((f) => {
-          const c = Lf.map((p, k) => [lerp(p[0], Rf[k][0], f), lerp(p[1], Rf[k][1], f)]);
-          return sketchPasses(c, { step: 0, seed: seed + Math.round(f * 100), width: wInk * 0.55, passes: 1, ampScale: 1.3, overshoot: false })[0];
+        const fr = [0.18, 0.38, 0.62, 0.82].map((f2) => {
+          const c = Lf.map((p, k) => [lerp(p[0], Rf[k][0], f2), lerp(p[1], Rf[k][1], f2)]);
+          return sketchPasses(c, { step: 0, seed: seed + Math.round(f2 * 100), width: wInk * 0.55, passes: 1, ampScale: 1.3, overshoot: false })[0];
         });
         const frMid = (() => {
           const c = Lf.map((p, k) => [(p[0] + Rf[k][0]) / 2, (p[1] + Rf[k][1]) / 2]);
@@ -4014,7 +4235,7 @@
               }
               ctx.restore();
             }
-            const ex = (a, b, f) => [a[0] + (a[0] - b[0]) * f, a[1] + (a[1] - b[1]) * f];
+            const ex = (a, b, f2) => [a[0] + (a[0] - b[0]) * f2, a[1] + (a[1] - b[1]) * f2];
             const qq = [ex(L[j], L[j + 1], 0.35), ex(L[j + 1], L[j], 0.35), ex(Rr[j + 1], Rr[j], 0.35), ex(Rr[j], Rr[j + 1], 0.35)];
             const cx = (qq[0][0] + qq[2][0]) / 2, cy = (qq[0][1] + qq[2][1]) / 2;
             ctx.beginPath();
@@ -4035,8 +4256,8 @@
                   fillVarStroke(ctx, ln.pts, hatch, (isInk() ? 0.6 : 0.32) * (0.4 + 0.6 * fk), Math.max(0, j - 1), Math.min(ln.pts.length - 1, j + 2));
                 });
               } else if (S.shading > 0 && skip[j][2] > 0.35) {
-                const f = 0.5;
-                const a = [lerp(L[j][0], L[j + 1][0], f), lerp(L[j][1], L[j + 1][1], f)], b = [lerp(Rr[j][0], Rr[j + 1][0], f), lerp(Rr[j][1], Rr[j + 1][1], f)];
+                const f2 = 0.5;
+                const a = [lerp(L[j][0], L[j + 1][0], f2), lerp(L[j][1], L[j + 1][1], f2)], b = [lerp(Rr[j][0], Rr[j + 1][0], f2), lerp(Rr[j][1], Rr[j + 1][1], f2)];
                 sketchLine(ctx, [a, b], { seed: seed + j * 3, passes: 1, width: 0.8 * d, color: hatch, alpha: 0.4 * S.shading, ampScale: 0.5, step: 5, overshoot: false });
               }
             }
@@ -4627,8 +4848,8 @@
         return e;
       }
       if (tl === "not" || tl === "!") {
-        const f2 = factor();
-        return (s, a) => !f2(s, a);
+        const f3 = factor();
+        return (s, a) => !f3(s, a);
       }
       switch (tl) {
         case "all":
@@ -4715,31 +4936,31 @@
       }
     }
     function term() {
-      let f2 = factor();
+      let f3 = factor();
       while (peek() && (peek().toLowerCase() === "and" || peek() === "&")) {
         next();
-        const g2 = factor(), f0 = f2;
-        f2 = (s, a) => f0(s, a) && g2(s, a);
+        const g2 = factor(), f0 = f3;
+        f3 = (s, a) => f0(s, a) && g2(s, a);
       }
-      return f2;
+      return f3;
     }
     function expr() {
-      let f2 = term();
+      let f3 = term();
       while (peek() && (peek().toLowerCase() === "or" || peek() === "|")) {
         next();
-        const g2 = term(), f0 = f2;
-        f2 = (s, a) => f0(s, a) || g2(s, a);
+        const g2 = term(), f0 = f3;
+        f3 = (s, a) => f0(s, a) || g2(s, a);
       }
-      return f2;
+      return f3;
     }
-    const f = str ? expr() : () => false;
-    cache.set(str, f);
-    return f;
+    const f2 = str ? expr() : () => false;
+    cache.set(str, f2);
+    return f2;
   }
   function selectAtoms(s, sel) {
-    const f = compileSelection(sel);
+    const f2 = compileSelection(sel);
     const m = new Uint8Array(s.count);
-    for (let i = 0; i < s.count; i++) m[i] = f(s, i) ? 1 : 0;
+    for (let i = 0; i < s.count; i++) m[i] = f2(s, i) ? 1 : 0;
     return m;
   }
 
@@ -5014,7 +5235,7 @@
   }
   function stackScene(files, style) {
     files = [...files].sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
-    const structs = files.map((f) => structureOf(f.text, f.name));
+    const structs = files.map((f2) => structureOf(f2.text, f2.name));
     const base = pcaBasis(structs[0]);
     const one = structs.length === 1;
     const keyframes = structs.map((st) => {
@@ -5111,80 +5332,80 @@
     const dpr = spec.scale || 1;
     return { style, look, camera: cam, structure, scene, overrides, labels, fitPoints: structure ? fitPointsOf(structure, style) : new Float32Array(0), frame: spec.frame || 0, W, H, dpr };
   }
-  function engineFor(f) {
+  function engineFor(f2) {
     const E = classic();
-    if (f.scene) {
-      E.cfg = cfgFromStyle(f.style, f.camera, true);
-      if (E.scene !== f.scene) E.scene = f.scene;
-      f.scene.reps = { ...f.style.reps };
-      f.scene.groupColors = { ...f.overrides };
-      f.scene.labels = f.labels;
+    if (f2.scene) {
+      E.cfg = cfgFromStyle(f2.style, f2.camera, true);
+      if (E.scene !== f2.scene) E.scene = f2.scene;
+      f2.scene.reps = { ...f2.style.reps };
+      f2.scene.groupColors = { ...f2.overrides };
+      f2.scene.labels = f2.labels;
     } else {
-      E.cfg = cfgFromStyle(f.style, f.camera, false);
-      E.scene = sceneFromStructure(f.structure, f.style, f.overrides, f.camera.base, f.fitPoints, f.labels);
+      E.cfg = cfgFromStyle(f2.style, f2.camera, false);
+      E.scene = sceneFromStructure(f2.structure, f2.style, f2.overrides, f2.camera.base, f2.fitPoints, f2.labels);
     }
     return E;
   }
-  function sceneFrame(f) {
+  function sceneFrame(f2) {
     const E = classic();
-    E.cfg = cfgFromStyle(f.style, f.camera, true);
-    if (E.scene !== f.scene) E.scene = f.scene;
+    E.cfg = cfgFromStyle(f2.style, f2.camera, true);
+    if (E.scene !== f2.scene) E.scene = f2.scene;
     const total = E.TL.total;
-    f.frame = (f.frame % total + total) % total;
+    f2.frame = (f2.frame % total + total) % total;
     E.cfg = { ...E.cfg, stepEvery: 2 };
-    const drawn = Math.floor(f.frame / 2) * 2;
-    if (f.scene.keyframes.some((k) => k.view)) {
-      E.cfg = cfgFromStyle(f.style, f.camera, true);
+    const drawn = Math.floor(f2.frame / 2) * 2;
+    if (f2.scene.keyframes.some((k) => k.view)) {
+      E.cfg = cfgFromStyle(f2.style, f2.camera, true);
       const v = E.viewAt(drawn);
-      if (v) Object.assign(f.camera, { yaw: v.yaw, pitch: v.pitch, roll: v.roll, zoom: v.zoom, panX: v.panX, panY: v.panY });
+      if (v) Object.assign(f2.camera, { yaw: v.yaw, pitch: v.pitch, roll: v.roll, zoom: v.zoom, panX: v.panX, panY: v.panY });
     }
   }
   function render(spec, measure) {
     if (measure) setMeasure(measure);
-    const f = settle(spec);
+    const f2 = settle(spec);
     const c = new RecCanvas();
-    c.width = Math.round(f.W * f.dpr);
-    c.height = Math.round(f.H * f.dpr);
+    c.width = Math.round(f2.W * f2.dpr);
+    c.height = Math.round(f2.H * f2.dpr);
     const ctx = c.getContext("2d");
-    const R = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: c.width, h: c.height };
+    const R = { structure: f2.structure, camera: f2.camera, overrides: f2.overrides, fitPoints: f2.fitPoints, labels: f2.labels, w: c.width, h: c.height };
     const t0 = Date.now();
-    if (f.scene) {
-      sceneFrame(f);
-      renderScene(ctx, R, f.style, f.scene, f.frame, f.dpr);
-    } else renderClassic(ctx, R, f.style, f.frame, f.dpr);
+    if (f2.scene) {
+      sceneFrame(f2);
+      renderScene(ctx, R, f2.style, f2.scene, f2.frame, f2.dpr);
+    } else renderClassic(ctx, R, f2.style, f2.frame, f2.dpr);
     const ops = flush();
     release(c.id);
     const streams = takeStreams();
     return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, canvases: ops, streams };
   }
   function info(spec) {
-    const f = settle(spec);
-    const out = { look: f.look, style: f.style, camera: { ...f.camera, base: void 0 }, labels: f.labels, groupColors: f.overrides };
-    if (f.structure) {
-      const s = f.structure;
+    const f2 = settle(spec);
+    const out = { look: f2.look, style: f2.style, camera: { ...f2.camera, base: void 0 }, labels: f2.labels, groupColors: f2.overrides };
+    if (f2.structure) {
+      const s = f2.structure;
       out.structure = { name: s.name, atoms: s.count, residues: s.residues.length, chains: s.chains.map((c) => c.id) };
     }
-    if (f.scene) {
+    if (f2.scene) {
       const E = classic();
-      E.cfg = cfgFromStyle(f.style, f.camera, true);
-      if (E.scene !== f.scene) E.scene = f.scene;
+      E.cfg = cfgFromStyle(f2.style, f2.camera, true);
+      if (E.scene !== f2.scene) E.scene = f2.scene;
       const TL = E.TL;
-      out.scene = { name: f.scene.name, keyframes: f.scene.keyframes.map((k) => k.name), frames: TL.total, fps: FPS, segs: TL.segs };
+      out.scene = { name: f2.scene.name, keyframes: f2.scene.keyframes.map((k) => k.name), frames: TL.total, fps: FPS, segs: TL.segs };
     }
     return out;
   }
   function frames(spec, which = "drawn") {
-    const f = settle(spec);
-    if (!f.scene) return [0];
+    const f2 = settle(spec);
+    if (!f2.scene) return [0];
     const E = classic();
-    E.cfg = cfgFromStyle(f.style, f.camera, true);
-    if (E.scene !== f.scene) E.scene = f.scene;
+    E.cfg = cfgFromStyle(f2.style, f2.camera, true);
+    if (E.scene !== f2.scene) E.scene = f2.scene;
     const TL = E.TL;
     const out = [];
     const w = String(which);
     if (w === "all") for (let i = 0; i < TL.total; i++) out.push(i);
     else if (w === "drawn") for (let i = 0; i < TL.total; i += 2) out.push(i);
-    else if (w === "keyframes") for (let k = 0; k < f.scene.keyframes.length; k++) {
+    else if (w === "keyframes") for (let k = 0; k < f2.scene.keyframes.length; k++) {
       const s = TL.segs.find((s2) => s2.kf === k && s2.type === "hold") || TL.segs.find((s2) => s2.kf === k);
       if (s) out.push(s.start);
     }
@@ -5194,38 +5415,38 @@
     } else out.push(+w);
     return out;
   }
-  function siteHostOf(f) {
-    return { engine: () => engineFor(f), camera: f.camera, W: f.W, H: f.H, frame: f.frame, siteSel: f.style.site.sel || "" };
+  function siteHostOf(f2) {
+    return { engine: () => engineFor(f2), camera: f2.camera, W: f2.W, H: f2.H, frame: f2.frame, siteSel: f2.style.site.sel || "" };
   }
   function pocket(spec, dist = 5) {
-    const f = settle(spec);
-    if (!f.structure) throw new Error("the pocket needs a structure, not a scene");
-    return pocketSel(f.structure, dist);
+    const f2 = settle(spec);
+    if (!f2.structure) throw new Error("the pocket needs a structure, not a scene");
+    return pocketSel(f2.structure, dist);
   }
   function frameTheSite(spec) {
-    const f = settle(spec);
-    const r = frameSite(siteHostOf(f));
-    const { base, ...cam } = f.camera;
+    const f2 = settle(spec);
+    const r = frameSite(siteHostOf(f2));
+    const { base, ...cam } = f2.camera;
     return { ...r, camera: cam };
   }
   function labelTheSite(spec) {
-    const f = settle(spec);
-    const labels = f.labels.map((l) => ({ ...l }));
-    const r = labelSite(siteHostOf(f), labels);
+    const f2 = settle(spec);
+    const labels = f2.labels.map((l) => ({ ...l }));
+    const r = labelSite(siteHostOf(f2), labels);
     return { ...r, labels };
   }
   function sceneJson(spec) {
-    const f = settle(spec);
-    const doc = f.scene ? { ...f.scene } : sceneFromStructure(f.structure, f.style, f.overrides, f.camera.base, new Float32Array(0));
-    doc.reps = { ...f.style.reps };
-    doc.groupColors = { ...f.overrides };
-    doc.labels = f.labels.map((l) => ({ ...l }));
-    if (f.style.site.sel.trim()) doc.site = { ...f.style.site };
+    const f2 = settle(spec);
+    const doc = f2.scene ? { ...f2.scene } : sceneFromStructure(f2.structure, f2.style, f2.overrides, f2.camera.base, new Float32Array(0));
+    doc.reps = { ...f2.style.reps };
+    doc.groupColors = { ...f2.overrides };
+    doc.labels = f2.labels.map((l) => ({ ...l }));
+    if (f2.style.site.sel.trim()) doc.site = { ...f2.style.site };
     else delete doc.site;
-    if (f.look) doc.look = f.look;
+    if (f2.look) doc.look = f2.look;
     delete doc.fitPoints;
-    const c = f.camera;
-    doc.view = { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: c.fov, fog: f.style.view.fog, fogStart: f.style.view.fogStart };
+    const c = f2.camera;
+    doc.view = { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: c.fov, fog: f2.style.view.fog, fogStart: f2.style.view.fogStart };
     return doc;
   }
   var catalog = () => ({
@@ -5240,9 +5461,9 @@
     return ribbonColours(p.colors, paper, ink);
   };
   function atomId(spec, q) {
-    const f = settle(spec);
-    const E = engineFor(f);
-    const { st } = E.projectFrame(f.W, f.H, f.frame);
+    const f2 = settle(spec);
+    const E = engineFor(f2);
+    const { st } = E.projectFrame(f2.W, f2.H, f2.frame);
     const ids = st.atoms.map((a) => a.id);
     if (ids.includes(q)) return q;
     const m = /^\s*([A-Za-z]+)\s*(-?\d+)(?:\.([A-Za-z0-9]+))?(?::(\S+))?\s*$/.exec(q);
@@ -5256,10 +5477,10 @@
     return pick.id;
   }
   function engineConfig(spec) {
-    const f = settle(spec);
-    if (f.scene) sceneFrame(f);
-    const E = engineFor(f);
-    return { cfg: E.cfg, reps: E.scene.reps, groupColors: E.scene.groupColors, camera: { ...f.camera, base: Array.from(f.camera.base) } };
+    const f2 = settle(spec);
+    if (f2.scene) sceneFrame(f2);
+    const E = engineFor(f2);
+    return { cfg: E.cfg, reps: E.scene.reps, groupColors: E.scene.groupColors, camera: { ...f2.camera, base: Array.from(f2.camera.base) } };
   }
 
   // src/headless/entry.ts

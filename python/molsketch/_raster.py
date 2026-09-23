@@ -6,6 +6,7 @@ from __future__ import annotations
 import functools
 import math
 import re
+import struct
 
 import numpy as np
 import skia
@@ -62,17 +63,20 @@ def parse_color(s):
 _HEADER = np.array([5, 0, 0, 0], np.int32)   # SkPath's serialised form, version 5: version | fill type, points, conics, verbs
 
 
-def _run_path(points: np.ndarray, verbs: np.ndarray, p0: int, np_: int, v0: int, nv: int) -> skia.Path:
-    """a run of moves, lines and closes as one Skia path, read from its binary form (no per-point Python)"""
-    h = _HEADER.copy(); h[1] = np_; h[3] = nv
-    data = h.tobytes() + points[2 * p0:2 * (p0 + np_)].tobytes() + verbs[v0:v0 + nv].tobytes()
-    data += b"\0" * (-len(data) % 4)
+_PAD = (b"", b"\0\0\0", b"\0\0", b"\0")
+
+
+def _run_path(pts: bytes, verbs: bytes, weights: bytes, n: int, nv: int, nw: int) -> skia.Path:
+    """a run of path verbs as one Skia path, read from its binary form: header, points, conic weights, verbs"""
     path = skia.Path()
-    if path.readFromMemory(data) == 0:   # a Skia that serialises differently: build it point by point
-        pts = points[2 * p0:2 * (p0 + np_)].reshape(-1, 2); k = 0
-        for v in verbs[v0:v0 + nv]:
-            if v == 0: path.moveTo(float(pts[k][0]), float(pts[k][1])); k += 1
-            elif v == 1: path.lineTo(float(pts[k][0]), float(pts[k][1])); k += 1
+    if path.readFromMemory(struct.pack("<4i", 5, n, nw, nv) + pts + weights + verbs + _PAD[nv % 4]) == 0:   # a Skia that serialises differently
+        p = np.frombuffer(pts, np.float32).tolist(); w = np.frombuffer(weights, np.float32).tolist(); k = 0; j = 0
+        for v in verbs:
+            if v == 0: path.moveTo(p[k], p[k + 1]); k += 2
+            elif v == 1: path.lineTo(p[k], p[k + 1]); k += 2
+            elif v == 2: path.quadTo(*p[k:k + 4]); k += 4
+            elif v == 3: path.conicTo(*p[k:k + 4], w[j]); k += 4; j += 1
+            elif v == 4: path.cubicTo(*p[k:k + 6]); k += 6
             else: path.close()
     return path
 
@@ -132,15 +136,20 @@ class Raster:
         self.paints: dict[tuple, skia.Paint | None] = {}   # the paints of recent states
         self.text = text
 
-    def add(self, canvases: dict, points: np.ndarray | None = None, verbs: np.ndarray | None = None):
-        """take a render's ops; runs of moves and lines (P ops) become Skia paths now, while their streams are at hand"""
+    def add(self, canvases: dict, streams: tuple[bytes, bytes, bytes] | None = None):
+        """take a render's ops; path runs (P ops) become Skia paths now, while their streams (points, verbs, conic
+        weights, as bytes) are at hand"""
         for cid, c in canvases.items():
             cid = int(cid); lst = self.ops.setdefault(cid, []); n0 = self.base.get(cid, (0,))[0]
             if c["start"] != n0 + len(lst): raise RuntimeError(f"canvas {cid}: ops out of order ({c['start']} after {n0 + len(lst)})")
             ops = c["ops"]
-            if points is not None:
+            if streams is not None:
+                pb, vb, wb = streams; first = np.frombuffer(pb, np.float32)
                 for i, o in enumerate(ops):
-                    if o[0] == "P": ops[i] = ("P", _run_path(points, verbs, o[1], o[2], o[3], o[4]), o[5], bool((verbs[o[3]:o[3] + o[4]] == 5).any()), float(points[2 * o[1]]), float(points[2 * o[1] + 1]))
+                    if o[0] == "P":
+                        p0, n, v0, nv, w0, nw = o[1], o[2], o[3], o[4], o[6], o[7]; verbs = vb[v0:v0 + nv]
+                        ops[i] = ("P", _run_path(pb[8 * p0:8 * (p0 + n)], verbs, wb[4 * w0:4 * (w0 + nw)], n, nv, nw), o[5], 5 in verbs,
+                                  float(first[2 * p0]), float(first[2 * p0 + 1]))
             lst.extend(ops)
 
     def forget(self, cid: int):
@@ -295,9 +304,11 @@ class _Replay:
             o = ops[i]; k = o[0]
             if k == "P":   # a run of moves and lines, already a path
                 seg = o[1]
-                if self.path.countVerbs() == 0:   # Skia copies a path added to an empty one, with the stale last-move index
-                    self.path.moveTo(o[4], o[5]); self.path.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode)   # a read path has: begin at its first point instead
-                elif o[2]: self.path.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode)
+                if o[2]: self.path.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode)   # carrying on the last contour
+                elif self.path.countVerbs() <= 1:
+                    # Skia replaces an (effectively) empty path with the one added, copying its stale last-move index
+                    # (a path read from memory has one): start the path at the run's first point and extend it instead
+                    self.path.reset(); self.path.moveTo(o[4], o[5]); self.path.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode)
                 else: self.path.addPath(seg, skia.Path.AddPathMode.kAppend_AddPathMode)
                 if o[3]: self.has_close = True
             elif k == "L":

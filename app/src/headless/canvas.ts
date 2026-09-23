@@ -14,16 +14,28 @@
      text kind(fill|stroke) s x y [maxWidth]
      img id snap … (the 2, 4 or 8 drawImage numbers)          snap: the source's op count at the time */
 
+import { arcTo, type ArcSink } from './skarc';
+
 type Op = (string | number | boolean | object | null)[];
 let nextId = 1;
-/* Runs of moveTo / lineTo / closePath, the bulk of a large drawing, do not become one op each: their points go into
-   one float32 stream and their verbs (Skia's: 0 move, 1 line, 5 close) into one byte stream, and the run into one op
-     P pointIndex pointCount verbIndex verbCount continues
-   `continues`: the run's first verb is a line from the current point, so the host extends the path's last contour
-   with it rather than starting one (the run is stored with a move to that first point, which the host turns into a
-   line). The host takes both streams as binary after the render. */
-let PTS: number[] = [], VBS: number[] = [];
-export function takeStreams() { const p = new Float32Array(PTS), v = new Uint8Array(VBS); PTS = []; VBS = []; return { points: p, verbs: v } }
+/* Paths, the bulk of a large drawing, do not become one op per call: moves, lines, curves, closes and arcs (as the
+   conics Skia's arcTo makes of them, skarc.ts) go into a float32 point stream, a verb stream (Skia's: 0 move, 1 line,
+   2 quad, 3 conic, 4 cubic, 5 close) and a conic-weight stream, and each run of them into one op
+     P pointIndex pointCount verbIndex verbCount continues weightIndex weightCount
+   `continues`: the run carries on the path's last contour; it starts with a move to the current point, which the
+   host's extend joins without a line. The host takes the streams as binary after the render. What the recorder cannot
+   follow exactly (a turned ellipse, arcTo, anything after a transform moved the path) stays an op for the host. */
+class Stream<T extends Float32Array | Uint8Array> {
+  n = 0;
+  constructor(public a: T) { }
+  push(v: number) { if (this.n === this.a.length) this.grow(); this.a[this.n++] = v }
+  push2(x: number, y: number) { if (this.n + 2 > this.a.length) this.grow(); this.a[this.n++] = x; this.a[this.n++] = y }
+  private grow() { const b = new (this.a.constructor as any)(this.a.length * 2); b.set(this.a); this.a = b }
+  take(): T { const r = this.a.slice(0, this.n) as T; this.n = 0; return r }
+}
+const PTS = new Stream(new Float32Array(1 << 16)), VBS = new Stream(new Uint8Array(1 << 15)), WTS = new Stream(new Float32Array(1 << 12));
+export function takeStreams() { return { points: PTS.take(), verbs: VBS.take(), weights: WTS.take() } }
+const f32 = Math.fround;
 export const canvases = new Map<number, RecCanvas>();
 /** width of `text` in the CSS `font`, as the host measures it (set by the host before rendering) */
 let measureFn: (font: string, text: string) => number = (_f, t) => t.length * 8;
@@ -73,19 +85,44 @@ export class RecCanvas {
 
 export class RecContext {
   private s: State = fresh(); private stack: State[] = [];
-  // the path as Skia would hold it: is there a current point, was the last verb a close, where did the contour start
-  private hasCur = false; private closed = false; private start: [number, number] | null = null;
-  private run: { p: number; v: number; cont: boolean } | null = null;
+  // the path as Skia holds it, as far as the recorder knows: is there a current point, was the last verb a close, the
+  // contour's start (Skia's last move) and the last point, as float32 (null: made by an op the host builds, unknown here)
+  private hasCur = false; private closed = false; private hasStart = false; private sx = 0; private sy = 0; private hasLast = false; private lx = 0; private ly = 0;
+  private run: { p: number; v: number; w: number; cont: boolean; moveAt: number } | null = null;   // moveAt: the run's trailing move, or -1
   constructor(public canvas: RecCanvas) { }
   reset() { this.s = fresh(); this.stack = []; this.newPath() }
-  private newPath() { this.hasCur = false; this.closed = false; this.start = null }
-  /** end the current run of moves and lines as one P op */
-  settle() { const r = this.run; if (!r) return; this.run = null; this.canvas.push(['P', r.p / 2, (PTS.length - r.p) / 2, r.v, VBS.length - r.v, r.cont]) }
-  private op(...o: Op) { this.settle(); this.canvas.push(o) }
-  private runVerb(verb: number, x?: number, y?: number) {
-    if (!this.run) { this.run = { p: PTS.length, v: VBS.length, cont: verb === 1 }; if (verb === 1) verb = 0 }   // a continuing run starts with a move the host turns into a line
-    VBS.push(verb); if (x !== undefined) PTS.push(x, y!);
+  private newPath() { this.hasCur = false; this.closed = false; this.hasStart = false; this.hasLast = false }
+  /** end the current run of path verbs as one P op */
+  settle() {
+    const r = this.run; if (!r) return; this.run = null;
+    this.canvas.push(['P', r.p / 2, (PTS.n - r.p) / 2, r.v, VBS.n - r.v, r.cont, r.w, WTS.n - r.w]);
   }
+  private op(...o: Op) { this.settle(); this.canvas.push(o) }
+  /** an op the host builds the path with itself: what it leaves is unknown here */
+  private hostOp(fresh: boolean, ...o: Op) { this.op(...o); this.hasCur = true; this.closed = false; this.hasLast = false; if (fresh) this.hasStart = false }
+  private newRun(cont: boolean) { this.run = { p: PTS.n, v: VBS.n, w: WTS.n, cont, moveAt: -1 } }
+  /** Skia's moveTo: a move after a move replaces it */
+  private emitMove(x: number, y: number) {
+    x = f32(x); y = f32(y);
+    if (this.run && this.run.moveAt >= 0) { PTS.a[this.run.moveAt] = x; PTS.a[this.run.moveAt + 1] = y }
+    else { if (!this.run) this.newRun(false); this.run!.moveAt = PTS.n; VBS.push(0); PTS.push2(x, y) }
+    this.hasCur = true; this.closed = false; this.hasStart = this.hasLast = true; this.sx = this.lx = x; this.sy = this.ly = y;
+  }
+  /** a drawing verb (1 line, 2 quad, 3 conic, 4 cubic) from the current point; callers make sure `last` (and after a
+     close, `start`) is known. After a close Skia first moves to the contour's start; a run that continues a contour
+     begins with a move to the current point, which the host's extend joins without a line */
+  private before() {
+    if (this.closed) { if (this.run) this.run.moveAt = -1; this.emitMove(this.sx, this.sy) }
+    else if (!this.run) { this.newRun(true); VBS.push(0); PTS.push2(this.lx, this.ly) }
+    this.run!.moveAt = -1; this.hasCur = true; this.closed = false;
+  }
+  private emitEnd(x: number, y: number) { PTS.push2(x, y); this.lx = PTS.a[PTS.n - 2]; this.ly = PTS.a[PTS.n - 1]; this.hasLast = true }
+  private emitLine(x: number, y: number) { this.before(); VBS.push(1); this.emitEnd(x, y) }
+  private emitQuad(a: number, b: number, x: number, y: number) { this.before(); VBS.push(2); PTS.push2(a, b); this.emitEnd(x, y) }
+  private emitConic(a: number, b: number, x: number, y: number, w: number) { this.before(); VBS.push(3); WTS.push(w); PTS.push2(a, b); this.emitEnd(x, y) }
+  private emitCubic(a: number, b: number, c: number, d: number, x: number, y: number) { this.before(); VBS.push(4); PTS.push2(a, b); PTS.push2(c, d); this.emitEnd(x, y) }
+  /** can the next drawing verb be recorded here (the points it starts from are known)? */
+  private get knows() { return !this.hasCur || (this.hasLast && (!this.closed || this.hasStart)) }
   private setProp(k: keyof State, v: any, rec: any = v) { (this.s as any)[k] = v; this.op('set', k, rec) }
 
   /* state */
@@ -113,7 +150,7 @@ export class RecContext {
   restore() { const t = this.stack.pop(); if (!t) return; this.s = t; this.op('restore') }
 
   /* transform: the op carries the whole matrix, composed here in doubles as Chrome does */
-  private setM(m: M6) { this.s.m = m; this.op('m', ...m) }
+  private setM(m: M6) { this.s.m = m; this.op('m', ...m); if (this.hasCur) this.hasLast = this.hasStart = false }   // the host moves the path into the new space
   setTransform(a?: any, b?: number, c?: number, d?: number, e?: number, f?: number) {
     if (a === undefined) return this.setM([1, 0, 0, 1, 0, 0]);
     if (typeof a === 'object') { const t = a; return this.setM([t.a ?? 1, t.b ?? 0, t.c ?? 0, t.d ?? 1, t.e ?? 0, t.f ?? 0]) }
@@ -128,25 +165,73 @@ export class RecContext {
 
   /* paths: non-finite arguments are ignored, as the spec says */
   beginPath() { this.op('begin'); this.newPath() }
-  closePath() { if (!this.hasCur) return; if (this.run) this.runVerb(5); else this.op('close'); this.closed = true }   // closing nothing does nothing
-  moveTo(x: number, y: number) { if (!fin(x, y)) return; this.runVerb(0, x, y); this.hasCur = true; this.closed = false; this.start = [x, y] }
+  closePath() {   // closing nothing does nothing, nor does closing twice
+    if (!this.hasCur || this.closed) return;
+    if (this.run) { VBS.push(5); this.run.moveAt = -1 } else this.op('close');
+    this.closed = true;
+  }
+  moveTo(x: number, y: number) { if (fin(x, y)) this.emitMove(x, y) }
   lineTo(x: number, y: number) {
     if (!fin(x, y)) return;
     if (!this.hasCur) return this.moveTo(x, y);   // no current point: a move, as Blink does
-    if (this.closed) {   // after a close the line starts a new contour at the old one's start (Skia's injected move)
-      if (!this.start) { this.op('L', x, y); this.closed = false; return }   // a contour an arc began: its start is Skia's to compute
-      this.runVerb(0, this.start[0], this.start[1]); this.closed = false }
-    this.runVerb(1, x, y);
+    if (!this.knows) { this.op('L', x, y); this.closed = false; this.hasLast = true; this.lx = f32(x); this.ly = f32(y); return }   // the host knows where it is
+    this.emitLine(x, y);
   }
-  private curve() { this.hasCur = true; this.closed = false; if (!this.start) this.start = null }
-  quadraticCurveTo(cx: number, cy: number, x: number, y: number) { if (fin(cx, cy, x, y)) { const fresh = !this.hasCur; this.op('Q', cx, cy, x, y); if (fresh || this.closed) this.start = null; this.curve() } }
-  bezierCurveTo(a: number, b: number, c: number, d: number, x: number, y: number) { if (fin(a, b, c, d, x, y)) { const fresh = !this.hasCur; this.op('C', a, b, c, d, x, y); if (fresh || this.closed) this.start = null; this.curve() } }
+  quadraticCurveTo(cx: number, cy: number, x: number, y: number) {
+    if (!fin(cx, cy, x, y)) return;
+    if (!this.hasCur) this.emitMove(cx, cy);
+    if (!this.knows) return this.hostOp(false, 'Q', cx, cy, x, y);
+    this.emitQuad(cx, cy, x, y);
+  }
+  bezierCurveTo(a: number, b: number, c: number, d: number, x: number, y: number) {
+    if (!fin(a, b, c, d, x, y)) return;
+    if (!this.hasCur) this.emitMove(a, b);
+    if (!this.knows) return this.hostOp(false, 'C', a, b, c, d, x, y);
+    this.emitCubic(a, b, c, d, x, y);
+  }
   arc(x: number, y: number, r: number, a0: number, a1: number, ccw = false) {
-    if (!fin(x, y, r, a0, a1)) return; if (r < 0) throw new RangeError("IndexSizeError: arc radius is negative"); const fresh = !this.hasCur || this.closed; this.op('A', x, y, r, a0, a1, !!ccw); if (fresh) this.start = null; this.curve() }
+    if (!fin(x, y, r, a0, a1)) return; if (r < 0) throw new RangeError("IndexSizeError: arc radius is negative");
+    if (!this.knows) return this.hostOp(!this.hasCur || this.closed, 'A', x, y, r, a0, a1, !!ccw);
+    this.addEllipse(x, y, r, r, a0, a1, !!ccw);
+  }
   ellipse(x: number, y: number, rx: number, ry: number, rot: number, a0: number, a1: number, ccw = false) {
-    if (!fin(x, y, rx, ry, rot, a0, a1)) return; if (rx < 0 || ry < 0) throw new RangeError('IndexSizeError: ellipse radius is negative'); const fresh = !this.hasCur || this.closed; this.op('E', x, y, rx, ry, rot, a0, a1, !!ccw); if (fresh) this.start = null; this.curve() }
-  arcTo(x1: number, y1: number, x2: number, y2: number, r: number) { if (!fin(x1, y1, x2, y2, r)) return; if (r < 0) throw new RangeError('IndexSizeError'); const fresh = !this.hasCur || this.closed; this.op('T', x1, y1, x2, y2, r); if (fresh) this.start = null; this.curve() }
-  rect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) { this.op('R', x, y, w, h); this.hasCur = true; this.closed = true; this.start = [x, y] } }   // a closed contour from (x, y)
+    if (!fin(x, y, rx, ry, rot, a0, a1)) return; if (rx < 0 || ry < 0) throw new RangeError('IndexSizeError: ellipse radius is negative');
+    if (rot || !this.knows) return this.hostOp(!this.hasCur || this.closed, 'E', x, y, rx, ry, rot, a0, a1, !!ccw);   // a turned ellipse: the host places it
+    this.addEllipse(x, y, rx, ry, a0, a1, !!ccw);
+  }
+  arcTo(x1: number, y1: number, x2: number, y2: number, r: number) {
+    if (!fin(x1, y1, x2, y2, r)) return; if (r < 0) throw new RangeError('IndexSizeError');
+    this.hostOp(!this.hasCur || this.closed, 'T', x1, y1, x2, y2, r);
+  }
+  /** Blink's arc: its angles adjusted (AdjustArcAngles), then Skia's arcTo on the oval, a whole turn as two halves */
+  private addEllipse(x: number, y: number, rx: number, ry: number, a0: number, a1: number, ccw: boolean) {
+    const T = 2 * Math.PI;
+    if (a0 >= T || a0 <= -T) { const ns = a0 % T; a1 += ns - a0; a0 = ns }
+    if (a0 < 0) { a0 += T; a1 += T }
+    if (!ccw && a1 - a0 >= T) a1 = a0 + T;
+    else if (ccw && a0 - a1 >= T) a1 = a0 - T;
+    else if (!ccw && a0 > a1) a1 = a0 + (T - (a0 - a1) % T);
+    else if (ccw && a0 < a1) a1 = a0 - (T - (a1 - a0) % T);
+    const DEG = 180 / Math.PI, start = a0 * DEG, sweep = (a1 - a0) * DEG;
+    const l = f32(x - rx), t = f32(y - ry), r = f32(x + rx), b = f32(y + ry);
+    const move = !this.hasCur, sink = this.sink;
+    if (Math.abs(sweep - 360) < 1e-4) { arcTo(sink, l, t, r, b, f32(start), 180, move); arcTo(sink, l, t, r, b, f32(start + 180), 180, false) }
+    else if (Math.abs(sweep + 360) < 1e-4) { arcTo(sink, l, t, r, b, f32(start), -180, move); arcTo(sink, l, t, r, b, f32(start - 180), -180, false) }
+    else arcTo(sink, l, t, r, b, f32(start), f32(sweep), move);
+  }
+  private sink: ArcSink = {
+    has: () => this.hasCur, lx: () => this.lx, ly: () => this.ly,
+    move: (x, y) => this.emitMove(x, y),
+    line: (x, y) => this.emitLine(x, y),
+    quad: (a, b, x, y) => this.emitQuad(a, b, x, y),
+    conic: (a, b, x, y, w) => this.emitConic(a, b, x, y, w),
+  };
+  rect(x: number, y: number, w: number, h: number) {   // a closed contour from (x, y), as the host built it
+    if (!fin(x, y, w, h)) return;
+    this.emitMove(x, y);
+    this.emitLine(x + w, y); this.emitLine(x + w, y + h); this.emitLine(x, y + h);
+    VBS.push(5); this.closed = true;
+  }
   fill(rule: string = 'nonzero') { this.op('fill', rule === 'evenodd' ? 'evenodd' : 'nonzero') }
   stroke() { this.op('stroke') }
   clip(rule: string = 'nonzero') { this.op('clip', rule === 'evenodd' ? 'evenodd' : 'nonzero') }

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 import itertools
 import json
+import os
 import pathlib
 import threading
 
-import numpy as np
 import skia
+import py_mini_racer
 from py_mini_racer import MiniRacer
 
 from ._raster import Raster
@@ -33,7 +34,7 @@ globalThis.__render = (spec) => { __miss = []; const r = MolSketchCore.render(JS
   return JSON.stringify({ canvas: r.canvas, width: r.width, height: r.height, ms: r.ms, miss: __miss,
     sizes: Object.fromEntries(Object.entries(r.canvases).map(([id, c]) => [id, [c.start, c.ops.length]])) }) };
 globalThis.__slice = (id, from, n) => JSON.stringify(__last.canvases[id].ops.slice(from, from + n));
-globalThis.__points = () => __last.streams.points.buffer; globalThis.__verbs = () => __last.streams.verbs.buffer;
+globalThis.__stream = (k) => __last.streams[k].buffer;
 globalThis.__done = () => { __last = null; return 0 };
 globalThis.__learn = (rows) => { for (const [f, t, w] of JSON.parse(rows)) __M.set(f + '\u0001' + t, w); return __M.size };
 """
@@ -43,11 +44,21 @@ class CoreError(RuntimeError):
     """an error from the drawing core (a bad selection, an unknown look, …), with its message as the core gave it"""
 
 
+def _init_v8():
+    """V8 with its background threads (compiling and collecting garbage beside the engine: a large figure draws in
+    half the time). mini-racer's default is single-threaded, which a process that forks after drawing may need:
+    MOLSKETCH_V8_SINGLE_THREADED=1 keeps it."""
+    flags = ("--single-threaded",) if os.environ.get("MOLSKETCH_V8_SINGLE_THREADED") else ()
+    try: py_mini_racer.init_mini_racer(flags=flags, ignore_duplicate_init=True)
+    except Exception: pass   # already started by someone else: theirs it is
+
+
 class Engine:
     _lock = threading.Lock()
     _ids = itertools.count(1)
 
     def __init__(self):
+        _init_v8()
         self.v8 = MiniRacer()
         self.v8.eval(CORE.read_text())
         self.v8.eval(PRELUDE)
@@ -77,11 +88,11 @@ class Engine:
                 try:
                     r = json.loads(self.v8.call("__render", json.dumps(spec)))
                     r["canvases"] = {cid: {"start": start, "ops": self._pull(cid, n)} for cid, (start, n) in r["sizes"].items()}
-                    pts = np.frombuffer(bytes(self.v8.eval("__points()")), np.float32); vbs = np.frombuffer(bytes(self.v8.eval("__verbs()")), np.uint8)   # binary, not JSON (eval: call would encode it)
+                    streams = tuple(bytes(self.v8.eval(f"__stream('{k}')")) for k in ("points", "verbs", "weights"))   # binary, not JSON (eval: call would encode it)
                     self.v8.call("__done")
                 except Exception as e:
                     raise CoreError(_js_message(e)) from None
-                self.raster.add(r["canvases"], pts, vbs)
+                self.raster.add(r["canvases"], streams)
                 if not r["miss"] or attempt == 3: break
                 self.raster.forget(r["canvas"])   # a frame drawn with guessed text widths: measure them and draw it again
                 rows = [(f, t, self.text.measure(f, t)) for f, t in {(f, t) for f, t in r["miss"]}]
