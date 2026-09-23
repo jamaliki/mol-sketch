@@ -2,6 +2,7 @@
 replayed in Skia. One Engine per process is plenty; it keeps parsed structures, the paper and text shaping cached."""
 from __future__ import annotations
 
+import gc
 import itertools
 import json
 import os
@@ -83,6 +84,14 @@ class Engine:
         return ref
 
     def render(self, spec: dict) -> skia.Image:
+        # a large figure is millions of small objects (ops, paths) and none of them in a cycle: Python's collector,
+        # walking them again and again as they arrive, would cost more than the drawing
+        was = gc.isenabled(); gc.disable()
+        try: return self._render(spec)
+        finally:
+            if was: gc.enable()
+
+    def _render(self, spec: dict) -> skia.Image:
         with self._lock:
             for attempt in range(4):
                 try:

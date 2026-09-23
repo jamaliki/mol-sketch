@@ -696,24 +696,32 @@
     stroke() {
       if (!this.fuse(2)) this.op("stroke");
     }
-    /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op:
-       F pointIndex pointCount verbIndex verbCount weightIndex weightCount mode (0 fill, 1 even-odd fill, 2 stroke) */
+    /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op, and
+       such draws one after another in the same state as one op too:
+         F mode (0 fill, 1 even-odd fill, 2 stroke) then, per path, pointIndex pointCount verbIndex verbCount weightIndex weightCount */
     fuse(mode) {
       this.settle();
-      const ops = this.canvas.ops;
+      const c = this.canvas, ops = c.ops;
       let j = ops.length - 1;
       while (j >= 0 && ops[j][0] === "S") j--;
       const pi = j;
       if (pi < 0 || ops[pi][0] !== "P" || ops[pi][7]) return false;
       j--;
       while (j >= 0 && ops[j][0] === "S") j--;
-      const bi = j;
-      if (bi < 0 || ops[bi][0] !== "begin" || this.canvas.total - ops.length + bi < this.canvas.frozen) return false;
-      const P = ops[pi], sets = ops.slice(bi + 1, pi).concat(ops.slice(pi + 1));
+      const bi = j, at = c.total - ops.length;
+      if (bi < 0 || ops[bi][0] !== "begin" || at + bi < c.frozen) return false;
+      const P = ops[pi], sets = ops.slice(bi + 1, pi).concat(ops.slice(pi + 1)), run = [P[1], P[2], P[3], P[4], P[5], P[6]];
+      const prev = ops[bi - 1];
+      if (!sets.length && prev && prev[0] === "F" && prev[1] === mode && at + bi - 1 >= c.frozen) {
+        ops.length = bi;
+        for (const v of run) prev.push(v);
+        c.total -= 2;
+        return true;
+      }
       ops.length = bi;
       for (const o of sets) ops.push(o);
-      ops.push(["F", P[1], P[2], P[3], P[4], P[5], P[6], mode]);
-      this.canvas.total -= 1;
+      ops.push(["F", mode, ...run]);
+      c.total -= 1;
       return true;
     }
     clip(rule = "nonzero") {

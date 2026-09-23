@@ -163,10 +163,17 @@ class Raster:
                 pb, vb, wb = streams; first = np.frombuffer(pb, np.float32)
                 for i, o in enumerate(ops):
                     k = o[0]
-                    if k == "F" or k == "P":
+                    if k == "P":
                         p0, n, v0, nv, w0, nw = o[1], o[2], o[3], o[4], o[5], o[6]; verbs = vb[v0:v0 + nv]
                         ops[i] = (k, _run_path(pb[8 * p0:8 * (p0 + n)], verbs, wb[4 * w0:4 * (w0 + nw)], n, nv, nw), o[7], 5 in verbs,
                                   float(first[2 * p0]), float(first[2 * p0 + 1]))
+                    elif k == "F":   # mode, then one or more paths: (path, has a close, first point)
+                        runs = []
+                        for j in range(2, len(o), 6):
+                            p0, n, v0, nv, w0, nw = o[j:j + 6]; verbs = vb[v0:v0 + nv]
+                            runs.append((_run_path(pb[8 * p0:8 * (p0 + n)], verbs, wb[4 * w0:4 * (w0 + nw)], n, nv, nw), 5 in verbs,
+                                         float(first[2 * p0]), float(first[2 * p0 + 1])))
+                        ops[i] = (k, o[1], runs)
             lst.extend(ops)
 
     def forget(self, cid: int):
@@ -223,8 +230,8 @@ class _Replay:
     def _own(self):
         """make the path this replay's own before changing it: an F op's path is shared with the op list, and one read
         from memory carries a stale last-move index, so rebuild it from its first point"""
-        o = self.handed; self.handed = None
-        p = skia.Path(); p.moveTo(o[4], o[5]); p.addPath(o[1], skia.Path.AddPathMode.kExtend_AddPathMode); p.setFillType(o[1].getFillType())
+        seg, _, x, y = self.handed; self.handed = None
+        p = skia.Path(); p.moveTo(x, y); p.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode); p.setFillType(seg.getFillType())
         self.path = p
 
     def _paint(self, style, stroke=False):
@@ -349,14 +356,20 @@ class _Replay:
         c = self.c
         for i in range(i0, i1):
             o = ops[i]; k = o[0]
-            if k == "F":   # begin, a path run, then fill it (mode 0 nonzero, 1 even-odd) or stroke it (2)
-                seg = o[1]; self.path = seg; self.handed = o; self.has_close = o[3]
-                if o[2] == 2:
+            if k == "F":   # per path: begin, the path, then fill it (mode 0 nonzero, 1 even-odd) or stroke it (2)
+                runs = o[2]; last = runs[-1]; self.path = last[0]; self.handed = last; self.has_close = last[1]
+                if o[1] == 2:
                     p = self._stroke()
-                    if p is not None: self._draw_path(p)
+                    if p is not None:
+                        for run in runs: self.path = run[0]; self.has_close = run[1]; self._draw_path(p)
                 else:
                     p = self._fill()
-                    if p is not None: seg.setFillType(skia.PathFillType.kEvenOdd if o[2] == 1 else skia.PathFillType.kWinding); self._draw_path(p)
+                    if p is not None:
+                        draw = c.drawPath
+                        if o[1] == 1:
+                            for run in runs: run[0].setFillType(skia.PathFillType.kEvenOdd); draw(run[0], p)
+                        else:
+                            for run in runs: draw(run[0], p)   # a path read from memory fills non-zero
                 continue
             if self.handed is not None and k in _CHANGES_PATH: self._own()
             if k == "P":   # a run of path verbs, already a path
