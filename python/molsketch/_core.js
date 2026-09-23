@@ -138,17 +138,27 @@
   var R32 = new Int32Array(RUNS.buffer);
   var RF32 = new Float32Array(RUNS.buffer);
   var runsN = 0;
+  var runGen = 0;
+  function ensureRuns(n) {
+    if (n <= RUNS.length) return;
+    let c = RUNS.length * 2;
+    while (n > c) c *= 2;
+    const b = new Uint8Array(c);
+    b.set(RUNS.subarray(0, runsN));
+    RUNS = b;
+    R32 = new Int32Array(b.buffer);
+    RF32 = new Float32Array(b.buffer);
+  }
+  function copyRun(off, len) {
+    ensureRuns(runsN + len);
+    RUNS.copyWithin(runsN, off, off + len);
+    const o = runsN;
+    runsN += len;
+    return o;
+  }
   function writeRun(pts, vbs, wts) {
     const np = pts.n / 2, nw = wts.n, nv = vbs.n, len = 16 + 8 * np + 4 * nw + (nv + 3 & ~3), off = runsN;
-    if (off + len > RUNS.length) {
-      let n = RUNS.length * 2;
-      while (off + len > n) n *= 2;
-      const b = new Uint8Array(n);
-      b.set(RUNS.subarray(0, off));
-      RUNS = b;
-      R32 = new Int32Array(b.buffer);
-      RF32 = new Float32Array(b.buffer);
-    }
+    ensureRuns(off + len);
     let q = off >> 2;
     R32[q] = 5;
     R32[q + 1] = np;
@@ -309,7 +319,9 @@
     fid: 0,
     fidE: -1,
     sid: 0,
-    sidE: -1
+    sidE: -1,
+    bid: 0,
+    bidE: -1
   });
   var PAINTS = /* @__PURE__ */ new Map();
   var SPECS = [];
@@ -396,6 +408,12 @@
       __publicField(this, "ly", 0);
       __publicField(this, "run", null);
       // moveAt: the run's trailing move, or -1
+      // the path's version (any change bumps it); the run an F op last drew it from, while the path is unchanged and the
+      // run's bytes are in this chunk; and the path's own bytes when the host's current path is a reopened copy of it
+      __publicField(this, "ver", 0);
+      __publicField(this, "fused", null);
+      __publicField(this, "shadow", null);
+      __publicField(this, "shadowClose", false);
       // the run being made
       __publicField(this, "PTS", new Stream(new Float32Array(1 << 10)));
       __publicField(this, "VBS", new Stream(new Uint8Array(1 << 9)));
@@ -424,12 +442,27 @@
       this.closed = false;
       this.hasStart = false;
       this.hasLast = false;
+      this.ver++;
+      this.shadow = null;
+    }
+    /** before the host next uses or extends its current path: if that is a reopened copy (see fuse), give it the path
+       itself (F mode 4: set the path, draw nothing) */
+    restorePath() {
+      const b = this.shadow;
+      if (!b) return;
+      this.shadow = null;
+      ensureRuns(runsN + b.length);
+      RUNS.set(b, runsN);
+      const off = runsN;
+      runsN += b.length;
+      this.canvas.push(["F", 4, 0, off, b.length, this.shadowClose]);
     }
     /** end the current run of path verbs as one P op */
     settle() {
       const r = this.run;
       if (!r) return;
       this.run = null;
+      this.restorePath();
       const [off, len] = writeRun(this.PTS, this.VBS, this.WTS);
       this.canvas.push(["P", off, len, r.cont, r.close]);
     }
@@ -439,7 +472,10 @@
     }
     /** an op the host builds the path with itself: what it leaves is unknown here */
     hostOp(fresh2, ...o) {
+      this.settle();
+      this.restorePath();
       this.op(...o);
+      this.ver++;
       this.hasCur = true;
       this.closed = false;
       this.hasLast = false;
@@ -466,6 +502,7 @@
       this.hasStart = this.hasLast = true;
       this.sx = this.lx = x;
       this.sy = this.ly = y;
+      this.ver++;
     }
     /** a drawing verb (1 line, 2 quad, 3 conic, 4 cubic) from the current point; callers make sure `last` (and after a
        close, `start`) is known. After a close Skia first moves to the contour's start; a run that continues a contour
@@ -482,6 +519,7 @@
       this.run.moveAt = -1;
       this.hasCur = true;
       this.closed = false;
+      this.ver++;
     }
     emitEnd(x, y) {
       this.PTS.push2(x, y);
@@ -522,15 +560,17 @@
     setProp(k, v) {
       const s = this.s;
       s[k] = v;
-      s.fidE = s.sidE = -1;
+      s.fidE = s.sidE = s.bidE = -1;
     }
-    /** the id of the paint this state fills (or strokes) with */
-    pid(stroke) {
+    /** the id of the paint this state fills (or strokes) with; `butt`: its stroke with butt caps (a reopened hairline) */
+    pid(stroke, butt = false) {
       const s = this.s;
-      if (stroke ? s.sidE === EPOCH : s.fidE === EPOCH) return stroke ? s.sid : s.fid;
+      if (butt) {
+        if (s.bidE === EPOCH) return s.bid;
+      } else if (stroke ? s.sidE === EPOCH : s.fidE === EPOCH) return stroke ? s.sid : s.fid;
       const v = stroke ? s.strokeV : s.fillV, common = [s.globalAlpha, s.globalCompositeOperation, s.filter];
       const spec = Array.isArray(v) ? [stroke ? 1 : 0, ...v, ...common] : [stroke ? 3 : 2, v.pat, v.snap, v.rep, v.m, s.imageSmoothingEnabled, ...common];
-      if (stroke) spec.push(s.lineWidth, s.lineCap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
+      if (stroke) spec.push(s.lineWidth, butt ? "butt" : s.lineCap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
       const key = JSON.stringify(spec);
       let id = PAINTS.get(key);
       if (id === void 0) {
@@ -538,7 +578,10 @@
         PAINTS.set(key, id);
         SPECS.push(id, spec);
       }
-      if (stroke) {
+      if (butt) {
+        s.bid = id;
+        s.bidE = EPOCH;
+      } else if (stroke) {
         s.sid = id;
         s.sidE = EPOCH;
       } else {
@@ -674,6 +717,11 @@
       const c = this.s.m;
       if (m[0] === c[0] && m[1] === c[1] && m[2] === c[2] && m[3] === c[3] && m[4] === c[4] && m[5] === c[5]) return;
       this.opened();
+      if (this.hasCur) {
+        this.settle();
+        this.restorePath();
+        this.ver++;
+      }
       this.s.m = m;
       this.op("m", ...m);
       if (this.hasCur) this.hasLast = this.hasStart = false;
@@ -718,8 +766,12 @@
         this.VBS.push(5);
         this.run.moveAt = -1;
         this.run.close = true;
-      } else this.op("close");
+      } else {
+        this.restorePath();
+        this.op("close");
+      }
       this.closed = true;
+      this.ver++;
     }
     moveTo(x, y) {
       if (fin(x, y)) this.emitMove(x, y);
@@ -728,7 +780,10 @@
       if (!fin(x, y)) return;
       if (!this.hasCur) return this.moveTo(x, y);
       if (!this.knows) {
+        this.settle();
+        this.restorePath();
         this.op("L", x, y);
+        this.ver++;
         this.closed = false;
         this.hasLast = true;
         this.lx = f32(x);
@@ -802,38 +857,79 @@
       this.VBS.push(5);
       this.run.close = true;
       this.closed = true;
+      this.ver++;
     }
     fill(rule = "nonzero") {
       const eo = rule === "evenodd", p = this.pid(false);
-      if (!this.fuse(eo ? 1 : 0, p)) this.op("fill", eo ? "evenodd" : "nonzero", p);
+      if (!this.fuse(eo ? 1 : 0, p) && !this.again(eo ? 1 : 0, p)) {
+        this.settle();
+        this.restorePath();
+        this.op("fill", eo ? "evenodd" : "nonzero", p);
+      }
       handOver();
     }
     stroke() {
       const p = this.pid(true);
-      if (!this.fuse(2, p)) this.op("stroke", p);
+      if (!this.fuse(2, p) && !this.again(2, p)) {
+        this.settle();
+        this.restorePath();
+        this.op("stroke", p);
+      }
       handOver();
     }
     /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op, and
        such draws one after another in the same state as one op too:
-         F mode (0 fill, 1 even-odd fill, 2 stroke) paint then, per path, offset length hasClose */
+         F mode (0 fill, 1 even-odd fill, 2 stroke, 3 stroke as it is) paint then, per path, offset length hasClose
+         (4: no draw, the path only). The host's current path afterwards is the op's last path.
+       A stroke is decided here: one that needs nothing of the host is drawn as it is (3), and a hairline stroke of closed
+       contours as Chrome's Skia draws it (the host's would hit each contour's start twice): each close a line back to the
+       start, with butt caps, on a reopened copy of its run. */
     fuse(mode, paint) {
       this.settle();
       const c = this.canvas, ops = c.ops, pi = ops.length - 1, bi = pi - 1, at = c.total - ops.length;
       if (bi < 0 || ops[pi][0] !== "P" || ops[pi][3] || ops[bi][0] !== "begin" || at + bi < c.frozen) return false;
-      const P = ops[pi], prev = ops[bi - 1];
-      if (prev && prev[0] === "F" && prev[1] === mode && prev[2] === paint && at + bi - 1 >= c.frozen) {
+      const P = ops[pi], prev = ops[bi - 1], off = P[1], len = P[2], close = P[4];
+      const d = this.decide(mode, paint, off, len, close);
+      if (prev && prev[0] === "F" && prev[1] === d.mode && prev[2] === d.paint && at + bi - 1 >= c.frozen) {
         ops.length = bi;
-        prev.push(P[1], P[2], P[4]);
+        prev.push(d.off, d.len, d.close);
         c.total -= 2;
-        return true;
+      } else {
+        ops.length = bi;
+        ops.push(["F", d.mode, d.paint, d.off, d.len, d.close]);
+        c.total -= 1;
       }
-      ops.length = bi;
-      ops.push(["F", mode, paint, P[1], P[2], P[4]]);
-      c.total -= 1;
+      this.drew(off, len, close, d.off !== off);
       return true;
+    }
+    /** a fill or stroke of the path an F op just drew, unchanged since: another F op on the same run */
+    again(mode, paint) {
+      const f2 = this.fused;
+      if (!f2 || f2.ver !== this.ver || f2.gen !== runGen || this.run) return false;
+      const d = this.decide(mode, paint, f2.off, f2.len, f2.close);
+      this.canvas.push(["F", d.mode, d.paint, d.off, d.len, d.close]);
+      this.drew(f2.off, f2.len, f2.close, d.off !== f2.off);
+      return true;
+    }
+    decide(mode, paint, off, len, close) {
+      if (mode !== 2) return { mode, paint, off, len, close };
+      if (!close || !hairline(this.s.m, f32(this.s.lineWidth))) return { mode: 3, paint, off, len, close };
+      const o = copyRun(off, len), l = reopenLastRun(o, len);
+      if (l < 0) {
+        runsN = o;
+        return { mode, paint, off, len, close };
+      }
+      return { mode: 3, paint: this.pid(true, true), off: o, len: l, close: false };
+    }
+    drew(off, len, close, reopened) {
+      this.fused = { ver: this.ver, gen: runGen, off, len, close };
+      this.shadow = reopened ? RUNS.slice(off, off + len) : null;
+      this.shadowClose = close;
     }
     clip(rule = "nonzero") {
       this.opened();
+      this.settle();
+      this.restorePath();
       this.op("clip", rule === "evenodd" ? "evenodd" : "nonzero");
     }
     fillRect(x, y, w, h) {
@@ -887,6 +983,48 @@
       throw new Error("gradients are not recorded headless");
     }
   };
+  function hairline(m, w) {
+    const fast = (x, y) => {
+      x = Math.abs(x);
+      y = Math.abs(y);
+      return Math.max(x, y) + Math.min(x, y) / 2;
+    };
+    return fast(m[0] * w, m[1] * w) <= 1 && fast(m[2] * w, m[3] * w) <= 1;
+  }
+  var PER_VERB = [1, 1, 2, 2, 3, 0];
+  function reopenLastRun(off, len) {
+    if (off + len !== runsN) return -1;
+    const q = off >> 2, np = R32[q + 1], nw = R32[q + 2], nv = R32[q + 3], pq = q + 4, wq = pq + 2 * np, vb = wq + nw << 2;
+    if (!nv || RUNS[vb + nv - 1] !== 5) return -1;
+    let closes = 0;
+    for (let i = 0; i < nv; i++) {
+      const v = RUNS[vb + i];
+      if (v === 5) closes++;
+      else if (v === 0 && i > 0 && RUNS[vb + i - 1] !== 5) return -1;
+    }
+    const pts = RF32.slice(pq, pq + 2 * np), wts = RF32.slice(wq, wq + nw), vbs = RUNS.slice(vb, vb + nv);
+    const np2 = np + closes, len2 = 16 + 8 * np2 + 4 * nw + (nv + 3 & ~3);
+    ensureRuns(off + len2);
+    R32[q + 1] = np2;
+    let k = 0, o = pq, sx = 0, sy = 0;
+    for (let i = 0; i < nv; i++) {
+      const v = vbs[i];
+      if (v === 0) {
+        sx = pts[k];
+        sy = pts[k + 1];
+      }
+      if (v === 5) {
+        RF32[o++] = sx;
+        RF32[o++] = sy;
+      } else for (let j = 2 * PER_VERB[v]; j > 0; j--) RF32[o++] = pts[k++];
+    }
+    for (let j = 0; j < nw; j++) RF32[o + j] = wts[j];
+    const v2 = o + nw << 2;
+    for (let i = 0; i < nv; i++) RUNS[v2 + i] = vbs[i] === 5 ? 1 : vbs[i];
+    for (let i = v2 + nv; i < off + len2; i++) RUNS[i] = 0;
+    runsN = off + len2;
+    return len2;
+  }
   var STREAM_OPS = 2e4;
   var STREAM_BYTES = 4 << 20;
   var stream = null;
@@ -910,6 +1048,7 @@
     }
     const runs = RUNS.slice(0, runsN);
     runsN = 0;
+    runGen++;
     const paints = SPECS;
     SPECS = [];
     return { canvases, paints, runs, dead };

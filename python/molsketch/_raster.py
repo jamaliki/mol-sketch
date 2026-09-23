@@ -315,13 +315,16 @@ class _Replay:
         c = self.c; paint = self.r.paint
         for i in range(i0, i1):
             o = ops[i]; k = o[0]
-            if k == "F":   # per path: begin, the path, then fill it (mode 0 nonzero, 1 even-odd) or stroke it (2)
+            if k == "F":   # per path: begin, the path, then fill it (mode 0 nonzero, 1 even-odd) or stroke it (2; 3 as it is)
                 runs = o[3]; last = runs[-1]; self.path = last[0]; self.handed = last; self.has_close = last[1]
+                if o[1] == 4: continue   # the path only (the recorder's, after drawing a reopened copy of it)
                 p = paint(o[2])
                 if p is None: continue
                 if o[1] == 2:
                     for run in runs: self.path = run[0]; self.has_close = run[1]; self._draw_path(p)
                     self.has_close = last[1]
+                elif o[1] == 3:   # a stroke to draw as it is (a hairline the recorder reopened)
+                    for run in runs: c.drawPath(run[0], p)
                 else:
                     draw = c.drawPath
                     if o[1] == 1:
