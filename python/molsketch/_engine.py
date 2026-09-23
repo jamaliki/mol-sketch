@@ -8,6 +8,7 @@ import itertools
 import json
 import os
 import pathlib
+import sys
 import threading
 
 import skia
@@ -31,8 +32,9 @@ globalThis.__measure = (font, text) => { let w = 0, miss = false; const m = /([\
 globalThis.__call = (name, args) => JSON.stringify(MolSketchCore[name](...JSON.parse(args)) ?? null);
 // The recording reaches the host while the engine draws: each chunk is written into a ring the host reads in place
 // (an ArrayBuffer it holds a view of), then a notification tells it to read. Header: int32 [0] bytes written, [1] bytes
-// read (the host's); a record is int32 JSON length (UTF-16 units) and runs length, the JSON as UTF-16, the runs, each
-// padded to 4; -1 where a record would not fit before the end of the ring and the next starts at its beginning.
+// read (the host's); a record is int32 JSON length (characters), runs length and width (1: Latin-1 bytes, 2: UTF-16),
+// the JSON, the runs, each padded to 4; -1 where a record would not fit before the end of the ring and the next
+// starts at its beginning.
 // V8 cannot hand over anything else mid-run: the host touching a JS value waits for the engine to finish.
 globalThis.__RING = new ArrayBuffer(%RING%);
 (() => {
@@ -42,14 +44,16 @@ globalThis.__RING = new ArrayBuffer(%RING%);
   globalThis.__ringPut = (chunk) => {
     if (!globalThis.__note) return false;
     const js = JSON.stringify({ canvases: chunk.canvases, paints: chunk.paints, dead: chunk.dead }), runs = chunk.runs;
-    const jb = (js.length * 2 + 3) & ~3, rb = (runs.length + 3) & ~3, need = 8 + jb + rb;
+    let wide = 1; for (let i = 0; i < js.length; i++) if (js.charCodeAt(i) > 255) { wide = 2; break }
+    const jb = (js.length * wide + 3) & ~3, rb = (runs.length + 3) & ~3, need = 12 + jb + rb;
     if (need > CAP) return false;   // too big for the ring: it waits for the end of the render
     let pos = written % CAP; const tail = CAP - pos, wrap = tail < need;
     while (CAP - (written - Atomics.load(H, 1)) < (wrap ? tail + need : need)) { }   // the host is still reading
     if (wrap) { I32[(D0 + pos) >> 2] = -1; written += tail; pos = 0 }
-    const o = D0 + pos; I32[o >> 2] = js.length; I32[(o >> 2) + 1] = runs.length;
-    const u = (o + 8) >> 1; for (let i = 0; i < js.length; i++) U16[u + i] = js.charCodeAt(i);
-    U8.set(runs, o + 8 + jb);
+    const o = D0 + pos; I32[o >> 2] = js.length; I32[(o >> 2) + 1] = runs.length; I32[(o >> 2) + 2] = wide;
+    if (wide === 1) for (let i = 0, u = o + 12; i < js.length; i++) U8[u + i] = js.charCodeAt(i);
+    else for (let i = 0, u = (o + 12) >> 1; i < js.length; i++) U16[u + i] = js.charCodeAt(i);
+    U8.set(runs, o + 12 + jb);
     written += need; Atomics.store(H, 0, written);
     __note(0);
     return true;
@@ -122,10 +126,11 @@ class Engine:
             i32 = self._i32; pos = self._read % (RING - 64); o = 64 + pos
             n = i32[o >> 2]
             if n == -1: self._read += RING - 64 - pos; o = 64; n = i32[o >> 2]
-            r = i32[(o >> 2) + 1]; jb = (2 * n + 3) & ~3
-            js = self._ring[o + 8:o + 8 + 2 * n].tobytes().decode("utf-16-le", "surrogatepass")
-            runs = self._ring[o + 8 + jb:o + 8 + jb + r].tobytes()
-            self._read += 8 + jb + ((r + 3) & ~3); i32[1] = self._read
+            r = i32[(o >> 2) + 1]; wide = i32[(o >> 2) + 2]; jb = (wide * n + 3) & ~3
+            raw = self._ring[o + 12:o + 12 + wide * n].tobytes()
+            js = raw.decode("latin-1") if wide == 1 else raw.decode("utf-16-le", "surrogatepass")
+            runs = self._ring[o + 12 + jb:o + 12 + jb + r].tobytes()
+            self._read += 12 + jb + ((r + 3) & ~3); i32[1] = self._read
             self.raster.feed(js, runs)
         except BaseException as e:  # reported by the render that sent it
             self._err = e
@@ -145,9 +150,12 @@ class Engine:
     def render(self, spec: dict) -> skia.Image:
         # a large figure is millions of small objects (ops, paths) and none of them in a cycle: Python's collector,
         # walking them again and again as they arrive, would cost more than the drawing
-        was = gc.isenabled(); gc.disable()
+        # and V8 hands records over through Python's lock: switching threads every 0.5 ms rather than 5 keeps the
+        # engine from waiting on the replay while it draws
+        was = gc.isenabled(); gc.disable(); sw = sys.getswitchinterval(); sys.setswitchinterval(0.0005)
         try: return self._render(spec)
         finally:
+            sys.setswitchinterval(sw)
             if was: gc.enable()
 
     def _render(self, spec: dict) -> skia.Image:

@@ -186,7 +186,7 @@
       if (h.length === 3 || h.length === 4) h = [...h].map((c) => c + c).join("");
       if (h.length !== 6 && h.length !== 8 || !HEX.test(h)) return null;
       const v = [0, 2, 4, 6].slice(0, h.length / 2).map((i) => parseInt(h.slice(i, i + 2), 16));
-      return [v[0] / 255, v[1] / 255, v[2] / 255, v.length === 4 ? v[3] / 255 : 1];
+      return [v[0], v[1], v[2], v.length === 4 ? v[3] / 255 : 1];
     }
     const m = RGB.exec(s);
     if (m) {
@@ -197,11 +197,11 @@
       const a = parts.length === 4 ? parts[3].endsWith("%") ? num(parts[3].slice(0, -1)) / 100 : num(parts[3]) : 1;
       if (ch.some(isNaN) || isNaN(a)) return null;
       const c = ch.map((x) => Math.min(255, Math.max(0, roundHalfEven(x))));
-      return [c[0] / 255, c[1] / 255, c[2] / 255, Math.min(1, Math.max(0, a))];
+      return [c[0], c[1], c[2], Math.min(1, Math.max(0, a))];
     }
     if (s === "transparent") return [0, 0, 0, 0];
     const n = NAMED[s];
-    return n ? [n[0] / 255, n[1] / 255, n[2] / 255, 1] : null;
+    return n ? [n[0], n[1], n[2], 1] : null;
   }
   var NAMED = {
     black: [0, 0, 0],

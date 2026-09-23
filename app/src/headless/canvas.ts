@@ -65,7 +65,8 @@ function writeRun(pts: Stream<Float32Array>, vbs: Stream<Uint8Array>, wts: Strea
 
 const f32 = Math.fround;
 
-/** a CSS colour as float RGBA (0..1): #hex, rgb()/rgba(), transparent and a few names; null if Chrome would ignore it */
+/** a CSS colour as RGBA, the channels integers 0..255 (Blink rounds them) and alpha 0..1: #hex, rgb()/rgba(), transparent
+   and a few names; null if Chrome would ignore it. The host divides the channels by 255. */
 const HEX = /^[0-9a-f]+$/, RGB = /^rgba?\(\s*([^)]*)\)$/;
 function parseColor(str: string): number[] | null {
   const s = str.trim().toLowerCase();
@@ -74,7 +75,7 @@ function parseColor(str: string): number[] | null {
     if (h.length === 3 || h.length === 4) h = [...h].map(c => c + c).join('');
     if ((h.length !== 6 && h.length !== 8) || !HEX.test(h)) return null;
     const v = [0, 2, 4, 6].slice(0, h.length / 2).map(i => parseInt(h.slice(i, i + 2), 16));
-    return [v[0] / 255, v[1] / 255, v[2] / 255, v.length === 4 ? v[3] / 255 : 1];
+    return [v[0], v[1], v[2], v.length === 4 ? v[3] / 255 : 1];
   }
   const m = RGB.exec(s);
   if (m) {
@@ -85,10 +86,10 @@ function parseColor(str: string): number[] | null {
     const a = parts.length === 4 ? (parts[3].endsWith('%') ? num(parts[3].slice(0, -1)) / 100 : num(parts[3])) : 1;
     if (ch.some(isNaN) || isNaN(a)) return null;
     const c = ch.map(x => Math.min(255, Math.max(0, roundHalfEven(x))));   // Blink rounds the channels to integers
-    return [c[0] / 255, c[1] / 255, c[2] / 255, Math.min(1, Math.max(0, a))];
+    return [c[0], c[1], c[2], Math.min(1, Math.max(0, a))];
   }
   if (s === 'transparent') return [0, 0, 0, 0];
-  const n = NAMED[s]; return n ? [n[0] / 255, n[1] / 255, n[2] / 255, 1] : null;
+  const n = NAMED[s]; return n ? [n[0], n[1], n[2], 1] : null;
 }
 const NAMED: Record<string, number[]> = { black: [0, 0, 0], white: [255, 255, 255], red: [255, 0, 0], green: [0, 128, 0], blue: [0, 0, 255],
   gray: [128, 128, 128], grey: [128, 128, 128], yellow: [255, 255, 0], orange: [255, 165, 0] };
@@ -139,7 +140,7 @@ const fresh = (): State => ({ m: [1, 0, 0, 1, 0, 0], fillStyle: '#000000', strok
 
 /* Paints: the state a draw depends on (its style, alpha, blend mode, filter and, for a stroke, the pen) becomes a paint
    spec; each distinct spec gets an id, and draw ops carry the id. The specs of a render go to the host beside its ops
-     fill colour     0 r g b a alpha composite filter
+     fill colour     0 r g b a alpha composite filter          r g b: 0..255, a and alpha 0..1
      stroke colour   1 r g b a alpha composite filter width cap join miter dash dashOffset
      fill pattern    2 pat snap rep m smoothing alpha composite filter
      stroke pattern  3 pat snap rep m smoothing alpha composite filter width cap join miter dash dashOffset

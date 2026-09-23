@@ -196,23 +196,29 @@ class Raster:
 
     # ---- paints ----
     def paint(self, pid: int) -> skia.Paint | None:
-        """the paint of an id (shared: whoever changes it copies it first); None when its pattern has no pixels"""
-        try: return self.paints[pid]
-        except KeyError: p = self.paints[pid] = self._make_paint(self.specs[pid]); return p
+        """the paint of an id, for a draw made now: a colour is set on its template's one paint (shared, so whoever keeps
+        a paint copies it); None when a pattern has no pixels"""
+        try: e = self.paints[pid]
+        except KeyError: e = self.paints[pid] = self._make_paint(self.specs[pid])
+        if e.__class__ is tuple:
+            t, col, f4 = e
+            if f4: t.setColor4f(col)
+            else: t.setColor(col)
+            return t
+        return e
 
     def _make_paint(self, spec):
         kind = spec[0]
-        if kind < 2:   # a colour on a copy of the template for the rest of the spec (a copy is one call, the setters several)
+        if kind < 2:   # a colour, and the template for the rest of the spec (one paint per template, recoloured per draw)
             r, g, b, a, alpha, comp, filt = spec[1:8]; pen = spec[8:14] if kind == 1 else None
+            r /= 255; g /= 255; b /= 255   # the recorder's channels are Blink's integers
             key = (comp, filt, (*pen[:4], tuple(pen[4]) if pen[4] else None, pen[5]) if pen else None)
             t = self.templates.get(key)
             if t is None: t = self.templates[key] = _finish(skia.Paint(AntiAlias=True), comp, filt, pen)
-            p = skia.Paint(t)
             # colour precision as Chrome's Skia blends: normal drawing keeps the colour in float; the other blend modes
             # (multiply, screen: watercolour and paper) run at 8 bits, so the colour is rounded there first (measured)
-            if comp == "source-over": p.setColor4f(skia.Color4f(r, g, b, a * alpha))
-            else: p.setColor(skia.Color(round(r * 255), round(g * 255), round(b * 255), round(a * alpha * 255)))
-            return p
+            if comp == "source-over": return (t, skia.Color4f(r, g, b, a * alpha), True)
+            return (t, skia.Color(round(r * 255), round(g * 255), round(b * 255), round(a * alpha * 255)), False)
         pat, snap, rep, m, smooth, alpha, comp, filt = spec[1:9]; pen = spec[9:15] if kind == 3 else None
         # a pattern: the source canvas as snapshot `snap` holds it; the shader lives on a cached paint, since
         # skia-python's setShader on an image shader costs tens of milliseconds and copying a paint that holds one nothing

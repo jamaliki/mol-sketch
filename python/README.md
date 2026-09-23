@@ -93,6 +93,13 @@ colour precision of each blend mode, sub-pixel strokes as hairlines, the blur fi
 word at a time with HarfBuzz using Skia's advances, Blink's baselines, and CoreText's font fallback on the Mac. On
 Linux and Windows the fallback fonts are the platform's, as Chrome's would be there.
 
+## Speed
+
+The engine records its drawing as it goes and hands it over in pieces, so Skia draws while V8 is still working. A
+144 000-atom ribosome at 900 × 900 takes about 0.9 s as a cartoon and 2.4 s as a watercolour surface once the engine
+is warm (the app in Chrome: 0.65 s and 2.7 s); a single protein takes a few tens of milliseconds. V8 runs with its
+background threads; set `MOLSKETCH_V8_SINGLE_THREADED=1` if your process forks after drawing.
+
 ## Development
 
 The drawing core is built from the app's source (`app/src/headless/`) into `molsketch/_core.js`, and the app itself
