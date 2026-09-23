@@ -15,15 +15,27 @@ npm run build          # static bundle in dist/
 npm run render -- public/examples/1A8O.pdb --look watercolour --size 1920x1440 --out out   # headless PNGs (classic engine)
 ```
 
-Drag a PDB, mmCIF or scene JSON file onto the canvas, or pick an example. Drag to rotate, the *roll* slider in *View* to
-turn the picture about the view axis, shift-drag or right-drag to pan, wheel to zoom, arrow keys to nudge, `r` to reset.
-*Frame* fits what is drawn into a box of the canvas (a preset for the website's hero, desktop or phone, or any box in
-percent) with guides you can switch on; *Copy render command* in *Data* puts the CLI line that renders exactly what is
-on screen on the clipboard, naming the scene and style files that *Save scene JSON* and *Save style* write.
+Drag a PDB, mmCIF or scene JSON file onto the canvas, use *Open…* / *Examples* in the top bar, or type a PDB ID
+(e.g. `1A8O`) and *Fetch* to load that entry from RCSB as mmCIF. Drag to rotate, shift-drag or
+right-drag to pan, wheel to zoom, arrow keys to nudge, `r` to reset; `?` shows every shortcut.
+
+The top bar holds what is used every time: open, examples, undo / redo, *Save PNG* (the screen as it is) and *Export…*.
+The side panel has one tab per task, and a search box (`/`) that finds any setting across all of them:
+
+- **Look**: the looks (the same as the files in `../looks`), what to draw (sticks, cartoon, surface, with one-click
+  choices or any selection), fill, labels, and collapsed fine tuning for lines, hatching, watercolour and paper.
+- **Colour**: what colours by what, the group palettes (engraved ribbons take their first three colours for helix,
+  sheet and coil), per-group overrides, every swatch, and the paper-and-ink presets.
+- **View**: camera, fog and light, suggested views, *Frame* (fit the drawing into a box of the canvas, e.g. the website's
+  hero, with guides), motion (turntable, boiling) and the engine.
+- **Scene** (with a scene loaded): checks, keyframes and their timing, and arrows / lone pairs / charges by clicking.
+  The timeline under the drawing plays, steps and jumps to keyframes.
+- **Export**: a PNG or poster at a chosen size, the loop as a video, scene and style files, and *Copy render command*,
+  the CLI line that renders exactly what is on screen from the files *Save scene JSON* and *Save style* write.
+
 [../docs/hero-workflow.md](../docs/hero-workflow.md) is the route from computed states to a looping video, both in the app
-and by script. The *Looks* buttons apply the same looks as the
-files in `../looks`; every other control edits one field of the style, which is saved in the browser and
-can be exported/imported as JSON (*Save style* / *Load style*).
+and by script. Every control edits one field of the style, which is saved in the browser and can be exported / imported
+as JSON.
 
 ## How it works
 

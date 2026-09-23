@@ -91,6 +91,8 @@ this README. [docs/looks.md](docs/looks.md) documents each one, setting by setti
 | `looks/chalkboard.json` | chalk on the same navy: dusty fills, soft white line, the board's tooth |
 | `looks/assembly-surface.json` | watercolour surface coloured by subunit, for large complexes |
 | `looks/assembly-cartoon.json` | tube/ribbon cartoon coloured by subunit, thin pen, heavy fog |
+| `looks/engraved.json` | line-shaded ribbons, black on white, after MOLSCRIPT figures |
+| `looks/engraved-colour.json` | the same with colour only in the lines: five heavier coloured lines per face |
 
 ```bash
 node render.js examples/mechanism.json --settings looks/watercolour.json --frames drawn --out out

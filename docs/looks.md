@@ -221,6 +221,68 @@ node render.js 6GZQ.cif --settings looks/assembly-cartoon.json \
 Secondary structure comes from `_struct_conf` / `_struct_sheet_range` when the file has them, otherwise
 from a P-SEA-style geometric assignment on the Cα trace. `rep.cartoonScale` (1) is the ribbon width.
 
+## 6b. Engraved — `looks/engraved.json`
+
+![](img/engraved.png)
+
+Line-shaded ribbons, black on white, as in MOLSCRIPT figures of the early 1990s (Kraulis 1991). The geometry is a
+port of MOLSCRIPT 2.1's own (`graphics.c`): secondary-structure elements share their end residues as MolAuto writes
+them; coils are Priestle-smoothed Hermite splines through Cα; helices are ribbons along the local helix axis (Cα
+plane normal tilted 32°, tangents at −11°) that widen from the coil radius over their first and last residue;
+strands are smoothed boxes whose normals are averaged and made perpendicular, ending in MOLSCRIPT's stepped
+arrowhead (1.5× width, then 0.75×, then the tip). Every ribbon face is paper with straight lines running along it
+at fixed fractions of its width, so they join from segment to segment and crowd where a face turns away; line weight
+also rises as the face normal leaves the viewer, helix back faces are heavier still, and the narrow sides and butt
+ends of strands are solid ink. Faces are painted back to front (by their nearest corner, as MOLSCRIPT does) together
+with sticks and ligands. SVG export works as for every other look.
+
+```bash
+node render.js 5P21.pdb --settings looks/engraved.json \
+     --set reps.cartoon=polymer --set "reps.sticks=hetatm and not water" --set view.yaw=60 --set view.pitch=20 --frames 0
+```
+
+The image is Ras with its nucleotide (the `ras.pdb` of the MolScript distribution). Secondary structure is Triad's
+own assignment (the file's HELIX/SHEET records, or the geometric one), so element boundaries can differ from a
+MolAuto script.
+
+| setting | value | why |
+|---|---|---|
+| `rep.cartoonStyle` | `engraved` | the ribbon renderer; `sketch` (default) is the hand-drawn one of the fill mode |
+| `rep.engraveLines` | `8` | lines per ribbon face |
+| `rep.engraveWidth` | `0.45` | line weight (px at scale 1) for a face turned to the viewer; up to ×2.35 edge-on, ×1.7 on helix backs |
+| `rep.strandThickness` | `0.6` | Å, MOLSCRIPT's default; 0 gives flat strands |
+| `rep.coilWidth` | `1.25` | × MOLSCRIPT's 0.2 Å coil radius |
+| `rep.ssLabels` | `true` | α1, β1 … at the middle of each element, numbered along the chain |
+| `rep.cartoonScale` | `1` | helices 2.4 Å wide, strands 2.0 Å, as in MOLSCRIPT |
+| `rep.fill` | `ink` | white fills; sticks and balls as pen and ink |
+| `style.rough`, `style.passes`, `style.pressure` | `0.15`, `1`, `0` | a steady ruling pen instead of a sketching hand |
+| `style.grain`, `style.wash`, `style.fillWobble` | `0` | plain white paper |
+| `palette.paper`, `.ink`, `.hatch` | `#ffffff`, `#000000`, `#000000` | |
+| `view.fog`, `view.fov` | `0`, `0` | no depth cue, orthographic, as in the originals |
+
+In the app the look is *Looks › Engraved*; *cartoon style*, and, once it is `engraved`, *lines per face*, *line
+weight*, *strand thickness*, *coil width* and *α/β labels*, are in *Show*. It is drawn by the classic engine, which in the
+app also draws while you rotate whenever a frame takes under 45 ms (most single proteins), so the drawing you turn is
+the final one; for larger structures the GPU preview stands in until the view rests.
+
+### Engraved colour — `looks/engraved-colour.json`
+
+![](img/engraved_colour.png)
+
+The engraved ribbons with colour only in the lines: faces stay white, and each face carries five heavier lines in its
+element's colour at an even weight (so face-on ribbons keep their colour), strand sides a darker shade, coils one
+coloured centre line. Helices red, strands blue by default; `--set rep.cartoonColor=rainbow` runs blue → red along
+each chain (a darker ramp than the filled modes, so yellow and cyan still read on white).
+
+| setting | value |
+|---|---|
+| `rep.fill` | `ink colour` |
+| `rep.engraveLines`, `rep.engraveWidth` | `5`, `1.1` |
+| `palette.helix`, `.sheet`, `.loop` | `#d6453d`, `#2f6fb5`, `#1e1e1e` |
+
+The other fill modes colour the engraved faces too: `flat` fills them with the colour and darkens the lines, `wash`
+tints them.
+
 ## 7. Turntable
 
 ![](img/ribosome_turntable.gif)

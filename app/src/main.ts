@@ -33,6 +33,7 @@ let live = true; let turntable = 0; let pitchSwing = 0; let dirty = true; let la
 type RestMode = 'preview' | 'sketch' | 'classic';
 let restMode: RestMode = 'classic';   // what is drawn once the view rests: the fast hybrid sketch or the exact classic engine
 let sketchOn = true;
+let classicMs = Infinity;   // the last classic drawing's cost; when it is small the classic engine also draws while you drag, so what you see moving is the final look
 let lastChange = 0; let sketchShown = false; let boil = 0; let sketchStats = { readMs: 0, regionMs: 0, drawMs: 0, regions: 0 };
 function invalidate() { dirty = true; lastChange = performance.now(); if (sketchShown) { sketchShown = false; skCanvas.classList.remove('on') } drawOverlay() }
 /* scenes: a keyframed document; the GPU previews the sampled state of the current frame, the classic engine draws the frame */
@@ -85,8 +86,8 @@ function sceneJson(): string {
 }
 function runSketch(mode: RestMode = restMode) {
   skCanvas.width = R.w; skCanvas.height = R.h;
-  if (mode === 'classic' && sceneDoc) { const ms = renderScene(skCtx, R, style, sceneDoc, frame, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; sceneFast = ms < 90 }
-  else if (mode === 'classic') { const ms = renderClassic(skCtx, R, style, boil, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 } }
+  if (mode === 'classic' && sceneDoc) { const ms = renderScene(skCtx, R, style, sceneDoc, frame, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; sceneFast = ms < 90; classicMs = ms }
+  else if (mode === 'classic') { const ms = renderClassic(skCtx, R, style, boil, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; classicMs = ms }
   else sketchStats = drawSketch(skCtx, R, style, boil);
   sketchShown = true; skCanvas.classList.add('on'); drawOverlay();
 }
@@ -99,7 +100,7 @@ function fit() {
   for (const c of [canvas, skCanvas, ovCanvas]) { c.style.left = left + 'px'; c.style.top = top + 'px'; c.style.width = cw + 'px'; c.style.height = ch + 'px' }
   const w = Math.max(64, Math.floor(cw * dpr)), h = Math.max(64, Math.floor(ch * dpr)); R.resize(w, h); invalidate(); showGuides(guideBox);
 }
-window.addEventListener('resize', fit);
+new ResizeObserver(() => fit()).observe(stage);   // the window, and the timeline showing or hiding
 function setPreviewAspect(a: number | null) { previewAspect = a; fit() }
 
 function save() { try { localStorage.setItem('triad-sketch-style', JSON.stringify(style)) } catch { } }
@@ -128,9 +129,14 @@ const controls = new OrbitControls(canvas, R.camera, () => { invalidate() }, wha
 
 function status(msg?: string) {
   const s = R.structure; const st = R.stats;
-  const el = document.getElementById('status'); if (!el) return;
-  el.textContent = (msg ? msg + '\n' : '') + (s ? `${s.name || 'structure'}: ${s.count.toLocaleString()} atoms, ${s.residues.length.toLocaleString()} residues, ${s.chains.length} chains · ${st.instances.toLocaleString()} instances, ${st.triangles.toLocaleString()} triangles, built in ${st.buildMs.toFixed(0)} ms` : 'no structure');
+  const info = document.getElementById('fileinfo');
+  if (info) { info.textContent = s ? `${sceneDoc?.name || s.name || 'structure'} · ${s.count.toLocaleString()} atoms · ${s.residues.length.toLocaleString()} residues · ${s.chains.length} chain${s.chains.length === 1 ? '' : 's'}` : 'no structure';
+    info.title = s ? `${st.instances.toLocaleString()} instances, ${st.triangles.toLocaleString()} triangles, built in ${st.buildMs.toFixed(0)} ms` : '' }
+  if (msg) toast(msg);
 }
+/** a message that shows over the drawing for a few seconds */
+let toastTimer = 0;
+function toast(msg: string) { const t = document.getElementById('toast'); if (!t) return; t.textContent = msg; t.classList.add('on'); clearTimeout(toastTimer); toastTimer = window.setTimeout(() => t.classList.remove('on'), 4000) }
 
 let loadSeq = 0;   // every load bumps it; the start-up example only lands if nothing else loaded meanwhile
 async function loadText(text: string, name: string) {
@@ -142,6 +148,14 @@ async function loadText(text: string, name: string) {
   const hasPoly = s.residues.some(r => !r.het);
   if (!hasPoly) { style.reps = { sticks: 'all', cartoon: '', surface: '' } }
   rebuild(); panel.refresh(); panel.refreshChecks?.(); status(`parsed in ${(performance.now() - t0).toFixed(0)} ms`);
+}
+/** an entry from the PDB by its four-character ID, as mmCIF (every entry has one; the large ones have no .pdb) */
+async function fetchPdb(id: string) {
+  id = id.trim().toUpperCase(); if (!/^[0-9][A-Z0-9]{3}$/.test(id)) throw new Error(`"${id}" is not a PDB ID: four characters, starting with a digit, e.g. 1A8O`);
+  status(`fetching ${id} from RCSB…`); let r: Response;
+  try { r = await fetch(`https://files.rcsb.org/download/${id}.cif`) } catch { throw new Error(`could not reach RCSB for ${id}: check the connection`) }
+  if (!r.ok) throw new Error(r.status === 404 ? `${id} is not in the PDB` : `RCSB answered ${r.status} for ${id}`);
+  await loadText(await r.text(), id + '.cif'); status(`${id} fetched from RCSB`);
 }
 async function loadUrl(url: string) { const r = await fetch(url); if (!r.ok) throw new Error('fetch ' + url + ' ' + r.status); await loadText(await r.text(), url.split('/').pop() || url) }
 
@@ -364,6 +378,7 @@ const panel = buildPanel(document.getElementById('controls')!, {
   loadFile: async (f: File) => { await loadText(await f.text(), f.name) }, loadFiles,
   saveScene: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(sceneJson()); a.download = (sceneDoc?.name || R.structure?.name || 'scene') + '.json'; a.click() },
   loadExample: (name: string) => loadUrl('examples/' + name).catch(e => status(e.message)),
+  fetchPdb,
   play: (v: boolean) => { playing = v }, isPlaying: () => playing, seek: (f: number) => { playing = false; setFrame(f) }, step: (d: number) => { playing = false; setFrame(frame + d) },
   reset: () => { mark('reset style'); style = cloneStyle(DEFAULT_STYLE); panel.refresh(); rebuild() },
   setDpr: (v: number) => { dpr = v; fit() },
@@ -374,7 +389,7 @@ const panel = buildPanel(document.getElementById('controls')!, {
   undo: () => { const l = history.back(); status(l ? 'undo: ' + l : 'nothing to undo') }, redo: () => { const l = history.forward(); status(l ? 'redo: ' + l : 'nothing to redo') },
   historyState: () => ({ undo: history.canUndo ? history.nextUndo : '', redo: history.canRedo ? history.nextRedo : '' }),
   // keyframes
-  fps: FPS, hasScene: () => !!sceneDoc, keyframes, currentKey, loopSeconds, setKeyTiming, setKeyName, goToKey, duplicateKey, deleteKey, moveKey, setKeyView,
+  fps: FPS, hasScene: () => !!sceneDoc, keyframes, currentKey, keyStarts: () => sceneDoc ? keyframes().map((_, i) => (timeline().segs.find(s => s.kf === i && s.type === 'hold') || timeline().segs.find(s => s.kf === i))?.start ?? 0) : [], loopSeconds, setKeyTiming, setKeyName, goToKey, duplicateKey, deleteKey, moveKey, setKeyView,
   setShowChanges, setHoverChanges, diffNote: () => diffNote,
   // authoring
   setAuthorMode: (m: string) => setAuthorMode(m as AuthorMode), authorMode: () => authorMode, authorText, arrowsOf, editArrow,
@@ -400,7 +415,9 @@ function loop(t: number) {
   if (playing && sceneDoc) { playAcc += dt * FPS; if (playAcc >= 2) { playAcc -= 2; setFrame(frame + 2); if (restMode === 'classic' && sceneFast) { dirty = false; R.render(style); runSketch('classic') } } }
   if (turntable) { R.camera.yaw = (R.camera.yaw + turntable * dt) % 360; if (pitchSwing) R.camera.pitch = pitchSwing * Math.sin(R.camera.yaw * Math.PI / 180); invalidate() }
   if (!sketchOn && live && t - lastLive > 1000 / 10) { lastLive = t; dirty = true }
-  if (dirty) { dirty = false; R.render(style); hud.textContent = `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°${R.camera.roll ? ' roll ' + R.camera.roll.toFixed(0) + '°' : ''} · zoom ${R.camera.zoom.toFixed(2)} pan ${R.camera.panX.toFixed(2)}, ${R.camera.panY.toFixed(2)}${sceneDoc ? ` · ${(frame / FPS).toFixed(2)} s` : ''}` }
+  if (dirty && restMode === 'classic' && sketchOn && R.structure && !turntable && classicMs < 45) {   // live exact: cheap enough to draw the real thing every frame
+    dirty = false; R.render(style); runSketch('classic'); lastSketchAt = t; hud.textContent = `classic (live) ${classicMs.toFixed(0)} ms · ${R.w}×${R.h}` }
+  else if (dirty) { dirty = false; R.render(style); hud.textContent = `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°${R.camera.roll ? ' roll ' + R.camera.roll.toFixed(0) + '°' : ''} · zoom ${R.camera.zoom.toFixed(2)} pan ${R.camera.panX.toFixed(2)}, ${R.camera.panY.toFixed(2)}${sceneDoc ? ` · ${(frame / FPS).toFixed(2)} s` : ''}` }
   else if (sketchOn && R.structure && !turntable) {
     const rested = t - lastChange > 220; const period = Math.max(900, (sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs) * 3);
     if ((!sketchShown && rested) || (live && sketchShown && t - lastSketchAt > period)) {
@@ -416,7 +433,7 @@ fit(); requestAnimationFrame(loop);
 /* scripting hook (used by the CLI and tests) */
 (window as any).TriadSketch = {
   get style() { return style }, set style(v: Style) { style = mergeStyle(DEFAULT_STYLE, v); panel.refresh(); rebuild() },
-  applyLook, loadText, loadUrl, render: () => { R.render(style); return R.stats.frameMs }, renderer: R, camera: R.camera,
+  applyLook, loadText, loadUrl, fetchPdb, render: () => { R.render(style); return R.stats.frameMs }, renderer: R, camera: R.camera,
   setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
   setSize: (w: number, h: number) => { R.resize(w, h) }, rebuild,
   sketch: (b?: number, mode?: RestMode) => { R.render(style); if (b !== undefined) boil = b; runSketch(mode || 'sketch'); return sketchStats },

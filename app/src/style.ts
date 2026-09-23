@@ -17,7 +17,11 @@ export interface Style {
   font: 'Caveat' | 'Patrick Hand' | 'Kalam' | 'Plain sans'; labelSize: number; captionSize: number; annot: number;
   palette: Palette;
   colorBy: ColorBy;          // carbon / cartoon-by-carbon / surface-by-residue schemes
-  cartoonColor: 'ss' | 'carbon';
+  cartoonColor: 'ss' | 'carbon' | 'rainbow';   // rainbow: blue → red along each chain (engraved cartoon; elsewhere as ss)
+  /** sketch: the hand-drawn ribbons of the fill mode; engraved: line-shaded ribbons in the manner of MOLSCRIPT (Kraulis 1991),
+      white faces with lines running along the ribbon, inked strand sides, paper-white coils. Classic engine only. */
+  cartoonStyle: 'sketch' | 'engraved';
+  engrave: { lines: number; width: number; strandThickness: number; coilWidth: number; labels: boolean };
   surfaceColor: 'single' | 'residue' | 'chain' | 'subunit' | 'entity';
   reps: { sticks: string; cartoon: string; surface: string };   // selections
   stickRadius: number;       // Å
@@ -57,6 +61,8 @@ export const DEFAULT_STYLE: Style = {
   palette: { ...PALETTES['Colored pencil'] },
   colorBy: 'residue',
   cartoonColor: 'ss',
+  cartoonStyle: 'sketch',
+  engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: false },
   surfaceColor: 'subunit',
   reps: { sticks: 'hetatm and not water', cartoon: 'polymer', surface: '' },
   stickRadius: 0.2,

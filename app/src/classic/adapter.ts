@@ -22,7 +22,7 @@ export function cfgFromStyle(style: Style, cam: { yaw: number; pitch: number; ro
       lightAngle: style.view.light, shading: style.shading, pencilFill: style.pencilFill, grain: style.paper.grain, font: style.font, labelSize: style.labelSize, captionSize: style.captionSize, annot: style.annot ?? 1 },
     show: { ...D.show, ...style.show, construction: style.construction, caption: scene && style.show.caption, stepLabel: scene && style.show.stepLabel },
     palette: { ...D.palette, ...style.palette },
-    rep: { ...D.rep, detail: style.detail || 'auto', textureScale: style.textureScale || 'screen', mode: style.mode, fill: style.fill, colorBy: style.colorBy, stickRadius: style.stickRadius, sphereScale: style.sphereScale, sideChainHelper: style.sideChainHelper, cartoonScale: style.cartoonScale, cartoonColor: style.cartoonColor, probe: style.probe, surfaceColor },
+    rep: { ...D.rep, detail: style.detail || 'auto', textureScale: style.textureScale || 'screen', mode: style.mode, fill: style.fill, colorBy: style.colorBy, stickRadius: style.stickRadius, sphereScale: style.sphereScale, sideChainHelper: style.sideChainHelper, cartoonScale: style.cartoonScale, cartoonColor: style.cartoonColor, cartoonStyle: style.cartoonStyle || 'sketch', engraveLines: style.engrave?.lines ?? 8, engraveWidth: style.engrave?.width ?? 0.45, strandThickness: style.engrave?.strandThickness ?? 0.6, coilWidth: style.engrave?.coilWidth ?? 1.25, ssLabels: !!style.engrave?.labels, probe: style.probe, surfaceColor },
   };
 }
 

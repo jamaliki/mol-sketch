@@ -210,7 +210,7 @@ const DEFAULT_CFG={
   style:{rough:1.1,passes:2,pressure:0.55,fillWobble:1,hatchDensity:1.4,hierarchy:0.6,wash:0.3,washSeed:1,washLife:0.6,inkWidth:1.5,ballScale:1,bondWidth:2.1,hatchSpacing:5,hatchAngle:-40,lightAngle:-125,shading:0.65,pencilFill:0.55,grain:0.6,font:'Caveat',labelSize:19,captionSize:24,contextAlpha:0.5,annot:1},
   show:{H:true,lonePairs:true,charges:true,arrows:true,labels:true,hbonds:true,context:false,caption:true,stepLabel:true,colorBonds:false,resLabels:false,valence:true,construction:false},
   palette:{...PRESETS['PyMOL flat']},
-  rep:{detail:'auto',textureScale:'screen',mode:'sticks',fill:'flat',colorBy:'group',stickRadius:0.2,sphereScale:0.4,sideChainHelper:true,cartoonScale:1,cartoonColor:'ss',probe:1.4,surfaceScale:1,surfaceOpacity:1,surfaceColor:'carbon'},
+  rep:{detail:'auto',textureScale:'screen',mode:'sticks',fill:'flat',colorBy:'group',stickRadius:0.2,sphereScale:0.4,sideChainHelper:true,cartoonScale:1,cartoonColor:'ss',cartoonStyle:'sketch',engraveLines:8,engraveWidth:0.45,strandThickness:0.6,coilWidth:1.25,ssLabels:false,probe:1.4,surfaceScale:1,surfaceOpacity:1,surfaceColor:'carbon'},
   pdbFrames:2
 };
 let cfg=JSON.parse(JSON.stringify(DEFAULT_CFG));
@@ -977,7 +977,145 @@ function sketchOffsets(pts,seed,passes){ // jittered copies of a polyline (no re
     out.push(o)}
   return out;
 }
+/* Engraved cartoon (cfg.rep.cartoonStyle==='engraved'): a port of MOLSCRIPT's schematic geometry (Kraulis 1991, v2.1
+   graphics.c: coil / helix / strand) drawn as its line-shaded PostScript figures were. Secondary-structure elements share
+   their end residues as in MolAuto's scripts; coils are Priestle-smoothed Hermite splines drawn as paper bands; helices
+   are ribbons along the local helix axis that widen from the coil radius over their first and last residue; strands are
+   smoothed boxes ending in a stepped arrowhead. Every ribbon face is paper with lines running along it at fixed fractions
+   of its width; faces turned from the viewer take heavier lines (MOLSCRIPT's shading by the face normal), helix back
+   faces heavier still, and the narrow sides of strands are solid ink. Faces are painted back to front with the rest. */
+function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
+  const P=cfg.palette,S=cfg.style,R=cfg.rep;const K=R.cartoonScale;
+  const SEG=6,N=Math.max(0,Math.round(R.engraveLines??8)),lw0=R.engraveWidth??0.45;
+  const coilR=0.2*K*(R.coilWidth??1.25),helixW=1.2*K,strandW=1.0*K,thick=0.5*(R.strandThickness??0.6)*K;
+  const wInk=S.inkWidth*LW.outer;
+  const add=(a,b,f=1)=>[a[0]+b[0]*f,a[1]+b[1]*f,a[2]+b[2]*f],mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2],scl=(a,f)=>[a[0]*f,a[1]*f,a[2]*f];
+  const herm=(p0,p1,v0,v1,t)=>{const t2=t*t,t3=t2*t;const h1=2*t3-3*t2+1,h2=t3-2*t2+t,h3=-2*t3+3*t2,h4=t3-t2;return[0,1,2].map(k=>h1*p0[k]+h2*v0[k]+h3*p1[k]+h4*v1[k])};
+  const hermT=(p0,p1,v0,v1,t)=>{const t2=t*t;const h1=6*t2-6*t,h2=3*t2-4*t+1,h3=-6*t2+6*t,h4=3*t2-2*t;return[0,1,2].map(k=>h1*p0[k]+h2*v0[k]+h3*p1[k]+h4*v1[k])};
+  const priestle=(pts,steps)=>{for(let s=0;s<steps;s++){const tmp=pts.map(p=>p.slice());for(let i=1;i<pts.length-1;i++)tmp[i]=mid(mid(pts[i-1],pts[i+1]),pts[i]);for(let i=1;i<pts.length-1;i++)pts[i]=tmp[i]}};
+  const nz=n=>proj.rot([n[0]+FIT.cx,n[1]+FIT.cy,n[2]+FIT.cz])[2]; // z of a direction in view space (+ toward the viewer)
+  const P2=p=>{const q=proj.proj(p);return[q.x,q.y,q.z,q.d,q.fog]};
+  const HA=32*Math.PI/180,HB=-11*Math.PI/180,HH=4.7;
+  // colour: by secondary structure, by the carbon scheme, or a blue→red ramp along each chain (MOLSCRIPT's colourramp)
+  const ssCol=t=>t==='H'?P.helix:t==='E'?P.sheet:P.loop;
+  const hsv=(h,s,v)=>{const f=(k)=>{const q=(k+h*6)%6;return v-v*s*Math.max(0,Math.min(q,4-q,1))};return'#'+[f(5),f(3),f(1)].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('')};
+  const mode=R.fill,colourMode=R.cartoonColor||'ss';
+  const tone=col=>{ // fill, hatch and side colours of a face in the current fill mode
+    if(mode==='ink')return{fill:null,hatch:P.hatch,side:P.ink,coil:null};
+    if(mode==='ink colour')return{fill:null,hatch:col,side:mix(col,P.ink,0.3),coil:null,coilLine:true}; // colour only in the lines
+    if(mode==='flat')return{fill:col,hatch:mix(col,P.ink,0.6),side:mix(col,P.ink,0.72),coil:col};
+    return{fill:mix(col,P.paper,0.55),hatch:mix(col,P.ink,0.5),side:mix(col,P.ink,0.68),coil:mix(col,P.paper,0.55)}};
+  const drawItem=(z,alpha,fn)=>items.push({z,draw:(ctx)=>{ctx.save();ctx.globalAlpha=alpha;ctx.lineCap='round';ctx.lineJoin='round';fn(ctx);ctx.restore()}});
+  const poly=(ctx,q)=>{ctx.beginPath();q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath()};
+  const seg=(ctx,a,b)=>{ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1])};
+  /* one face: q = [a0,a1,b1,b0] projected (a = one long edge, b = the other); kind hatch|side|plain; edges = [a0a1,a1b1,b1b0,b0a0] */
+  const face=(q,kind,znorm,back,edges,alpha,col)=>{const T=tone(col||P.loop);
+    const z=Math.max(q[0][2],q[1][2],q[2][2],q[3][2]);const d=(q[0][3]+q[1][3]+q[2][3]+q[3][3])/4,fog=(q[0][4]+q[2][4])/2,fk=1-fog*cfg.view.fog;
+    drawItem(z,alpha,ctx=>{
+      const ink=fogged(P.ink,fog),hatch=fogged(T.hatch,fog),side=fogged(T.side,fog);const fl=kind==='plain'?T.coil:T.fill;let fillC=fl?fogged(fl,fog):paperFill();
+      /* the face's width on screen: a ribbon turned edge-on is a few pixels wide, and its lines must not fuse into a band.
+         As it narrows, lines drop out symmetrically about the middle one (those left keep their place, so they run on unbroken
+         from the wider faces) and none grows heavier than leaves some paper between them; the colour the dropped lines
+         carried goes into a pale tint of the face, so a ribbon keeps about the same amount of colour at every angle */
+      const wS=(Math.hypot(q[3][0]-q[0][0],q[3][1]-q[0][1])+Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]))/2;
+      let hl=null;
+      if(kind==='hatch'&&N>0){
+        const g=clamp(Math.abs(znorm),0,1);const lw1=lw0*(T.coilLine?(1+0.8*(1-g))*(back?1.3:1):(0.55+1.8*(1-g))*(back?1.7:1)); /* colour in the lines: an even weight, so face-on ribbons keep their colour */
+        const gap=wS/(N+1),stride=Math.max(1,Math.ceil(1.5*lw1/Math.max(gap,1e-6))),m=Math.ceil((N+1)/2);const lw=Math.min(lw1,0.7*gap*stride);
+        const ks=[];for(let k=1;k<=N;k++)if(!((k-m)%stride))ks.push(k);if(wS<2*lw)ks.length=0;
+        const lost=clamp(Math.min(1,N*lw1/Math.max(wS,1e-6))-ks.length*lw/Math.max(wS,1e-6),0,1);
+        if(lost>0.02&&!fl)fillC=fogged(mix(P.paper,T.coilLine?col:T.hatch,(T.coilLine?0.55:0.3)*lost),fog);
+        hl={lw,ks}}
+      poly(ctx,q);if(kind==='side'){ctx.fillStyle=side;ctx.fill();ctx.lineWidth=0.5;ctx.strokeStyle=side;ctx.stroke()}else{ctx.fillStyle=fillC;ctx.fill();ctx.lineWidth=0.6;ctx.strokeStyle=fillC;ctx.stroke()}
+      const la=Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[3][0],q[2][1]-q[3][1]);
+      if(kind==='plain'&&T.coilLine&&la>0.05){ctx.lineWidth=lw0*1.6;ctx.strokeStyle=hatch;ctx.beginPath();ctx.moveTo((q[0][0]+q[3][0])/2,(q[0][1]+q[3][1])/2);ctx.lineTo((q[1][0]+q[2][0])/2,(q[1][1]+q[2][1])/2);ctx.stroke()}
+      if(hl&&hl.ks.length&&la>0.05){ctx.lineWidth=hl.lw;ctx.strokeStyle=hatch;ctx.beginPath();
+        for(const k of hl.ks){const f=k/(N+1);ctx.moveTo(lerp(q[0][0],q[3][0],f),lerp(q[0][1],q[3][1],f));ctx.lineTo(lerp(q[1][0],q[2][0],f),lerp(q[1][1],q[2][1],f))}ctx.stroke()}
+      // one pen weight throughout, as MOLSCRIPT's plots (no thickening toward the viewer); where a face is edge-on its two
+      // edges nearly coincide, so each is drawn a little lighter and together they read as one outline, not a doubled one;
+      // with colour in the lines, that outline takes the ribbon's dark shade, so a helix seen end-on stays coloured
+      const ex=wS/Math.max(wInk,1e-6),tri=ex<1?ex:ex<2?2-ex:0;const eo=kind==='hatch'&&T.coilLine?clamp(1-(ex-1)/2.5,0,1):0;
+      ctx.lineWidth=wInk*(0.8+0.2*fk)*(kind==='hatch'?1-0.4*tri:1);ctx.strokeStyle=eo>0.02?fogged(mix(P.ink,T.side,eo),fog):ink;ctx.beginPath();
+      if(edges[0])seg(ctx,q[0],q[1]);if(edges[1])seg(ctx,q[1],q[2]);if(edges[2])seg(ctx,q[2],q[3]);if(edges[3])seg(ctx,q[3],q[0]);ctx.stroke()});
+  };
+  const labels=[];let nH=0,nE=0;
+  const traces=backboneTraces(atoms,sel);
+  for(const tr of traces){
+    const A=tr.atoms,n=A.length;const pts=A.map(a=>a.pos.slice());
+    const rc=(i,t)=>colourMode==='rainbow'?(mode==='ink colour'?hsv(0.6667*(1-i/Math.max(1,n-1)),0.9,0.8):hsv(0.6667*(1-i/Math.max(1,n-1)),0.75,0.95)):colourMode==='carbon'?carbonColor(A[i]):ssCol(t);
+    // elements: runs of H (≥3 residues) and E (≥2), the rest coil; neighbours share their end residue, as MolAuto writes them
+    const ss=A.map(a=>a.nucleic?'L':(a.ss==='H'||a.ss==='E'?a.ss:'L'));
+    const runs=[];for(let i=0;i<n;){let j=i;while(j+1<n&&ss[j+1]===ss[i])j++;runs.push({t:ss[i],s:i,e:j});i=j+1}
+    for(const r of runs)if((r.t==='H'&&r.e-r.s<2)||(r.t==='E'&&r.e-r.s<1))r.t='L';
+    const el=[];for(const r of runs){const last=el[el.length-1];if(last&&last.t==='L'&&r.t==='L')last.e=r.e;else el.push({...r})}
+    for(let k=0;k<el.length-1;k++)el[k].e=el[k+1].s;   // each element ends on the residue where the next begins
+    for(const e of el){
+      const idx=[];for(let i=e.s;i<=e.e;i++)idx.push(i);if(idx.length<2)continue;
+      const alpha=A[idx[0]].alpha??1;
+      if(e.t==='H'&&idx.length>=3){ /* ---- helix ---- */
+        const p=idx.map(i=>pts[i]),m=p.length;const ax=new Array(m),tg=new Array(m);
+        for(let i=1;i<m-1;i++){const c=norm3(sub3(p[i+1],p[i-1]));const r=norm3(cross3(sub3(p[i],p[i-1]),sub3(p[i+1],p[i])));
+          ax[i]=add(scl(r,Math.cos(HA)),c,Math.sin(HA));tg[i]=scl(add(scl(c,Math.cos(HB)),r,Math.sin(HB)),HH)}
+        ax[0]=ax[1];ax[m-1]=ax[m-2];
+        const before=e.s>0?pts[e.s-1]:p[0],after=e.e<n-1?pts[e.e+1]:p[m-1];
+        tg[0]=scl(norm3(sub3(p[1],before)),HH);tg[m-1]=scl(norm3(sub3(after,p[m-2])),HH);
+        const secs=[];let ri=0;const push=(pos,a,hw,dir)=>{secs.push({p1:add(pos,a,hw),p2:add(pos,a,-hw),nrm:norm3(cross3(dir,a)),r:ri})};
+        for(let i=0;i<m-1;i++){for(let s=0;s<SEG;s++){const t=s/SEG;ri=idx[t<0.5?i:i+1];const pos=herm(p[i],p[i+1],tg[i],tg[i+1],t);const dir=hermT(p[i],p[i+1],tg[i],tg[i+1],t);
+          let a,hw;if(i===0){a=ax[0];hw=coilR+(helixW-coilR)*0.5*(1-Math.cos(Math.PI*t))}else if(i===m-2){a=ax[m-1];hw=coilR+(helixW-coilR)*0.5*(1+Math.cos(Math.PI*t))}else{a=norm3(add(scl(ax[i],1-t),ax[i+1],t));hw=helixW}
+          if(s===0&&i>0&&i<m-2)a=ax[i];if(s===0&&i===0)hw=coilR;push(pos,a,hw,dir)}}
+        ri=idx[m-1];push(p[m-1],ax[m-1],coilR,sub3(after,p[m-2]));
+        const q=secs.map(c=>[P2(c.p1),P2(c.p2)]);
+        const zs=[];for(let j=0;j<secs.length-1;j++)zs.push(nz(norm3(add(secs[j].nrm,secs[j+1].nrm))));
+        const fold=j=>j>0&&j<zs.length&&(zs[j-1]<0)!==(zs[j]<0); // the section where the ribbon turns over: its silhouette, inked
+        for(let j=0;j<zs.length;j++){const zn=zs[j];
+          face([q[j][0],q[j+1][0],q[j+1][1],q[j][1]],'hatch',zn,zn<0,[1,fold(j+1),1,fold(j)],alpha,rc(secs[j].r,'H'))}
+        nH++;labels.push({pos:p[Math.floor(m/2)],txt:'α'+nH,alpha});
+      }else if(e.t==='E'&&idx.length>=3){ /* ---- strand ---- */
+        const p=idx.map(i=>pts[i].slice()),m=p.length;const nm=new Array(m);
+        for(let i=1;i<m-1;i++)nm[i]=norm3(sub3(p[i],mid(p[i-1],p[i+1])));nm[0]=nm[1];nm[m-1]=nm[m-2];
+        priestle(p,2);
+        for(let i=0;i<m-1;i++)if(dot3(nm[i],nm[i+1])<0)nm[i+1]=scl(nm[i+1],-1);
+        {const sm=nm.map(v=>v.slice());for(let i=1;i<m-1;i++)sm[i]=norm3(add(add(nm[i-1],nm[i]),nm[i+1]));for(let i=1;i<m-1;i++)nm[i]=sm[i]}
+        const perp=(i,dir)=>{const side=cross3(dir,nm[i]);nm[i]=norm3(cross3(side,dir))};
+        perp(0,sub3(p[1],p[0]));for(let i=1;i<m-1;i++)perp(i,sub3(p[i+1],p[i-1]));perp(m-1,sub3(p[m-1],p[m-2]));
+        const secs=[];let ri=idx[0];const box=(pos,nrm,side,w,t)=>({p1:add(add(pos,side,w),nrm,t),p2:add(add(pos,side,w),nrm,-t),p3:add(add(pos,side,-w),nrm,-t),p4:add(add(pos,side,-w),nrm,t),n:nrm,s:side,r:ri});
+        const segs=SEG/2+1;let dir2=norm3(sub3(p[1],p[0])),v2=scl(sub3(p[1],p[0]),0.5);
+        for(let i=0;i<m-2;i++){const dir1=dir2;dir2=norm3(sub3(p[i+2],p[i]));const v1=v2;v2=scl(sub3(p[i+2],p[i]),0.5);
+          for(let s=0;s<segs;s++){const t=s/segs;ri=idx[t<0.5?i:i+1];const pos=herm(p[i],p[i+1],v1,v2,t);const dir=add(scl(dir1,1-t),dir2,t);const nrm=add(scl(nm[i],1-t),nm[i+1],t);const side=norm3(cross3(nrm,dir));secs.push(box(pos,nrm,side,strandW,thick))}}
+        {ri=idx[m-1];const pos=p[m-2],nrm=nm[m-2],side=norm3(cross3(nrm,dir2));secs.push(box(pos,nrm,side,strandW,thick));secs.push({...box(pos,nrm,side,1.5*strandW,thick),step:true});
+          const d1=dir2,d2=norm3(sub3(p[m-1],p[m-2]));const dm=mid(d1,d2),pm=mid(p[m-2],p[m-1]),nn=norm3(mid(nm[m-2],nm[m-1])),sd=norm3(cross3(nn,dm));secs.push(box(pm,nn,sd,0.75*strandW,thick));
+          secs.push(box(p[m-1],nm[m-1],sd,0,thick))}
+        const q=secs.map(c=>[P2(c.p1),P2(c.p2),P2(c.p3),P2(c.p4)]);
+        for(let j=0;j<secs.length-1;j++){const c0=secs[j],c1=secs[j+1];const q0=q[j],q1=q[j+1];const isStep=!!c1.step;
+          const nT=norm3(add(c0.n,c1.n)),nS=norm3(add(c0.s,c1.s));const zT=nz(nT),zS=nz(nS);const fc=rc(c0.r,'E');
+          // top (p1,p4 edge) and bottom (p2,p3); only the face toward the viewer, as MOLSCRIPT culls
+          if(zT>=0)face([q0[0],q1[0],q1[3],q0[3]],isStep?'bare':'hatch',zT,false,[1,0,1,j===0],alpha,fc);
+          else face([q0[1],q1[1],q1[2],q0[2]],isStep?'bare':'hatch',-zT,false,[1,0,1,j===0],alpha,fc);
+          // sides: p1–p2 (+side) and p4–p3 (−side)
+          if(zS>=0)face([q0[0],q1[0],q1[1],q0[1]],'side',zS,false,[1,0,1,j===0],alpha,fc);
+          else face([q0[3],q1[3],q1[2],q0[2]],'side',-zS,false,[1,0,1,j===0],alpha,fc)}
+        {const c=secs[0],q0=q[0];const nb=scl(norm3(sub3(secs[1].p1,c.p1)),-1);if(nz(nb)>=0)face([q0[0],q0[1],q0[2],q0[3]],'side',1,false,[1,1,1,1],alpha,rc(idx[0],'E'))} // butt end
+        nE++;labels.push({pos:p[Math.floor((m-1)/2)],txt:'β'+nE,alpha});
+      }else{ /* ---- coil: smoothed spline, drawn as a paper band of constant width with an ink outline ---- */
+        const p=idx.map(i=>pts[i].slice()),m=p.length;const first=e.s>0?pts[e.s-1]:null,last=e.e<n-1?pts[e.e+1]:null;
+        priestle(p,2);
+        const path=[p[0]],pr_i=[idx[0]];let v2=first?scl(sub3(p[1],first),0.5):sub3(p[1],p[0]);
+        for(let i=0;i<m-1;i++){const v1=v2;v2=i===m-2?(last?scl(sub3(last,p[m-2]),0.5):sub3(p[m-1],p[m-2])):scl(sub3(p[i+2],p[i]),0.5);
+          for(let s=1;s<SEG;s++){path.push(herm(p[i],p[i+1],v1,v2,s/SEG));pr_i.push(idx[s/SEG<0.5?i:i+1])}path.push(p[i+1]);pr_i.push(idx[i+1])}
+        const pr=path.map(P2);const L=[],Rr=[];
+        for(let j=0;j<pr.length;j++){const a=pr[Math.max(0,j-1)],b=pr[Math.min(pr.length-1,j+1)];let tx=b[0]-a[0],ty=b[1]-a[1];const l=Math.hypot(tx,ty)||1;const hw=coilR*proj.pxPerA*pr[j][3];
+          L.push([pr[j][0]-ty/l*hw,pr[j][1]+tx/l*hw,pr[j][2],pr[j][3],pr[j][4]]);Rr.push([pr[j][0]+ty/l*hw,pr[j][1]-tx/l*hw,pr[j][2],pr[j][3],pr[j][4]])}
+        const atEnd=(j,end)=>end===0?(j===0&&!first):(j===pr.length-2&&!last);
+        for(let j=0;j<pr.length-1;j++)face([L[j],L[j+1],Rr[j+1],Rr[j]],'plain',1,false,[1,atEnd(j,1),1,atEnd(j,0)],alpha,rc(pr_i[j],'L'));
+      }
+    }
+  }
+  if(R.ssLabels){for(const lb of labels){const p=proj.proj(lb.pos);items.push({z:p.z+2,draw:(ctx)=>{ctx.save();ctx.globalAlpha=lb.alpha;
+    const fs=Math.max(9,Math.round(0.8*proj.pxPerA*p.d*K));ctx.font=`italic ${fs}px 'Times New Roman', Times, serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.lineWidth=3;ctx.strokeStyle=paperFill();ctx.strokeText(lb.txt,p.x,p.y);ctx.fillStyle=P.label;ctx.fillText(lb.txt,p.x,p.y);ctx.restore()}})}}
+}
 function buildCartoon(items,st,pos,atoms,sel,proj,seedBase,lowDetail){
+  if(cfg.rep.cartoonStyle==='engraved')return buildCartoonEngraved(items,atoms,sel,proj,seedBase);
   const P=cfg.palette,S=cfg.style;const K=cfg.rep.cartoonScale;const SPR=6; // samples per residue
   const traces=backboneTraces(atoms,sel);
   const ssColor=ss=>ss==='H'?P.helix:ss==='E'?P.sheet:ss==='N'?(P.nucleic||'#e0a23a'):P.loop;
@@ -1310,8 +1448,14 @@ function buildPanel(){
   slider(R,'stick radius',()=>cfg.rep.stickRadius,v=>cfg.rep.stickRadius=v,0.1,0.5,0.01,v=>v.toFixed(2)+' Å');
   slider(R,'sphere size',()=>cfg.rep.sphereScale,v=>cfg.rep.sphereScale=v,0,1,0.05,v=>v.toFixed(2));
   check(R,'hide backbone under cartoon',()=>cfg.rep.sideChainHelper,v=>cfg.rep.sideChainHelper=v);
-  select(R,'cartoon colour',()=>cfg.rep.cartoonColor,v=>cfg.rep.cartoonColor=v,['ss','carbon']);
+  select(R,'cartoon colour',()=>cfg.rep.cartoonColor,v=>cfg.rep.cartoonColor=v,['ss','carbon','rainbow']);
   slider(R,'cartoon width',()=>cfg.rep.cartoonScale,v=>cfg.rep.cartoonScale=v,0.4,2,0.05,v=>v.toFixed(2)+'×');
+  select(R,'cartoon style',()=>cfg.rep.cartoonStyle||'sketch',v=>cfg.rep.cartoonStyle=v,['sketch','engraved']);
+  slider(R,'engraved lines',()=>cfg.rep.engraveLines??8,v=>cfg.rep.engraveLines=v,0,14,1,v=>v.toFixed(0));
+  slider(R,'engraved weight',()=>cfg.rep.engraveWidth??0.45,v=>cfg.rep.engraveWidth=v,0.1,1.5,0.05,v=>v.toFixed(2));
+  slider(R,'strand thickness',()=>cfg.rep.strandThickness??0.6,v=>cfg.rep.strandThickness=v,0,1.2,0.05,v=>v.toFixed(2)+' Å');
+  slider(R,'coil width',()=>cfg.rep.coilWidth??1.25,v=>cfg.rep.coilWidth=v,0.5,2.5,0.05,v=>v.toFixed(2)+'×');
+  check(R,'α/β labels (engraved)',()=>!!cfg.rep.ssLabels,v=>cfg.rep.ssLabels=v);
   select(R,'surface colour',()=>cfg.rep.surfaceColor,v=>cfg.rep.surfaceColor=v,['single','chain','subunit','entity','carbon','element']);
   slider(R,'probe radius',()=>cfg.rep.probe,v=>cfg.rep.probe=v,0,2.5,0.1,v=>v.toFixed(1)+' Å');
   slider(R,'surface opacity',()=>cfg.rep.surfaceOpacity,v=>cfg.rep.surfaceOpacity=v,0.1,1,0.05,v=>v.toFixed(2));

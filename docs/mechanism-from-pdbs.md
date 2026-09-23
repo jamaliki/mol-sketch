@@ -15,11 +15,11 @@ it has only the end states, raise `transition` in the JSON (step 3) to 40–60 s
 
 ## 2. Load and frame
 
-In the app: *Open… (several = a stack)* and select all the files, or drop them together on the canvas. In the
+In the app: *Open…* and select all the files, or drop them together on the canvas. In the
 CLI: `node cli/render.mjs step_*.pdb …`. The stack is oriented by its principal axes and the first frame
 appears.
 
-Then reduce the view to the mechanism. In *Representations*, set `cartoon` to nothing and `sticks` to the
+Then reduce the view to the mechanism. In *Show*, set `cartoon` to nothing and `sticks` to the
 catalytic atoms, for example
 
 ```
