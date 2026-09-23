@@ -19,12 +19,14 @@ import { arcTo, type ArcSink } from './skarc';
 type Op = (string | number | boolean | object | null)[];
 let nextId = 1;
 /* Paths, the bulk of a large drawing, do not become one op per call: moves, lines, curves, closes and arcs (as the
-   conics Skia's arcTo makes of them, skarc.ts) go into a float32 point stream, a verb stream (Skia's: 0 move, 1 line,
-   2 quad, 3 conic, 4 cubic, 5 close) and a conic-weight stream, and each run of them into one op
-     P pointIndex pointCount verbIndex verbCount continues weightIndex weightCount
+   conics Skia's arcTo makes of them, skarc.ts) are collected as Skia's points, conic weights and verbs (0 move, 1 line,
+   2 quad, 3 conic, 4 cubic, 5 close), and each run of them is written, as a serialised SkPath (version 5: four int32
+   version, points, conics, verbs; float32 points and weights; verb bytes padded to four), into one byte stream the
+   host reads paths from directly. A run is one op
+     P offset length continues hasClose
    `continues`: the run carries on the path's last contour; it starts with a move to the current point, which the
-   host's extend joins without a line. The host takes the streams as binary after the render. What the recorder cannot
-   follow exactly (a turned ellipse, arcTo, anything after a transform moved the path) stays an op for the host. */
+   host's extend joins without a line. What the recorder cannot follow exactly (a turned ellipse, arcTo, anything
+   after a transform moved the path) stays an op for the host. */
 class Stream<T extends Float32Array | Uint8Array> {
   n = 0;
   constructor(public a: T) { }
@@ -33,8 +35,27 @@ class Stream<T extends Float32Array | Uint8Array> {
   private grow() { const b = new (this.a.constructor as any)(this.a.length * 2); b.set(this.a); this.a = b }
   take(): T { const r = this.a.slice(0, this.n) as T; this.n = 0; return r }
 }
-const PTS = new Stream(new Float32Array(1 << 16)), VBS = new Stream(new Uint8Array(1 << 15)), WTS = new Stream(new Float32Array(1 << 12));
-export function takeStreams() { return { points: PTS.take(), verbs: VBS.take(), weights: WTS.take() } }
+let RUNS = new Uint8Array(1 << 20), R32 = new Int32Array(RUNS.buffer), RF32 = new Float32Array(RUNS.buffer), runsN = 0;   // runsN: bytes used, a multiple of 4
+/** a run as a serialised SkPath at the end of RUNS (the host is little-endian, as typed arrays are here): its offset and
+   length. Copied by hand: a run is small, and views made per run would be garbage by the million */
+function writeRun(pts: Stream<Float32Array>, vbs: Stream<Uint8Array>, wts: Stream<Float32Array>): [number, number] {
+  const np = pts.n / 2, nw = wts.n, nv = vbs.n, len = 16 + 8 * np + 4 * nw + ((nv + 3) & ~3), off = runsN;
+  if (off + len > RUNS.length) {
+    let n = RUNS.length * 2; while (off + len > n) n *= 2;
+    const b = new Uint8Array(n); b.set(RUNS.subarray(0, off)); RUNS = b; R32 = new Int32Array(b.buffer); RF32 = new Float32Array(b.buffer);
+  }
+  let q = off >> 2; R32[q] = 5; R32[q + 1] = np; R32[q + 2] = nw; R32[q + 3] = nv; q += 4;
+  const P = pts.a, W = wts.a, V = vbs.a;
+  for (let i = 0; i < 2 * np; i++) RF32[q + i] = P[i];
+  q += 2 * np;
+  for (let i = 0; i < nw; i++) RF32[q + i] = W[i];
+  let v = (q + nw) << 2;
+  for (let i = 0; i < nv; i++) RUNS[v + i] = V[i];
+  for (v += nv; v < off + len; v++) RUNS[v] = 0;
+  runsN = off + len; pts.n = vbs.n = wts.n = 0;
+  return [off, len];
+}
+export function takeRuns() { const r = RUNS.slice(0, runsN); runsN = 0; return r }
 const f32 = Math.fround;
 
 /** a CSS colour as float RGBA (0..1), as the host parses it (python/molsketch/_raster.py parse_color): #hex and
@@ -118,24 +139,27 @@ export class RecContext {
   // the path as Skia holds it, as far as the recorder knows: is there a current point, was the last verb a close, the
   // contour's start (Skia's last move) and the last point, as float32 (null: made by an op the host builds, unknown here)
   private hasCur = false; private closed = false; private hasStart = false; private sx = 0; private sy = 0; private hasLast = false; private lx = 0; private ly = 0;
-  private run: { p: number; v: number; w: number; cont: boolean; moveAt: number } | null = null;   // moveAt: the run's trailing move, or -1
+  private run: { cont: boolean; close: boolean; moveAt: number } | null = null;   // moveAt: the run's trailing move, or -1
+  // the run being made
+  private PTS = new Stream(new Float32Array(1 << 10)); private VBS = new Stream(new Uint8Array(1 << 9)); private WTS = new Stream(new Float32Array(1 << 6));
   constructor(public canvas: RecCanvas) { }
   reset() { this.s = fresh(); this.stack = []; this.newPath() }
   private newPath() { this.hasCur = false; this.closed = false; this.hasStart = false; this.hasLast = false }
   /** end the current run of path verbs as one P op */
   settle() {
     const r = this.run; if (!r) return; this.run = null;
-    this.canvas.push(['P', r.p / 2, (PTS.n - r.p) / 2, r.v, VBS.n - r.v, r.w, WTS.n - r.w, r.cont]);
+    const [off, len] = writeRun(this.PTS, this.VBS, this.WTS);
+    this.canvas.push(['P', off, len, r.cont, r.close]);
   }
   private op(...o: Op) { this.settle(); this.canvas.push(o) }
   /** an op the host builds the path with itself: what it leaves is unknown here */
   private hostOp(fresh: boolean, ...o: Op) { this.op(...o); this.hasCur = true; this.closed = false; this.hasLast = false; if (fresh) this.hasStart = false }
-  private newRun(cont: boolean) { this.run = { p: PTS.n, v: VBS.n, w: WTS.n, cont, moveAt: -1 } }
+  private newRun(cont: boolean) { this.run = { cont, close: false, moveAt: -1 } }
   /** Skia's moveTo: a move after a move replaces it */
   private emitMove(x: number, y: number) {
     x = f32(x); y = f32(y);
-    if (this.run && this.run.moveAt >= 0) { PTS.a[this.run.moveAt] = x; PTS.a[this.run.moveAt + 1] = y }
-    else { if (!this.run) this.newRun(false); this.run!.moveAt = PTS.n; VBS.push(0); PTS.push2(x, y) }
+    if (this.run && this.run.moveAt >= 0) { this.PTS.a[this.run.moveAt] = x; this.PTS.a[this.run.moveAt + 1] = y }
+    else { if (!this.run) this.newRun(false); this.run!.moveAt = this.PTS.n; this.VBS.push(0); this.PTS.push2(x, y) }
     this.hasCur = true; this.closed = false; this.hasStart = this.hasLast = true; this.sx = this.lx = x; this.sy = this.ly = y;
   }
   /** a drawing verb (1 line, 2 quad, 3 conic, 4 cubic) from the current point; callers make sure `last` (and after a
@@ -143,14 +167,14 @@ export class RecContext {
      begins with a move to the current point, which the host's extend joins without a line */
   private before() {
     if (this.closed) { if (this.run) this.run.moveAt = -1; this.emitMove(this.sx, this.sy) }
-    else if (!this.run) { this.newRun(true); VBS.push(0); PTS.push2(this.lx, this.ly) }
+    else if (!this.run) { this.newRun(true); this.VBS.push(0); this.PTS.push2(this.lx, this.ly) }
     this.run!.moveAt = -1; this.hasCur = true; this.closed = false;
   }
-  private emitEnd(x: number, y: number) { PTS.push2(x, y); this.lx = PTS.a[PTS.n - 2]; this.ly = PTS.a[PTS.n - 1]; this.hasLast = true }
-  private emitLine(x: number, y: number) { this.before(); VBS.push(1); this.emitEnd(x, y) }
-  private emitQuad(a: number, b: number, x: number, y: number) { this.before(); VBS.push(2); PTS.push2(a, b); this.emitEnd(x, y) }
-  private emitConic(a: number, b: number, x: number, y: number, w: number) { this.before(); VBS.push(3); WTS.push(w); PTS.push2(a, b); this.emitEnd(x, y) }
-  private emitCubic(a: number, b: number, c: number, d: number, x: number, y: number) { this.before(); VBS.push(4); PTS.push2(a, b); PTS.push2(c, d); this.emitEnd(x, y) }
+  private emitEnd(x: number, y: number) { this.PTS.push2(x, y); this.lx = this.PTS.a[this.PTS.n - 2]; this.ly = this.PTS.a[this.PTS.n - 1]; this.hasLast = true }
+  private emitLine(x: number, y: number) { this.before(); this.VBS.push(1); this.emitEnd(x, y) }
+  private emitQuad(a: number, b: number, x: number, y: number) { this.before(); this.VBS.push(2); this.PTS.push2(a, b); this.emitEnd(x, y) }
+  private emitConic(a: number, b: number, x: number, y: number, w: number) { this.before(); this.VBS.push(3); this.WTS.push(w); this.PTS.push2(a, b); this.emitEnd(x, y) }
+  private emitCubic(a: number, b: number, c: number, d: number, x: number, y: number) { this.before(); this.VBS.push(4); this.PTS.push2(a, b); this.PTS.push2(c, d); this.emitEnd(x, y) }
   /** can the next drawing verb be recorded here (the points it starts from are known)? */
   private get knows() { return !this.hasCur || (this.hasLast && (!this.closed || this.hasStart)) }
   /** a state property: consecutive ones share one op, S key value key value … */
@@ -202,7 +226,7 @@ export class RecContext {
   beginPath() { this.op('begin'); this.newPath() }
   closePath() {   // closing nothing does nothing, nor does closing twice
     if (!this.hasCur || this.closed) return;
-    if (this.run) { VBS.push(5); this.run.moveAt = -1 } else this.op('close');
+    if (this.run) { this.VBS.push(5); this.run.moveAt = -1; this.run.close = true } else this.op('close');
     this.closed = true;
   }
   moveTo(x: number, y: number) { if (fin(x, y)) this.emitMove(x, y) }
@@ -265,22 +289,22 @@ export class RecContext {
     if (!fin(x, y, w, h)) return;
     this.emitMove(x, y);
     this.emitLine(x + w, y); this.emitLine(x + w, y + h); this.emitLine(x, y + h);
-    VBS.push(5); this.closed = true;
+    this.VBS.push(5); this.run!.close = true; this.closed = true;
   }
   fill(rule: string = 'nonzero') { const eo = rule === 'evenodd'; if (!this.fuse(eo ? 1 : 0)) this.op('fill', eo ? 'evenodd' : 'nonzero') }
   stroke() { if (!this.fuse(2)) this.op('stroke') }
   /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op, and
      such draws one after another in the same state as one op too:
-       F mode (0 fill, 1 even-odd fill, 2 stroke) then, per path, pointIndex pointCount verbIndex verbCount weightIndex weightCount */
+       F mode (0 fill, 1 even-odd fill, 2 stroke) then, per path, offset length hasClose */
   private fuse(mode: number) {
     this.settle();
     const c = this.canvas, ops = c.ops; let j = ops.length - 1;
     while (j >= 0 && ops[j][0] === 'S') j--;
-    const pi = j; if (pi < 0 || ops[pi][0] !== 'P' || ops[pi][7]) return false;
+    const pi = j; if (pi < 0 || ops[pi][0] !== 'P' || ops[pi][3]) return false;
     j--; while (j >= 0 && ops[j][0] === 'S') j--;
     const bi = j, at = c.total - ops.length;   // the op count at ops[0]
     if (bi < 0 || ops[bi][0] !== 'begin' || at + bi < c.frozen) return false;
-    const P = ops[pi], sets = ops.slice(bi + 1, pi).concat(ops.slice(pi + 1)), run = [P[1], P[2], P[3], P[4], P[5], P[6]];
+    const P = ops[pi], sets = ops.slice(bi + 1, pi).concat(ops.slice(pi + 1)), run = [P[1], P[2], P[4]];
     const prev = ops[bi - 1];
     if (!sets.length && prev && prev[0] === 'F' && prev[1] === mode && at + bi - 1 >= c.frozen) {   // the same draw again: join it
       ops.length = bi; for (const v of run) prev.push(v); c.total -= 2; return true;

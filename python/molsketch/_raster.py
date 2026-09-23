@@ -60,24 +60,29 @@ def parse_color(s):
     return None
 
 
-_HEADER = np.array([5, 0, 0, 0], np.int32)   # SkPath's serialised form, version 5: version | fill type, points, conics, verbs
 
 
 _PAD = (b"", b"\0\0\0", b"\0\0", b"\0")
 
 
-def _run_path(pts: bytes, verbs: bytes, weights: bytes, n: int, nv: int, nw: int) -> skia.Path:
-    """a run of path verbs as one Skia path, read from its binary form: header, points, conic weights, verbs"""
+def _read_path(data) -> skia.Path:
+    """a path from its serialised form (SkPath version 5, as the recorder writes it)"""
     path = skia.Path()
-    if path.readFromMemory(struct.pack("<4i", 5, n, nw, nv) + pts + weights + verbs + _PAD[nv % 4]) == 0:   # a Skia that serialises differently
-        p = np.frombuffer(pts, np.float32).tolist(); w = np.frombuffer(weights, np.float32).tolist(); k = 0; j = 0
-        for v in verbs:
-            if v == 0: path.moveTo(p[k], p[k + 1]); k += 2
-            elif v == 1: path.lineTo(p[k], p[k + 1]); k += 2
-            elif v == 2: path.quadTo(*p[k:k + 4]); k += 4
-            elif v == 3: path.conicTo(*p[k:k + 4], w[j]); k += 4; j += 1
-            elif v == 4: path.cubicTo(*p[k:k + 6]); k += 6
-            else: path.close()
+    if path.readFromMemory(data) == 0: path = _build_path(bytes(data))   # a Skia that reads it differently
+    return path
+
+
+def _build_path(data: bytes) -> skia.Path:
+    _, n, nw, nv = struct.unpack_from("<4i", data)
+    p = list(struct.unpack_from(f"<{2 * n}f", data, 16)); w = struct.unpack_from(f"<{nw}f", data, 16 + 8 * n); vb = data[16 + 8 * n + 4 * nw:16 + 8 * n + 4 * nw + nv]
+    path = skia.Path(); k = j = 0
+    for v in vb:
+        if v == 0: path.moveTo(p[k], p[k + 1]); k += 2
+        elif v == 1: path.lineTo(p[k], p[k + 1]); k += 2
+        elif v == 2: path.quadTo(*p[k:k + 4]); k += 4
+        elif v == 3: path.conicTo(*p[k:k + 4], w[j]); k += 4; j += 1
+        elif v == 4: path.cubicTo(*p[k:k + 6]); k += 6
+        else: path.close()
     return path
 
 
@@ -152,28 +157,19 @@ class Raster:
         self.templates: dict[tuple, skia.Paint] = {}         # paints without their colour, by the rest of the state
         self.text = text
 
-    def add(self, canvases: dict, streams: tuple[bytes, bytes, bytes] | None = None):
-        """take a render's ops; path runs (P ops) become Skia paths now, while their streams (points, verbs, conic
-        weights, as bytes) are at hand"""
+    def add(self, canvases: dict, runs: bytes | None = None):
+        """take a render's ops; its path runs (P and F ops: offsets into `runs`, serialised SkPaths) become Skia paths
+        now, while the bytes are at hand"""
         for cid, c in canvases.items():
             cid = int(cid); lst = self.ops.setdefault(cid, []); n0 = self.base.get(cid, (0,))[0]
             if c["start"] != n0 + len(lst): raise RuntimeError(f"canvas {cid}: ops out of order ({c['start']} after {n0 + len(lst)})")
             ops = c["ops"]
-            if streams is not None:
-                pb, vb, wb = streams; first = np.frombuffer(pb, np.float32)
+            if runs is not None:
+                mv = memoryview(runs)
                 for i, o in enumerate(ops):
                     k = o[0]
-                    if k == "P":
-                        p0, n, v0, nv, w0, nw = o[1], o[2], o[3], o[4], o[5], o[6]; verbs = vb[v0:v0 + nv]
-                        ops[i] = (k, _run_path(pb[8 * p0:8 * (p0 + n)], verbs, wb[4 * w0:4 * (w0 + nw)], n, nv, nw), o[7], 5 in verbs,
-                                  float(first[2 * p0]), float(first[2 * p0 + 1]))
-                    elif k == "F":   # mode, then one or more paths: (path, has a close, first point)
-                        runs = []
-                        for j in range(2, len(o), 6):
-                            p0, n, v0, nv, w0, nw = o[j:j + 6]; verbs = vb[v0:v0 + nv]
-                            runs.append((_run_path(pb[8 * p0:8 * (p0 + n)], verbs, wb[4 * w0:4 * (w0 + nw)], n, nv, nw), 5 in verbs,
-                                         float(first[2 * p0]), float(first[2 * p0 + 1])))
-                        ops[i] = (k, o[1], runs)
+                    if k == "P": ops[i] = ("P", _read_path(mv[o[1]:o[1] + o[2]]), o[3], o[4])
+                    elif k == "F": ops[i] = ("F", o[1], [(_read_path(mv[o[j]:o[j] + o[j + 1]]), o[j + 2]) for j in range(2, len(o), 3)])
             lst.extend(ops)
 
     def forget(self, cid: int):
@@ -230,8 +226,8 @@ class _Replay:
     def _own(self):
         """make the path this replay's own before changing it: an F op's path is shared with the op list, and one read
         from memory carries a stale last-move index, so rebuild it from its first point"""
-        seg, _, x, y = self.handed; self.handed = None
-        p = skia.Path(); p.moveTo(x, y); p.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode); p.setFillType(seg.getFillType())
+        seg = self.handed[0]; self.handed = None
+        p = skia.Path(); p.moveTo(seg.getPoint(0)); p.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode); p.setFillType(seg.getFillType())
         self.path = p
 
     def _paint(self, style, stroke=False):
@@ -378,7 +374,7 @@ class _Replay:
                 elif self.path.countVerbs() <= 1:
                     # Skia replaces an (effectively) empty path with the one added, copying its stale last-move index
                     # (a path read from memory has one): start the path at the run's first point and extend it instead
-                    self.path.reset(); self.path.moveTo(o[4], o[5]); self.path.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode)
+                    self.path.reset(); self.path.moveTo(seg.getPoint(0)); self.path.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode)
                 else: self.path.addPath(seg, skia.Path.AddPathMode.kAppend_AddPathMode)
                 if o[3]: self.has_close = True
             elif k == "L":

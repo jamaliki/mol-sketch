@@ -134,11 +134,42 @@
       return r;
     }
   };
-  var PTS = new Stream(new Float32Array(1 << 16));
-  var VBS = new Stream(new Uint8Array(1 << 15));
-  var WTS = new Stream(new Float32Array(1 << 12));
-  function takeStreams() {
-    return { points: PTS.take(), verbs: VBS.take(), weights: WTS.take() };
+  var RUNS = new Uint8Array(1 << 20);
+  var R32 = new Int32Array(RUNS.buffer);
+  var RF32 = new Float32Array(RUNS.buffer);
+  var runsN = 0;
+  function writeRun(pts, vbs, wts) {
+    const np = pts.n / 2, nw = wts.n, nv = vbs.n, len = 16 + 8 * np + 4 * nw + (nv + 3 & ~3), off = runsN;
+    if (off + len > RUNS.length) {
+      let n = RUNS.length * 2;
+      while (off + len > n) n *= 2;
+      const b = new Uint8Array(n);
+      b.set(RUNS.subarray(0, off));
+      RUNS = b;
+      R32 = new Int32Array(b.buffer);
+      RF32 = new Float32Array(b.buffer);
+    }
+    let q = off >> 2;
+    R32[q] = 5;
+    R32[q + 1] = np;
+    R32[q + 2] = nw;
+    R32[q + 3] = nv;
+    q += 4;
+    const P = pts.a, W = wts.a, V = vbs.a;
+    for (let i = 0; i < 2 * np; i++) RF32[q + i] = P[i];
+    q += 2 * np;
+    for (let i = 0; i < nw; i++) RF32[q + i] = W[i];
+    let v = q + nw << 2;
+    for (let i = 0; i < nv; i++) RUNS[v + i] = V[i];
+    for (v += nv; v < off + len; v++) RUNS[v] = 0;
+    runsN = off + len;
+    pts.n = vbs.n = wts.n = 0;
+    return [off, len];
+  }
+  function takeRuns() {
+    const r = RUNS.slice(0, runsN);
+    runsN = 0;
+    return r;
   }
   var f32 = Math.fround;
   var HEX = /^[0-9a-f]+$/;
@@ -308,7 +339,6 @@
     }
   };
   var RecContext = class {
-    // moveAt: the run's trailing move, or -1
     constructor(canvas) {
       __publicField(this, "canvas", canvas);
       __publicField(this, "s", fresh());
@@ -324,6 +354,11 @@
       __publicField(this, "lx", 0);
       __publicField(this, "ly", 0);
       __publicField(this, "run", null);
+      // moveAt: the run's trailing move, or -1
+      // the run being made
+      __publicField(this, "PTS", new Stream(new Float32Array(1 << 10)));
+      __publicField(this, "VBS", new Stream(new Uint8Array(1 << 9)));
+      __publicField(this, "WTS", new Stream(new Float32Array(1 << 6)));
       __publicField(this, "sink", {
         has: () => this.hasCur,
         lx: () => this.lx,
@@ -350,7 +385,8 @@
       const r = this.run;
       if (!r) return;
       this.run = null;
-      this.canvas.push(["P", r.p / 2, (PTS.n - r.p) / 2, r.v, VBS.n - r.v, r.w, WTS.n - r.w, r.cont]);
+      const [off, len] = writeRun(this.PTS, this.VBS, this.WTS);
+      this.canvas.push(["P", off, len, r.cont, r.close]);
     }
     op(...o) {
       this.settle();
@@ -365,20 +401,20 @@
       if (fresh2) this.hasStart = false;
     }
     newRun(cont) {
-      this.run = { p: PTS.n, v: VBS.n, w: WTS.n, cont, moveAt: -1 };
+      this.run = { cont, close: false, moveAt: -1 };
     }
     /** Skia's moveTo: a move after a move replaces it */
     emitMove(x, y) {
       x = f32(x);
       y = f32(y);
       if (this.run && this.run.moveAt >= 0) {
-        PTS.a[this.run.moveAt] = x;
-        PTS.a[this.run.moveAt + 1] = y;
+        this.PTS.a[this.run.moveAt] = x;
+        this.PTS.a[this.run.moveAt + 1] = y;
       } else {
         if (!this.run) this.newRun(false);
-        this.run.moveAt = PTS.n;
-        VBS.push(0);
-        PTS.push2(x, y);
+        this.run.moveAt = this.PTS.n;
+        this.VBS.push(0);
+        this.PTS.push2(x, y);
       }
       this.hasCur = true;
       this.closed = false;
@@ -395,42 +431,42 @@
         this.emitMove(this.sx, this.sy);
       } else if (!this.run) {
         this.newRun(true);
-        VBS.push(0);
-        PTS.push2(this.lx, this.ly);
+        this.VBS.push(0);
+        this.PTS.push2(this.lx, this.ly);
       }
       this.run.moveAt = -1;
       this.hasCur = true;
       this.closed = false;
     }
     emitEnd(x, y) {
-      PTS.push2(x, y);
-      this.lx = PTS.a[PTS.n - 2];
-      this.ly = PTS.a[PTS.n - 1];
+      this.PTS.push2(x, y);
+      this.lx = this.PTS.a[this.PTS.n - 2];
+      this.ly = this.PTS.a[this.PTS.n - 1];
       this.hasLast = true;
     }
     emitLine(x, y) {
       this.before();
-      VBS.push(1);
+      this.VBS.push(1);
       this.emitEnd(x, y);
     }
     emitQuad(a, b, x, y) {
       this.before();
-      VBS.push(2);
-      PTS.push2(a, b);
+      this.VBS.push(2);
+      this.PTS.push2(a, b);
       this.emitEnd(x, y);
     }
     emitConic(a, b, x, y, w) {
       this.before();
-      VBS.push(3);
-      WTS.push(w);
-      PTS.push2(a, b);
+      this.VBS.push(3);
+      this.WTS.push(w);
+      this.PTS.push2(a, b);
       this.emitEnd(x, y);
     }
     emitCubic(a, b, c, d, x, y) {
       this.before();
-      VBS.push(4);
-      PTS.push2(a, b);
-      PTS.push2(c, d);
+      this.VBS.push(4);
+      this.PTS.push2(a, b);
+      this.PTS.push2(c, d);
       this.emitEnd(x, y);
     }
     /** can the next drawing verb be recorded here (the points it starts from are known)? */
@@ -603,8 +639,9 @@
     closePath() {
       if (!this.hasCur || this.closed) return;
       if (this.run) {
-        VBS.push(5);
+        this.VBS.push(5);
         this.run.moveAt = -1;
+        this.run.close = true;
       } else this.op("close");
       this.closed = true;
     }
@@ -686,7 +723,8 @@
       this.emitLine(x + w, y);
       this.emitLine(x + w, y + h);
       this.emitLine(x, y + h);
-      VBS.push(5);
+      this.VBS.push(5);
+      this.run.close = true;
       this.closed = true;
     }
     fill(rule = "nonzero") {
@@ -698,19 +736,19 @@
     }
     /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op, and
        such draws one after another in the same state as one op too:
-         F mode (0 fill, 1 even-odd fill, 2 stroke) then, per path, pointIndex pointCount verbIndex verbCount weightIndex weightCount */
+         F mode (0 fill, 1 even-odd fill, 2 stroke) then, per path, offset length hasClose */
     fuse(mode) {
       this.settle();
       const c = this.canvas, ops = c.ops;
       let j = ops.length - 1;
       while (j >= 0 && ops[j][0] === "S") j--;
       const pi = j;
-      if (pi < 0 || ops[pi][0] !== "P" || ops[pi][7]) return false;
+      if (pi < 0 || ops[pi][0] !== "P" || ops[pi][3]) return false;
       j--;
       while (j >= 0 && ops[j][0] === "S") j--;
       const bi = j, at = c.total - ops.length;
       if (bi < 0 || ops[bi][0] !== "begin" || at + bi < c.frozen) return false;
-      const P = ops[pi], sets = ops.slice(bi + 1, pi).concat(ops.slice(pi + 1)), run = [P[1], P[2], P[3], P[4], P[5], P[6]];
+      const P = ops[pi], sets = ops.slice(bi + 1, pi).concat(ops.slice(pi + 1)), run = [P[1], P[2], P[4]];
       const prev = ops[bi - 1];
       if (!sets.length && prev && prev[0] === "F" && prev[1] === mode && at + bi - 1 >= c.frozen) {
         ops.length = bi;
@@ -5443,8 +5481,8 @@
     } else renderClassic(ctx, R, f2.style, f2.frame, f2.dpr);
     const ops = flush();
     release(c.id);
-    const streams = takeStreams();
-    return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, canvases: ops, streams };
+    const runs = takeRuns();
+    return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, canvases: ops, runs };
   }
   function info(spec) {
     const f2 = settle(spec);
