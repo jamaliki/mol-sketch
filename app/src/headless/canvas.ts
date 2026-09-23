@@ -5,7 +5,7 @@
 
    Ops (arrays, first element the name):
      size w h                       the canvas was (re)sized: a fresh, transparent bitmap, state reset
-     set key value                  a state property (fillStyle, lineWidth, font, …); patterns as {pat, snap, rep, m}
+     S key value [key value …]      state properties (fillStyle, lineWidth, font, …); colours as [r, g, b, a], patterns as {pat, snap, rep, m}
      m a b c d e f                  the current transform, after any transform call
      save / restore
      begin / close / M x y / L x y / Q cx cy x y / C c1x c1y c2x c2y x y / A x y r a0 a1 ccw / E … / R x y w h
@@ -36,6 +36,34 @@ class Stream<T extends Float32Array | Uint8Array> {
 const PTS = new Stream(new Float32Array(1 << 16)), VBS = new Stream(new Uint8Array(1 << 15)), WTS = new Stream(new Float32Array(1 << 12));
 export function takeStreams() { return { points: PTS.take(), verbs: VBS.take(), weights: WTS.take() } }
 const f32 = Math.fround;
+
+/** a CSS colour as float RGBA (0..1), as the host parses it (python/molsketch/_raster.py parse_color): #hex and
+   rgb()/rgba() here; anything else (a named colour) stays a string for the host; null if Chrome would ignore it */
+const HEX = /^[0-9a-f]+$/, RGB = /^rgba?\(\s*([^)]*)\)$/;
+function parseColor(str: string): number[] | string | null {
+  const s = str.trim().toLowerCase();
+  if (s[0] === '#') {
+    let h = s.slice(1);
+    if (h.length === 3 || h.length === 4) h = [...h].map(c => c + c).join('');
+    if ((h.length !== 6 && h.length !== 8) || !HEX.test(h)) return null;
+    const v = [0, 2, 4, 6].slice(0, h.length / 2).map(i => parseInt(h.slice(i, i + 2), 16));
+    return [v[0] / 255, v[1] / 255, v[2] / 255, v.length === 4 ? v[3] / 255 : 1];
+  }
+  const m = RGB.exec(s);
+  if (m) {
+    const parts = m[1].split(/[\s,/]+/).filter(Boolean);
+    if (parts.length !== 3 && parts.length !== 4) return null;
+    const num = (p: string) => /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/.test(p) ? Number(p) : NaN;
+    const ch = parts.slice(0, 3).map(p => p.endsWith('%') ? num(p.slice(0, -1)) * 2.55 : num(p));
+    const a = parts.length === 4 ? (parts[3].endsWith('%') ? num(parts[3].slice(0, -1)) / 100 : num(parts[3])) : 1;
+    if (ch.some(isNaN) || isNaN(a)) return str;   // an unusual number: the host's own parser decides
+    const c = ch.map(x => Math.min(255, Math.max(0, roundHalfEven(x))));   // Blink rounds the channels to integers
+    return [c[0] / 255, c[1] / 255, c[2] / 255, Math.min(1, Math.max(0, a))];
+  }
+  return s === 'transparent' ? [0, 0, 0, 0] : str;
+}
+/** Python's round(): halves to even */
+function roundHalfEven(x: number) { const r = Math.round(x); return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r }
 export const canvases = new Map<number, RecCanvas>();
 /** width of `text` in the CSS `font`, as the host measures it (set by the host before rendering) */
 let measureFn: (font: string, text: string) => number = (_f, t) => t.length * 8;
@@ -74,6 +102,8 @@ const fresh = (): State => ({ m: [1, 0, 0, 1, 0, 0], fillStyle: '#000000', strok
 export class RecCanvas {
   id: number; private w = 300; private h = 150; ops: Op[] = []; total = 0; private ctx: RecContext | null = null;
   constructor() { this.id = nextId++; canvases.set(this.id, this); this.push(['size', 300, 150]) }
+  /** the op count when another canvas last took this one's picture: ops before it are never rewritten */
+  frozen = 0;
   push(op: Op) { this.ops.push(op); this.total++ }
   private resize() { this.ctx?.settle(); this.push(['size', this.w, this.h]); this.ctx?.reset() }
   /** every op so far pushed (a pending run included): before another canvas snapshots this one */
@@ -95,7 +125,7 @@ export class RecContext {
   /** end the current run of path verbs as one P op */
   settle() {
     const r = this.run; if (!r) return; this.run = null;
-    this.canvas.push(['P', r.p / 2, (PTS.n - r.p) / 2, r.v, VBS.n - r.v, r.cont, r.w, WTS.n - r.w]);
+    this.canvas.push(['P', r.p / 2, (PTS.n - r.p) / 2, r.v, VBS.n - r.v, r.w, WTS.n - r.w, r.cont]);
   }
   private op(...o: Op) { this.settle(); this.canvas.push(o) }
   /** an op the host builds the path with itself: what it leaves is unknown here */
@@ -123,14 +153,19 @@ export class RecContext {
   private emitCubic(a: number, b: number, c: number, d: number, x: number, y: number) { this.before(); VBS.push(4); PTS.push2(a, b); PTS.push2(c, d); this.emitEnd(x, y) }
   /** can the next drawing verb be recorded here (the points it starts from are known)? */
   private get knows() { return !this.hasCur || (this.hasLast && (!this.closed || this.hasStart)) }
-  private setProp(k: keyof State, v: any, rec: any = v) { (this.s as any)[k] = v; this.op('set', k, rec) }
+  /** a state property: consecutive ones share one op, S key value key value … */
+  private setProp(k: keyof State, v: any, rec: any = v) {
+    (this.s as any)[k] = v; this.settle();
+    const ops = this.canvas.ops, last = ops[ops.length - 1];
+    if (last && last[0] === 'S') last.push(k, rec); else this.canvas.push(['S', k, rec]);
+  }
 
   /* state */
   get fillStyle() { return this.s.fillStyle } set fillStyle(v: any) { this.style('fillStyle', v) }
   get strokeStyle() { return this.s.strokeStyle } set strokeStyle(v: any) { this.style('strokeStyle', v) }
   private style(k: 'fillStyle' | 'strokeStyle', v: any) {
     if (v instanceof Pattern) this.setProp(k, v, { pat: v.id, snap: v.snap, rep: v.rep, m: v.m });
-    else if (typeof v === 'string') this.setProp(k, v);   // the host parses; an unparsable colour is ignored there, as in Chrome
+    else if (typeof v === 'string') { const c = parseColor(v); if (c !== null) this.setProp(k, v, c) }   // an unparsable colour is ignored, as in Chrome
   }
   get lineWidth() { return this.s.lineWidth } set lineWidth(v: number) { v = +v; if (fin(v) && v > 0) this.setProp('lineWidth', v) }
   get miterLimit() { return this.s.miterLimit } set miterLimit(v: number) { v = +v; if (fin(v) && v > 0) this.setProp('miterLimit', v) }
@@ -232,8 +267,23 @@ export class RecContext {
     this.emitLine(x + w, y); this.emitLine(x + w, y + h); this.emitLine(x, y + h);
     VBS.push(5); this.closed = true;
   }
-  fill(rule: string = 'nonzero') { this.op('fill', rule === 'evenodd' ? 'evenodd' : 'nonzero') }
-  stroke() { this.op('stroke') }
+  fill(rule: string = 'nonzero') { const eo = rule === 'evenodd'; if (!this.fuse(eo ? 1 : 0)) this.op('fill', eo ? 'evenodd' : 'nonzero') }
+  stroke() { if (!this.fuse(2)) this.op('stroke') }
+  /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op:
+     F pointIndex pointCount verbIndex verbCount weightIndex weightCount mode (0 fill, 1 even-odd fill, 2 stroke) */
+  private fuse(mode: number) {
+    this.settle();
+    const ops = this.canvas.ops; let j = ops.length - 1;
+    while (j >= 0 && ops[j][0] === 'S') j--;
+    const pi = j; if (pi < 0 || ops[pi][0] !== 'P' || ops[pi][7]) return false;
+    j--; while (j >= 0 && ops[j][0] === 'S') j--;
+    const bi = j; if (bi < 0 || ops[bi][0] !== 'begin' || this.canvas.total - ops.length + bi < this.canvas.frozen) return false;
+    const P = ops[pi], sets = ops.slice(bi + 1, pi).concat(ops.slice(pi + 1));
+    ops.length = bi; for (const o of sets) ops.push(o);
+    ops.push(['F', P[1], P[2], P[3], P[4], P[5], P[6], mode]);
+    this.canvas.total -= 1;   // begin and P became F
+    return true;
+  }
   clip(rule: string = 'nonzero') { this.op('clip', rule === 'evenodd' ? 'evenodd' : 'nonzero') }
   fillRect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) this.op('fillRect', x, y, w, h) }
   strokeRect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) this.op('strokeRect', x, y, w, h) }
@@ -249,11 +299,11 @@ export class RecContext {
     if (!(img instanceof RecCanvas)) throw new TypeError('drawImage: only canvases can be drawn headless');
     if (!(n.length === 2 || n.length === 4 || n.length === 8) || !fin(...n)) return;
     if (img.width === 0 || img.height === 0) throw new Error('InvalidStateError: drawImage of an empty canvas');
-    img.settle(); this.op('img', img.id, img.total, ...n);
+    img.settle(); img.frozen = img.total; this.op('img', img.id, img.total, ...n);
   }
   createPattern(img: any, rep: string | null) {
     if (!(img instanceof RecCanvas)) throw new TypeError('createPattern: only canvases headless');
-    img.settle(); return new Pattern(img.id, img.total, rep || 'repeat');
+    img.settle(); img.frozen = img.total; return new Pattern(img.id, img.total, rep || 'repeat');
   }
   createLinearGradient(): never { throw new Error('gradients are not recorded headless') }
   createRadialGradient(): never { throw new Error('gradients are not recorded headless') }

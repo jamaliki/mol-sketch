@@ -81,47 +81,62 @@ def _run_path(pts: bytes, verbs: bytes, weights: bytes, n: int, nv: int, nw: int
     return path
 
 
+def _from_parts(pts: list, wts: list, vbs: list, n: int, nw: int, nv: int) -> skia.Path:
+    path = skia.Path()
+    if nv: path.readFromMemory(struct.pack("<4i", 5, n, nw, nv) + b"".join(pts) + b"".join(wts) + b"".join(vbs) + _PAD[nv % 4])
+    return path
+
+
 def _reopened(path: skia.Path):
-    """the path's closed contours with each close made a line back to its start, and its open contours: from the path's
-    binary form (Skia's verbs: 0 move, 1 line, 2 quad, 3 conic, 4 cubic, 5 close)"""
-    data = bytes(path.serialize()); h = np.frombuffer(data[:16], np.int32)
-    npts, ncon, nvb = int(h[1]), int(h[2]), int(h[3])
-    pts = np.frombuffer(data[16:16 + 8 * npts], np.float32).reshape(-1, 2)
-    con = np.frombuffer(data[16 + 8 * npts:16 + 8 * npts + 4 * ncon], np.float32)
-    vb = np.frombuffer(data[16 + 8 * npts + 4 * ncon:16 + 8 * npts + 4 * ncon + nvb], np.uint8)
-    per = np.array([1, 1, 2, 2, 3, 0], np.int64)
-    closed, rest = skia.Path(), skia.Path(); k = 0; w = 0; i = 0
+    """the path's closed contours with each close made a line back to its start, and its open contours, worked on the
+    path's binary form (Skia's verbs: 0 move, 1 line, 2 quad, 3 conic, 4 cubic, 5 close; a close ends its contour)"""
+    data = bytes(path.serialize()); _, npts, ncon, nvb = struct.unpack_from("<4i", data)
+    W = 16 + 8 * npts; V = W + 4 * ncon
+    pts = data[16:W]; wts = data[W:V]; vb = data[V:V + nvb]
+    if vb.count(0) == 1 and vb[-1] == 5:   # the usual case: one closed contour
+        return _from_parts([pts, pts[:8]], [wts], [vb.replace(b"\5", b"\1")], npts + 1, ncon, nvb), skia.Path()
+    parts = ([], [], [], [0, 0, 0]), ([], [], [], [0, 0, 0])   # closed, open: points, weights, verbs, counts
+    i = k = w = 0
     while i < nvb:   # one contour at a time
-        j = i + 1
-        while j < nvb and vb[j] != 0: j += 1
-        cv = vb[i:j]; npt = int(per[cv].sum()); cp = pts[k:k + npt]; nw = int((cv == 3).sum()); cw = con[w:w + nw]
-        is_closed = bool((cv == 5).any())
-        if is_closed: cv = np.where(cv == 5, 1, cv).astype(np.uint8); cp = np.vstack([cp, cp[:1]]).astype(np.float32)   # the close → a line to the start
-        hh = _HEADER.copy(); hh[1] = len(cp); hh[2] = nw; hh[3] = len(cv)
-        blob = hh.tobytes() + cp.tobytes() + cw.tobytes() + cv.tobytes(); blob += b"\0" * (-len(blob) % 4)
-        part = skia.Path(); part.readFromMemory(blob)
-        (closed if is_closed else rest).addPath(part)
-        k += npt; w += nw; i = j
-    return closed, rest
+        j = vb.find(b"\0", i + 1)
+        if j < 0: j = nvb
+        cv = vb[i:j]; n = cv.count(0) + cv.count(1) + 2 * (cv.count(2) + cv.count(3)) + 3 * cv.count(4); nc = cv.count(3)
+        cp = pts[k:k + 8 * n]; cw = wts[w:w + 4 * nc]
+        P, Wt, Vb, cnt = parts[0] if 5 in cv else parts[1]
+        if 5 in cv: P += [cp, cp[:8]]; Vb.append(cv.replace(b"\5", b"\1")); cnt[0] += n + 1
+        else: P.append(cp); Vb.append(cv); cnt[0] += n
+        Wt.append(cw); cnt[1] += nc; cnt[2] += len(cv)
+        k += 8 * n; w += 4 * nc; i = j
+    return tuple(_from_parts(P, Wt, Vb, *cnt) for P, Wt, Vb, cnt in parts)
+
+
+_CHANGES_PATH = frozenset(("P", "L", "M", "close", "A", "Q", "C", "E", "T", "R"))   # ops that change the current path
+
+
+@functools.lru_cache(1024)
+def _treat_as_hairline(m, w):
+    fast = lambda x, y: max(abs(x), abs(y)) + min(abs(x), abs(y)) / 2
+    return fast(m[0] * w, m[1] * w) <= 1 and fast(m[2] * w, m[3] * w) <= 1
 
 
 def _mat(m):
     return skia.Matrix.MakeAll(m[0], m[2], m[4], m[1], m[3], m[5], 0, 0, 1)
 
 
+_UNSET = object()
+
+
 class _State:
     __slots__ = ("fill", "stroke", "lineWidth", "lineCap", "lineJoin", "miterLimit", "globalAlpha", "composite", "font",
-                 "textAlign", "textBaseline", "filter", "smoothing", "dash", "dashOffset", "m")
+                 "textAlign", "textBaseline", "filter", "smoothing", "dash", "dashOffset", "m", "fp", "sp")
 
     def __init__(self):
         self.fill = (0.0, 0.0, 0.0, 1.0); self.stroke = (0.0, 0.0, 0.0, 1.0); self.lineWidth = 1.0; self.lineCap = "butt"; self.lineJoin = "miter"
         self.miterLimit = 10.0; self.globalAlpha = 1.0; self.composite = "source-over"; self.font = "10px sans-serif"; self.textAlign = "start"
         self.textBaseline = "alphabetic"; self.filter = "none"; self.smoothing = True; self.dash = []; self.dashOffset = 0.0; self.m = (1.0, 0.0, 0.0, 1.0, 0.0, 0.0)
+        self.fp = self.sp = _UNSET   # the fill and stroke paints of this state, made when first drawn with
 
-    def copy(self):
-        t = _State.__new__(_State)
-        for k in _State.__slots__: setattr(t, k, getattr(self, k))
-        return t
+    exec("def copy(self):\n t = _State.__new__(_State)\n" + "".join(f" t.{k} = self.{k}\n" for k in __slots__) + " return t")   # a copy without a loop
 
 
 class Raster:
@@ -134,6 +149,7 @@ class Raster:
         self.cache: dict[int, tuple[int, skia.Image]] = {}
         self.shaders: dict[tuple, skia.Shader] = {}
         self.paints: dict[tuple, skia.Paint | None] = {}   # the paints of recent states
+        self.templates: dict[tuple, skia.Paint] = {}         # paints without their colour, by the rest of the state
         self.text = text
 
     def add(self, canvases: dict, streams: tuple[bytes, bytes, bytes] | None = None):
@@ -146,9 +162,10 @@ class Raster:
             if streams is not None:
                 pb, vb, wb = streams; first = np.frombuffer(pb, np.float32)
                 for i, o in enumerate(ops):
-                    if o[0] == "P":
-                        p0, n, v0, nv, w0, nw = o[1], o[2], o[3], o[4], o[6], o[7]; verbs = vb[v0:v0 + nv]
-                        ops[i] = ("P", _run_path(pb[8 * p0:8 * (p0 + n)], verbs, wb[4 * w0:4 * (w0 + nw)], n, nv, nw), o[5], 5 in verbs,
+                    k = o[0]
+                    if k == "F" or k == "P":
+                        p0, n, v0, nv, w0, nw = o[1], o[2], o[3], o[4], o[5], o[6]; verbs = vb[v0:v0 + nv]
+                        ops[i] = (k, _run_path(pb[8 * p0:8 * (p0 + n)], verbs, wb[4 * w0:4 * (w0 + nw)], n, nv, nw), o[7], 5 in verbs,
                                   float(first[2 * p0]), float(first[2 * p0 + 1]))
             lst.extend(ops)
 
@@ -190,8 +207,26 @@ class _Replay:
         self.r = raster; self.c = canvas; self.w = w; self.h = h; self.s = _State(); self.stack: list[_State] = []
         self.path = skia.Path(); self.pm = self.s.m   # the matrix the path's points are in
         self.has_close = False
+        self.handed = None   # the path is an F op's own (read from memory): copied before anything changes it
 
     # ---- paint ----
+    def _fill(self):
+        s = self.s; p = s.fp
+        if p is _UNSET: p = s.fp = self._paint(s.fill)
+        return p
+
+    def _stroke(self):
+        s = self.s; p = s.sp
+        if p is _UNSET: p = s.sp = self._paint(s.stroke, stroke=True)
+        return p
+
+    def _own(self):
+        """make the path this replay's own before changing it: an F op's path is shared with the op list, and one read
+        from memory carries a stale last-move index, so rebuild it from its first point"""
+        o = self.handed; self.handed = None
+        p = skia.Path(); p.moveTo(o[4], o[5]); p.addPath(o[1], skia.Path.AddPathMode.kExtend_AddPathMode); p.setFillType(o[1].getFillType())
+        self.path = p
+
     def _paint(self, style, stroke=False):
         """the paint for this state (shared: callers that change it copy it first)"""
         s = self.s
@@ -206,17 +241,29 @@ class _Replay:
 
     def _make_paint(self, style, stroke):
         s = self.s
-        if isinstance(style, dict): p = self._pattern_paint(style)
-        else: p = skia.Paint(AntiAlias=True)
-        if p is None: return None
         if isinstance(style, dict):
+            p = self._pattern_paint(style)
+            if p is None: return None
             p.setAlphaf(s.globalAlpha)
         else:
+            # a colour on a copy of the template for the rest of the state (a copy is one call, the setters several)
+            key = (s.composite, s.filter, (s.lineWidth, s.lineCap, s.lineJoin, s.miterLimit, tuple(s.dash) if s.dash else None, s.dashOffset) if stroke else None)
+            t = self.r.templates.get(key)
+            if t is None: t = self.r.templates[key] = self._template(stroke)
+            p = skia.Paint(t)
             # colour precision as Chrome's Skia blends: normal drawing keeps the colour in float; the other blend modes
             # (multiply, screen: watercolour and paper) run at 8 bits, so the colour is rounded there first (measured)
             r, g, b, a = style
             if s.composite == "source-over": p.setColor4f(skia.Color4f(r, g, b, a * s.globalAlpha))
             else: p.setColor(skia.Color(round(r * 255), round(g * 255), round(b * 255), round(a * s.globalAlpha * 255)))
+            return p
+        return self._finish(p, stroke)
+
+    def _template(self, stroke):
+        return self._finish(skia.Paint(AntiAlias=True), stroke)
+
+    def _finish(self, p, stroke):
+        s = self.s
         p.setBlendMode(BLEND[s.composite])
         if stroke:
             p.setStyle(skia.Paint.kStroke_Style); p.setStrokeWidth(s.lineWidth); p.setStrokeCap(CAP[s.lineCap])
@@ -251,6 +298,7 @@ class _Replay:
     # ---- the path, kept in the space of the matrix it was built under (Blink moves it when the matrix changes) ----
     def _set_matrix(self, m):
         if m == self.s.m: return
+        if self.handed is not None: self._own()
         if not self.path.isEmpty():
             inv = skia.Matrix()
             if _mat(m).invert(inv):
@@ -292,8 +340,7 @@ class _Replay:
     # ---- text ----
     def _text(self, kind, s, x, y, maxw):
         st = self.s
-        style = st.fill if kind == "fill" else st.stroke
-        p = self._paint(style, stroke=(kind == "stroke"))
+        p = self._fill() if kind == "fill" else self._stroke()
         if p is None: return
         self.r.text.draw(self.c, s, x, y, st.font, st.textAlign, st.textBaseline, maxw, skia.Paint(p))
 
@@ -302,7 +349,17 @@ class _Replay:
         c = self.c
         for i in range(i0, i1):
             o = ops[i]; k = o[0]
-            if k == "P":   # a run of moves and lines, already a path
+            if k == "F":   # begin, a path run, then fill it (mode 0 nonzero, 1 even-odd) or stroke it (2)
+                seg = o[1]; self.path = seg; self.handed = o; self.has_close = o[3]
+                if o[2] == 2:
+                    p = self._stroke()
+                    if p is not None: self._draw_path(p)
+                else:
+                    p = self._fill()
+                    if p is not None: seg.setFillType(skia.PathFillType.kEvenOdd if o[2] == 1 else skia.PathFillType.kWinding); self._draw_path(p)
+                continue
+            if self.handed is not None and k in _CHANGES_PATH: self._own()
+            if k == "P":   # a run of path verbs, already a path
                 seg = o[1]
                 if o[2]: self.path.addPath(seg, skia.Path.AddPathMode.kExtend_AddPathMode)   # carrying on the last contour
                 elif self.path.countVerbs() <= 1:
@@ -315,13 +372,14 @@ class _Replay:
                 if self.path.countPoints() == 0: self.path.moveTo(o[1], o[2])
                 else: self.path.lineTo(o[1], o[2])
             elif k == "M": self.path.moveTo(o[1], o[2])
-            elif k == "set": self._set(o[1], o[2])
-            elif k == "begin": self.path.reset(); self.has_close = False
+            elif k == "S":
+                for j in range(1, len(o), 2): self._set(o[j], o[j + 1])
+            elif k == "begin": self.path = skia.Path(); self.handed = None; self.has_close = False
             elif k == "stroke":
-                p = self._paint(self.s.stroke, stroke=True)
+                p = self._stroke()
                 if p is not None: self._draw_path(p)
             elif k == "fill":
-                p = self._paint(self.s.fill)
+                p = self._fill()
                 if p is not None:
                     self.path.setFillType(skia.PathFillType.kEvenOdd if o[1] == "evenodd" else skia.PathFillType.kWinding); self._draw_path(p)
             elif k == "close": self.path.close(); self.has_close = True
@@ -343,10 +401,10 @@ class _Replay:
                 self.path.setFillType(skia.PathFillType.kEvenOdd if o[1] == "evenodd" else skia.PathFillType.kWinding)
                 c.clipPath(self.path, skia.ClipOp.kIntersect, True)
             elif k == "fillRect":
-                p = self._paint(self.s.fill)
+                p = self._fill()
                 if p is not None: c.drawRect(skia.Rect.MakeXYWH(*o[1:5]).makeSorted(), p)
             elif k == "strokeRect":
-                p = self._paint(self.s.stroke, stroke=True)
+                p = self._stroke()
                 if p is not None: c.drawRect(skia.Rect.MakeXYWH(*o[1:5]).makeSorted(), p)
             elif k == "clearRect":
                 p = skia.Paint(); p.setBlendMode(skia.BlendMode.kClear); c.drawRect(skia.Rect.MakeXYWH(*o[1:5]).makeSorted(), p)
@@ -369,42 +427,13 @@ class _Replay:
     def _hairline(self, w):
         """Skia's SkDrawTreatAsHairline: the stroke's width mapped through the matrix, measured with its fast_len,
         at most a pixel both ways"""
-        m = self.s.m
-        fast = lambda x, y: max(abs(x), abs(y)) + min(abs(x), abs(y)) / 2
-        return fast(m[0] * w, m[1] * w) <= 1 and fast(m[2] * w, m[3] * w) <= 1
+        return _treat_as_hairline(self.s.m, w)
 
-    def _has_close(self):
-        it = skia.Path.Iter(self.path, False)
-        while True:
-            verb, _ = it.next()
-            if verb == skia.Path.kDone_Verb: return False
-            if verb == skia.Path.kClose_Verb: return True
-
-    def _split_closed(self):
-        """the path's closed contours reopened (each close a line back to its start), and its open contours"""
-        it = skia.Path.Iter(self.path, False); closed, rest = skia.Path(), skia.Path(); cur = []; start = None
-        def flush(target):
-            for fn, args in cur: getattr(target, fn)(*args)
-        while True:
-            verb, pts = it.next()
-            if verb == skia.Path.kDone_Verb: break
-            if verb == skia.Path.kMove_Verb:
-                if cur: flush(rest)
-                cur = [("moveTo", (pts[0],))]; start = pts[0]
-            elif verb == skia.Path.kLine_Verb: cur.append(("lineTo", (pts[1],)))
-            elif verb == skia.Path.kQuad_Verb: cur.append(("quadTo", (pts[1], pts[2])))
-            elif verb == skia.Path.kConic_Verb: cur.append(("conicTo", (pts[1], pts[2], it.conicWeight())))
-            elif verb == skia.Path.kCubic_Verb: cur.append(("cubicTo", (pts[1], pts[2], pts[3])))
-            elif verb == skia.Path.kClose_Verb:
-                if start is not None: cur.append(("lineTo", (start,)))
-                flush(closed); cur = []
-        if cur: flush(rest)
-        return closed, rest
 
     def _set(self, key, v):
-        s = self.s
+        s = self.s; s.fp = s.sp = _UNSET
         if key in ("fillStyle", "strokeStyle"):
-            val = v if isinstance(v, dict) else parse_color(v)
+            val = v if isinstance(v, dict) else tuple(v) if isinstance(v, list) else parse_color(v)   # the recorder parses most colours
             if val is None: return
             if key == "fillStyle": s.fill = val
             else: s.stroke = val

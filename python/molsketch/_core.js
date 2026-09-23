@@ -141,6 +141,34 @@
     return { points: PTS.take(), verbs: VBS.take(), weights: WTS.take() };
   }
   var f32 = Math.fround;
+  var HEX = /^[0-9a-f]+$/;
+  var RGB = /^rgba?\(\s*([^)]*)\)$/;
+  function parseColor(str) {
+    const s = str.trim().toLowerCase();
+    if (s[0] === "#") {
+      let h = s.slice(1);
+      if (h.length === 3 || h.length === 4) h = [...h].map((c) => c + c).join("");
+      if (h.length !== 6 && h.length !== 8 || !HEX.test(h)) return null;
+      const v = [0, 2, 4, 6].slice(0, h.length / 2).map((i) => parseInt(h.slice(i, i + 2), 16));
+      return [v[0] / 255, v[1] / 255, v[2] / 255, v.length === 4 ? v[3] / 255 : 1];
+    }
+    const m = RGB.exec(s);
+    if (m) {
+      const parts = m[1].split(/[\s,/]+/).filter(Boolean);
+      if (parts.length !== 3 && parts.length !== 4) return null;
+      const num = (p) => /^[+-]?(\d+\.?\d*|\.\d+)(e[+-]?\d+)?$/.test(p) ? Number(p) : NaN;
+      const ch = parts.slice(0, 3).map((p) => p.endsWith("%") ? num(p.slice(0, -1)) * 2.55 : num(p));
+      const a = parts.length === 4 ? parts[3].endsWith("%") ? num(parts[3].slice(0, -1)) / 100 : num(parts[3]) : 1;
+      if (ch.some(isNaN) || isNaN(a)) return str;
+      const c = ch.map((x) => Math.min(255, Math.max(0, roundHalfEven(x))));
+      return [c[0] / 255, c[1] / 255, c[2] / 255, Math.min(1, Math.max(0, a))];
+    }
+    return s === "transparent" ? [0, 0, 0, 0] : str;
+  }
+  function roundHalfEven(x) {
+    const r = Math.round(x);
+    return Math.abs(x % 1) === 0.5 && r % 2 !== 0 ? r - 1 : r;
+  }
   var canvases = /* @__PURE__ */ new Map();
   var measureFn = (_f, t) => t.length * 8;
   function setMeasure(f2) {
@@ -239,6 +267,8 @@
       __publicField(this, "ops", []);
       __publicField(this, "total", 0);
       __publicField(this, "ctx", null);
+      /** the op count when another canvas last took this one's picture: ops before it are never rewritten */
+      __publicField(this, "frozen", 0);
       this.id = nextId++;
       canvases.set(this.id, this);
       this.push(["size", 300, 150]);
@@ -320,7 +350,7 @@
       const r = this.run;
       if (!r) return;
       this.run = null;
-      this.canvas.push(["P", r.p / 2, (PTS.n - r.p) / 2, r.v, VBS.n - r.v, r.cont, r.w, WTS.n - r.w]);
+      this.canvas.push(["P", r.p / 2, (PTS.n - r.p) / 2, r.v, VBS.n - r.v, r.w, WTS.n - r.w, r.cont]);
     }
     op(...o) {
       this.settle();
@@ -407,9 +437,13 @@
     get knows() {
       return !this.hasCur || this.hasLast && (!this.closed || this.hasStart);
     }
+    /** a state property: consecutive ones share one op, S key value key value … */
     setProp(k, v, rec = v) {
       this.s[k] = v;
-      this.op("set", k, rec);
+      this.settle();
+      const ops = this.canvas.ops, last = ops[ops.length - 1];
+      if (last && last[0] === "S") last.push(k, rec);
+      else this.canvas.push(["S", k, rec]);
     }
     /* state */
     get fillStyle() {
@@ -426,7 +460,10 @@
     }
     style(k, v) {
       if (v instanceof Pattern) this.setProp(k, v, { pat: v.id, snap: v.snap, rep: v.rep, m: v.m });
-      else if (typeof v === "string") this.setProp(k, v);
+      else if (typeof v === "string") {
+        const c = parseColor(v);
+        if (c !== null) this.setProp(k, v, c);
+      }
     }
     get lineWidth() {
       return this.s.lineWidth;
@@ -653,10 +690,31 @@
       this.closed = true;
     }
     fill(rule = "nonzero") {
-      this.op("fill", rule === "evenodd" ? "evenodd" : "nonzero");
+      const eo = rule === "evenodd";
+      if (!this.fuse(eo ? 1 : 0)) this.op("fill", eo ? "evenodd" : "nonzero");
     }
     stroke() {
-      this.op("stroke");
+      if (!this.fuse(2)) this.op("stroke");
+    }
+    /** the common case, a path begun, made in one run and drawn (with only state set in between), as one op:
+       F pointIndex pointCount verbIndex verbCount weightIndex weightCount mode (0 fill, 1 even-odd fill, 2 stroke) */
+    fuse(mode) {
+      this.settle();
+      const ops = this.canvas.ops;
+      let j = ops.length - 1;
+      while (j >= 0 && ops[j][0] === "S") j--;
+      const pi = j;
+      if (pi < 0 || ops[pi][0] !== "P" || ops[pi][7]) return false;
+      j--;
+      while (j >= 0 && ops[j][0] === "S") j--;
+      const bi = j;
+      if (bi < 0 || ops[bi][0] !== "begin" || this.canvas.total - ops.length + bi < this.canvas.frozen) return false;
+      const P = ops[pi], sets = ops.slice(bi + 1, pi).concat(ops.slice(pi + 1));
+      ops.length = bi;
+      for (const o of sets) ops.push(o);
+      ops.push(["F", P[1], P[2], P[3], P[4], P[5], P[6], mode]);
+      this.canvas.total -= 1;
+      return true;
     }
     clip(rule = "nonzero") {
       this.op("clip", rule === "evenodd" ? "evenodd" : "nonzero");
@@ -688,11 +746,13 @@
       if (!(n.length === 2 || n.length === 4 || n.length === 8) || !fin(...n)) return;
       if (img.width === 0 || img.height === 0) throw new Error("InvalidStateError: drawImage of an empty canvas");
       img.settle();
+      img.frozen = img.total;
       this.op("img", img.id, img.total, ...n);
     }
     createPattern(img, rep) {
       if (!(img instanceof RecCanvas)) throw new TypeError("createPattern: only canvases headless");
       img.settle();
+      img.frozen = img.total;
       return new Pattern(img.id, img.total, rep || "repeat");
     }
     createLinearGradient() {
