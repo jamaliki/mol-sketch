@@ -22,7 +22,7 @@ export interface EngineMap {
   caption: string;
   sample: (x: number, y: number, z: number) => number;   // density at a point of the drawing's frame
   box: number[][];                    // the map's corners, drawing frame
-  opts: Style['map']; hasModel: boolean; primaryLevel: number;
+  opts: Style['map']; hasModel: boolean; primaryLevel: number; zoned?: boolean;
 }
 
 const cache = new WeakMap<DensityMap, Map<string, EngineMap>>();
@@ -56,7 +56,7 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
     const pad = zoneSel ? Math.max(o.carve, 2) + 3 : o.crop;
     m = cropMap(whole, lo.map(v => v - pad), hi.map(v => v + pad)) }
   // smoothing: the map low-passed to a resolution the picture can show (a whole particle cannot show atoms), on a grid
-  // no finer than a third of it. 'auto' low-passes to a 20th of what is drawn (the model, or else the particle: the
+  // no finer than a third of it. 'auto' low-passes to a 20th of what is drawn (4 Å at the finest) (the model, or else the particle: the
   // density above the level), when the map is finer than that
   let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
   for (let k = 0, q = 0; k < m.nz; k++) for (let j = 0; j < m.ny; j++) for (let i = 0; i < m.nx; i++, q++) if (m.data[q] >= level) {
@@ -65,11 +65,20 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   if (s && s.count) { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
     for (let i = 0; i < s.count; i++) { if (zoneSel && !zoneSel[i]) continue; const p = [s.x[i], s.y[i], s.z[i]]; for (let k = 0; k < 3; k++) { if (p[k] < lo[k]) lo[k] = p[k]; if (p[k] > hi[k]) hi[k] = p[k] } }
     extent = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) }
-  const R = o.smooth === 'auto' ? (m.resolution ?? 2 * m.step[0]) < extent / 20 * 0.8 ? Math.round(extent / 20) : 0 : Math.max(0, +o.smooth || 0);
+  const R = o.smooth === 'auto' ? (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
   // what is low-passed is the density above the contour level (the rest set to zero): a sharpened map has lost its
   // low frequencies (its protein's mean density is the solvent's), so low-passing it all would leave only noise
   const above = R > 0 ? { ...m, data: m.data.map(v => v >= level ? v : 0) } : m;
-  const g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels), g1 = R > 0 ? lowpass(g0, R) : g0;
+  let g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
+  // with a model, a low-passed map keeps only the density within 5 Å of it, before the low-pass (so its surface closes
+  // smoothly, instead of being cut where the rest of an assembly joins it); the caption says so
+  const zoned = R > 0 && !!s && s.count > 0 && o.finish !== 'sketch' && o.context !== 'show';
+  if (zoned) { const keep = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = 5;
+    for (let i = 0; i < s!.count; i++) { if (s!.element[i] === 'H') continue; const c = [s!.x[i], s!.y[i], s!.z[i]].map((v, k) => (v - g0.origin[k]) / g0.step[k]), rv = r / g0.step[0];
+      for (let z = Math.max(0, Math.floor(c[2] - rv)); z <= Math.min(n[2] - 1, Math.ceil(c[2] + rv)); z++) for (let y = Math.max(0, Math.floor(c[1] - rv)); y <= Math.min(n[1] - 1, Math.ceil(c[1] + rv)); y++)
+        for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) keep[(z * n[1] + y) * n[0] + x] = 1 }
+    g0 = { ...g0, data: g0.data.map((v, q) => keep[q] ? v : 0) } }
+  const g1 = R > 0 ? lowpass(g0, R) : g0;
   // a close-up is sampled finer than its map (to about a 150th of what is drawn), so its surface is not the grid's facets
   const box = Math.max(g1.nx * g1.step[0], g1.ny * g1.step[1], g1.nz * g1.step[2]);   // at most 160 voxels a side
   const g = o.finish !== 'sketch' ? upsample(g1, Math.max(0.2, extent / 150, box / 160)) : g1;
@@ -162,12 +171,12 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   const sigma = (level - m.mean) / (m.rms || 1);
   const caption = [m.name, R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''} low-passed to ${R} Å` : '', byVolume ? mass <= 0 ? 'contoured at 2 σ' : `contoured to enclose ${(mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + ' MDa' : Math.round(mass / 1e3) + ' kDa')} (${massFrom}'s mass, 1.21 Å³/Da)`
       : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''}, ${sigma.toFixed(1)} σ`,
-    o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `around ${o.zone}` : m !== whole ? `cropped to the model's box and ${o.crop} Å` : '',
+    o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', zoned ? 'the density within 5 Å of the model' : o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `around ${o.zone}` : m !== whole ? `cropped to the model's box and ${o.crop} Å` : '',
     dust ? 'specks under 2% of the largest piece hidden' : '', g0 !== m && !byVolume ? `drawn at ${g.step[0].toFixed(1)} Å per voxel${R > 0 ? '' : ', at the level enclosing the same volume'}` : '',
     o.localResolution === 'bfactor' && s ? 'line looseness from B-factors' : o.localResolution === 'map' && localRes ? 'line looseness from local resolution' : ''].filter(Boolean).join(' · ');
   const corners: number[][] = []; for (const a of [0, 1]) for (const b of [0, 1]) for (const c of [0, 1]) corners.push(turn(g.origin[0] + a * (g.nx - 1) * g.step[0], g.origin[1] + b * (g.ny - 1) * g.step[1], g.origin[2] + c * (g.nz - 1) * g.step[2]));
   const out: EngineMap = { name: m.name, levels, primary, wire, unsupported, caption, sample: (x, y, z) => { const p = unturn(x, y, z); return sampleMap(g, p[0], p[1], p[2]) * level / gLevel },
-    box: corners, opts: o, hasModel: atoms.length > 0, primaryLevel: level };
+    box: corners, opts: o, hasModel: atoms.length > 0, primaryLevel: level, zoned };
   per.set(key, out); if (per.size > 6) per.delete(per.keys().next().value!);
   return out;
 }

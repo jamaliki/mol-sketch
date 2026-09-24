@@ -1045,10 +1045,10 @@ function buildMap(items,st,pos,proj,seedBase){
       // does not cover (context, in a paler map colour)
       let explained=0;for(let v=0;v<n;v++)if(!far[v])explained++;
       const size=new Map();for(let v=0;v<n;v++)if(far[v]){const r=find(v);size.set(r,(size.get(r)||0)+1)}
-      for(let v=0;v<n;v++)if(far[v]){const k=size.get(find(v));comp[v]=k<24?0:k<=0.1*explained?1:2}}
+      for(let v=0;v<n;v++)if(far[v]){const k=size.get(find(v));comp[v]=k<24?0:k<=0.1*explained||M.zoned?1:2}}   // zoned: all that is left is the model's
     for(let v=0;v<n;v++){let c=mapCol;if(comp[v]===1&&o.unexplained)c=accent;else if(comp[v]===2)c=contextCol;else if((o.color==='model'||o.color==='chain')&&L.near[v]>=0){const a=atomsById[byIndex[L.near[v]]];if(a)c=o.color==='chain'?chainTint(a):colFor(a)}cls[v]=classOf(c)}
     // smooth finish: the rest of an assembly beyond the model is left out (cut along the mesh, so its edge is the surface's own); the caption says so
-    let tri=L.tri;if(o.finish!=='sketch'&&M.hasModel&&(o.context??'hide')==='hide'){const keep=[];let cut=0;for(let t=0;t<tri.length;t+=3){if(comp[tri[t]]===2&&comp[tri[t+1]]===2&&comp[tri[t+2]]===2){cut++;continue}keep.push(tri[t],tri[t+1],tri[t+2])}if(cut){tri=new Uint32Array(keep);M.contextHidden=true}}
+    let tri=L.tri;if(o.finish!=='sketch'&&M.hasModel&&!M.zoned&&(o.context??'hide')==='hide'){const keep=[];let cut=0;for(let t=0;t<tri.length;t+=3){if(comp[tri[t]]===2&&comp[tri[t+1]]===2&&comp[tri[t+2]]===2){cut++;continue}keep.push(tri[t],tri[t+1],tri[t+2])}if(cut){tri=new Uint32Array(keep);M.contextHidden=true}}
     return {...L,tri,px,py,pz,fog,rn,cls}};   // projected afresh every frame: the camera moves
   const levels=M.levels.map(prep),main=levels[M.primary]||levels[0];
   const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':'over'):o.layer;
@@ -1092,7 +1092,7 @@ function buildMap(items,st,pos,proj,seedBase){
     softenCovered(face,buf.tb,W,H,Math.max(1,Math.round(2*TEX)));
     return {dark,fogp,cls,hand,face}};
   const bbox=(test)=>{let x0=W,y0=H,x1=-1,y1=-1;for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(test(y*W+x)){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}return x1<0?null:[x0,y0,x1,y1]};
-  const speck=o.finish==='sketch'?3:(o.speck??5)**2*TEX*TEX;   // islands and holes smaller than this (px²) are specks: left out
+  const speck=o.finish==='sketch'?3:(o.speck??8)**2*TEX*TEX;   // islands and holes smaller than this (px²) are specks: left out
   const regions=(test)=>{const m=new Uint8Array(W*H);for(let i=0;i<m.length;i++)m[i]=test(i)?1:0;const b=bbox(i=>m[i]);return b?maskRings(m,W,H,b[0],b[1],b[2],b[3]).filter(r=>Math.abs(ringArea(r))>=speck):[]};
   // ink hatching over the region where `dark` passes a threshold: straight hand lines, one direction, then crossed
   const hatch=(ctx,sh,covered,t,ang,sp,colorAt,alpha)=>{const dx=Math.cos(ang),dy=Math.sin(ang),nx=-dy,ny=dx,R=Math.hypot(W,H)/2,cx=W/2,cy=H/2;let k=0;

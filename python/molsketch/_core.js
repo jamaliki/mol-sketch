@@ -1567,7 +1567,7 @@
       style: "surface",
       level: null,
       sigma: null,
-      speck: 5,
+      speck: 8,
       smooth: "auto",
       crop: 8,
       levels: [0.7, 1, 1.5],
@@ -4425,7 +4425,7 @@
           }
           for (let v = 0; v < n; v++) if (far[v]) {
             const k = size.get(find(v));
-            comp[v] = k < 24 ? 0 : k <= 0.1 * explained ? 1 : 2;
+            comp[v] = k < 24 ? 0 : k <= 0.1 * explained || M.zoned ? 1 : 2;
           }
         }
         for (let v = 0; v < n; v++) {
@@ -4439,7 +4439,7 @@
           cls[v] = classOf(c);
         }
         let tri = L.tri;
-        if (o.finish !== "sketch" && M.hasModel && (o.context ?? "hide") === "hide") {
+        if (o.finish !== "sketch" && M.hasModel && !M.zoned && (o.context ?? "hide") === "hide") {
           const keep = [];
           let cut = 0;
           for (let t = 0; t < tri.length; t += 3) {
@@ -4613,7 +4613,7 @@
         }
         return x1 < 0 ? null : [x0, y0, x1, y1];
       };
-      const speck = o.finish === "sketch" ? 3 : (o.speck ?? 5) ** 2 * TEX * TEX;
+      const speck = o.finish === "sketch" ? 3 : (o.speck ?? 8) ** 2 * TEX * TEX;
       const regions = (test) => {
         const m = new Uint8Array(W * H);
         for (let i = 0; i < m.length; i++) m[i] = test(i) ? 1 : 0;
@@ -6803,9 +6803,21 @@
       }
       extent = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
     }
-    const R = o.smooth === "auto" ? (m.resolution ?? 2 * m.step[0]) < extent / 20 * 0.8 ? Math.round(extent / 20) : 0 : Math.max(0, +o.smooth || 0);
+    const R = o.smooth === "auto" ? (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
     const above = R > 0 ? { ...m, data: m.data.map((v) => v >= level ? v : 0) } : m;
-    const g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels), g1 = R > 0 ? lowpass(g0, R) : g0;
+    let g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
+    const zoned = R > 0 && !!s && s.count > 0 && o.finish !== "sketch" && o.context !== "show";
+    if (zoned) {
+      const keep = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = 5;
+      for (let i = 0; i < s.count; i++) {
+        if (s.element[i] === "H") continue;
+        const c = [s.x[i], s.y[i], s.z[i]].map((v, k) => (v - g0.origin[k]) / g0.step[k]), rv = r / g0.step[0];
+        for (let z = Math.max(0, Math.floor(c[2] - rv)); z <= Math.min(n[2] - 1, Math.ceil(c[2] + rv)); z++) for (let y = Math.max(0, Math.floor(c[1] - rv)); y <= Math.min(n[1] - 1, Math.ceil(c[1] + rv)); y++)
+          for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) keep[(z * n[1] + y) * n[0] + x] = 1;
+      }
+      g0 = { ...g0, data: g0.data.map((v, q) => keep[q] ? v : 0) };
+    }
+    const g1 = R > 0 ? lowpass(g0, R) : g0;
     const box = Math.max(g1.nx * g1.step[0], g1.ny * g1.step[1], g1.nz * g1.step[2]);
     const g2 = o.finish !== "sketch" ? upsample(g1, Math.max(0.2, extent / 150, box / 160)) : g1;
     const EL = { C: 12.01, N: 14.01, O: 16, S: 32.07, P: 30.97, SE: 78.97 };
@@ -6984,7 +6996,7 @@
       R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
       byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
       o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
-      o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `around ${o.zone}` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
+      zoned ? "the density within 5 \xC5 of the model" : o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `around ${o.zone}` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
       dust ? "specks under 2% of the largest piece hidden" : "",
       g0 !== m && !byVolume ? `drawn at ${g2.step[0].toFixed(1)} \xC5 per voxel${R > 0 ? "" : ", at the level enclosing the same volume"}` : "",
       o.localResolution === "bfactor" && s ? "line looseness from B-factors" : o.localResolution === "map" && localRes ? "line looseness from local resolution" : ""
@@ -7005,7 +7017,8 @@
       box: corners,
       opts: o,
       hasModel: atoms.length > 0,
-      primaryLevel: level
+      primaryLevel: level,
+      zoned
     };
     per.set(key, out);
     if (per.size > 6) per.delete(per.keys().next().value);

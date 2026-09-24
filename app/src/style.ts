@@ -83,7 +83,7 @@ export const DEFAULT_STYLE: Style = {
   engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: false },
   site: { sel: '', cutaway: true, quiet: 0.35, scale: 1.9 },
   surfaceColor: 'subunit', surfaceDepth: { edges: 1, pooling: 1, fade: 1 },
-  map: { style: 'surface', level: null, sigma: null, speck: 5, smooth: 'auto', crop: 8, levels: [0.7, 1, 1.5], carve: 0, zone: '', finish: 'drawn', marks: 'ink', smoothing: 4, opacity: 0.55, context: 'hide', color: 'single', line: null, lineWidth: 0.9, shade: 0.35, glass: false, unexplained: false, unsupported: true, localResolution: 'none',
+  map: { style: 'surface', level: null, sigma: null, speck: 8, smooth: 'auto', crop: 8, levels: [0.7, 1, 1.5], carve: 0, zone: '', finish: 'drawn', marks: 'ink', smoothing: 4, opacity: 0.55, context: 'hide', color: 'single', line: null, lineWidth: 0.9, shade: 0.35, glass: false, unexplained: false, unsupported: true, localResolution: 'none',
     layer: 'auto', caption: true, maxVoxels: 192, meshSpacing: 1, slice: { offset: 0, cut: true } },
   reps: { sticks: 'hetatm and not water', cartoon: 'polymer', surface: '' },
   stickRadius: 0.2,
