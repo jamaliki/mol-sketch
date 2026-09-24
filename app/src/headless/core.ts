@@ -10,7 +10,7 @@ import { DEFAULT_STYLE, cloneStyle, mergeStyle, PALETTES, type Style } from '../
 import { LOOKS } from '../looks';
 import { GROUP_PALETTES, ribbonColours } from '../palettes';
 import { classic, cfgFromStyle, sceneFromStructure, renderClassic, renderScene, mapBasis, mapLevel } from '../classic/adapter';
-import { mapStats, type DensityMap } from '../model/map';
+import { mapStats, sampleMap, type DensityMap } from '../model/map';
 import { sceneFitPoints, type SceneDoc } from '../classic/scene';
 import { selectAtoms } from '../model/selection';
 import { pcaBasis } from '../render/pca';
@@ -185,6 +185,10 @@ export function info(spec: FigureSpec) {
   const f = settle(spec); const out: any = { look: f.look, style: f.style, camera: { ...f.camera, base: undefined }, labels: f.labels, groupColors: f.overrides };
   if (f.structure) { const s = f.structure; out.structure = { name: s.name, atoms: s.count, residues: s.residues.length, chains: s.chains.map(c => c.id) } }
   if (f.map) { const m = f.map; out.map = { name: m.name, level: mapLevel(m, f.style), recommended: m.level ?? null, mean: m.mean, rms: m.rms, min: m.min, max: m.max, size: [m.nx, m.ny, m.nz], step: m.step, origin: m.origin, binned: m.binned || 1, mass: m.mass ?? null, resolution: m.resolution ?? null } }
+  // atom inclusion (as EMDB reports it): the share of the model's heavy atoms inside the contour
+  if (f.map && f.structure) { const m = f.map, s = f.structure, lv = mapLevel(m, f.style); let n = 0, inside = 0;
+    for (let i = 0; i < s.count; i++) { if (s.element[i] === 'H' || s.residues[s.residueOf[i]].resn === 'HOH') continue; n++; if (sampleMap(m, s.x[i], s.y[i], s.z[i]) >= lv) inside++ }
+    out.map.atomInclusion = n ? inside / n : null }
   if (f.scene) { const E = classic(); E.cfg = cfgFromStyle(f.style, f.camera, true); if (E.scene !== f.scene) E.scene = f.scene; const TL = (E as any).TL;
     out.scene = { name: (f.scene as any).name, keyframes: f.scene.keyframes.map((k: any) => k.name), frames: TL.total, fps: FPS, segs: TL.segs } }
   return out;

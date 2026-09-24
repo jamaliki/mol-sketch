@@ -1570,6 +1570,7 @@
       crop: 8,
       levels: [0.7, 1, 1.5],
       carve: 0,
+      zone: "",
       color: "single",
       line: null,
       lineWidth: 0.9,
@@ -6341,8 +6342,148 @@
     return m;
   }
 
+  // src/model/selection.ts
+  var cache = /* @__PURE__ */ new Map();
+  function compileSelection(str) {
+    str = (str || "").trim();
+    const hit = cache.get(str);
+    if (hit) return hit;
+    const toks = str.match(/\(|\)|[^\s()]+/g) || [];
+    let i = 0;
+    const peek = () => toks[i], next = () => toks[i++];
+    const listArg = () => {
+      const t = next();
+      return t === void 0 ? [] : t.split("+");
+    };
+    const R = (s, a) => s.residues[s.residueOf[a]];
+    function factor() {
+      const t = next();
+      if (t === void 0) return () => false;
+      const tl = t.toLowerCase();
+      if (tl === "(") {
+        const e = expr();
+        if (peek() === ")") next();
+        return e;
+      }
+      if (tl === "not" || tl === "!") {
+        const f3 = factor();
+        return (s, a) => !f3(s, a);
+      }
+      switch (tl) {
+        case "all":
+        case "*":
+          return () => true;
+        case "none":
+          return () => false;
+        case "hetatm":
+        case "het":
+          return (s, a) => s.het[a] === 1;
+        case "polymer":
+        case "poly":
+          return (s, a) => s.het[a] === 0;
+        case "backbone":
+        case "bb":
+          return (s, a) => BACKBONE.has(s.atomName[a]);
+        case "sidechain":
+        case "sc":
+          return (s, a) => s.het[a] === 0 && !BACKBONE.has(s.atomName[a]);
+        case "hydro":
+        case "h.":
+        case "hydrogens":
+          return (s, a) => s.element[a] === "H";
+        case "nucleic":
+        case "na":
+          return (s, a) => R(s, a).nucleic;
+        case "protein":
+        case "prot":
+          return (s, a) => {
+            const r = R(s, a);
+            return !r.het && !r.nucleic;
+          };
+        case "water":
+        case "solvent":
+          return (s, a) => {
+            const n = R(s, a).resn;
+            return n === "HOH" || n === "WAT";
+          };
+        case "subunit": {
+          const S = new Set(listArg().map((v) => v.toUpperCase()));
+          return (s, a) => S.has(R(s, a).subunit);
+        }
+        case "entity": {
+          const S = new Set(listArg());
+          return (s, a) => S.has(R(s, a).entity);
+        }
+        case "resi":
+        case "i.": {
+          const ranges = listArg().map((v) => {
+            const m = v.match(/^(-?\d+)(?:-(-?\d+))?$/);
+            return m ? [+m[1], m[2] !== void 0 ? +m[2] : +m[1]] : null;
+          }).filter(Boolean);
+          return (s, a) => {
+            const r = R(s, a).resi;
+            return ranges.some(([lo, hi]) => r >= lo && r <= hi);
+          };
+        }
+        case "resn":
+        case "r.": {
+          const S = new Set(listArg().map((v) => v.toUpperCase()));
+          return (s, a) => S.has(R(s, a).resn.toUpperCase());
+        }
+        case "name":
+        case "n.": {
+          const S = new Set(listArg().map((v) => v.toUpperCase()));
+          return (s, a) => S.has(s.atomName[a].toUpperCase());
+        }
+        case "chain":
+        case "c.": {
+          const S = new Set(listArg().map((v) => v.toUpperCase()));
+          return (s, a) => S.has(R(s, a).chain.toUpperCase());
+        }
+        case "elem":
+        case "e.": {
+          const S = new Set(listArg().map((v) => v.toUpperCase()));
+          return (s, a) => S.has(s.element[a]);
+        }
+        case "ss": {
+          const S = new Set(listArg().map((v) => v.toUpperCase()));
+          return (s, a) => S.has(R(s, a).ss);
+        }
+        default:
+          return () => false;
+      }
+    }
+    function term() {
+      let f3 = factor();
+      while (peek() && (peek().toLowerCase() === "and" || peek() === "&")) {
+        next();
+        const g2 = factor(), f0 = f3;
+        f3 = (s, a) => f0(s, a) && g2(s, a);
+      }
+      return f3;
+    }
+    function expr() {
+      let f3 = term();
+      while (peek() && (peek().toLowerCase() === "or" || peek() === "|")) {
+        next();
+        const g2 = term(), f0 = f3;
+        f3 = (s, a) => f0(s, a) || g2(s, a);
+      }
+      return f3;
+    }
+    const f2 = str ? expr() : () => false;
+    cache.set(str, f2);
+    return f2;
+  }
+  function selectAtoms(s, sel) {
+    const f2 = compileSelection(sel);
+    const m = new Uint8Array(s.count);
+    for (let i = 0; i < s.count; i++) m[i] = f2(s, i) ? 1 : 0;
+    return m;
+  }
+
   // src/classic/mapprep.ts
-  var cache = /* @__PURE__ */ new WeakMap();
+  var cache2 = /* @__PURE__ */ new WeakMap();
   function mapBasis(m, level) {
     const iso = isosurface(downsample(m, 96), level);
     const n = iso.positions.length / 3;
@@ -6364,22 +6505,29 @@
   function prepareMap(whole, style, s, base, localRes = null) {
     const o = style.map, level = mapLevel(whole, style);
     const factors = o.style === "layers" ? o.levels : [1];
-    const key = JSON.stringify([level, o.smooth, o.crop, factors, o.carve, o.maxVoxels, o.localResolution, o.style === "mesh" ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
-    let per = cache.get(whole);
-    if (!per) cache.set(whole, per = /* @__PURE__ */ new Map());
+    const key = JSON.stringify([level, o.smooth, o.crop, o.zone, factors, o.carve, o.maxVoxels, o.localResolution, o.style === "mesh" ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
+    let per = cache2.get(whole);
+    if (!per) cache2.set(whole, per = /* @__PURE__ */ new Map());
     const hit = per.get(key);
     if (hit) return { ...hit, opts: o };
+    let zoneSel = null;
+    if (s && o.zone) {
+      zoneSel = selectAtoms(s, o.zone);
+      if (!zoneSel.some((v) => v)) zoneSel = null;
+    }
     let m = whole;
-    if (s && o.crop > 0 && s.count) {
+    if (s && s.count && (o.crop > 0 || zoneSel)) {
       const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
       for (let i = 0; i < s.count; i++) {
+        if (zoneSel && !zoneSel[i]) continue;
         const p = [s.x[i], s.y[i], s.z[i]];
         for (let k = 0; k < 3; k++) {
           if (p[k] < lo[k]) lo[k] = p[k];
           if (p[k] > hi[k]) hi[k] = p[k];
         }
       }
-      m = cropMap(whole, lo.map((v) => v - o.crop), hi.map((v) => v + o.crop));
+      const pad = zoneSel ? Math.max(o.carve, 2) + 3 : o.crop;
+      m = cropMap(whole, lo.map((v) => v - pad), hi.map((v) => v + pad));
     }
     let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
     for (let k = 0, q = 0; k < m.nz; k++) for (let j = 0; j < m.ny; j++) for (let i = 0; i < m.nx; i++, q++) if (m.data[q] >= level) {
@@ -6394,6 +6542,7 @@
     if (s && s.count) {
       const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
       for (let i = 0; i < s.count; i++) {
+        if (zoneSel && !zoneSel[i]) continue;
         const p = [s.x[i], s.y[i], s.z[i]];
         for (let k = 0; k < 3; k++) {
           if (p[k] < lo[k]) lo[k] = p[k];
@@ -6465,6 +6614,16 @@
       }
       return [best, Math.sqrt(bd)];
     };
+    const zoneAtoms = zoneSel ? atoms.filter((i) => zoneSel[i]) : atoms;
+    const carveDist = (x, y, z) => {
+      if (!zoneSel) return nearest(x, y, z)[1];
+      let bd = Infinity;
+      for (const i of zoneAtoms) {
+        const d = (s.x[i] - x) ** 2 + (s.y[i] - y) ** 2 + (s.z[i] - z) ** 2;
+        if (d < bd) bd = d;
+      }
+      return Math.sqrt(bd);
+    };
     let dust = 0;
     const levels = factors.map((f2) => {
       const iso = isosurface(g2, same(level * f2));
@@ -6502,8 +6661,9 @@
         tri = new Uint32Array(keep);
       }
       if (o.carve > 0 && atoms.length) {
+        const cd = zoneSel ? Float32Array.from({ length: nv }, (_, v) => carveDist(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2])) : dist;
         const keep = [];
-        for (let t = 0; t < tri.length; t += 3) if (dist[tri[t]] <= o.carve || dist[tri[t + 1]] <= o.carve || dist[tri[t + 2]] <= o.carve) keep.push(tri[t], tri[t + 1], tri[t + 2]);
+        for (let t = 0; t < tri.length; t += 3) if (cd[tri[t]] <= o.carve || cd[tri[t + 1]] <= o.carve || cd[tri[t + 2]] <= o.carve) keep.push(tri[t], tri[t + 1], tri[t + 2]);
         tri = new Uint32Array(keep);
       }
       let hand2 = null;
@@ -6542,7 +6702,7 @@
         for (let i = 0; i < n; i += sp) for (const line of joinSegments(sliceContours(g2, ax, i, gLevel))) {
           let run = [];
           for (const p of line) {
-            const inZone = !(o.carve > 0 && atoms.length) || nearest(p[0], p[1], p[2])[1] <= o.carve;
+            const inZone = !(o.carve > 0 && atoms.length) || carveDist(p[0], p[1], p[2]) <= o.carve;
             if (inZone) run.push(turn(p[0], p[1], p[2]));
             else {
               if (run.length > 1) wire.push(run);
@@ -6555,7 +6715,7 @@
     }
     const unsupported = [];
     if (s) for (const r of s.residues) {
-      if (r.het || r.trace < 0) continue;
+      if (r.het || r.trace < 0 || zoneSel && !zoneSel[r.trace]) continue;
       let n = 0, low = 0;
       for (let i = r.atomStart; i < r.atomEnd; i++) {
         if (s.element[i] === "H") continue;
@@ -6570,7 +6730,7 @@
       R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && m.level != null ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
       byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
       o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
-      o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of the model` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
+      o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `around ${o.zone}` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
       dust ? "specks under 2% of the largest piece hidden" : "",
       g0 !== m && !byVolume ? `drawn at ${g2.step[0].toFixed(1)} \xC5 per voxel${R > 0 ? "" : ", at the level enclosing the same volume"}` : "",
       o.localResolution === "bfactor" && s ? "line looseness from B-factors" : o.localResolution === "map" && localRes ? "line looseness from local resolution" : ""
@@ -6771,146 +6931,6 @@
       out.push(p[0], p[1], p[2]);
     }
     return Float32Array.from(out);
-  }
-
-  // src/model/selection.ts
-  var cache2 = /* @__PURE__ */ new Map();
-  function compileSelection(str) {
-    str = (str || "").trim();
-    const hit = cache2.get(str);
-    if (hit) return hit;
-    const toks = str.match(/\(|\)|[^\s()]+/g) || [];
-    let i = 0;
-    const peek = () => toks[i], next = () => toks[i++];
-    const listArg = () => {
-      const t = next();
-      return t === void 0 ? [] : t.split("+");
-    };
-    const R = (s, a) => s.residues[s.residueOf[a]];
-    function factor() {
-      const t = next();
-      if (t === void 0) return () => false;
-      const tl = t.toLowerCase();
-      if (tl === "(") {
-        const e = expr();
-        if (peek() === ")") next();
-        return e;
-      }
-      if (tl === "not" || tl === "!") {
-        const f3 = factor();
-        return (s, a) => !f3(s, a);
-      }
-      switch (tl) {
-        case "all":
-        case "*":
-          return () => true;
-        case "none":
-          return () => false;
-        case "hetatm":
-        case "het":
-          return (s, a) => s.het[a] === 1;
-        case "polymer":
-        case "poly":
-          return (s, a) => s.het[a] === 0;
-        case "backbone":
-        case "bb":
-          return (s, a) => BACKBONE.has(s.atomName[a]);
-        case "sidechain":
-        case "sc":
-          return (s, a) => s.het[a] === 0 && !BACKBONE.has(s.atomName[a]);
-        case "hydro":
-        case "h.":
-        case "hydrogens":
-          return (s, a) => s.element[a] === "H";
-        case "nucleic":
-        case "na":
-          return (s, a) => R(s, a).nucleic;
-        case "protein":
-        case "prot":
-          return (s, a) => {
-            const r = R(s, a);
-            return !r.het && !r.nucleic;
-          };
-        case "water":
-        case "solvent":
-          return (s, a) => {
-            const n = R(s, a).resn;
-            return n === "HOH" || n === "WAT";
-          };
-        case "subunit": {
-          const S = new Set(listArg().map((v) => v.toUpperCase()));
-          return (s, a) => S.has(R(s, a).subunit);
-        }
-        case "entity": {
-          const S = new Set(listArg());
-          return (s, a) => S.has(R(s, a).entity);
-        }
-        case "resi":
-        case "i.": {
-          const ranges = listArg().map((v) => {
-            const m = v.match(/^(-?\d+)(?:-(-?\d+))?$/);
-            return m ? [+m[1], m[2] !== void 0 ? +m[2] : +m[1]] : null;
-          }).filter(Boolean);
-          return (s, a) => {
-            const r = R(s, a).resi;
-            return ranges.some(([lo, hi]) => r >= lo && r <= hi);
-          };
-        }
-        case "resn":
-        case "r.": {
-          const S = new Set(listArg().map((v) => v.toUpperCase()));
-          return (s, a) => S.has(R(s, a).resn.toUpperCase());
-        }
-        case "name":
-        case "n.": {
-          const S = new Set(listArg().map((v) => v.toUpperCase()));
-          return (s, a) => S.has(s.atomName[a].toUpperCase());
-        }
-        case "chain":
-        case "c.": {
-          const S = new Set(listArg().map((v) => v.toUpperCase()));
-          return (s, a) => S.has(R(s, a).chain.toUpperCase());
-        }
-        case "elem":
-        case "e.": {
-          const S = new Set(listArg().map((v) => v.toUpperCase()));
-          return (s, a) => S.has(s.element[a]);
-        }
-        case "ss": {
-          const S = new Set(listArg().map((v) => v.toUpperCase()));
-          return (s, a) => S.has(R(s, a).ss);
-        }
-        default:
-          return () => false;
-      }
-    }
-    function term() {
-      let f3 = factor();
-      while (peek() && (peek().toLowerCase() === "and" || peek() === "&")) {
-        next();
-        const g2 = factor(), f0 = f3;
-        f3 = (s, a) => f0(s, a) && g2(s, a);
-      }
-      return f3;
-    }
-    function expr() {
-      let f3 = term();
-      while (peek() && (peek().toLowerCase() === "or" || peek() === "|")) {
-        next();
-        const g2 = term(), f0 = f3;
-        f3 = (s, a) => f0(s, a) || g2(s, a);
-      }
-      return f3;
-    }
-    const f2 = str ? expr() : () => false;
-    cache2.set(str, f2);
-    return f2;
-  }
-  function selectAtoms(s, sel) {
-    const f2 = compileSelection(sel);
-    const m = new Uint8Array(s.count);
-    for (let i = 0; i < s.count; i++) m[i] = f2(s, i) ? 1 : 0;
-    return m;
   }
 
   // src/render/camera.ts
@@ -7498,6 +7518,16 @@
     if (f2.map) {
       const m = f2.map;
       out.map = { name: m.name, level: mapLevel(m, f2.style), recommended: m.level ?? null, mean: m.mean, rms: m.rms, min: m.min, max: m.max, size: [m.nx, m.ny, m.nz], step: m.step, origin: m.origin, binned: m.binned || 1, mass: m.mass ?? null, resolution: m.resolution ?? null };
+    }
+    if (f2.map && f2.structure) {
+      const m = f2.map, s = f2.structure, lv = mapLevel(m, f2.style);
+      let n = 0, inside = 0;
+      for (let i = 0; i < s.count; i++) {
+        if (s.element[i] === "H" || s.residues[s.residueOf[i]].resn === "HOH") continue;
+        n++;
+        if (sampleMap(m, s.x[i], s.y[i], s.z[i]) >= lv) inside++;
+      }
+      out.map.atomInclusion = n ? inside / n : null;
     }
     if (f2.scene) {
       const E = classic();
