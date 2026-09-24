@@ -214,3 +214,18 @@ def test_map_with_its_model_and_on_its_own(tmp_path):
     assert "map" in repr(alone) and alone.render(SMALL).to_numpy()[..., :3].std() > 5
     assert alone.copy().map(smooth=4).render(SMALL).to_numpy()[..., :3].std() > 5   # low-passed: the "auto" keeps its map
     assert ms.load(EX / "1A8O.pdb").map(p).map(None).map_info is None
+
+
+def test_modified_residues_stay_in_the_chain():
+    """a selenomethionine (HETATM MSE) bonded into the chain is part of the polymer: drawn in the cartoon, not as a
+    ligand; a HETATM not bonded to the chain stays a ligand"""
+    lines = []
+    for i, (resn, rec) in enumerate((("ALA", "ATOM  "), ("MSE", "HETATM"), ("ALA", "ATOM  ")), start=1):
+        for nm, x, el in (("N", 3.8 * (i - 1) - 0.65, "N"), ("CA", 3.8 * (i - 1), "C"), ("C", 3.8 * (i - 1) + 1.56, "C")):
+            lines.append(f"{rec}{len(lines) + 1:5d}  {nm:<3} {resn} A{i:4d}    {x:8.3f}{0.0:8.3f}{0.0:8.3f}  1.00 10.00          {el:>2}")
+    lines.append(f"HETATM{len(lines) + 1:5d}  C1  LIG A 100    {30.0:8.3f}{0.0:8.3f}{0.0:8.3f}  1.00 10.00           C")
+    fig = ms.load("\n".join(lines) + "\nEND\n", format="pdb")
+    from molsketch._engine import engine
+    atoms = engine().call("sceneJson", fig._spec())["keyframes"][0]["atoms"]
+    het = {a["resn"]: a["het"] for a in atoms.values()}
+    assert het["MSE"] is False and het["ALA"] is False and het["LIG"] is True

@@ -1138,6 +1138,17 @@
         }
         g2.push(r);
       }
+      const groups = [...order.values()];
+      const atom = (g2, nm) => g2?.find((a) => a.name === nm);
+      const near = (a, b, d) => !!a && !!b && (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2 <= d * d;
+      for (let i = 0; i < groups.length; i++) {
+        const g2 = groups[i];
+        if (!g2[0].het || g2[0].resn === "HOH") continue;
+        const prev = groups[i - 1]?.[0]?.chain === g2[0].chain ? groups[i - 1] : void 0, next = groups[i + 1]?.[0]?.chain === g2[0].chain ? groups[i + 1] : void 0;
+        const peptide = !!atom(g2, "CA") && (near(atom(prev, "C"), atom(g2, "N"), 1.75) || near(atom(g2, "C"), atom(next, "N"), 1.75));
+        const nucleotide = !atom(g2, "CA") && (near(atom(prev, "O3'"), atom(g2, "P"), 1.9) || near(atom(g2, "O3'"), atom(next, "P"), 1.9));
+        if (peptide || nucleotide) for (const a of g2) a.het = false;
+      }
       const n = recs.length;
       s.count = n;
       s.x = new Float32Array(n);
@@ -1155,7 +1166,7 @@
         return "X";
       };
       const chainMap = /* @__PURE__ */ new Map();
-      for (const [, g2] of order) {
+      for (const g2 of groups) {
         const first = g2[0];
         const names = new Set(g2.map((a) => a.name));
         const nucleic = !first.het && (names.has("O3'") || names.has("C4'") || NUCLEIC_RESN.has(first.resn)) && !names.has("CA");

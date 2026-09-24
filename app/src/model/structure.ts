@@ -56,6 +56,18 @@ export class Structure {
     const key = (r: AtomRecord) => r.chain + '/' + r.resi + '/' + r.resn + '/' + (r.het ? 1 : 0);
     const order = new Map<string, AtomRecord[]>();
     for (const r of recs) { let g = order.get(key(r)); if (!g) { g = []; order.set(key(r), g) } g.push(r) }
+    // modified residues in a chain (selenomethionine, phosphoserine, pseudouridine …) are HETATM records, but they are
+    // part of the polymer: one bonded to its neighbour (a peptide C–N, or a nucleic O3'–P) joins it, keeping its name
+    const groups = [...order.values()];
+    const atom = (g: AtomRecord[] | undefined, nm: string) => g?.find(a => a.name === nm);
+    const near = (a: AtomRecord | undefined, b: AtomRecord | undefined, d: number) => !!a && !!b && (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2 <= d * d;
+    for (let i = 0; i < groups.length; i++) {
+      const g = groups[i]; if (!g[0].het || g[0].resn === 'HOH') continue;
+      const prev = groups[i - 1]?.[0]?.chain === g[0].chain ? groups[i - 1] : undefined, next = groups[i + 1]?.[0]?.chain === g[0].chain ? groups[i + 1] : undefined;
+      const peptide = !!atom(g, 'CA') && (near(atom(prev, 'C'), atom(g, 'N'), 1.75) || near(atom(g, 'C'), atom(next, 'N'), 1.75));
+      const nucleotide = !atom(g, 'CA') && (near(atom(prev, "O3'"), atom(g, 'P'), 1.9) || near(atom(g, "O3'"), atom(next, 'P'), 1.9));
+      if (peptide || nucleotide) for (const a of g) a.het = false;
+    }
     const n = recs.length; s.count = n;
     s.x = new Float32Array(n); s.y = new Float32Array(n); s.z = new Float32Array(n); s.b = new Float32Array(n);
     s.residueOf = new Int32Array(n); s.het = new Uint8Array(n); s.flags = new Uint8Array(n);
@@ -67,7 +79,7 @@ export class Structure {
       return 'X';
     };
     const chainMap = new Map<string, Chain>();
-    for (const [, g] of order) {
+    for (const g of groups) {
       const first = g[0];
       const names = new Set(g.map(a => a.name));
       const nucleic = !first.het && (names.has("O3'") || names.has("C4'") || NUCLEIC_RESN.has(first.resn)) && !names.has('CA');
