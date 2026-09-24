@@ -42,11 +42,30 @@ import gemmi
 fig = ms.load(gemmi.read_structure("protein.cif"))
 ```
 
-### `ms.fetch(pdb_id, **kw)`
+### `ms.fetch(pdb_id, *, map=False, **kw)`
 
 Make a figure of an entry in the Protein Data Bank, such as `"2PTN"`. The file is downloaded from RCSB as mmCIF the
 first time and read from the cache after that (`~/.cache/molsketch`, or the folder named by `MOLSKETCH_CACHE`).
-Keywords are passed on to `load`. Raises `ValueError` if the ID is not a valid PDB ID or the entry does not exist.
+With `map=True`, the cryo-EM map the entry was built into is fetched from EMDB and drawn with it (the same as
+`.map("auto")`). Other keywords are passed on to `load`. Raises `ValueError` if the ID is not a valid PDB ID or the
+entry does not exist.
+
+### `ms.fetch_map(emdb_id, *, max_voxels=320)`
+
+Make a figure of an EMDB entry's map on its own, such as `"EMD-11638"`. The map is downloaded once (kept in
+`~/.cache/molsketch/emdb`) with the depositors' recommended contour level and the sample's mass. Maps larger than
+`max_voxels` a side are averaged down. How maps are drawn, and why, is in [docs/maps.md](../../docs/maps.md).
+
+### `ms.load_map(source, *, name=None, level=None, max_voxels=320)`
+
+Make a figure of a map on its own: a path to an MRC / CCP4 file (`.mrc`, `.map`, `.ccp4`, or any of them `.gz`), or
+a `DensityMap`. `level` is the contour level to start from.
+
+### `ms.read_map(path, *, name=None, level=None, max_voxels=320)`
+
+Read a map file into a `DensityMap` without making a figure: `.data` (a float32 array, z, y, x), `.origin` and
+`.step` (Å), `.level` (the recommended level, if known), `.binned` (how much it was averaged down), `.shape`
+(nx, ny, nz). Any axis order in the file is read into the model's frame. Pass it to `fig.map` or `ms.load_map`.
 
 ### `ms.scene(path_or_dict)`
 
@@ -168,6 +187,34 @@ Zoom and pan so the drawing fills a box of the canvas, keeping the turn (the app
 puts the drawing in the upper right, beside a headline. For a scene, `what="all"` (the default) fits every keyframe,
 so nothing leaves the box as it animates; `"frame"` fits only this frame. Pass the `size` you will save at. Saving the
 figure as `.json` afterwards stores the fitted camera in the scene.
+
+### Density maps
+
+How maps are drawn, and why, is in [docs/maps.md](../../docs/maps.md).
+
+#### `fig.map(source="auto", *, level=None, sigma=None, local_resolution=None, max_voxels=320, **style)`
+
+Draw a cryo-EM density map with the figure. `source` is `"auto"` (the map this PDB entry was built into, from
+EMDB; on a figure that already has a map, that map), an EMDB ID (`"EMD-11638"`), a path to a map file, a
+`DensityMap`, or another figure (its map). `None` removes the map.
+
+`level` is the contour level in the map's units, `sigma` the same in standard deviations above the mean; the
+default is the depositors' recommended level. Setting one clears the other. `local_resolution="bfactor"` makes the
+lines looser where the model's B-factors are high; a local-resolution map (a path, an EMDB ID or a `DensityMap`,
+values in Å) does the same from the map. Any other keyword is a map field ([style.md](style.md#density-maps)):
+
+```python
+fig = ms.fetch("3J5P", map=True)
+fig.map(sigma=5, opacity=0.4)
+fig.map(zone="resi 93 and not hydro", carve=2).show(sticks="resi 93 and not hydro", cartoon=None)
+fig.map(style="mesh", smooth=0)
+```
+
+#### `fig.map_info`
+
+The map this figure draws, or `None`: `name`, `level` (in use), `recommended`, `mean`, `rms` (σ), `min`, `max`,
+`size`, `step`, `origin`, `binned`, `mass` and `resolution` (as deposited, if known), and with a model,
+`atomInclusion` (the share of its heavy atoms inside the contour).
 
 ### Active site
 
@@ -467,13 +514,15 @@ use too:
 | `GET /api/health` | | `{"molsketch": "0.1.0"}` |
 | `POST /api/put` | `{"input": {"text": …, "name": "x.cif"}}` (or `{"scene": …}`, `{"stack": [...]}`) | `{"ref": "in3"}`: keeps the structure on the server |
 | `POST /api/drop` | `{"ref": "in3"}` | `{}`: forgets it |
+| `POST /api/putmap` | a map file's bytes (gzipped or not), with `?name=&level=&mass=&resolution=`; or `{"emdb": "EMD-11638"}` | `{"ref": "map2", …}` and the map's header: keeps the map on the server |
 | `POST /api/render` | a figure spec (below) | the image, `image/png`; with `"format": "svg"` in the spec, the SVG (`image/svg+xml`) |
 | `POST /api/call` | `{"name": …, "args": [...]}` | JSON: `info`, `frames`, `pocket`, `frameTheSite`, `labelTheSite`, `atomId`, `sceneJson`, `catalog` |
 
 A figure spec is a JSON object, in the engine's own camelCase names (the app sends these): `input` (`{"ref": …}` or an inline input as for `/api/put`), and optionally `look`,
 `style` (dotted field names to values, as `set`), `styleFile` (a whole style, as `apply_style`), `palette`,
 `camera` (`yaw`, `pitch`, `roll`, `zoom`, `panX`, `panY`, `fov`), `labels`, `groupColors` (as `color`), `size`
-(`[w, h]`), `scale` and `frame`.
+(`[w, h]`), `scale`, `frame`, and `map` (`{"ref": …}` from `/api/putmap`). A map on its own is the input
+`{"map": ref}`.
 
 ```bash
 curl -s localhost:8471/api/render -H 'Content-Type: application/json' \

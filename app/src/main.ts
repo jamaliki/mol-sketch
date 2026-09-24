@@ -8,7 +8,8 @@ import { GROUP_PALETTE } from './model/color';
 import { buildPanel } from './app/panel';
 import { OrbitControls } from './app/controls';
 import { drawSketch } from './ink/sketch';
-import { renderClassic, renderScene, classic, sceneFromStructure, cfgFromStyle } from './classic/adapter';
+import { renderClassic, renderScene, classic, sceneFromStructure, cfgFromStyle, mapBasis, mapLevel } from './classic/adapter';
+import { parseMRC, downsample, sampleMap, type DensityMap } from './model/map';
 import { pcaBasis } from './render/renderer';
 import { sceneFitPoints, structureFromState, type SceneDoc } from './classic/scene';
 import { History, type Snapshot } from './app/history';
@@ -95,16 +96,18 @@ const sdkReady = connect().then(s => { sdk = s; if (s) { inputs = new InputSync(
 /** the current figure as the SDK's FigureSpec: the full style, the camera, labels, group colours, frame, size */
 async function figureSpec(W: number, H: number, scale: number, f: number, cam?: any): Promise<FigureSpec> {
   let ref: string;
+  const mref = await mapRefOnSdk();
   if (sceneDoc) { const json = sceneJsonForSdk(); ref = await inputs!.get(json, () => ({ scene: JSON.parse(json) })) }   // a scene: again whenever it is edited (undo included)
-  else ref = await inputs!.get(structureText, () => structureText);
+  else if (structureText) ref = await inputs!.get(structureText, () => structureText);
+  else ref = '';
   const c = cam || camOf();
-  return { input: { ref }, styleFile: JSON.parse(JSON.stringify(style)), camera: { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: R.camera.fov },
+  return { input: ref ? { ref } : { map: mref! }, ...(mref && ref ? { map: { ref: mref } } : {}), styleFile: JSON.parse(JSON.stringify(style)), camera: { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: R.camera.fov },
     labels: R.labels.map(l => ({ ...l })), groupColors: { ...R.overrides }, size: [W, H], scale, frame: f };
 }
 /** a scene as the SDK gets it: its keyframes and settings (labels, colours and camera come with each spec) */
 function sceneJsonForSdk() { const d: any = { ...sceneDoc }; delete d.fitPoints; delete d._rev; return JSON.stringify(d) }
 function runSketch(mode: RestMode = restMode) {
-  if (mode === 'classic' && sdk && (sceneDoc || structureText)) { runSketchSdk(); return }
+  if (mode === 'classic' && sdk && (sceneDoc || structureText || mapObj)) { runSketchSdk(); return }
   skCanvas.width = R.w; skCanvas.height = R.h;
   if (mode === 'classic' && sceneDoc) { const ms = renderScene(skCtx, R, style, sceneDoc, frame, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; sceneFast = ms < 90; classicMs = ms }
   else if (mode === 'classic') { const ms = renderClassic(skCtx, R, style, boil, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; classicMs = ms }
@@ -180,6 +183,76 @@ async function fetchPdb(id: string) {
   if (!r.ok) throw new Error(r.status === 404 ? `${id} is not in the PDB` : `RCSB answered ${r.status} for ${id}`);
   await loadText(await r.text(), id + '.cif'); status(`${id} fetched from RCSB`);
 }
+/* ---------- density maps: an MRC / CCP4 file, an EMDB entry, or the map a PDB entry was built into ---------- */
+let mapObj: DensityMap | null = null; let mapRaw: { bytes: ArrayBuffer; name: string; level?: number; mass?: number; resolution?: number } | null = null;
+let mapRef: string | null = null; let mapRefFor: any = null;
+const isMapName = (n: string) => /\.(map|mrc|ccp4)(\.gz)?$/i.test(n);
+async function gunzip(buf: ArrayBuffer): Promise<ArrayBuffer> {
+  const u = new Uint8Array(buf); if (u[0] !== 0x1f || u[1] !== 0x8b) return buf;
+  return await new Response(new Blob([buf]).stream().pipeThrough(new DecompressionStream('gzip'))).arrayBuffer();
+}
+/** a map's file (gzipped or not) → the figure's map; `meta`: what EMDB says of it (recommended level, mass, resolution) */
+async function loadMapBytes(bytes: ArrayBuffer, name: string, meta: { level?: number; mass?: number; resolution?: number } = {}) {
+  status(`reading ${name}…`); const t0 = performance.now();
+  let m = parseMRC(await gunzip(bytes), name.replace(/\.(map|mrc|ccp4)(\.gz)?$/i, ''));
+  const big = Math.max(m.nx, m.ny, m.nz); if (big > 320) m = downsample(m, 320);   // as molsketch.read_map does
+  if (meta.level != null) m.level = meta.level; if (meta.mass) m.mass = meta.mass; if (meta.resolution) m.resolution = meta.resolution;
+  mark('load map'); mapObj = m; mapRaw = { bytes, name, ...meta }; mapRef = null; (R as any).map = m;
+  if (!R.structure && !sceneDoc) { R.camera.base = mapBasis(m, mapLevel(m, style)); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.roll = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0 }
+  rebuild(); panel.refresh(); status(`${m.name}: ${m.nx}×${m.ny}×${m.nz} at ${m.step[0].toFixed(2)} Å${m.binned && m.binned > 1 ? ` (averaged ${m.binned}×)` : ''}${m.level != null ? `, recommended level ${m.level}` : ''} · read in ${(performance.now() - t0).toFixed(0)} ms`);
+}
+/** drop the structure (a map is then drawn on its own) */
+function unloadStructure(why: string) {
+  sceneDoc = null; structureText = null; R.fitOverride = null; R.labels = []; selLabel = -1; R.setStructure(null); inputs = sdk ? new InputSync(sdk) : null;
+  status(why ? `showing the map on its own (${why}; open that entry to see the model in it)` : 'showing the map on its own');
+}
+function clearMap() { mark('remove map'); mapObj = null; mapRaw = null; mapRef = null; (R as any).map = null; rebuild(); panel.refresh(); status('map removed') }
+/** an EMDB entry's primary map, with the depositors' recommended contour level and the sample's mass */
+async function fetchEmdb(key: string) {
+  const m = key.trim().match(/^(?:emd[-_]?)?(\d{4,6})$/i); if (!m) throw new Error(`"${key}" is not an EMDB ID, e.g. EMD-11638`);
+  const id = `EMD-${m[1]}`; status(`fetching ${id} from EMDB…`);
+  const e = await (await fetch(`https://www.ebi.ac.uk/emdb/api/entry/${id}`)).json().catch(() => { throw new Error(`EMDB has no entry ${id}`) });
+  const cs = e?.map?.contour_list?.contour || []; const prim = cs.find((c: any) => c.primary) || cs[0];
+  const sup = e?.sample?.supramolecule_list?.supramolecule?.[0]?.molecular_weight?.theoretical; const unit: Record<string, number> = { MDa: 1e6, kDa: 1e3, Da: 1 };
+  const mass = sup?.valueOf_ ? +sup.valueOf_ * (unit[sup.units] ?? 1e6) : undefined;
+  let resolution: number | undefined; try { for (const sd of e.structure_determination_list.structure_determination) for (const ip of sd.image_processing) { const r = ip?.final_reconstruction?.resolution; if (r?.valueOf_) { resolution = +r.valueOf_; break } } } catch { }
+  // the structure stays only if it is one of the models built into this map; anything else would be drawn in the wrong place
+  const fitted: string[] = (e?.crossreferences?.pdb_list?.pdb_reference || []).map((p: any) => String(p.pdb_id).toUpperCase());
+  if (R.structure && !fitted.includes((R.structure.name || '').toUpperCase())) unloadStructure(fitted.length ? `${id} was built as ${fitted.join(', ')}` : '');
+  const url = `https://ftp.ebi.ac.uk/pub/databases/emdb/structures/${id}/map/emd_${m[1]}.map.gz`;
+  await loadMapBytes(await download(url, id), id, { level: prim?.level != null ? +prim.level : undefined, mass, resolution });
+}
+/** a large file, with its progress in the status line, kept in the browser's cache so it downloads once */
+async function download(url: string, what: string): Promise<ArrayBuffer> {
+  let cache: Cache | null = null; try { cache = await caches.open('molsketch-maps') } catch { }
+  const hit = cache && await cache.match(url).catch(() => undefined); if (hit) { status(`${what}: from the cache`); return hit.arrayBuffer() }
+  const r = await fetch(url); if (!r.ok || !r.body) throw new Error(`EMDB answered ${r.status} for ${what}`);
+  const total = +(r.headers.get('content-length') || 0), parts: Uint8Array[] = [], rd = r.body.getReader(); let got = 0, last = 0;
+  for (;;) { const { done, value } = await rd.read(); if (done) break; parts.push(value); got += value.length;
+    if (performance.now() - last > 400) { last = performance.now(); status(`downloading ${what}: ${(got / 1e6).toFixed(0)}${total ? ` of ${(total / 1e6).toFixed(0)}` : ''} MB`) } }
+  const buf = new Uint8Array(got); let o = 0; for (const p of parts) { buf.set(p, o); o += p.length }
+  if (cache) cache.put(url, new Response(buf.slice())).catch(() => { });
+  return buf.buffer;
+}
+/** the map the loaded PDB entry was built into, found through RCSB */
+async function mapForEntry() {
+  const name = (R.structure?.name || '').toUpperCase(); if (!/^[0-9][A-Z0-9]{3}$/.test(name)) throw new Error('load a PDB entry by its ID first (Open › PDB ID), so its EMDB map can be found');
+  const d = await (await fetch(`https://data.rcsb.org/rest/v1/core/entry/${name}`)).json();
+  const ids = d?.rcsb_entry_container_identifiers?.emdb_ids || []; if (!ids.length) throw new Error(`${name} has no EMDB map (it is not a cryo-EM structure)`);
+  await fetchEmdb(ids[0]);
+}
+function mapInfo() {
+  const m = mapObj; if (!m) return null; const lv = mapLevel(m, style); const s = R.structure; let inc: number | null = null;
+  if (s) { let n = 0, k = 0; for (let i = 0; i < s.count; i++) { if (s.element[i] === 'H' || s.residues[s.residueOf[i]].resn === 'HOH') continue; n++; if (sampleMap(m, s.x[i], s.y[i], s.z[i]) >= lv) k++ } inc = n ? k / n : null }
+  return { name: m.name, level: lv, sigma: (lv - m.mean) / (m.rms || 1), recommended: m.level ?? null, mean: m.mean, rms: m.rms, size: [m.nx, m.ny, m.nz], step: m.step[0], binned: m.binned || 1, atomInclusion: inc };
+}
+/** the map on the SDK's server: sent once (its file's bytes), again only when another map is loaded */
+async function mapRefOnSdk(): Promise<string | null> {
+  if (!mapRaw || !sdk) return null; if (mapRef && mapRefFor === mapRaw) return mapRef;
+  const q = new URLSearchParams({ name: mapObj?.name || mapRaw.name }); if (mapRaw.level != null) q.set('level', String(mapRaw.level)); if (mapRaw.mass) q.set('mass', String(mapRaw.mass)); if (mapRaw.resolution) q.set('resolution', String(mapRaw.resolution));
+  const res = await fetch(`${sdk.url}/api/putmap?${q}`, { method: 'POST', body: mapRaw.bytes }); if (!res.ok) throw new Error('the server could not read the map: ' + ((await res.json().catch(() => ({}))).error || res.status));
+  mapRef = (await res.json()).ref; mapRefFor = mapRaw; return mapRef;
+}
 async function loadUrl(url: string) { const r = await fetch(url); if (!r.ok) throw new Error('fetch ' + url + ' ' + r.status); await loadText(await r.text(), url.split('/').pop() || url) }
 
 /* drag & drop */
@@ -188,6 +261,9 @@ stage.addEventListener('dragleave', () => stage.classList.remove('drag'));
 stage.addEventListener('drop', async e => { e.preventDefault(); stage.classList.remove('drag'); const fl = Array.from(e.dataTransfer?.files || []); if (fl.length) { try { await loadFiles(fl) } catch (err: any) { status('could not read: ' + err.message) } } });
 /** one file: structure or scene; several: a stack */
 async function loadFiles(fl: File[]) {
+  const mapsIn = fl.filter(f => isMapName(f.name)); fl = fl.filter(f => !isMapName(f.name));
+  for (const f of mapsIn) await loadMapBytes(await f.arrayBuffer(), f.name);
+  if (!fl.length) return;
   if (fl.length === 1) { await loadText(await fl[0].text(), fl[0].name); return }
   const texts = []; for (const f of fl) texts.push({ name: f.name, text: await f.text() });
   loadStack(texts);
@@ -481,7 +557,7 @@ async function runSketchSdk() {
   finally { sdkBusy = false; if (sdkAgain) { sdkAgain = false; if (!sketchShown) runSketchSdk() } }
 }
 function drawFrameTo(ctx: CanvasRenderingContext2D, W: number, H: number, f: number): void | Promise<void> {
-  if (sdk && (sceneDoc || structureText)) return (async () => {   // exports through the SDK: the same frame the Python package draws
+  if (sdk && (sceneDoc || structureText || mapObj)) return (async () => {   // exports through the SDK: the same frame the Python package draws
     const bmp = await sdk!.render(await figureSpec(W, H, 1, f)); ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.drawImage(bmp, 0, 0); ctx.restore(); bmp.close() })();
   const E = classic(); const drawn = Math.floor(f / 2) * 2;
   let cam: any = { ...camOf(), fov: R.camera.fov };
@@ -537,6 +613,10 @@ const panel = buildPanel(document.getElementById('controls')!, {
   saveScene: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(sceneJson()); a.download = docName() + '.json'; a.click() },
   loadExample: (name: string) => loadUrl('examples/' + name).catch(e => status(e.message)),
   fetchPdb,
+  loadMap: async (f: File) => { try { await loadMapBytes(await f.arrayBuffer(), f.name) } catch (e: any) { status('could not read the map: ' + e.message) } },
+  fetchMap: async (id: string) => { try { await fetchEmdb(id) } catch (e: any) { status(e.message) } },
+  mapForEntry: async () => { try { await mapForEntry() } catch (e: any) { status(e.message) } },
+  clearMap, mapInfo, hasMap: () => !!mapObj, hasStructure: () => !!R.structure,
   figLabels: () => R.labels.map((l, i) => ({ i, text: l.text, where: labelWhere(l), size: l.size || 1 })), setLabelText, setLabelSize, deleteLabel, clearLabels,
   setLabelMode: (v: boolean) => setLabelMode(v), labelMode: () => labelMode,
   pocketSel, frameSite, labelSite,
@@ -576,10 +656,10 @@ function loop(t: number) {
   if (playing && sceneDoc) { playAcc += dt * FPS; if (playAcc >= 2) { playAcc -= 2; setFrame(frame + 2); if (restMode === 'classic' && sceneFast) { dirty = false; R.render(style); runSketch('classic') } } }
   if (turntable) { R.camera.yaw = (R.camera.yaw + turntable * dt) % 360; if (pitchSwing) R.camera.pitch = pitchSwing * Math.sin(R.camera.yaw * Math.PI / 180); invalidate() }
   if (!sketchOn && live && t - lastLive > 1000 / 10) { lastLive = t; dirty = true }
-  if (dirty && restMode === 'classic' && sketchOn && R.structure && !turntable && classicMs < 45) {   // live exact: cheap enough to draw the real thing every frame
+  if (dirty && restMode === 'classic' && sketchOn && (R.structure || mapObj) && !turntable && classicMs < 45) {   // live exact: cheap enough to draw the real thing every frame
     dirty = false; R.render(style); runSketch('classic'); lastSketchAt = t; hud.textContent = `classic (live) ${classicMs.toFixed(0)} ms · ${R.w}×${R.h}` }
   else if (dirty) { dirty = false; R.render(style); hud.textContent = `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°${R.camera.roll ? ' roll ' + R.camera.roll.toFixed(0) + '°' : ''} · zoom ${R.camera.zoom.toFixed(2)} pan ${R.camera.panX.toFixed(2)}, ${R.camera.panY.toFixed(2)}${sceneDoc ? ` · ${(frame / FPS).toFixed(2)} s` : ''}` }
-  else if (sketchOn && R.structure && !turntable) {
+  else if (sketchOn && (R.structure || mapObj) && !turntable) {
     const rested = t - lastChange > 220; const period = Math.max(900, (sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs) * 3);
     if ((!sketchShown && rested) || (live && sketchShown && t - lastSketchAt > period)) {
       if (sketchShown) boil++; lastSketchAt = t; runSketch();
@@ -598,7 +678,7 @@ const api = {
   setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
   setSize: (w: number, h: number) => { fixedSize = [w, h]; R.resize(w, h) }, setDpr: (v: number) => { dpr = v }, rebuild,
   sketch: (b?: number, mode?: RestMode) => { R.render(style); if (b !== undefined) boil = b; runSketch(mode || 'sketch'); return sketchStats },
-  renderClassic, classicEngine: () => classic(), seek: setFrame, loadScene, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
+  renderClassic, classicEngine: () => classic(), seek: setFrame, loadScene, fetchMap: fetchEmdb, mapForEntry, loadMapBytes, clearMap, mapInfo, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
   classic: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch('classic'); return sketchStats.drawMs },
   setSketch: (v: boolean) => { sketchOn = v; invalidate() }, setRest: (m: RestMode) => { restMode = m; sketchOn = m !== 'preview'; invalidate() },
   fitFrame, screenBox: (what: 'all' | 'frame' = 'all') => R.camera.screenBox(R.w, R.h, framePoints(what)), framePresets: FRAME_PRESETS, renderCommand,

@@ -18,7 +18,7 @@ Headless images, videos and SVG come from the Python package, which draws with t
 `pip install ./python`, then `molsketch render public/examples/1A8O.pdb --look watercolour -o fig.png`, or
 `molsketch serve` to run this app with its finished figures drawn by the package (see [../python](../python)).
 
-Drag a PDB, mmCIF or scene JSON file onto the canvas, use *Open…* / *Examples* in the top bar, or type a PDB ID
+Drag a PDB, mmCIF, scene JSON or density map (`.map`, `.mrc`, `.ccp4`) file onto the canvas, use *Open…* / *Examples* in the top bar, or type a PDB ID
 (e.g. `1A8O`) and *Fetch* to load that entry from RCSB as mmCIF. Drag to rotate, shift-drag or
 right-drag to pan, wheel to zoom, arrow keys to nudge, `r` to reset; `?` shows every shortcut.
 
@@ -27,6 +27,10 @@ The side panel has one tab per task, and a search box (`/`) that finds any setti
 
 - **Look**: the looks (the same as the files in `../looks`), what to draw (sticks, cartoon, surface, with one-click
   choices or any selection), fill, marks, and collapsed fine tuning for lines, hatching, watercolour and paper.
+- **Map**: a cryo-EM density map: fetch it by EMDB ID, find the map of the loaded PDB entry, or open a `.map` /
+  `.mrc` file (or drop one on the drawing). Then the contour (σ or level, *Recommended*), the style (surface, layers,
+  mesh, slice), low-pass, the marks and shading, and with a model: a zone for close-ups, carving, cropping, and the
+  marks for unsupported residues and unexplained density. See [../docs/maps.md](../docs/maps.md).
 - **Colour**: what colours by what, the group palettes (engraved ribbons take their first three colours for helix,
   sheet and coil), per-group overrides, every swatch, and the paper-and-ink presets.
 - **Labels**: labels you place (*+ Add label* or `L`, then click the drawing: on an atom or a ribbon the label follows

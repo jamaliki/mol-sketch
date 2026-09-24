@@ -16,6 +16,9 @@ export interface PanelHost {
   camera: Camera;
   onLive: (v: boolean) => void; onTurntable: (v: number) => void; onPitchSwing: (v: number) => void; onRest: (v: string) => void; renderNow: () => void;
   play: (v: boolean) => void; isPlaying: () => boolean; seek: (f: number) => void; step: (d: number) => void;
+  /* density maps */
+  loadMap: (f: File) => Promise<void>; fetchMap: (id: string) => Promise<void>; mapForEntry: () => Promise<void>; clearMap: () => void; hasMap: () => boolean; hasStructure: () => boolean;
+  mapInfo: () => { name: string; level: number; sigma: number; recommended: number | null; mean: number; rms: number; size: number[]; step: number; binned: number; atomInclusion: number | null } | null;
   savePng: () => void; saveStyle: () => void; loadStyle: (f: File) => void; loadFile: (f: File) => void; loadFiles: (f: File[]) => void; saveScene: () => void; loadExample: (n: string) => void; fetchPdb: (id: string) => Promise<void>;
   /* figure labels */
   figLabels: () => { i: number; text: string; where: string; size: number }[]; setLabelText: (i: number, t: string) => void; setLabelSize: (i: number, v: number) => void;
@@ -100,7 +103,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   const selControl = (parent: HTMLElement, label: string, path: string, choices: [string, string][], tip: string) => {
     const inp = el('input', { type: 'text', placeholder: 'nothing', spellcheck: 'false' }) as HTMLInputElement;
     const chips = el('div', { class: 'chips' });
-    const apply = (v: string) => { H.mark(label); set(H.style, path, v); H.rebuild(); refresh() };
+    const apply = (v: string) => { if (v === '__site__') v = H.style.site.sel || ''; H.mark(label); set(H.style, path, v); H.rebuild(); refresh() };   // __site__: the active site's selection
     const bs = choices.map(([t, v]) => { const b = el('button', { class: 'chip', title: v ? 'selection: ' + v : 'draw none', onclick: () => apply(v) }, t) as HTMLButtonElement; b.dataset.v = v; chips.append(b); return b });
     inp.onchange = () => apply(inp.value);
     const show = () => { const v = (get(H.style, path) ?? '').trim(); inp.value = v; bs.forEach(b => b.classList.toggle('on', b.dataset.v === v)) }; refreshers.push(show); show();
@@ -153,15 +156,77 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   window.addEventListener('keydown', e => { const t = (e.target as HTMLElement)?.tagName; if (e.key === '/' && t !== 'INPUT' && t !== 'TEXTAREA' && t !== 'SELECT') { e.preventDefault(); search.focus() } });
 
   const Look = tab('look', 'Look', 'the drawing style: looks, what is drawn, fills and lines');
+  const MapT = tab('map', 'Map', 'a cryo-EM density map: on its own, or with the model built into it');
   const Col = tab('colour', 'Colour', 'palettes, colour schemes and every colour');
   const Lab = tab('labels', 'Labels', 'labels you place, and which of the automatic ones show');
   const View = tab('view', 'View', 'camera, depth, framing and motion');
   const Scn = tab('scene', 'Scene', 'keyframes, arrows and checks of a mechanism scene');
   const Exp = tab('export', 'Export', 'pictures, video, files and the render command');
 
+  /* ---------- the Map tab: a density map, its contour, how it is drawn ---------- */
+  {
+    const hasMap = () => H.hasMap(), withModel = () => H.hasMap() && H.hasStructure();
+    const g = group(MapT, 'Density map', { keys: 'cryo-em emdb mrc ccp4 density map electron microscopy fetch open' });
+    const idIn = el('input', { type: 'text', placeholder: 'EMD-11638', spellcheck: 'false' }) as HTMLInputElement;
+    const fetchIt = () => { if (idIn.value.trim()) H.fetchMap(idIn.value.trim()).then(refresh) };
+    idIn.onkeydown = (e: KeyboardEvent) => { if (e.key === 'Enter') fetchIt() };
+    row(g, 'EMDB ID', idIn, el('button', { onclick: fetchIt, title: 'download the entry’s primary map, with the depositors’ recommended contour level' }, 'Fetch'));
+    const mapIn = el('input', { type: 'file', accept: '.map,.mrc,.ccp4,.gz', style: 'display:none', onchange: (e: any) => { const f = e.target.files?.[0]; if (f) H.loadMap(f).then(refresh); e.target.value = '' } }) as HTMLInputElement;
+    const acts = el('div', { class: 'btns' },
+      el('button', { title: 'the map this PDB entry was built into (from RCSB and EMDB)', onclick: () => H.mapForEntry().then(refresh) }, 'Map of this entry'),
+      el('button', { title: 'an MRC / CCP4 map file (.map, .mrc, .ccp4, gzipped or not); you can also drop one on the drawing', onclick: () => mapIn.click() }, 'Open map file…'), mapIn);
+    g.append(acts);
+    const rm = el('div', { class: 'btns' }, el('button', { onclick: () => { H.clearMap(); refresh() } }, 'Remove the map')); g.append(showWhen(rm, hasMap));
+    const info = note(''); g.append(info);
+    const showInfo = () => { const m = H.mapInfo();
+      info.textContent = !m ? 'No map. Fetch one by its EMDB ID, open a file, or drop a .map / .mrc on the drawing. With a PDB entry loaded, “Map of this entry” finds the map it was built into.'
+        : `${m.name}: ${m.size.join('×')} at ${m.step.toFixed(2)} Å${m.binned > 1 ? ` (averaged ${m.binned}×)` : ''}. Contour ${+m.level.toPrecision(3)} (${m.sigma.toFixed(1)} σ)${m.recommended != null ? `; recommended ${m.recommended}` : ''}.${m.atomInclusion != null ? ` ${(m.atomInclusion * 100).toFixed(0)}% of the model’s atoms inside.` : ''}` };
+    refreshers.push(showInfo); showInfo();
+  }
+  {
+    const g = group(MapT, 'Contour', { keys: 'level sigma threshold contour recommended layers' }); showWhen(g, () => H.hasMap());
+    const sig = el('input', { type: 'range', min: 0.5, max: 12, step: 0.1 }) as HTMLInputElement; const sv = el('span', { class: 'val' });
+    const lvIn = el('input', { type: 'text', spellcheck: 'false', style: 'width:6em' }) as HTMLInputElement;
+    const show = () => { const m = H.mapInfo(); if (!m) return; sig.value = String(m.sigma); sv.textContent = m.sigma.toFixed(1) + ' σ'; lvIn.value = String(+m.level.toPrecision(4)) };
+    sig.oninput = () => { H.mark('contour'); S().map.sigma = +sig.value; S().map.level = null; H.redraw(); refresh() }; sig.onchange = () => H.settle();
+    lvIn.onchange = () => { const v = parseFloat(lvIn.value); if (!isFinite(v)) return; H.mark('contour'); S().map.level = v; S().map.sigma = null; H.redraw(); refresh() };
+    refreshers.push(show); show();
+    row(g, 'σ above mean', sig, sv).title = 'the contour in standard deviations above the map’s mean';
+    row(g, 'level', lvIn, el('button', { title: 'the depositors’ recommended level (EMDB)', onclick: () => { H.mark('contour'); S().map.level = null; S().map.sigma = null; H.redraw(); refresh() } }, 'Recommended')).title = 'the contour in the map’s own units';
+    control(g, { t: 'select', label: 'style', path: 'map.style', options: ['surface', 'layers', 'mesh', 'slice'], tip: 'surface: the contour drawn as a surface · layers: several contours nested · mesh: chicken wire, as Coot · slice: a section through the map' });
+    const lvls = el('input', { type: 'text', spellcheck: 'false', placeholder: '0.7, 1, 1.5' }) as HTMLInputElement;
+    lvls.onchange = () => { const v = lvls.value.split(/[\s,]+/).map(Number).filter(x => isFinite(x) && x > 0); if (v.length) { H.mark('levels'); S().map.levels = v; H.redraw() } };
+    refreshers.push(() => { lvls.value = (S().map.levels || []).join(', ') });
+    showWhen(row(g, 'levels (× contour)', lvls), () => S().map.style === 'layers');
+    control(g, { t: 'select', label: 'low-pass', path: 'map.smooth', options: ['auto', '0', '3', '4', '5', '6', '8', '12'], tip: 'Å: the map smoothed to what the picture can show (the density above the contour, then contoured to enclose the molecule’s mass) · auto: for whole particles only · 0: the map as it is' });
+    control(g, { t: 'range', label: 'slice offset', path: 'map.slice.offset', min: -0.5, max: 0.5, step: 0.01, when: () => S().map.style === 'slice' });
+    control(g, { t: 'check', label: 'cut in front', path: 'map.slice.cut', when: () => S().map.style === 'slice', tip: 'what lies in front of the slice is cut away' });
+  }
+  {
+    const g = group(MapT, 'Drawing', { keys: 'marks ink hatching shading outline opacity finish smooth caption' }); showWhen(g, () => H.hasMap());
+    control(g, { t: 'select', label: 'marks', path: 'map.marks', options: ['ink', 'look'], tip: 'ink: outline and hatching in every look · look: the look’s own (a watercolour gradient)' });
+    control(g, { t: 'select', label: 'finish', path: 'map.finish', options: ['drawn', 'smooth', 'sketch'], tip: 'drawn: a smooth surface in the look’s marks · smooth: plainly lit, as ChimeraX · sketch: the raw grid, hand-drawn' });
+    control(g, { t: 'range', label: 'shading', path: 'map.shade', min: 0, max: 1, step: 0.05 });
+    control(g, { t: 'range', label: 'outline', path: 'map.lineWidth', min: 0.2, max: 2.5, step: 0.05 });
+    control(g, { t: 'range', label: 'opacity over model', path: 'map.opacity', min: 0.1, max: 1, step: 0.05, when: () => H.hasStructure() });
+    control(g, { t: 'range', label: 'surface smoothing', path: 'map.smoothing', min: 0, max: 10, step: 1, when: () => S().map.finish !== 'sketch', tip: 'Taubin smoothing steps, as ChimeraX smooths surfaces' });
+    control(g, { t: 'range', label: 'specks under (px)', path: 'map.speck', min: 0, max: 20, step: 1, tip: 'islands and holes smaller than this are left out' });
+    control(g, { t: 'check', label: 'caption', path: 'map.caption', tip: 'a line under the drawing that says how the map is shown: its level, filtering, carving' });
+  }
+  {
+    const g = group(MapT, 'With the model', { keys: 'zone carve crop context unsupported unexplained residue side chain b-factor' }); showWhen(g, () => H.hasMap() && H.hasStructure());
+    selControl(g, 'zone', 'map.zone', [['none', ''], ['site', '__site__']], 'only the map around these atoms, at full resolution: for a close look at residues in their density (show them as sticks too)');
+    control(g, { t: 'range', label: 'carve (Å)', path: 'map.carve', min: 0, max: 8, step: 0.5, tip: 'only the density this close to the model (or the zone); the caption says when it is on' });
+    control(g, { t: 'range', label: 'crop margin (Å)', path: 'map.crop', min: 0, max: 20, step: 1, tip: 'the map is cropped to the model’s box and this margin' });
+    control(g, { t: 'select', label: 'rest of assembly', path: 'map.context', options: ['hide', 'show'], tip: 'density the model does not cover (the rest of a symmetric assembly): left out, or drawn faintly' });
+    control(g, { t: 'check', label: 'mark unsupported residues', path: 'map.unsupported', tip: 'a small circle on residues whose atoms are mostly outside the density' });
+    control(g, { t: 'check', label: 'unexplained density', path: 'map.unexplained', tip: 'density the model does not explain (a ligand, a missing loop) in the accent colour' });
+    control(g, { t: 'select', label: 'line looseness', path: 'map.localResolution', options: ['none', 'bfactor'], tip: 'bfactor: lines looser where the model’s B-factors are high, as a stand-in for local resolution' });
+  }
+
   /* ---------- top bar: the things used every time ---------- */
   const top = document.getElementById('topbar') || root;
-  const fileIn = el('input', { type: 'file', accept: '.pdb,.ent,.cif,.mmcif,.json', multiple: '', style: 'display:none', onchange: (e: any) => { const fl = Array.from(e.target.files as FileList); if (fl.length) H.loadFiles(fl); e.target.value = '' } }) as HTMLInputElement;
+  const fileIn = el('input', { type: 'file', accept: '.pdb,.ent,.cif,.mmcif,.json,.map,.mrc,.ccp4,.gz', multiple: '', style: 'display:none', onchange: (e: any) => { const fl = Array.from(e.target.files as FileList); if (fl.length) H.loadFiles(fl); e.target.value = '' } }) as HTMLInputElement;
   const examples: [string, string][] = [['trypsin_active_site.json', 'Trypsin active site (engraved)'], ['mechanism.json', 'Serine hydrolase mechanism (scene)'], ['calb_pnpa.json', 'CALB with pNPA (scene)'], ['1A8O.pdb', '1A8O — HIV capsid domain'], ['1LCD.pdb', '1LCD — lac repressor headpiece'], ['test_protein.pdb', 'Test protein'], ['test_protein_rna.cif', 'Test protein with RNA'], ['6GZQ.cif', '6GZQ — ribosome (large)']];
   const ex = el('select', { class: 'examples', title: 'load an example', onchange: (e: any) => { if (e.target.value) H.loadExample(e.target.value); e.target.value = '' } }, el('option', { value: '' }, 'Examples'), ...examples.map(([v, t]) => el('option', { value: v }, t))) as HTMLSelectElement;
   const svg = (d: string) => { const e = document.createElementNS('http://www.w3.org/2000/svg', 'svg'); e.setAttribute('viewBox', '0 0 16 16'); e.setAttribute('width', '15'); e.setAttribute('height', '15'); e.innerHTML = `<path d="${d}" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/>`; return e };

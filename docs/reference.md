@@ -29,6 +29,13 @@ What is read:
   drive the `entity` and `subunit` colourings and selections.
 - On load the structure is turned by its principal axes so its widest spread lies in the picture plane.
 
+### Density maps
+
+MRC / CCP4 maps (modes 0, 1, 2, 6 and 12; any axis order; gzipped or not), from a file or from EMDB with the
+recommended contour level and the sample's mass. Maps larger than 320 voxels a side are averaged down on reading.
+The isosurface is extracted by surface nets, sampled finer for close-ups and Taubin-smoothed; its outline, folds and
+shading come from a per-pixel depth buffer of the surface. How maps are drawn, and why: [maps.md](maps.md).
+
 ### Scene JSON
 
 A scene is a list of keyframes, each with atoms, bonds, curly arrows and a caption, plus the figure's look, labels,

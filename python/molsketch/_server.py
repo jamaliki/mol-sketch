@@ -5,6 +5,9 @@ The server hands out the app (its built files, bundled here) and a small API the
     GET  /api/health                          → {"molsketch": version}
     POST /api/put     {"input": …}            → {"ref": "in3"}         a structure's text, a scene or a stack, kept here
     POST /api/drop    {"ref": "in3"}          → {}
+    POST /api/putmap  the file's bytes        → {"ref": "map2", ...}   an MRC / CCP4 map (gzipped or not), averaged
+                      ?name=&level=&mass=&resolution=                    down as molsketch.read_map does; or JSON
+                      {"emdb": "EMD-11638"}                              to fetch an EMDB entry here
     POST /api/render  {figure spec}           → image/png              the same drawing as Figure.render
                       (with "format": "svg")  → image/svg+xml          as Figure.svg
     POST /api/call    {"name": …, "args": […]} → JSON                  frames, info, pocket, frameTheSite, labelTheSite, …
@@ -15,12 +18,14 @@ from __future__ import annotations
 
 import json
 import mimetypes
+import os
 import pathlib
+import tempfile
 import threading
 import webbrowser
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 import skia
 
@@ -61,9 +66,29 @@ class _Handler(BaseHTTPRequestHandler):
         if f is None or not f.is_file(): return self._send(404, b"not found", "text/plain")
         self._send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream")
 
+    def _putmap(self, query: dict, raw: bytes):
+        """a map from the app: its file's bytes, or an EMDB ID fetched here (with its recommended level and mass)"""
+        from ._maps import fetch_map, read_map
+        if raw[:1] == b"{":
+            m = fetch_map(json.loads(raw)["emdb"])
+        else:
+            q = {k: v[0] for k, v in query.items()}
+            fd, tmp = tempfile.mkstemp(suffix=".map.gz" if raw[:2] == b"\x1f\x8b" else ".map"); os.close(fd)
+            try:
+                pathlib.Path(tmp).write_bytes(raw)
+                m = read_map(tmp, name=q.get("name") or "map", level=float(q["level"]) if q.get("level") else None)
+                m.data = m.data.copy()   # off the temporary file
+            finally:
+                for p in (tmp, tmp[:-3] if tmp.endswith(".gz") else None):
+                    if p and os.path.exists(p): os.remove(p)
+            m.meta = {"mass": float(q["mass"]) if q.get("mass") else None, "resolution": float(q["resolution"]) if q.get("resolution") else None}
+        ref = engine().put_map(m)
+        return self._json({"ref": ref, **m.header()})
+
     def do_POST(self):
-        path = urlparse(self.path).path
+        url = urlparse(self.path); path = url.path
         try:
+            if path == "/api/putmap": return self._putmap(parse_qs(url.query), self.rfile.read(int(self.headers.get("Content-Length") or 0)))
             body = json.loads(self.rfile.read(int(self.headers.get("Content-Length") or 0)) or b"{}")
             E = engine()
             if path == "/api/put": return self._json({"ref": E.put(body["input"])})

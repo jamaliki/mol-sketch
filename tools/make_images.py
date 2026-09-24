@@ -1,7 +1,7 @@
 """Regenerate the images in docs/img and the style files in looks/, all with the molsketch Python package.
 
     python tools/make_images.py            everything (the ribosome images take a few minutes)
-    python tools/make_images.py ras looks  only some groups: looks, ras, palettes, protein, ribosome, turntable, styles
+    python tools/make_images.py ras looks  only some groups: looks, ras, palettes, protein, ribosome, turntable, styles, maps
 
 Run it from the repository root with the package installed (pip install ./python). Structures come from the PDB and
 are cached; ffmpeg is needed for the turntable. docs/img/app.png is a screenshot of the app and is not made here.
@@ -74,6 +74,20 @@ def turntable():
     say(fig.turntable(IMG / "ribosome_turntable.gif", n=36, size=(480, 480), swing=12, fps=12))
 
 
+def maps():
+    """cryo-EM maps: TRPV1 (EMD-5778) on its own and with its model (3J5P); Trp93 of apoferritin (7A4M, EMD-11638) in
+    its density at the recommended level and at 3 σ; Asp89, whose side chain has lost its density"""
+    say(ms.fetch_map("EMD-5778").save(IMG / "map_alone.png", (900, 900)))
+    say(ms.fetch_map("EMD-5778").look("ink").save(IMG / "map_alone_ink.png", (900, 900)))
+    say(ms.fetch("3J5P", map=True).save(IMG / "map_with_model.png", (900, 900)))
+    say(ms.fetch("7A4M", map=True).save(IMG / "map_with_subunit.png", (900, 900)))
+    trp = "resi 93 and not hydro"
+    for name, extra in (("map_side_chain", {}), ("map_side_chain_3sigma", {"sigma": 3})):
+        say(ms.fetch("7A4M", map=True).map(zone=trp, carve=2, **extra).show(sticks=trp, cartoon=None).save(IMG / f"{name}.png", (900, 900)))
+    asp = "resi 89 and not hydro"
+    say(ms.fetch("7A4M", map=True).map(zone=asp, carve=2).show(sticks=asp, cartoon=None).save(IMG / "map_damaged_side_chain.png", (900, 900)))
+
+
 def styles():
     """looks/*.json: each look as a complete style file, what the app's Export › Save style writes (and its
     Load style, Figure.apply_style and molsketch render --style read)"""
@@ -84,7 +98,7 @@ def styles():
         p = out / f"{look}.json"; p.write_text(json.dumps(style, indent=1, ensure_ascii=False) + "\n"); say(p)
 
 
-GROUPS = {"looks": looks, "ras": ras, "palettes": palettes, "protein": protein, "ribosome": ribosome, "turntable": turntable, "styles": styles}
+GROUPS = {"looks": looks, "ras": ras, "palettes": palettes, "protein": protein, "ribosome": ribosome, "turntable": turntable, "styles": styles, "maps": maps}
 
 if __name__ == "__main__":
     for g in sys.argv[1:] or GROUPS:

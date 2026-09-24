@@ -21,6 +21,7 @@ of MOLSCRIPT, on paper, with lines that boil from frame to frame so an animation
 - [Looks](#looks)
 - [Engraved ribbons and palettes](#engraved-ribbons-and-palettes)
 - [Labels](#labels)
+- [Cryo-EM maps](#cryo-em-maps)
 - [Mechanisms and animation](#mechanisms-and-animation)
 - [The command line](#the-command-line)
 - [Inputs and selections](#inputs-and-selections)
@@ -146,6 +147,25 @@ ones you placed, a scene's atom labels, residue labels, and α/β numbering on e
 Placed labels are part of the figure: they are saved in the scene JSON (`labels`, see
 [docs/scene-format.md](docs/scene-format.md)) and drawn in every PNG, poster, video and CLI render.
 
+## Cryo-EM maps
+
+Density maps draw on their own, with the model built into them, or close up around a few residues, in ink by default
+in every look. Maps come from EMDB (with the depositors' recommended contour level) or your own MRC / CCP4 files; the
+contour is chosen in the map's units or in σ, and a caption states how the map is shown (its level, any low-pass or
+carving). In the app, use the Map tab; in Python:
+
+```python
+ms.fetch("3J5P", map=True)           # an entry with the map it was built into
+ms.fetch_map("EMD-5778")             # a map on its own
+```
+
+| | | |
+|---|---|---|
+| ![TRPV1 map](docs/img/map_alone_ink.png) | ![TRPV1 with its model](docs/img/map_with_model.png) | ![Trp93 in its density](docs/img/map_side_chain_3sigma.png) |
+
+How maps are drawn and why (low-passing whole particles, the level that encloses the molecule's mass, cropping to the
+model, close-ups): [docs/maps.md](docs/maps.md).
+
 ## Mechanisms and animation
 
 A scene is a list of keyframes, each with atoms, bonds, curly arrows, lone pairs, charges and a caption; MolSketch
@@ -225,6 +245,7 @@ It also writes the style files in `looks/`. Each group is a short function in
 - [app/README.md](app/README.md): the app, its renderers and its CLI
 - [docs/looks.md](docs/looks.md): every look, setting by setting, with the command that makes its image
 - [docs/scene-format.md](docs/scene-format.md): the scene JSON
+- [docs/maps.md](docs/maps.md): cryo-EM density maps, how they are drawn and why
 - [docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): a mechanism figure from your own structures
 - [docs/hero-workflow.md](docs/hero-workflow.md): computed states to a looping video
 - [python/README.md](python/README.md), [python/docs/api.md](python/docs/api.md) and

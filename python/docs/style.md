@@ -193,6 +193,39 @@ Usually set through [`fig.site`](api.md#figsiteselectionnone--ligandfalse-within
 | `site.quiet` | `0.35` | how much the rest of the protein fades, 0 to 1 |
 | `site.scale` | `1.9` | how much thicker the site's sticks are |
 
+## Density maps
+
+Usually set through [`fig.map`](api.md#figmapsourceauto--levelnone-sigmanone-local_resolutionnone-max_voxels320-style)
+(`fig.map(shade=0.5)` sets `map.shade`). The guide is [docs/maps.md](../../docs/maps.md).
+
+| field | default | meaning |
+|---|---|---|
+| `map.style` | `"surface"` | `"surface"`, `"layers"` (nested contours), `"mesh"` (chicken wire) or `"slice"` (a stippled section) |
+| `map.level` | `null` | the contour level, in the map's units (`null`: `map.sigma`, else the recommended level, else mean + 3σ) |
+| `map.sigma` | `null` | the contour level in σ above the mean |
+| `map.levels` | `[0.7, 1, 1.5]` | the contours of `"layers"`, as multiples of the level |
+| `map.smooth` | `"auto"` | low-pass to this many Å (`0`: none). `"auto"`: to a 20th of what is drawn, at least 4 Å, for whole particles; the density above the level is smoothed and contoured to enclose the molecule's mass |
+| `map.finish` | `"drawn"` | `"drawn"`: a smoothed surface in the chosen marks · `"smooth"`: plainly lit, ChimeraX-like · `"sketch"`: the raw grid, hand-drawn |
+| `map.marks` | `"ink"` | `"ink"`: outline and hatching in every look · `"look"`: the look's own marks (a watercolour gradient) |
+| `map.smoothing` | `4` | Taubin smoothing steps of the surface |
+| `map.shade` | `0.35` | how much shading, 0 (outline only) to 1 |
+| `map.line` | `null` | the outline's colour (`null`: the look's ink) |
+| `map.line_width` | `0.9` | the outline's weight |
+| `map.opacity` | `0.55` | how opaque the map is over a model |
+| `map.speck` | `8` | islands and holes smaller than this, in pixels, are left out |
+| `map.crop` | `8` | with a model: the map is cropped to the model's box and this margin, Å |
+| `map.zone` | `""` | a selection: the map closely around it only, at full resolution, for close-ups |
+| `map.carve` | `0` | keep only the density this close to the model (or the zone), Å; `0` off |
+| `map.context` | `"hide"` | with a model: the rest of an assembly beyond it `"hide"` (only the density within 5 Å of the model is kept) or `"show"` (drawn faintly) |
+| `map.unsupported` | `true` | a small accent circle on residues mostly outside the density |
+| `map.unexplained` | `false` | density the model does not explain in the accent colour |
+| `map.local_resolution` | `"none"` | `"bfactor"` or `"map"`: lines looser where the resolution is worse |
+| `map.layer` | `"auto"` | draw the map `"over"` or `"under"` the model |
+| `map.caption` | `true` | the line under the drawing that says how the map is shown |
+| `map.max_voxels` | `192` | the largest grid drawn from, per side (larger maps are averaged down) |
+| `map.mesh_spacing` | `1` | Å between the mesh's planes |
+| `map.slice.offset`, `map.slice.cut` | `0`, `true` | where the slice lies (−0.5 to 0.5 of the depth), and whether what is in front of it is cut away |
+
 ## View and depth
 
 The camera itself (turn, zoom, pan) is set with [`fig.view`](api.md#figviewyawnone-pitchnone-rollnone-zoomnone-pannone-fovnone).

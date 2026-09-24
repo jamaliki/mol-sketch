@@ -39,6 +39,8 @@ ms.load("mechanism.json")               # a scene saved from the app (keyframes,
 ms.load(["s1.pdb", "s2.pdb", "s3.pdb"]) # several structures: one keyframe each, animated between
 ms.load(text, name="model")             # PDB / mmCIF text, or a Biopython, gemmi or MDAnalysis structure
 ms.fetch("2PTN")                        # an entry from the PDB (cached in ~/.cache/molsketch)
+ms.fetch("3J5P", map=True)              # with the cryo-EM map it was built into (EMDB)
+ms.fetch_map("EMD-5778")                # a map on its own; ms.load_map("map.mrc") for your own
 ```
 
 | method | what it does |
@@ -54,6 +56,7 @@ ms.fetch("2PTN")                        # an entry from the PDB (cached in ~/.ca
 | `.frame_site(size)` · `.label_site(size)` | turn the site towards you and zoom in; label its residues (give the size you save at) |
 | `.label(text, at="Tyr32", offset=(dx, dy), size=1)` | a label pinned to an atom (`"Tyr32:OH"`, `"TYR32.A:CA"`), or placed on the canvas with `xy=(x, y)` |
 | `.labels(False)` · `.labels(secondary=True)` · `.clear_labels()` | hide every label; switch one kind (placed, atoms, residues, α/β); remove the placed ones |
+| `.map(source, level=, sigma=, **fields)` | draw a cryo-EM map with the figure: `"auto"`, an EMDB ID or a file; the contour in map units or σ; `zone=` and `carve=` for close-ups ([docs/maps.md](../docs/maps.md)) |
 | `.frame(n)` | a scene's frame (24 per second), or for a structure, another version of the hand-drawn wobble |
 | `.copy()` | an independent copy, for variations of one figure |
 | `.style` · `.camera` | the style and camera the figure will be drawn with |
