@@ -669,7 +669,10 @@ function loop(t: number) {
   requestAnimationFrame(loop);
 }
 fit(); requestAnimationFrame(loop);
-{ const seq = loadSeq; fetch('examples/test_protein.pdb').then(r => r.text()).then(t => { if (loadSeq === seq) loadText(t, 'test_protein.pdb') }).catch(e => status(e.message)) }
+/* start-up: ?pdb=3J5P loads that entry, ?map=auto (its map) or ?map=EMD-5778 a map, and opens the Map tab; else the example */
+{ const q = new URLSearchParams(location.search), pdb = q.get('pdb'), mp = q.get('map');
+  if (pdb || mp) (async () => { try { if (pdb) await fetchPdb(pdb); if (mp) { panel.selectTab?.('map'); if (mp === 'auto') await mapForEntry(); else await fetchEmdb(mp); panel.refresh() } } catch (e: any) { status(e.message) } })();
+  else { const seq = loadSeq; fetch('examples/test_protein.pdb').then(r => r.text()).then(t => { if (loadSeq === seq) loadText(t, 'test_protein.pdb') }).catch(e => status(e.message)) } }
 
 /* scripting hook (used by the CLI and tests) */
 const api = {
