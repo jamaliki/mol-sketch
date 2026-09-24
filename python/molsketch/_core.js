@@ -6383,6 +6383,7 @@
       }
       return [best, Math.sqrt(bd)];
     };
+    let dust = 0;
     const levels = factors.map((f2) => {
       const iso = isosurface(g2, same(level * f2));
       const nv = iso.positions.length / 3;
@@ -6393,6 +6394,31 @@
         dist[v] = d;
       }
       let tri = iso.triangles;
+      if (R > 0) {
+        const par = new Int32Array(nv);
+        for (let v = 0; v < nv; v++) par[v] = v;
+        const find = (x) => {
+          while (par[x] !== x) {
+            par[x] = par[par[x]];
+            x = par[x];
+          }
+          return x;
+        };
+        for (let t = 0; t < tri.length; t += 3) {
+          const a = find(tri[t]), b = find(tri[t + 1]), c = find(tri[t + 2]);
+          par[b] = a;
+          par[find(c)] = a;
+        }
+        const size = /* @__PURE__ */ new Map();
+        for (let v = 0; v < nv; v++) {
+          const r = find(v);
+          size.set(r, (size.get(r) || 0) + 1);
+        }
+        const big = Math.max(0, ...size.values()) * 0.02, keep = [];
+        for (let t = 0; t < tri.length; t += 3) if (size.get(find(tri[t])) >= big) keep.push(tri[t], tri[t + 1], tri[t + 2]);
+        else dust++;
+        tri = new Uint32Array(keep);
+      }
       if (o.carve > 0 && atoms.length) {
         const keep = [];
         for (let t = 0; t < tri.length; t += 3) if (dist[tri[t]] <= o.carve || dist[tri[t + 1]] <= o.carve || dist[tri[t + 2]] <= o.carve) keep.push(tri[t], tri[t + 1], tri[t + 2]);
@@ -6463,6 +6489,7 @@
       byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
       o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
       o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of the model` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
+      dust ? "specks under 2% of the largest piece hidden" : "",
       g0 !== m && !byVolume ? `drawn at ${g2.step[0].toFixed(1)} \xC5 per voxel${R > 0 ? "" : ", at the level enclosing the same volume"}` : "",
       o.localResolution === "bfactor" && s ? "line looseness from B-factors" : o.localResolution === "map" && localRes ? "line looseness from local resolution" : ""
     ].filter(Boolean).join(" \xB7 ");
