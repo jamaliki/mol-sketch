@@ -137,7 +137,7 @@ export function settle(spec: FigureSpec): Settled {
   if (spec.labels) labels = spec.labels.map(l => ({ ...l }));
   if (spec.groupColors) overrides = { ...spec.groupColors };
   const [W, H] = spec.size || [960, 720]; const dpr = spec.scale || 1;
-  if (spec.map) map = mapOf(spec.map.ref);
+  if (spec.map && style.map.visible !== false) map = mapOf(spec.map.ref);   // hidden: not drawn
   const localRes = spec.map?.localResolution ? mapOf(spec.map.localResolution) : null;
   if (map && !structure && !scene) { const b = basisOf(map, mapLevel(map, style)); cam.base = b }   // a map alone: turned by its own principal axes
   return { style, look, camera: cam, structure, scene, overrides, labels, fitPoints: structure ? fitPointsOf(structure, style) : new Float32Array(0), frame: spec.frame || 0, W, H, dpr, map, localRes };

@@ -22,28 +22,25 @@ Drag a PDB, mmCIF, scene JSON or density map (`.map`, `.mrc`, `.ccp4`) file onto
 (e.g. `1A8O`) and *Fetch* to load that entry from RCSB as mmCIF. Drag to rotate, shift-drag or
 right-drag to pan, wheel to zoom, arrow keys to nudge, `r` to reset; `?` shows every shortcut.
 
-The top bar holds what is used every time: open, examples, undo / redo, *Save PNG* (the screen as it is) and *Export…*.
-The side panel has one tab per task, and a search box (`/`) that finds any setting across all of them:
+The window has three parts around the drawing:
 
-- **Look**: the looks (the same as the files in `../looks`), what to draw (sticks, cartoon, surface, with one-click
-  choices or any selection), fill, marks, and collapsed fine tuning for lines, hatching, watercolour and paper.
-- **Map**: a cryo-EM density map: fetch it by EMDB ID, find the map of the loaded PDB entry, or open a `.map` /
-  `.mrc` file (or drop one on the drawing). Then the contour (σ or level, *Recommended*), the style (surface, layers,
-  mesh, slice), low-pass, the marks and shading, and with a model: a zone for close-ups, carving, cropping, and the
-  marks for unsupported residues and unexplained density. See [../docs/maps.md](../docs/maps.md).
-- **Colour**: what colours by what, the group palettes (engraved ribbons take their first three colours for helix,
-  sheet and coil), per-group overrides, every swatch, and the paper-and-ink presets.
-- **Labels**: labels you place (*+ Add label* or `L`, then click the drawing: on an atom or a ribbon the label follows
-  that residue; drag to move, double-click to edit, right-click or Delete to remove), which automatic labels show
-  (atom, residue, α/β), and their font, size and colour. *Labels on / off* on the drawing hides every label at once.
-  Placed labels are saved in the scene JSON and drawn in every export.
-- **View**: camera, fog and light, suggested views, *Frame* (fit the drawing into a box of the canvas, e.g. the website's
-  hero, with guides), motion (turntable, boiling) and the engine.
-- **Scene** (with a scene loaded): checks, keyframes and their timing, and arrows / lone pairs / charges by clicking.
-  The timeline under the drawing plays, steps and jumps to keyframes.
-- **Export**: a PNG or poster at a chosen size, the loop as a video, scene and style files, and *Copy render command*,
-  the `molsketch render` line that renders exactly what is on screen from the files *Save scene JSON* and *Save style*
-  write.
+- **The top bar**: *Open* (a file, an entry from the PDB by its ID, a cryo-EM map from EMDB by its ID, or an
+  example), the name of what is loaded, undo / redo, help (`?`) and *Export*.
+- **The layers of the picture** (left): the drawing style; the molecule's parts (protein or nucleic acid and its
+  chains, side chains, ligands, water), each with a switch to show or hide it; the density map (or *Add a density
+  map*); the active site; labels; keyframes, for an animation; camera and light. Select one to see its settings.
+- **The inspector** (right): the settings of the selected layer, the everyday ones first and the fine tuning folded
+  away. *Drawing style* has the looks, drawn with your molecule in each, then the fill, the hand, the pen, hatching,
+  watercolour, paper and every colour. *Protein* has how it is drawn (cartoon, surface, both, sticks) and coloured
+  (by structure, chain, residue or rainbow, with the group palettes). *Density map* has the contour (in σ or the map's
+  units, *Recommended*), how it sits with the model (behind, over, outline), close-ups on residues and the processing.
+  The search box (`/`) finds any setting in any layer.
+
+On the drawing, a small dock resets the view, spins the molecule, adds a label and saves what is on screen. For an
+animation, the timeline under the drawing plays, steps and jumps to keyframes. *Export* opens a dialog with the
+picture at any size (PNG, a JPEG poster, SVG through `molsketch serve`), the video, the scene and style files, and the
+`molsketch render` command that renders exactly what is on screen; while it is open, the drawing shows the frame the
+file will hold.
 
 [../docs/hero-workflow.md](../docs/hero-workflow.md) is the route from computed states to a looping video, both in the app
 and by script. Every control edits one field of the style, which is saved in the browser and can be exported / imported

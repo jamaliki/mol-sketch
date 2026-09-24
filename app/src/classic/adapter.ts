@@ -52,7 +52,7 @@ export function sceneFromStructure(s: Structure, style: Style, overrides: Record
 
 /** Draw the current structure with the classic engine onto a 2D context of the renderer's pixel size. Returns ms. */
 export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style: Style, boil: number, dpr = 1): number {
-  const t0 = performance.now(); const E = classic(); const s = R.structure; const map: DensityMap | null = (R as any).map || null; if (!s && !map) return 0;
+  const t0 = performance.now(); const E = classic(); const s = R.structure; const map: DensityMap | null = style.map.visible === false ? null : (R as any).map || null;   // hidden: kept, not drawn if (!s && !map) return 0;
   E.cfg = cfgFromStyle(style, R.camera, false);
   if (s) { E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels); (E.scene as any)._src = s; (E.scene as any).atomIds = (sceneFromStructure as any).lastIds }   // which structure it was built from
   else E.scene = mapScene(map!, style, R.camera.base, R.labels);

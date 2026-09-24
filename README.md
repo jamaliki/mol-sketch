@@ -58,25 +58,24 @@ figure drawn by the package.
 
 ## The app
 
-![The app: Ras in engraved colour, with the Labels tab open](docs/img/app.png)
+![The app: TRPV1 with its cryo-EM map, the density map selected in the layers](docs/img/app.png)
 
 While you drag, a WebGL2 preview follows the mouse in a few milliseconds; when the view rests, the stroke engine
 redraws the exact frame with real strokes, hatching and watercolour. Cost follows the visible outline rather than the
 atom count, so a 144 000-atom ribosome settles in about a second.
 
-- **Top bar**: *Open…*, *Examples*, fetch a PDB ID from RCSB, undo / redo, *Save PNG*, *Export…*, and `?` for every
-  shortcut.
-- **Look**: the looks, what to draw (sticks, cartoon, surface, each with one-click choices or any selection), fill,
-  marks, and fine tuning for lines, hatching, watercolour and paper.
-- **Colour**: what is coloured by what, the group palettes, per-residue or per-chain overrides, every swatch.
-- **Labels**: labels you place on the figure, which automatic labels show, and their font, size and colour.
-- **View**: camera, fog and light, suggested views, framing into a box of the canvas, turntable and boiling.
-- **Scene** (with a mechanism loaded): keyframes and their timing, curly arrows, lone pairs and charges by clicking,
-  and checks. A timeline under the drawing plays, steps and jumps between keyframes.
-- **Export**: a PNG or poster at any size, the loop as a video (AV1, VP9 or H.264, encoded in the browser), the scene
-  and style as JSON, and the command that renders exactly what is on screen from the terminal.
+- **Top bar**: *Open* (a file, a PDB ID, an EMDB map ID, the examples), undo / redo, `?` for every shortcut, and
+  *Export*.
+- **Layers** (left): what is in the picture, each part with a switch: the drawing style, the protein and its chains,
+  side chains, ligands, water, the density map, the active site, labels, keyframes and the camera.
+- **Inspector** (right): the settings of the selected layer, the everyday ones first and the fine tuning folded away:
+  the looks drawn with your own molecule, how the protein is drawn and coloured, the map's contour and appearance,
+  labels, the site, camera and light, and for a mechanism its keyframes, curly arrows, lone pairs, charges and checks.
+- **On the drawing**: a dock to reset the view, spin, add a label and save the screen; a timeline for animations.
+- **Export**: a PNG, poster or SVG at any size, the loop as a video (AV1, VP9 or H.264, encoded in the browser), the
+  scene and style as JSON, and the command that renders exactly what is on screen from the terminal.
 
-*Find a setting* (`/`) searches every tab. Every change can be undone, and the style is kept in the browser between
+The search box (`/`) finds any setting in any layer. Every change can be undone, and the style is kept in the browser between
 visits. The app's own [README](app/README.md) covers how the renderers fit together.
 
 ## Looks

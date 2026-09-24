@@ -26,7 +26,7 @@ const canvas = document.getElementById('c') as HTMLCanvasElement;
 const skCanvas = document.getElementById('sk') as HTMLCanvasElement; const skCtx = skCanvas.getContext('2d', { willReadFrequently: true })!;   // CPU-backed: the classic engine composites huge offscreen canvases, which GPU canvases can drop silently
 const ovCanvas = document.getElementById('ov') as HTMLCanvasElement; const ovCtx = ovCanvas.getContext('2d')!;   // overlays: change highlights, authoring marks
 const stage = document.getElementById('stage')!;
-const hud = document.getElementById('hud')!;
+const hud = document.getElementById('hud')!; if (!new URLSearchParams(location.search).has('debug')) hud.style.display = 'none';   // timings: ?debug
 
 let style: Style = cloneStyle(DEFAULT_STYLE);
 try { const s = localStorage.getItem('triad-sketch-style'); if (s) style = mergeStyle(DEFAULT_STYLE, JSON.parse(s)) } catch { }
@@ -155,7 +155,7 @@ const controls = new OrbitControls(canvas, R.camera, () => { invalidate() }, wha
 function status(msg?: string) {
   const s = R.structure; const st = R.stats;
   const info = document.getElementById('fileinfo');
-  if (info) { info.textContent = s ? `${sceneDoc?.name || s.name || 'structure'} · ${s.count.toLocaleString()} atoms · ${s.residues.length.toLocaleString()} residues · ${s.chains.length} chain${s.chains.length === 1 ? '' : 's'}` : 'no structure';
+  if (info) { info.textContent = s ? `${s.count.toLocaleString()} atoms · ${s.residues.length.toLocaleString()} residues · ${s.chains.length} chain${s.chains.length === 1 ? '' : 's'}` : mapObj ? 'density map' : '';
     info.title = s ? `${st.instances.toLocaleString()} instances, ${st.triangles.toLocaleString()} triangles, built in ${st.buildMs.toFixed(0)} ms` : '' }
   if (msg) toast(msg);
 }
@@ -593,6 +593,28 @@ async function saveSvg(width: number, height: number, f = sceneDoc ? frame : boi
 /** The frame with the arrows of the first keyframe fully drawn: the natural poster. */
 function posterFrame(): number { if (!sceneDoc) return 0; const h = timeline().segs.find(s => s.type === 'hold'); return h ? h.start + Math.floor(h.len * 0.9 / 2) * 2 : 0 }
 
+/* ---------- for the panel: what is loaded, and small drawings of it in each look ---------- */
+function molecule() {
+  const s = R.structure;
+  const kind: 'scene' | 'structure' | 'map' | null = sceneDoc ? 'scene' : s ? 'structure' : mapObj ? 'map' : null;
+  const name = sceneDoc?.name || s?.name || mapObj?.name || '';
+  if (!s) return { kind, name, atoms: 0, residues: 0, chains: [] as { id: string; desc: string; residues: number }[], ligands: [] as string[], water: 0, protein: false, nucleic: false, map: mapObj?.name || '' };
+  const chains = s.chains.map(c => ({ id: c.id, desc: (c.entity && s.entities[c.entity]?.desc) || '', residues: c.residues.filter(ri => !s.residues[ri].het).length })).filter(c => c.residues > 0);
+  const lig = new Map<string, number>(); let water = 0, protein = false, nucleic = false;
+  for (const r of s.residues) { if (r.resn === 'HOH' || r.resn === 'WAT') water++; else if (r.het) lig.set(r.resn, (lig.get(r.resn) || 0) + 1); else if (r.nucleic) nucleic = true; else protein = true }
+  return { kind, name, atoms: s.count, residues: s.residues.length, chains, ligands: [...lig.keys()], water, protein, nucleic, map: mapObj?.name || '' };
+}
+/** the loaded molecule drawn small in a look (the look gallery's thumbnails) */
+function lookPreview(key: string, w: number, h: number): HTMLCanvasElement | null {
+  const L = LOOKS[key]; if (!L || (!R.structure && !sceneDoc && !mapObj)) return null;
+  const st = mergeStyle(DEFAULT_STYLE, L.style); if (!L.style.reps) st.reps = { ...style.reps }; st.map = { ...style.map, caption: false } as any; st.show = { ...st.show, caption: false, stepLabel: false, noLabels: true } as any;
+  const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d', { willReadFrequently: true })!;
+  const tmp: any = { structure: R.structure, camera: { ...R.camera, zoom: 1, panX: 0, panY: 0, capFrac: 0, topFrac: 0 }, overrides: R.overrides, fitPoints: R.fitPoints, labels: [], w, h, map: mapObj, fitOverride: R.fitOverride };
+  try { if (sceneDoc) renderScene(ctx, tmp, st, sceneDoc, posterFrame(), 1); else renderClassic(ctx, tmp, st, 0, 1) } catch { return null }
+  if (sceneDoc) { sceneDoc.labels = R.labels } invalidate();
+  return c;
+}
+
 /* panel */
 function applyLook(key: string) {
   const L = LOOKS[key]; if (!L) return; mark('look ' + L.name); currentLook = key;
@@ -601,7 +623,7 @@ function applyLook(key: string) {
 }
 const panel = buildPanel(document.getElementById('controls')!, {
   get style() { return style }, set style(v) { style = v },
-  looks: LOOKS, currentLook: () => currentLook, applyLook,
+  looks: LOOKS, currentLook: () => currentLook, applyLook, molecule, lookPreview, openFileDialog: () => (document.getElementById('fileIn') as HTMLInputElement | null)?.click(),
   rebuild, redraw, camera: R.camera, mark, settle: () => history.settle(),
   onLive: v => { live = v; invalidate() }, onTurntable: v => { turntable = v; invalidate() }, onPitchSwing: v => { pitchSwing = v },
   onRest: (v: string) => { restMode = v as RestMode; sketchOn = v !== 'preview'; invalidate() },
