@@ -36,12 +36,12 @@ export function mapBasis(m: DensityMap, level: number): Float32Array {
 }
 
 /** the contour level a figure uses: the style's, else the map's recommended one, else mean + 3 σ */
-export function mapLevel(m: DensityMap, style: Style) { return style.map.level ?? m.level ?? m.mean + 3 * m.rms }
+export function mapLevel(m: DensityMap, style: Style) { const o = style.map; return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? m.level ?? m.mean + 3 * m.rms }
 
 export function prepareMap(whole: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null = null): EngineMap {
   const o = style.map, level = mapLevel(whole, style);
   const factors = o.style === 'layers' ? o.levels : [1];
-  const key = JSON.stringify([level, o.smooth, o.crop, o.zone, o.finish, o.smoothing, factors, o.carve, o.maxVoxels, o.localResolution, o.style === 'mesh' ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
+  const key = JSON.stringify([level, o.speck, o.smooth, o.crop, o.zone, o.finish, o.smoothing, factors, o.carve, o.maxVoxels, o.localResolution, o.style === 'mesh' ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
   let per = cache.get(whole); if (!per) cache.set(whole, per = new Map());
   const hit = per.get(key); if (hit) return { ...hit, opts: o };
   // with a model: the map inside the model's box and a margin (a box, not a mask: density near the model that it does
@@ -115,7 +115,7 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
     // carving: only the density within `carve` Å of the model (off by default; the caption says when it is on)
     let tri = iso.triangles;
     // dust: on a low-passed map, the pieces under 2% of the largest are what low-passing noise leaves (the caption says so)
-    if (R > 0) { const par = new Int32Array(nv); for (let v = 0; v < nv; v++) par[v] = v; const find = (x: number) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x] } return x };
+    if (R > 0 || o.finish !== 'sketch') { const par = new Int32Array(nv); for (let v = 0; v < nv; v++) par[v] = v; const find = (x: number) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x] } return x };
       for (let t = 0; t < tri.length; t += 3) { const a = find(tri[t]), b = find(tri[t + 1]), c = find(tri[t + 2]); par[b] = a; par[find(c)] = a }
       const size = new Map<number, number>(); for (let v = 0; v < nv; v++) { const r = find(v); size.set(r, (size.get(r) || 0) + 1) }
       const big = Math.max(0, ...size.values()) * 0.02, keep: number[] = [];
@@ -160,8 +160,8 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
     if (n && low / n > 0.5) unsupported.push(r.trace);
   }
   const sigma = (level - m.mean) / (m.rms || 1);
-  const caption = [m.name, R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && m.level != null ? ' (recommended)' : ''} low-passed to ${R} Å` : '', byVolume ? mass <= 0 ? 'contoured at 2 σ' : `contoured to enclose ${(mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + ' MDa' : Math.round(mass / 1e3) + ' kDa')} (${massFrom}'s mass, 1.21 Å³/Da)`
-      : `contoured at ${+level.toPrecision(3)}${style.map.level == null && m.level != null ? ' (recommended)' : ''}, ${sigma.toFixed(1)} σ`,
+  const caption = [m.name, R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''} low-passed to ${R} Å` : '', byVolume ? mass <= 0 ? 'contoured at 2 σ' : `contoured to enclose ${(mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + ' MDa' : Math.round(mass / 1e3) + ' kDa')} (${massFrom}'s mass, 1.21 Å³/Da)`
+      : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''}, ${sigma.toFixed(1)} σ`,
     o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `around ${o.zone}` : m !== whole ? `cropped to the model's box and ${o.crop} Å` : '',
     dust ? 'specks under 2% of the largest piece hidden' : '', g0 !== m && !byVolume ? `drawn at ${g.step[0].toFixed(1)} Å per voxel${R > 0 ? '' : ', at the level enclosing the same volume'}` : '',
     o.localResolution === 'bfactor' && s ? 'line looseness from B-factors' : o.localResolution === 'map' && localRes ? 'line looseness from local resolution' : ''].filter(Boolean).join(' · ');

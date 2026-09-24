@@ -1092,11 +1092,12 @@ function buildMap(items,st,pos,proj,seedBase){
     softenCovered(face,buf.tb,W,H,Math.max(1,Math.round(2*TEX)));
     return {dark,fogp,cls,hand,face}};
   const bbox=(test)=>{let x0=W,y0=H,x1=-1,y1=-1;for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(test(y*W+x)){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}return x1<0?null:[x0,y0,x1,y1]};
-  const regions=(test)=>{const m=new Uint8Array(W*H);for(let i=0;i<m.length;i++)m[i]=test(i)?1:0;const b=bbox(i=>m[i]);return b?maskRings(m,W,H,b[0],b[1],b[2],b[3]):[]};
+  const speck=o.finish==='sketch'?3:(o.speck??5)**2*TEX*TEX;   // islands and holes smaller than this (px²) are specks: left out
+  const regions=(test)=>{const m=new Uint8Array(W*H);for(let i=0;i<m.length;i++)m[i]=test(i)?1:0;const b=bbox(i=>m[i]);return b?maskRings(m,W,H,b[0],b[1],b[2],b[3]).filter(r=>Math.abs(ringArea(r))>=speck):[]};
   // ink hatching over the region where `dark` passes a threshold: straight hand lines, one direction, then crossed
   const hatch=(ctx,sh,covered,t,ang,sp,colorAt,alpha)=>{const dx=Math.cos(ang),dy=Math.sin(ang),nx=-dy,ny=dx,R=Math.hypot(W,H)/2,cx=W/2,cy=H/2;let k=0;
     for(let s=-R;s<R;s+=sp){let run=null;const step=1.5;
-      const end=()=>{if(run&&run.n>2){const c=colorAt(run.c),hh=run.h/run.n,fg=run.f/run.n;sketchLine(ctx,[run.a,run.b],{seed:seedBase+7001+k++,passes:1,width:0.7*TEX,color:c,alpha:alpha*clamp(0.35+0.8*run.d/run.n,0,1)*(1-0.6*FADE*fg),ampScale:0.4+1.6*hh,step:5,overshoot:false})}run=null};
+      const end=()=>{if(run&&run.n>(o.finish==='sketch'?2:6)){const c=colorAt(run.c),hh=run.h/run.n,fg=run.f/run.n;sketchLine(ctx,[run.a,run.b],{seed:seedBase+7001+k++,passes:1,width:0.7*TEX,color:c,alpha:alpha*clamp(0.35+0.8*run.d/run.n,0,1)*(1-0.6*FADE*fg),ampScale:0.4+1.6*hh,step:5,overshoot:false})}run=null};
       for(let u=-R;u<R;u+=step){const x=cx+nx*s+dx*u,y=cy+ny*s+dy*u,xi=Math.floor(x),yi=Math.floor(y);
         const i=xi>=0&&yi>=0&&xi<W&&yi<H?yi*W+xi:-1,on=i>=0&&covered(i)&&sh.dark[i]>=t;
         if(on&&run&&sh.cls[i]!==run.c)end();

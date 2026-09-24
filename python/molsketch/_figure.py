@@ -106,12 +106,14 @@ class Figure:
         self._colors = colors; return self
 
     # ------------------------------------------------------------------ density maps
-    def map(self, source="auto", *, level: float | None = None, local_resolution=None, max_voxels: int = 320, **style) -> "Figure":
+    def map(self, source="auto", *, level: float | None = None, sigma: float | None = None, local_resolution=None, max_voxels: int = 320, **style) -> "Figure":
         """Draw a density map (cryo-EM) with the structure. ``source`` is ``"auto"`` (the map this PDB entry was built
         into, from EMDB), an EMDB ID (``"EMD-11638"``), a path to an MRC / CCP4 file, a ``DensityMap``, or another
         figure's map (``ms.load_map(...)``). ``None`` removes the map.
 
-        ``level`` is the contour level (by default the depositors' recommended one; the caption states it).
+        ``level`` is the contour level in the map's own units, or ``sigma`` the same in standard deviations above the
+        mean (``sigma=3``); by default the depositors' recommended level. Setting one clears the other; the caption
+        states the level used, and ``map_info`` the recommended one and the map's mean and σ.
         ``local_resolution`` is a local-resolution map (a path, an EMDB ID, or a ``DensityMap``, values in Å) that sets
         how loose the lines are, or ``"bfactor"`` to use the model's B-factors as a stand-in. Any other keyword is a
         map style field (docs/style.md): ``fig.map("auto", style="layers", carve=2.5)``."""
@@ -124,7 +126,8 @@ class Figure:
         elif local_resolution is not None:
             lr = self._resolve_map(local_resolution, max_voxels); spec["localResolution"] = engine().put_map(lr); style["local_resolution"] = "map"
         self._map = spec; self._map_obj = m
-        if level is not None: style["level"] = float(level)
+        if level is not None: style["level"] = float(level); style["sigma"] = None
+        if sigma is not None: style["sigma"] = float(sigma); style["level"] = None
         if style: self.set(map=style)
         return self
 

@@ -1566,6 +1566,8 @@
     map: {
       style: "surface",
       level: null,
+      sigma: null,
+      speck: 5,
       smooth: "auto",
       crop: 8,
       levels: [0.7, 1, 1.5],
@@ -4611,11 +4613,12 @@
         }
         return x1 < 0 ? null : [x0, y0, x1, y1];
       };
+      const speck = o.finish === "sketch" ? 3 : (o.speck ?? 5) ** 2 * TEX * TEX;
       const regions = (test) => {
         const m = new Uint8Array(W * H);
         for (let i = 0; i < m.length; i++) m[i] = test(i) ? 1 : 0;
         const b = bbox((i) => m[i]);
-        return b ? maskRings(m, W, H, b[0], b[1], b[2], b[3]) : [];
+        return b ? maskRings(m, W, H, b[0], b[1], b[2], b[3]).filter((r) => Math.abs(ringArea(r)) >= speck) : [];
       };
       const hatch = (ctx, sh, covered, t, ang, sp, colorAt, alpha) => {
         const dx = Math.cos(ang), dy = Math.sin(ang), nx = -dy, ny = dx, R = Math.hypot(W, H) / 2, cx = W / 2, cy = H / 2;
@@ -4624,7 +4627,7 @@
           let run = null;
           const step = 1.5;
           const end = () => {
-            if (run && run.n > 2) {
+            if (run && run.n > (o.finish === "sketch" ? 2 : 6)) {
               const c = colorAt(run.c), hh = run.h / run.n, fg = run.f / run.n;
               sketchLine(ctx, [run.a, run.b], { seed: seedBase + 7001 + k++, passes: 1, width: 0.7 * TEX, color: c, alpha: alpha * clamp(0.35 + 0.8 * run.d / run.n, 0, 1) * (1 - 0.6 * FADE * fg), ampScale: 0.4 + 1.6 * hh, step: 5, overshoot: false });
             }
@@ -6748,12 +6751,13 @@
     return pcaBasis({ count: n, center: [cx / (n || 1), cy / (n || 1), cz / (n || 1)], x, y, z });
   }
   function mapLevel(m, style) {
-    return style.map.level ?? m.level ?? m.mean + 3 * m.rms;
+    const o = style.map;
+    return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? m.level ?? m.mean + 3 * m.rms;
   }
   function prepareMap(whole, style, s, base, localRes = null) {
     const o = style.map, level = mapLevel(whole, style);
     const factors = o.style === "layers" ? o.levels : [1];
-    const key = JSON.stringify([level, o.smooth, o.crop, o.zone, o.finish, o.smoothing, factors, o.carve, o.maxVoxels, o.localResolution, o.style === "mesh" ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
+    const key = JSON.stringify([level, o.speck, o.smooth, o.crop, o.zone, o.finish, o.smoothing, factors, o.carve, o.maxVoxels, o.localResolution, o.style === "mesh" ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
     let per = cache2.get(whole);
     if (!per) cache2.set(whole, per = /* @__PURE__ */ new Map());
     const hit = per.get(key);
@@ -6885,7 +6889,7 @@
         dist[v] = d;
       }
       let tri = iso.triangles;
-      if (R > 0) {
+      if (R > 0 || o.finish !== "sketch") {
         const par = new Int32Array(nv);
         for (let v = 0; v < nv; v++) par[v] = v;
         const find = (x) => {
@@ -6977,8 +6981,8 @@
     const sigma = (level - m.mean) / (m.rms || 1);
     const caption = [
       m.name,
-      R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && m.level != null ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
-      byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
+      R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
+      byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
       o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
       o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `around ${o.zone}` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
       dust ? "specks under 2% of the largest piece hidden" : "",
