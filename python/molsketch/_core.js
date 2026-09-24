@@ -4457,8 +4457,8 @@
         return { ...L, tri, px, py, pz, fog, rn, cls };
       };
       const levels = M.levels.map(prep), main = levels[M.primary] || levels[0];
-      const style = o.style, layer = o.layer === "auto" ? style === "slice" ? "plane" : "over" : o.layer;
-      const zItem = layer === "under" ? -1e9 : layer === "over" ? 1e9 : 0;
+      const style = o.style, layer = o.layer === "auto" ? style === "slice" ? "plane" : M.hasModel && style === "surface" ? "under" : "over" : o.layer === "behind" ? "under" : o.layer;
+      const zItem = layer === "under" ? -1e9 : layer === "over" || layer === "lines" ? 1e9 : 0;
       const silhouettes = (L, buf) => {
         const n = L.pos.length / 3, f2 = new Float32Array(n);
         for (let v = 0; v < n; v++) {
@@ -4799,9 +4799,9 @@
         const own = (i) => covered(i) && sh.cls[i] !== ctxIx, rest = ctxIx >= 0 ? regions((i) => covered(i) && sh.cls[i] === ctxIx) : [];
         const body = regions(own).map((r) => chaikin(r, 2));
         if (!body.length && !rest.length) return;
-        const alone = !M.hasModel, op = alone ? 1 : o.opacity ?? 0.55, lineCol = o.line || inkCol, lw = o.lineWidth ?? 0.9, blur = Math.max(1, 1.6 * TEX);
+        const lines2 = layer === "lines", alone = !M.hasModel || layer === "under", op = alone ? 1 : o.opacity ?? 0.55, lineCol = o.line || inkCol, lw = o.lineWidth ?? 0.9, blur = Math.max(1, 1.6 * TEX);
         const base = mapCol, darkC = mix(mapCol, light ? "#1c2330" : "#000000", light ? 0.62 : 0.7), lite = light ? "#ffffff" : mix(mapCol, "#ffffff", 0.5);
-        const hatchy = drawn && ((o.marks ?? "ink") === "ink" || ink || pencil || chalk), washy = drawn && wc && !hatchy;
+        const hatchy = !lines2 && drawn && ((o.marks ?? "ink") === "ink" || ink || pencil || chalk), washy = !lines2 && drawn && wc && !hatchy;
         if (hatchy) {
           ctx.save();
           ringsPath(ctx, body);
@@ -4817,7 +4817,7 @@
             hatch(ctx, sh, own, 0.68, ang + 1.25, sp * 1.2, colorAt, 0.55 * kk);
           } else hatch(ctx, sh, own, 0.62, ang, sp * 1.3, colorAt, 0.5 * kk);
         }
-        const off = hatchy ? null : document.createElement("canvas");
+        const off = hatchy || lines2 ? null : document.createElement("canvas");
         if (off) {
           off.width = Math.max(1, Math.round(W * RF.dpr));
           off.height = Math.max(1, Math.round(H * RF.dpr));

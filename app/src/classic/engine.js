@@ -1051,8 +1051,8 @@ function buildMap(items,st,pos,proj,seedBase){
     let tri=L.tri;if(o.finish!=='sketch'&&M.hasModel&&!M.zoned&&(o.context??'hide')==='hide'){const keep=[];let cut=0;for(let t=0;t<tri.length;t+=3){if(comp[tri[t]]===2&&comp[tri[t+1]]===2&&comp[tri[t+2]]===2){cut++;continue}keep.push(tri[t],tri[t+1],tri[t+2])}if(cut){tri=new Uint32Array(keep);M.contextHidden=true}}
     return {...L,tri,px,py,pz,fog,rn,cls}};   // projected afresh every frame: the camera moves
   const levels=M.levels.map(prep),main=levels[M.primary]||levels[0];
-  const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':'over'):o.layer;
-  const zItem=layer==='under'?-1e9:layer==='over'?1e9:0;
+  const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':M.hasModel&&style==='surface'?'under':'over'):o.layer==='behind'?'under':o.layer;   // with a model: behind it, so the model keeps its colour
+  const zItem=layer==='under'?-1e9:layer==='over'||layer==='lines'?1e9:0;
   // the surface's silhouette on the mesh: where n·(eye − p) changes sign, kept where the buffer sees it
   const silhouettes=(L,buf)=>{
     const n=L.pos.length/3,f=new Float32Array(n);
@@ -1153,17 +1153,18 @@ function buildMap(items,st,pos,proj,seedBase){
     const covered=i=>buf.tb[i]>=0,ctxIx=classIx.has(contextCol)?classIx.get(contextCol):-2,accIx=classIx.has(accent)?classIx.get(accent):-2;
     const own=i=>covered(i)&&sh.cls[i]!==ctxIx,rest=ctxIx>=0?regions(i=>covered(i)&&sh.cls[i]===ctxIx):[];
     const body=regions(own).map(r=>chaikin(r,2));if(!body.length&&!rest.length)return;
-    const alone=!M.hasModel,op=alone?1:(o.opacity??0.55),lineCol=o.line||inkCol,lw=o.lineWidth??0.9,blur=Math.max(1,1.6*TEX);
+    // behind the model (layer 'under'), the map is drawn as fully as on its own: the model is painted over it; 'lines': only its outline, over the model
+    const lines=layer==='lines',alone=!M.hasModel||layer==='under',op=alone?1:(o.opacity??0.55),lineCol=o.line||inkCol,lw=o.lineWidth??0.9,blur=Math.max(1,1.6*TEX);
     const base=mapCol,darkC=mix(mapCol,light?'#1c2330':'#000000',light?0.62:0.7),lite=light?'#ffffff':mix(mapCol,'#ffffff',0.5);
     // the map's marks: ink (outline and hatching, in every look: the default) or the look's own (a watercolour gradient)
-    const hatchy=drawn&&((o.marks??'ink')==='ink'||ink||pencil||chalk),washy=drawn&&wc&&!hatchy;
+    const hatchy=!lines&&drawn&&((o.marks??'ink')==='ink'||ink||pencil||chalk),washy=!lines&&drawn&&wc&&!hatchy;
     if(hatchy){ // ink: paper inside the outline, hatching where the light falls away, crossed where deepest
       ctx.save();ringsPath(ctx,body);ctx.fillStyle=paperFill();ctx.globalAlpha=alone?1:0.45;ctx.fill('evenodd');ctx.restore();
       if(wc)washRings(ctx,body,mapCol,seedBase+93,{strength:alone?0.16:0.1,layers:2,noRing:true});   // on watercolour paper, a faint wash under the hatching
       const inkColour=cfg.rep.fill==='ink colour',colorAt=()=>inkColour||pencil||chalk?mix(mapCol,P.hatch,0.3):P.hatch,sp=S.hatchSpacing*Math.max(0.7,TEX),ang=S.hatchAngle*Math.PI/180;
       const kk=(o.shade??0.35)/0.35;if(alone){hatch(ctx,sh,own,0.4,ang,sp,colorAt,0.7*kk);hatch(ctx,sh,own,0.68,ang+1.25,sp*1.2,colorAt,0.55*kk)}
       else hatch(ctx,sh,own,0.62,ang,sp*1.3,colorAt,0.5*kk)}   // over a model: only the deepest shadow, one way, so the model reads through
-    const off=hatchy?null:document.createElement('canvas');if(off){off.width=Math.max(1,Math.round(W*RF.dpr));off.height=Math.max(1,Math.round(H*RF.dpr));const x=off.getContext('2d');x.scale(RF.dpr,RF.dpr);
+    const off=hatchy||lines?null:document.createElement('canvas');if(off){off.width=Math.max(1,Math.round(W*RF.dpr));off.height=Math.max(1,Math.round(H*RF.dpr));const x=off.getContext('2d');x.scale(RF.dpr,RF.dpr);
     // the base colour, spread a little past the outline so the blur does not pale the edge
     ringsPath(x,body);x.fillStyle=base;x.fill('evenodd');x.lineWidth=blur*3;x.lineJoin='round';x.strokeStyle=base;x.stroke();
     for(let k=1;k<=9;k++){const t=k/10;const r=regions(i=>own(i)&&sh.dark[i]>t*0.9);if(r.length){ringsPath(x,r);x.fillStyle=rgba(darkC,washy?0.085:0.13);x.fill('evenodd')}}

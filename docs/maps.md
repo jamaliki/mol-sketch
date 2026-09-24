@@ -74,8 +74,10 @@ contoured to enclose 0.30 MDa (the sample's mass, 1.21 Å³/Da) · specks under 
 
 ## A map with its model
 
-The map is drawn over the model as a translucent envelope, so the model shows through it (`opacity`, 0.55 by
-default). Two more choices keep the picture about this model:
+The map is drawn **behind** the model: the model is painted over it and keeps its colour, and the map shows around
+it and through its gaps. `layer="over"` draws the map over the model instead, as a translucent envelope (`opacity`,
+0.55 by default), and `layer="lines"` draws only the map's outline over the model. In the app: Map › Drawing › *with
+the model*. Two more choices keep the picture about this model:
 
 - **Cropping.** The map is cropped to the model's box plus 8 Å (`crop`).
 - **Density near the model.** When the map is low-passed, only the density within 5 Å of the model is kept, before
@@ -113,7 +115,7 @@ carboxylates first. Asp89 above is an example: its backbone lies in density, its
 ## How the map is drawn
 
 By default a map is drawn in **ink** whatever the look: a steady outline, hatching where the surface turns from the
-light (only the deepest shadow when a model is inside), and the look's paper, with a faint wash on watercolour paper.
+light (only the deepest shadow when the map is drawn over a model), and the look's paper, with a faint wash on watercolour paper.
 The surface is smoothed first (sampled finely for close-ups and Taubin-smoothed, as ChimeraX smooths surfaces), so it
 has no grid facets.
 
@@ -122,6 +124,7 @@ has no grid facets.
 | `marks` | `ink` (default), `look` | `look` uses the look's own marks, such as a watercolour gradient |
 | `finish` | `drawn` (default), `smooth`, `sketch` | `smooth`: plainly lit, ChimeraX-like · `sketch`: the raw grid, hand-drawn |
 | `style` | `surface` (default), `layers`, `mesh`, `slice` | `layers`: several contours nested (`levels`, as multiples of the level) · `mesh`: Coot-style chicken wire · `slice`: a section through the map, stippled by density |
+| `layer` | `auto` (behind a model), `over`, `lines` | where the map is drawn relative to the model |
 | `shade`, `line_width`, `line` | | how much shading, how heavy the outline, and its colour (default: the look's ink) |
 
 The full list of map fields is in [python/docs/style.md](../python/docs/style.md#density-maps).

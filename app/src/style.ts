@@ -39,7 +39,7 @@ export interface Style {
       and the honest marks: density the model does not explain (accent), residues the density does not support, and
       a caption that states the level */
   map: { style: 'surface' | 'layers' | 'mesh' | 'slice'; level: number | null; sigma: number | null; speck: number; smooth: number | 'auto'; crop: number; levels: number[]; carve: number; zone: string; finish: 'drawn' | 'smooth' | 'sketch'; marks: 'ink' | 'look'; smoothing: number; opacity: number; context: 'hide' | 'show'; color: 'single' | 'chain' | 'model'; line: string | null; lineWidth: number; shade: number; glass: boolean;
-    unexplained: boolean; unsupported: boolean; localResolution: 'none' | 'bfactor' | 'map'; layer: 'auto' | 'under' | 'over';
+    unexplained: boolean; unsupported: boolean; localResolution: 'none' | 'bfactor' | 'map'; layer: 'auto' | 'under' | 'behind' | 'over' | 'lines';
     caption: boolean; maxVoxels: number; meshSpacing: number; slice: { offset: number; cut: boolean } };
   reps: { sticks: string; cartoon: string; surface: string };   // selections
   stickRadius: number;       // Å

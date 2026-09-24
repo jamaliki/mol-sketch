@@ -208,7 +208,8 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     control(g, { t: 'select', label: 'finish', path: 'map.finish', options: ['drawn', 'smooth', 'sketch'], tip: 'drawn: a smooth surface in the look’s marks · smooth: plainly lit, as ChimeraX · sketch: the raw grid, hand-drawn' });
     control(g, { t: 'range', label: 'shading', path: 'map.shade', min: 0, max: 1, step: 0.05 });
     control(g, { t: 'range', label: 'outline', path: 'map.lineWidth', min: 0.2, max: 2.5, step: 0.05 });
-    control(g, { t: 'range', label: 'opacity over model', path: 'map.opacity', min: 0.1, max: 1, step: 0.05, when: () => H.hasStructure() });
+    control(g, { t: 'select', label: 'with the model', path: 'map.layer', options: ['auto', 'behind', 'over', 'lines'], when: () => H.hasStructure(), tip: 'behind: the map drawn under the model, which keeps its colour (auto) · over: a translucent envelope over the model · lines: only the map’s outline, over the model' });
+    control(g, { t: 'range', label: 'opacity over model', path: 'map.opacity', min: 0.1, max: 1, step: 0.05, when: () => H.hasStructure() && S().map.layer === 'over' });
     control(g, { t: 'range', label: 'surface smoothing', path: 'map.smoothing', min: 0, max: 10, step: 1, when: () => S().map.finish !== 'sketch', tip: 'Taubin smoothing steps, as ChimeraX smooths surfaces' });
     control(g, { t: 'range', label: 'specks under (px)', path: 'map.speck', min: 0, max: 20, step: 1, tip: 'islands and holes smaller than this are left out' });
     control(g, { t: 'check', label: 'caption', path: 'map.caption', tip: 'a line under the drawing that says how the map is shown: its level, filtering, carving' });

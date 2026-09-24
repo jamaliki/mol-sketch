@@ -211,7 +211,7 @@ Usually set through [`fig.map`](api.md#figmapsourceauto--levelnone-sigmanone-loc
 | `map.shade` | `0.35` | how much shading, 0 (outline only) to 1 |
 | `map.line` | `null` | the outline's colour (`null`: the look's ink) |
 | `map.line_width` | `0.9` | the outline's weight |
-| `map.opacity` | `0.55` | how opaque the map is over a model |
+| `map.opacity` | `0.55` | how opaque the map is over a model (`map.layer="over"`) |
 | `map.speck` | `8` | islands and holes smaller than this, in pixels, are left out |
 | `map.crop` | `8` | with a model: the map is cropped to the model's box and this margin, Å |
 | `map.zone` | `""` | a selection: the map closely around it only, at full resolution, for close-ups |
@@ -220,7 +220,7 @@ Usually set through [`fig.map`](api.md#figmapsourceauto--levelnone-sigmanone-loc
 | `map.unsupported` | `true` | a small accent circle on residues mostly outside the density |
 | `map.unexplained` | `false` | density the model does not explain in the accent colour |
 | `map.local_resolution` | `"none"` | `"bfactor"` or `"map"`: lines looser where the resolution is worse |
-| `map.layer` | `"auto"` | draw the map `"over"` or `"under"` the model |
+| `map.layer` | `"auto"` | with a model: `"behind"` it (the default for surfaces: the model is drawn over the map and keeps its colour), `"over"` it as a translucent envelope (`map.opacity`), or `"lines"` (only the map's outline, over the model) |
 | `map.caption` | `true` | the line under the drawing that says how the map is shown |
 | `map.max_voxels` | `192` | the largest grid drawn from, per side (larger maps are averaged down) |
 | `map.mesh_spacing` | `1` | Å between the mesh's planes |
