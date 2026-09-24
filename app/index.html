@@ -12,7 +12,8 @@
     --r:8px; --rs:6px;
   }
   * { box-sizing:border-box }
-  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:12.5px/1.45 "IBM Plex Sans", system-ui, sans-serif; overflow:hidden; -webkit-font-smoothing:antialiased }
+  html, body { margin:0; height:100%; background:var(--bg); color:var(--fg); font:12.5px/1.45 "IBM Plex Sans", system-ui, sans-serif; overflow:hidden }
+  #topbar, #outline, #panel, .dialog, .menu, .dock, #timeline { -webkit-font-smoothing:antialiased }   /* the chrome only: on the drawing it would change how canvas text is smoothed */
   #app { display:grid; grid-template-columns:236px 1fr 316px; grid-template-rows:46px 1fr; height:100% }
   button { background:var(--raise); color:var(--fg); border:1px solid var(--line2); border-radius:var(--rs); padding:5px 10px; font:inherit; cursor:pointer; white-space:nowrap; transition:background .12s, border-color .12s, color .12s; display:inline-flex; align-items:center; justify-content:center; gap:5px }
   button:hover { background:#36332d; border-color:#4d483f }

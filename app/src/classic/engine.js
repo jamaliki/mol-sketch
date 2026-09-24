@@ -503,7 +503,7 @@ let groupIdx={},groupIdxKey='';
 function groupIndex(key){const sk=scene.keyframes.length+'|'+(scene.name||'');if(groupIdxKey!==sk){groupIdx={};groupIdxKey=sk;let n=0;for(const k of scene.keyframes)for(const id in k.atoms){const a=k.atoms[id];const g=a.group||((a.resn||'')+(a.resi??''));if(!(g in groupIdx))groupIdx[g]=n++;const c=a.chain||'';if(!(('chain:'+c) in groupIdx))groupIdx['chain:'+c]=n++;const e='entity:'+(a.entity||('chain:'+c));if(!(e in groupIdx))groupIdx[e]=n++}}return groupIdx[key]??0}
 function carbonColor(a){const P=cfg.palette,mode=cfg.rep.colorBy;
   if(a.color)return P[a.color]||a.color;
-  if(mode==='element')return P.C;if(mode==='subunit')return subunitColor(a);if(mode==='entity')return entityColor(a);
+  if(mode==='element')return P.C;if(mode==='subunit')return subunitColor(a);if(mode==='entity')return entityColor(a);if(mode==='chain')return chainColor(a);
   const key=mode==='chain'?('chain:'+(a.chain||'')):(a.group||((a.resn||'')+(a.resi??'')));
   if(scene.groupColors&&scene.groupColors[mode==='chain'?(a.chain||''):key])return scene.groupColors[mode==='chain'?(a.chain||''):key];
   if(mode==='group')return P.C;
@@ -512,14 +512,13 @@ function carbonColor(a){const P=cfg.palette,mode=cfg.rep.colorBy;
 const SUBUNIT_COLS={S:'#9cc27a',L:'#e6a45a',T:'#c96d8a',X:'#b8b4a8'};
 function subunitColor(a){const k=a.subunit||'X';if(scene.groupColors&&scene.groupColors['subunit:'+k])return scene.groupColors['subunit:'+k];return SUBUNIT_COLS[k]||SUBUNIT_COLS.X}
 function entityColor(a){const e=a.entity||('chain:'+(a.chain||''));if(scene.groupColors&&scene.groupColors['entity:'+e])return scene.groupColors['entity:'+e];const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[groupIndex('entity:'+e)%GP.length]}
-function chainColor(a){const c=a.chain||'';if(scene.groupColors&&scene.groupColors[c])return scene.groupColors[c];const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[groupIndex('chain:'+c)%GP.length]}
-/** the cartoon's colouring: the style's, or by chain when a map is drawn with its model by chain (the density and its chain share a colour) */
-/** a chain's colour for a map with its model: the chain's own if given, else the palette in the order the chains
-    come (chainColor counts residues and chains together, so neighbouring chains can share a colour) */
+/** a chain's colour: its own if given, else the palette's in the order the chains come (counted on their own, so
+    neighbouring chains never share a colour the way they could when residues and chains were counted together) */
 let chainOrd=null,chainOrdKey='';
-function chainTint(a){const c=a.chain||'';if(scene.groupColors&&scene.groupColors[c])return scene.groupColors[c];
-  const k=scene.keyframes.length+'|'+(scene.name||'');if(chainOrdKey!==k){chainOrd={};chainOrdKey=k;let n=0;for(const f of scene.keyframes)for(const id in f.atoms){const ch=f.atoms[id].chain||'';if(!(ch in chainOrd))chainOrd[ch]=n++}}
-  const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[(chainOrd[c]??0)%GP.length]}
+function chainColor(a){const c=a.chain||'';if(scene.groupColors&&scene.groupColors[c])return scene.groupColors[c];const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;
+  const k=scene.keyframes.length+'|'+(scene.name||'')+'|'+(scene.keyframes[0]?Object.keys(scene.keyframes[0].atoms).length:0);if(chainOrdKey!==k){chainOrd={};chainOrdKey=k;let n=0;for(const f of scene.keyframes)for(const id in f.atoms){const ch=f.atoms[id].chain||'';if(!(ch in chainOrd))chainOrd[ch]=n++}}
+  return GP[(chainOrd[c]??0)%GP.length]}
+/** the cartoon's colouring: the style's, or by chain when a map is drawn with its model by chain (the density and its chain share a colour) */
 function cartoonMode(){const M=scene.map;return M&&M.hasModel&&M.opts.color==='chain'?'chain':cfg.rep.cartoonColor||'ss'}
 function atomColor(a){if(a.color)return cfg.palette[a.color]||a.color;if(a.el==='C')return carbonColor(a);return cfg.palette[a.el]||cfg.palette.X}
 
@@ -1046,7 +1045,7 @@ function buildMap(items,st,pos,proj,seedBase){
       let explained=0;for(let v=0;v<n;v++)if(!far[v])explained++;
       const size=new Map();for(let v=0;v<n;v++)if(far[v]){const r=find(v);size.set(r,(size.get(r)||0)+1)}
       for(let v=0;v<n;v++)if(far[v]){const k=size.get(find(v));comp[v]=k<24?0:k<=0.1*explained||M.zoned?1:2}}   // zoned: all that is left is the model's
-    for(let v=0;v<n;v++){let c=mapCol;if(comp[v]===1&&o.unexplained)c=accent;else if(comp[v]===2)c=contextCol;else if((o.color==='model'||o.color==='chain')&&L.near[v]>=0){const a=atomsById[byIndex[L.near[v]]];if(a)c=o.color==='chain'?chainTint(a):colFor(a)}cls[v]=classOf(c)}
+    for(let v=0;v<n;v++){let c=mapCol;if(comp[v]===1&&o.unexplained)c=accent;else if(comp[v]===2)c=contextCol;else if((o.color==='model'||o.color==='chain')&&L.near[v]>=0){const a=atomsById[byIndex[L.near[v]]];if(a)c=o.color==='chain'?chainColor(a):colFor(a)}cls[v]=classOf(c)}
     // smooth finish: the rest of an assembly beyond the model is left out (cut along the mesh, so its edge is the surface's own); the caption says so
     let tri=L.tri;if(o.finish!=='sketch'&&M.hasModel&&!M.zoned&&(o.context??'hide')==='hide'){const keep=[];let cut=0;for(let t=0;t<tri.length;t+=3){if(comp[tri[t]]===2&&comp[tri[t+1]]===2&&comp[tri[t+2]]===2){cut++;continue}keep.push(tri[t],tri[t+1],tri[t+2])}if(cut){tri=new Uint32Array(keep);M.contextHidden=true}}
     return {...L,tri,px,py,pz,fog,rn,cls}};   // projected afresh every frame: the camera moves
@@ -1324,7 +1323,7 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
   const traces=backboneTraces(atoms,sel);
   for(const tr of traces){
     const A=tr.atoms,n=A.length;const pts=A.map(a=>a.pos.slice());
-    const rc=(i,t)=>colourMode==='rainbow'?(mode==='ink colour'?hsv(0.6667*(1-i/Math.max(1,n-1)),0.9,0.8):hsv(0.6667*(1-i/Math.max(1,n-1)),0.75,0.95)):colourMode==='carbon'?carbonColor(A[i]):colourMode==='chain'?chainTint(A[i]):ssCol(t);
+    const rc=(i,t)=>colourMode==='rainbow'?(mode==='ink colour'?hsv(0.6667*(1-i/Math.max(1,n-1)),0.9,0.8):hsv(0.6667*(1-i/Math.max(1,n-1)),0.75,0.95)):colourMode==='carbon'?carbonColor(A[i]):colourMode==='chain'?chainColor(A[i]):ssCol(t);
     // elements: runs of H (≥3 residues) and E (≥2), the rest coil; neighbours share their end residue, as MolAuto writes them
     const ss=A.map(a=>a.nucleic?'L':(a.ss==='H'||a.ss==='E'?a.ss:'L'));
     const runs=[];for(let i=0;i<n;){let j=i;while(j+1<n&&ss[j+1]===ss[i])j++;runs.push({t:ss[i],s:i,e:j});i=j+1}
@@ -1459,7 +1458,7 @@ function buildCartoon(items,st,pos,atoms,sel,proj,seedBase,lowDetail){
         if(poly.length>=3){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of poly){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1])}
           const m=10;x0=Math.floor(x0-m);y0=Math.floor(y0-m);const bw=Math.ceil(x1-x0+m),bh=Math.ceil(y1-y0+m);
           if(bw>0&&bh>0&&bw*bh<16e6){const cv=document.createElement('canvas');cv.width=Math.ceil(bw*RF.dpr);cv.height=Math.ceil(bh*RF.dpr);const wx=cv.getContext('2d',{willReadFrequently:true});wx.scale(RF.dpr,RF.dpr);wx.translate(-x0,-y0);
-            const cm=cartoonMode(),col=cm==='ss'?ssColor(samp[j0].ss):cm==='chain'?chainTint(samp[j0].atom):carbonColor(samp[j0].atom);const fog=(fogs[j0]+fogs[j1])/2;
+            const cm=cartoonMode(),col=cm==='ss'?ssColor(samp[j0].ss):cm==='chain'?chainColor(samp[j0].atom):carbonColor(samp[j0].atom);const fog=(fogs[j0]+fogs[j1])/2;
             watercolourShape(wx,poly,col,seed+j0*13,{fog,layers:10,strength:0.85,offscreen:true,noScale:true});
             const run={canvas:cv,x0,y0,w:bw,h:bh};for(let j=j0;j<=j1;j++)wcRuns[j]=run}}
         j0=j1+1}
@@ -1472,7 +1471,7 @@ function buildCartoon(items,st,pos,atoms,sel,proj,seedBase,lowDetail){
       const z=(zs[j]+zs[j+1])/2;const s=samp[j];
       items.push({z,draw:(ctx)=>{
         const fog=(fogs[j]+fogs[j+1])/2,fk=1-fog*cfg.view.fog;const d=(ds[j]+ds[j+1])/2;
-        const cm=cartoonMode();let col=cm==='ss'?ssColor(s.ss):cm==='chain'?chainTint(s.atom):carbonColor(s.atom);
+        const cm=cartoonMode();let col=cm==='ss'?ssColor(s.ss):cm==='chain'?chainColor(s.atom):carbonColor(s.atom);
         const baseCol=col;const isFront=front[j];col=fillFor(col);if(!isFront&&!isInk())col=shade(col,-0.14);col=fogged(col,fog);
         const q=[Lf[j],Lf[j+1],Rf[j+1],Rf[j]];
         ctx.save();ctx.globalAlpha=s.atom.alpha;

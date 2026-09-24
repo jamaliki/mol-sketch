@@ -168,6 +168,29 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   const cartoonOn = () => has(S().reps.cartoon), surfaceOn = () => has(S().reps.surface), sticksOn = () => has(S().reps.sticks);
   const engraved = () => cartoonOn() && S().cartoonStyle === 'engraved';
   const fillIs = (...f: string[]) => f.includes(S().fill);
+  /** the group palettes, the colours chains, residues and molecules take in order: hover to preview, click to keep.
+      Engraved ribbons take three of them for helix, sheet and coil. The studies fold under "More palettes" */
+  const palettePicker = (parent: HTMLElement) => {
+    const tiles: HTMLElement[] = []; let kept: { name: string; colors: string[] | null; ss: string[] } | null = null;
+    const SS = ['helix', 'sheet', 'loop'] as const;
+    const getSS = () => SS.map(k => H.style.palette[k]); const setSS = (v: string[]) => SS.forEach((k, i) => { H.style.palette[k] = v[i] });
+    const applyPal = (name: string, colors: string[]) => { H.style.groupPalette = name === 'MolSketch' ? null : colors.slice(); H.style.groupPaletteName = name;
+      if (H.style.cartoonStyle === 'engraved') { const base = H.looks[H.currentLook()]?.style.palette; if (name !== 'MolSketch') setSS(ribbonColours(colors, H.style.palette.paper, H.style.palette.ink)); else if (base) setSS(SS.map(k => base[k] ?? H.style.palette[k])) }
+      H.rebuild() };
+    const grid = (fam: string) => { const g = el('div', { class: 'paltiles' });
+      for (const name of Object.keys(H.groupPalettes)) { const gp = H.groupPalettes[name]; if (gp.family !== fam) continue;
+        const t = el('div', { class: 'paltile', title: name + ' — ' + gp.source }, el('div', { class: 'bands' }, ...gp.colors.map(c => { const i = el('i'); i.style.background = c; return i })), el('span', {}, name)); t.dataset.name = name;
+        t.onmouseenter = () => { if (!kept) kept = { name: H.style.groupPaletteName, colors: H.style.groupPalette, ss: getSS() }; applyPal(name, gp.colors) };
+        t.onmouseleave = () => { if (kept) { H.style.groupPalette = kept.colors; H.style.groupPaletteName = kept.name; setSS(kept.ss); kept = null; H.rebuild() } };
+        t.onclick = () => { const k = kept; kept = null; if (k) { H.style.groupPalette = k.colors; H.style.groupPaletteName = k.name; setSS(k.ss) } H.mark('palette ' + name); applyPal(name, gp.colors); refresh() };
+        g.append(t); tiles.push(t) } return g };
+    parent.append(grid('drawing'), el('div', { class: 'famhead' }, el('span', { class: 'subhead', style: 'margin:0' }, 'Colour-blind safe'), el('small', {}, 'Okabe–Ito, Tol, Tableau')), grid('safe'));
+    const n = Object.values(H.groupPalettes).filter(p => p.family === 'studies').length;
+    const more = el('div'); more.style.display = 'none'; more.append(grid('studies'));
+    const moreB = el('button', { class: 'ghost', style: 'padding:3px 4px;font-size:11px', onclick: () => { const on = more.style.display === 'none'; more.style.display = on ? '' : 'none'; moreB.textContent = on ? 'Fewer palettes' : `More palettes (${n})` } }, `More palettes (${n})`) as HTMLButtonElement;
+    parent.append(moreB, more);
+    refreshers.push(() => { const cur = H.style.groupPaletteName || 'MolSketch'; tiles.forEach(e => e.classList.toggle('on', e.dataset.name === cur)); if (tiles.some(t => t.dataset.name === cur && more.contains(t))) { more.style.display = ''; moreB.textContent = 'Fewer palettes' } });
+  };
 
   /* ---------- inspector: one pane per layer, and a search over all of them ---------- */
   const search = el('input', { type: 'search', class: 'search', placeholder: 'Search settings  ( / )', spellcheck: 'false' }) as HTMLInputElement;
@@ -221,7 +244,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   };
   const buildOutline = () => {
     const m = H.molecule(); const st = stickParts(); const hid = hiddenChains();
-    const key = JSON.stringify([m, S().reps, S().map.visible, S().show.noLabels, S().site.sel, H.hasScene(), H.figLabels().length, H.currentLook(), H.mapInfo()?.sigma?.toFixed(1)]);
+    const key = JSON.stringify([m, S().reps, S().map.visible, S().show.noLabels, S().site.sel, H.hasScene(), H.figLabels().length, H.currentLook(), H.mapInfo()?.sigma?.toFixed(1), S().groupPaletteName, S().colorBy, S().cartoonColor]);
     if (key === outlineKey) return; outlineKey = key; outline.innerHTML = ''; outlineRows = [];
     outline.append(el('div', { class: 'ohead' }, 'Style'));
     orow('drawing', 'drawing', 'Drawing style', H.looks[H.currentLook()]?.name || 'custom');
@@ -324,8 +347,13 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     // thumbnails of the loaded molecule in each look, drawn one at a time when the drawing is idle
     let thumbKey = '', queue: string[] = [], timer = 0;
     const drawNext = () => { const k = queue.shift(); if (!k) return; const c = H.lookPreview(k, 200, 150); const th = thumbs[k]; th.innerHTML = ''; if (c) th.append(c); timer = window.setTimeout(drawNext, 30) };
-    refreshers.push(() => { const m = H.molecule(); const key = JSON.stringify([m.name, m.atoms, m.map, S().reps, current]); if (current !== 'drawing' || key === thumbKey) return; thumbKey = key; clearTimeout(timer);
+    refreshers.push(() => { const m = H.molecule(); const key = JSON.stringify([m.name, m.atoms, m.map, S().reps, current]); if (current !== 'drawing' || key === thumbKey || navigator.webdriver) return;   // not in scripted browsers (the CLI) thumbKey = key; clearTimeout(timer);
       if (!m.kind || m.atoms > 30000) { for (const k in thumbs) thumbs[k].innerHTML = ''; return } queue = Object.keys(thumbs); timer = window.setTimeout(drawNext, 250) });
+  }
+  {
+    const g = sec(PD, 'Palette', { keys: 'palette colours colors okabe tol tableau colour-blind chains residues groups' });
+    g.append(note('The colours chains, residues and molecules take in order. Hover to preview, click to keep.'));
+    palettePicker(g);
   }
   {
     const g = sec(PD, 'Adjust', { keys: 'fill hand shading line width pen' });
@@ -423,29 +451,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     const setScheme = (v: string) => { H.mark('colour by ' + v); if (v === 'ss') S().cartoonColor = 'ss'; else if (v === 'rainbow') S().cartoonColor = 'rainbow'; else { S().cartoonColor = 'carbon'; S().colorBy = v as any } if (surfaceOn()) S().surfaceColor = v === 'chain' ? 'chain' : v === 'residue' ? 'residue' : S().surfaceColor; H.rebuild() };
     const r = row(g, 'colour by', segOf([['ss', 'Structure'], ['chain', 'Chain'], ['residue', 'Residue'], ['rainbow', 'Rainbow']], scheme, setScheme)); r.classList.add('full'); r.title = 'structure: helix, sheet and loop colours · chain · residue · rainbow: blue to red along each chain (engraved ribbons)'; showWhen(r, cartoonOn);
     control(g, { t: 'select', label: 'surface by', path: 'surfaceColor', options: [['subunit', 'subunit'], ['chain', 'chain'], ['entity', 'molecule'], ['residue', 'residue'], ['single', 'one colour']], geom: true, when: surfaceOn });
-    // the group palette: what it is now, and the choice folded under it
-    const bandsOf = (cs: string[]) => el('span', { class: 'bands' }, ...cs.map(c => { const i = el('i'); i.style.background = c; return i }));
-    const nowBtn = el('button', { class: 'palnow', title: 'the colours chains and residues take, in order' }) as HTMLButtonElement; const tilesBox = el('div'); tilesBox.style.display = 'none';
-    nowBtn.onclick = () => { tilesBox.style.display = tilesBox.style.display === 'none' ? '' : 'none' };
-    refreshers.push(() => { const n = H.style.groupPaletteName || 'MolSketch'; const gp = H.groupPalettes[n]; nowBtn.innerHTML = ''; nowBtn.append(bandsOf(gp ? gp.colors : H.style.groupPalette || []), el('span', {}, n), icon('chev')) });
-    row(g, 'palette', nowBtn); g.append(tilesBox);
-    const tiles: HTMLElement[] = []; let kept: { name: string; colors: string[] | null; ss: string[] } | null = null;
-    const SS = ['helix', 'sheet', 'loop'] as const;
-    const getSS = () => SS.map(k => H.style.palette[k]); const setSS = (v: string[]) => SS.forEach((k, i) => { H.style.palette[k] = v[i] });
-    const applyPal = (name: string, colors: string[]) => { H.style.groupPalette = name === 'MolSketch' ? null : colors.slice(); H.style.groupPaletteName = name;
-      if (H.style.cartoonStyle === 'engraved') { const base = H.looks[H.currentLook()]?.style.palette; if (name !== 'MolSketch') setSS(ribbonColours(colors, H.style.palette.paper, H.style.palette.ink)); else if (base) setSS(SS.map(k => base[k] ?? H.style.palette[k])) }
-      H.rebuild() };
-    for (const [fam, title, sub] of [['drawing', 'For drawings', ''], ['safe', 'Colour-blind safe', 'Okabe–Ito, Tol, Tableau'], ['studies', 'Studies', '']] as [string, string, string][]) {
-      tilesBox.append(el('div', { class: 'famhead' }, el('span', { class: 'subhead', style: 'margin:0' }, title), el('small', {}, sub)));
-      const grid = el('div', { class: 'paltiles' }); tilesBox.append(grid);
-      for (const name of Object.keys(H.groupPalettes)) { const gp = H.groupPalettes[name]; if (gp.family !== fam) continue;
-        const t = el('div', { class: 'paltile', title: name + ' — ' + gp.source }, el('div', { class: 'bands' }, ...gp.colors.map(c => { const i = el('i'); i.style.background = c; return i })), el('span', {}, name)); t.dataset.name = name;
-        t.onmouseenter = () => { if (!kept) kept = { name: H.style.groupPaletteName, colors: H.style.groupPalette, ss: getSS() }; applyPal(name, gp.colors) };
-        t.onmouseleave = () => { if (kept) { H.style.groupPalette = kept.colors; H.style.groupPaletteName = kept.name; setSS(kept.ss); kept = null; H.rebuild() } };
-        t.onclick = () => { const k = kept; kept = null; if (k) { H.style.groupPalette = k.colors; H.style.groupPaletteName = k.name; setSS(k.ss) } H.mark('group palette ' + name); applyPal(name, gp.colors); refresh() };
-        grid.append(t); tiles.push(t) }
-    }
-    refreshers.push(() => tiles.forEach(e => e.classList.toggle('on', e.dataset.name === (H.style.groupPaletteName || 'MolSketch'))));
+    g.append(el('div', { class: 'subhead' }, 'palette')); palettePicker(g);
     const ss = el('div'); g.append(ss); showWhen(ss, () => S().cartoonColor === 'ss');
     ss.append(el('div', { class: 'subhead' }, 'helix, sheet, loop')); const ssw = el('div', { class: 'swatches' }); ss.append(ssw); for (const k of ['helix', 'sheet', 'loop', 'nucleic']) { const [g2, s2] = stylePal(k, true); swatch(ssw, k, g2, s2) }
   }

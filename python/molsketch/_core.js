@@ -1575,6 +1575,7 @@
     surfaceColor: "subunit",
     surfaceDepth: { edges: 1, pooling: 1, fade: 1 },
     map: {
+      visible: true,
       style: "surface",
       level: null,
       sigma: null,
@@ -3079,6 +3080,7 @@
       if (mode === "element") return P.C;
       if (mode === "subunit") return subunitColor(a);
       if (mode === "entity") return entityColor(a);
+      if (mode === "chain") return chainColor(a);
       const key = mode === "chain" ? "chain:" + (a.chain || "") : a.group || (a.resn || "") + (a.resi ?? "");
       if (scene.groupColors && scene.groupColors[mode === "chain" ? a.chain || "" : key]) return scene.groupColors[mode === "chain" ? a.chain || "" : key];
       if (mode === "group") return P.C;
@@ -3097,17 +3099,12 @@
       const GP = cfg.groupPalette && cfg.groupPalette.length ? cfg.groupPalette : GROUP_PALETTE;
       return GP[groupIndex("entity:" + e) % GP.length];
     }
+    let chainOrd = null, chainOrdKey = "";
     function chainColor(a) {
       const c = a.chain || "";
       if (scene.groupColors && scene.groupColors[c]) return scene.groupColors[c];
       const GP = cfg.groupPalette && cfg.groupPalette.length ? cfg.groupPalette : GROUP_PALETTE;
-      return GP[groupIndex("chain:" + c) % GP.length];
-    }
-    let chainOrd = null, chainOrdKey = "";
-    function chainTint(a) {
-      const c = a.chain || "";
-      if (scene.groupColors && scene.groupColors[c]) return scene.groupColors[c];
-      const k = scene.keyframes.length + "|" + (scene.name || "");
+      const k = scene.keyframes.length + "|" + (scene.name || "") + "|" + (scene.keyframes[0] ? Object.keys(scene.keyframes[0].atoms).length : 0);
       if (chainOrdKey !== k) {
         chainOrd = {};
         chainOrdKey = k;
@@ -3117,7 +3114,6 @@
           if (!(ch in chainOrd)) chainOrd[ch] = n++;
         }
       }
-      const GP = cfg.groupPalette && cfg.groupPalette.length ? cfg.groupPalette : GROUP_PALETTE;
       return GP[(chainOrd[c] ?? 0) % GP.length];
     }
     function cartoonMode() {
@@ -4445,7 +4441,7 @@
           else if (comp[v] === 2) c = contextCol;
           else if ((o.color === "model" || o.color === "chain") && L.near[v] >= 0) {
             const a = atomsById[byIndex[L.near[v]]];
-            if (a) c = o.color === "chain" ? chainTint(a) : colFor(a);
+            if (a) c = o.color === "chain" ? chainColor(a) : colFor(a);
           }
           cls[v] = classOf(c);
         }
@@ -5318,7 +5314,7 @@
       for (const tr of traces) {
         const A = tr.atoms, n = A.length;
         const pts = A.map((a) => a.pos.slice());
-        const rc = (i, t) => colourMode === "rainbow" ? mode === "ink colour" ? hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.9, 0.8) : hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.75, 0.95) : colourMode === "carbon" ? carbonColor(A[i]) : colourMode === "chain" ? chainTint(A[i]) : ssCol(t);
+        const rc = (i, t) => colourMode === "rainbow" ? mode === "ink colour" ? hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.9, 0.8) : hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.75, 0.95) : colourMode === "carbon" ? carbonColor(A[i]) : colourMode === "chain" ? chainColor(A[i]) : ssCol(t);
         const ss = A.map((a) => a.nucleic ? "L" : a.ss === "H" || a.ss === "E" ? a.ss : "L");
         const runs = [];
         for (let i = 0; i < n; ) {
@@ -5708,7 +5704,7 @@
                 const wx = cv.getContext("2d", { willReadFrequently: true });
                 wx.scale(RF.dpr, RF.dpr);
                 wx.translate(-x0, -y0);
-                const cm = cartoonMode(), col = cm === "ss" ? ssColor(samp[j0].ss) : cm === "chain" ? chainTint(samp[j0].atom) : carbonColor(samp[j0].atom);
+                const cm = cartoonMode(), col = cm === "ss" ? ssColor(samp[j0].ss) : cm === "chain" ? chainColor(samp[j0].atom) : carbonColor(samp[j0].atom);
                 const fog = (fogs[j0] + fogs[j1]) / 2;
                 watercolourShape(wx, poly, col, seed + j0 * 13, { fog, layers: 10, strength: 0.85, offscreen: true, noScale: true });
                 const run = { canvas: cv, x0, y0, w: bw, h: bh };
@@ -5735,7 +5731,7 @@
             const fog = (fogs[j] + fogs[j + 1]) / 2, fk = 1 - fog * cfg.view.fog;
             const d = (ds[j] + ds[j + 1]) / 2;
             const cm = cartoonMode();
-            let col = cm === "ss" ? ssColor(s.ss) : cm === "chain" ? chainTint(s.atom) : carbonColor(s.atom);
+            let col = cm === "ss" ? ssColor(s.ss) : cm === "chain" ? chainColor(s.atom) : carbonColor(s.atom);
             const baseCol = col;
             const isFront = front[j];
             col = fillFor(col);
@@ -7155,8 +7151,7 @@
     const t0 = performance.now();
     const E = classic();
     const s = R.structure;
-    const map = R.map || null;
-    if (!s && !map) return 0;
+    const map = style.map.visible === false ? null : R.map || null;
     E.cfg = cfgFromStyle(style, R.camera, false);
     if (s) {
       E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels);
@@ -7724,7 +7719,7 @@
     if (spec.groupColors) overrides = { ...spec.groupColors };
     const [W, H] = spec.size || [960, 720];
     const dpr = spec.scale || 1;
-    if (spec.map) map = mapOf(spec.map.ref);
+    if (spec.map && style.map.visible !== false) map = mapOf(spec.map.ref);
     const localRes = spec.map?.localResolution ? mapOf(spec.map.localResolution) : null;
     if (map && !structure && !scene) {
       const b = basisOf(map, mapLevel(map, style));
