@@ -249,8 +249,12 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     control(g, { t: 'range', label: 'coil width', path: 'engrave.coilWidth', min: 0.5, max: 2.5, step: 0.05, when: engraved });
   }
   {
-    const g = group(Look, 'Surface', { keys: 'probe' }); showWhen(g, surfaceOn);
+    const g = group(Look, 'Surface', { keys: 'probe depth edges pooling fade' }); showWhen(g, surfaceOn);
     control(g, { t: 'range', label: 'probe', path: 'probe', min: 0, max: 3, step: 0.1, geom: true });
+    const wc = () => S().fill === 'watercolour';
+    control(g, { t: 'range', label: 'depth edges', path: 'surfaceDepth.edges', min: 0, max: 1, step: 0.05, when: wc, tip: 'ink lines where the surface stands in front of something far behind' });
+    control(g, { t: 'range', label: 'pooling', path: 'surfaceDepth.pooling', min: 0, max: 1, step: 0.05, when: wc, tip: 'pigment settling in the grooves: recesses darker' });
+    control(g, { t: 'range', label: 'fade', path: 'surfaceDepth.fade', min: 0, max: 1, step: 0.05, when: wc, tip: 'far parts fade into the paper with the depth fog' });
   }
   {
     const g = group(Look, 'Fill', { keys: 'watercolour ink pencil chalk flat wash shading' });

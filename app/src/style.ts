@@ -30,6 +30,9 @@ export interface Style {
       and the rest of the protein can be quieted so the site reads first */
   site: { sel: string; cutaway: boolean; quiet: number; scale: number };
   surfaceColor: 'single' | 'residue' | 'chain' | 'subunit' | 'entity';
+  /** depth in a watercolour surface, each 0..1: ink edges where it stands in front of something far behind, pigment
+      pooling in the grooves, and far parts fading into the paper with the depth fog */
+  surfaceDepth: { edges: number; pooling: number; fade: number };
   reps: { sticks: string; cartoon: string; surface: string };   // selections
   stickRadius: number;       // Å
   cartoonScale: number;
@@ -71,7 +74,7 @@ export const DEFAULT_STYLE: Style = {
   cartoonStyle: 'engraved', stickStyle: 'auto',
   engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: false },
   site: { sel: '', cutaway: true, quiet: 0.35, scale: 1.9 },
-  surfaceColor: 'subunit',
+  surfaceColor: 'subunit', surfaceDepth: { edges: 1, pooling: 1, fade: 1 },
   reps: { sticks: 'hetatm and not water', cartoon: 'polymer', surface: '' },
   stickRadius: 0.2,
   cartoonScale: 1,

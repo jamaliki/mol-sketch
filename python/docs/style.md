@@ -16,7 +16,7 @@ them.
 
 Lengths are in pixels at `scale=1` unless marked Å (ångström, the molecule's own units).
 
-Contents: [Fill and representation](#fill-and-representation) · [Colour](#colour) · [What to draw](#what-to-draw) ·
+Contents: [Fill and representation](#fill-and-representation) · [Depth in a surface](#depth-in-a-watercolour-surface) · [Colour](#colour) · [What to draw](#what-to-draw) ·
 [The pen](#the-pen) · [Shading and hatching](#shading-and-hatching) · [Paper](#paper) · [Engraved ribbons](#engraved-ribbons) ·
 [Active site](#active-site) · [View and depth](#view-and-depth) · [Labels and lettering](#labels-and-lettering) ·
 [Animation](#animation) · [Detail](#detail) · [Preview-only fields](#preview-only-fields)
@@ -48,6 +48,22 @@ The fills:
 | `"ink"` | paper only: nitrogen stippled, oxygen hatched, sulphur cross-hatched, carbon plain |
 | `"ink colour"` | as `ink`, but the hatching takes the element or residue colour |
 | `"chalk"` | broad, dusty chalk strokes (the `chalkboard` look) |
+
+### Depth in a watercolour surface
+
+A surface is drawn as one patch per residue. With `fill="watercolour"`, three cues show its depth. Each is a strength
+from 0 (off) to 1, and all three are on by default.
+
+| field | default | meaning |
+|---|---|---|
+| `surfaceDepth.edges` | `1` | a hand-drawn ink edge wherever a patch stands in front of something farther back, heavier the deeper the step (from 1.5 Å, full weight by 8 Å). Lobes and grooves read by their outlines, as in David Goodsell's paintings |
+| `surfaceDepth.pooling` | `1` | pigment settles in the grooves: patches with nearer surface all around them are painted darker and denser (the same colour, more of it), with extra granulation |
+| `surfaceDepth.fade` | `1` | far patches fade towards the paper: paler, less painted, with lighter edges. It follows the depth fog, so `view.fog` and `view.fogStart` set how far back it starts and how strong it gets |
+
+```python
+fig.set(surfaceDepth={"edges": 1, "pooling": 0.5, "fade": 0})
+fig.set(surfaceDepth={"edges": 0, "pooling": 0, "fade": 0})   # the flat wash, as before
+```
 
 ## Colour
 
