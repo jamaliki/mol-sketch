@@ -49,15 +49,17 @@ The fills:
 | `"ink colour"` | as `ink`, but the hatching takes the element or residue colour |
 | `"chalk"` | broad, dusty chalk strokes (the `chalkboard` look) |
 
-### Depth in a watercolour surface
+### Depth in a surface
 
-A surface is drawn as one patch per residue. With `fill="watercolour"`, three cues show its depth. Each is a strength
-from 0 (off) to 1, and all three are on by default.
+A surface is drawn as one patch per residue, back to front, and three cues show its depth. Each is a strength from 0
+(off) to 1, and all three are on by default. Each fill shows them in its own way: watercolour pools more pigment in
+the grooves, ink hatches them (cross-hatching the deepest), pencil and chalk scribble denser, flat and wash darken the
+tone. With all three at 0, the other fills draw the surface the old way, as one outlined ball per atom.
 
 | field | default | meaning |
 |---|---|---|
 | `surfaceDepth.edges` | `1` | a hand-drawn ink edge wherever a patch stands in front of something farther back, heavier the deeper the step (from 1.5 Å, full weight by 8 Å). Lobes and grooves read by their outlines, as in David Goodsell's paintings |
-| `surfaceDepth.pooling` | `1` | pigment settles in the grooves: patches with nearer surface all around them are painted darker and denser (the same colour, more of it), with extra granulation |
+| `surfaceDepth.pooling` | `1` | the grooves hold more shadow: patches with nearer surface all around them are painted darker (the same colour, more of it) and, depending on the fill, granulated, hatched or scribbled more densely |
 | `surfaceDepth.fade` | `1` | far patches fade towards the paper: paler, less painted, with lighter edges. It follows the depth fog, so `view.fog` and `view.fogStart` set how far back it starts and how strong it gets |
 
 ```python
@@ -71,7 +73,7 @@ fig.set(surfaceDepth={"edges": 0, "pooling": 0, "fade": 0})   # the flat wash, a
 |---|---|---|
 | `colorBy` | `"residue"` | what decides a carbon's colour: `"element"` (grey), `"residue"`, `"chain"`, `"subunit"` or `"entity"`. Other elements keep their element colours, and the automatic colours avoid blue and red so they never look like nitrogen or oxygen |
 | `cartoonColor` | `"ss"` | the cartoon's colour: `"ss"` (by secondary structure: `palette.helix`, `sheet`, `loop`, `nucleic`), `"carbon"` (as the carbons, by `colorBy`) or `"rainbow"` (blue to red along each chain; engraved ribbons only) |
-| `surfaceColor` | `"subunit"` | the surface's colour: `"single"` (`palette.surface`), `"residue"`, `"chain"`, `"subunit"` or `"entity"` |
+| `surfaceColor` | `"subunit"` | the surface's colour: `"single"` (`palette.surface`), `"residue"`, `"chain"`, `"subunit"` or `"entity"` (with every depth cue at 0, fills other than watercolour colour the surface by element) |
 | `groupPalette` | `null` | the colours handed to residues, chains or molecules in order. Set it with `fig.palette(name)` rather than by hand; `null` means the built-in palette |
 | `groupPaletteName` | `"MolSketch"` | the name of that palette (set by `fig.palette`) |
 | `palette` | | the named colours, below |
