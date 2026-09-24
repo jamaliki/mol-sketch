@@ -28,11 +28,15 @@ __version__ = "0.1.0"
 
 
 def load(source, *, name: str | None = None, format: str | None = None) -> Figure:
-    """A figure from a structure or a scene.
+    """Make a figure from a structure or a scene. ``source`` can be:
 
-    ``source`` is a path (``.pdb``, ``.cif``, or a scene ``.json`` the app saved), several paths (a stack: one keyframe
-    each, animated between), the text of a PDB or mmCIF file, a scene as a dict, or a structure object from Biopython,
-    gemmi or MDAnalysis. ``name`` names text sources (and picks the format with ``format="cif"`` / ``"pdb"``)."""
+    - a path to a ``.pdb`` or ``.cif`` file, or to a scene ``.json`` saved from the app;
+    - a list of paths: a stack, drawn as one keyframe per file and animated between them;
+    - the text of a PDB or mmCIF file (``format="pdb"`` or ``"cif"`` if it cannot be told from the text);
+    - a scene as a dict;
+    - a structure object from Biopython, gemmi or MDAnalysis.
+
+    ``name`` is the figure's name (it defaults to the file name)."""
     if isinstance(source, dict): return Figure({"scene": source}, source.get("name") or name or "scene")
     if isinstance(source, (list, tuple)):
         files = [pathlib.Path(p) for p in source]
@@ -53,7 +57,9 @@ def load(source, *, name: str | None = None, format: str | None = None) -> Figur
 
 
 def fetch(pdb_id: str, **kw) -> Figure:
-    """A figure of a PDB entry, downloaded from RCSB as mmCIF (cached in ~/.cache/molsketch)."""
+    """Make a figure of a PDB entry, such as ``"2PTN"``. The file is downloaded from RCSB once and kept in
+    ``~/.cache/molsketch`` (or the folder in the ``MOLSKETCH_CACHE`` environment variable). Takes the same keywords as
+    ``load``."""
     pid = pdb_id.strip().upper()
     if not re.fullmatch(r"[0-9][A-Z0-9]{3}", pid): raise ValueError(f"{pdb_id!r} is not a PDB ID: four characters, starting with a digit, e.g. 1A8O")
     cache = pathlib.Path(os.environ.get("MOLSKETCH_CACHE", pathlib.Path.home() / ".cache" / "molsketch")); cache.mkdir(parents=True, exist_ok=True)
@@ -69,7 +75,8 @@ def fetch(pdb_id: str, **kw) -> Figure:
 
 
 def scene(path_or_dict) -> Figure:
-    """A figure from a scene (a keyframed mechanism): a path to the app's scene JSON, or the scene as a dict."""
+    """Make a figure from a scene (a keyframed animation, such as a reaction mechanism): a path to a scene JSON saved
+    from the app, or the scene as a dict. The same as ``load`` for these inputs."""
     return load(path_or_dict if isinstance(path_or_dict, dict) else pathlib.Path(path_or_dict))
 
 

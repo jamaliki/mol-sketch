@@ -13,7 +13,12 @@ fig.label("Switch I", at="Tyr32", offset=(110, -60))
 fig.save("ras.png")                                     # 1920 × 1440; size=(w, h), scale=2 for print
 ```
 
+![Ras in engraved colour, drawn by the example above](docs/img/quickstart.png)
+
 In a notebook, a figure shows itself. Every method returns the figure, so calls chain.
+
+**Documentation:** [API reference](docs/api.md) (every function and argument) · [Style fields](docs/style.md)
+(everything `set` can change) · [Examples](examples/) (scripts, with the pictures they make).
 
 ## Install
 
@@ -36,31 +41,44 @@ ms.load(text, name="model")             # PDB / mmCIF text, or a Biopython, gemm
 ms.fetch("2PTN")                        # an entry from the PDB (cached in ~/.cache/molsketch)
 ```
 
-| | |
+| method | what it does |
 |---|---|
-| `.look(name)` | watercolour, ink-colour, ink, dark-paper, chalkboard, engraved, engraved-colour, assembly-surface, assembly-cartoon (`ms.looks()`) |
-| `.show(sticks=, cartoon=, surface=)` | what to draw, as selections: `"hetatm and not water"`, `"chain A and resi 50-120"`; `None` for nothing |
-| `.view(yaw=, pitch=, roll=, zoom=, pan=, fov=)` | the camera (degrees; zoom 1 fits what is drawn; fov 0 is orthographic) |
+| `.look(name)` | start from a look: watercolour, ink-colour, ink, dark-paper, chalkboard, engraved, engraved-colour, assembly-surface, assembly-cartoon (`ms.looks()` describes them) |
+| `.show(sticks=, cartoon=, surface=)` | what to draw, as [selections](docs/api.md#selections): `"hetatm and not water"`, `"chain A and resi 50-120"`; `None` for nothing |
+| `.view(yaw=, pitch=, roll=, zoom=, pan=, fov=)` | turn and frame the molecule (angles in degrees; zoom 1 fits what is drawn; fov 0 is a flat projection) |
 | `.palette(name)` | a group palette (`ms.palettes()`); with engraved ribbons it colours helix, sheet and coil too |
-| `.color(group, colour)` | one residue (`"SER195"`), chain (`"A"`) or subunit's colour |
-| `.set(**fields)` | any style field, nested or dotted: `set(line={"width": 2}, **{"hatch.spacing": 4})` (`ms.default_style()`) |
-| `.apply_style(path)` | a style saved from the app (Export › Save style) |
-| `.site(selection)` / `.site(ligand=True)` | the active site: bold sticks, a paper halo, the ribbons in front opened |
-| `.frame_site()` · `.label_site()` | turn the site to face you and close in; label its residues |
-| `.label(text, at="Tyr32", offset=(dx, dy))` | a label pinned to an atom (`"Tyr32:OH"`, `"TYR32.A:CA"`), or `xy=(x, y)` on the canvas |
-| `.labels(False)` · `.clear_labels()` | hide every label; remove the placed ones |
-| `.frame(n)` | a scene's frame (24 per second) |
+| `.color(group, colour)` | your own colour for a residue (`"SER195"`), a chain (`"A"`), a subunit (`"subunit:L"`) or an entity (`"entity:1"`) |
+| `.set(**fields)` | any [style field](docs/style.md), nested or dotted: `set(line={"width": 2}, **{"hatch.spacing": 4})` |
+| `.apply_style(path)` | a whole style saved from the app (Export › Save style) |
+| `.site(selection)` · `.site(ligand=True, within=5)` | mark the active site: bold sticks on a paper halo, the ribbon in front cut away (`cutaway=`), the rest faded (`quiet=`) |
+| `.frame_site(size)` · `.label_site(size)` | turn the site towards you and zoom in; label its residues (give the size you save at) |
+| `.label(text, at="Tyr32", offset=(dx, dy), size=1)` | a label pinned to an atom (`"Tyr32:OH"`, `"TYR32.A:CA"`), or placed on the canvas with `xy=(x, y)` |
+| `.labels(False)` · `.labels(secondary=True)` · `.clear_labels()` | hide every label; switch one kind (placed, atoms, residues, α/β); remove the placed ones |
+| `.frame(n)` | a scene's frame (24 per second), or for a structure, another version of the hand-drawn wobble |
+| `.copy()` | an independent copy, for variations of one figure |
+| `.style` · `.camera` | the style and camera the figure will be drawn with |
 
 ## Output
 
 ```python
 fig.save("fig.png", size=(1600, 1200), scale=2)       # .png .jpg .webp; .json saves the scene for the app
-img = fig.render((800, 600))                            # an Image: img.save(…), img.to_numpy(), img.to_pil()
-fig.frames("drawn")                                     # a scene's frames: "drawn", "all", "keyframes", 12, "10-40"
+img = fig.render((800, 600))                            # an Image (below)
+fig.frames("drawn")                                     # a scene's frame numbers: "drawn", "all", "keyframes", 90, "10-40"
 fig.save_frames("out/", "drawn")                        # frame_0000.png …
-fig.animate("loop.mp4")                                 # a scene's loop (.mp4 .webm .gif, needs ffmpeg)
-fig.turntable("spin.mp4", n=72, swing=10)               # one turn of a structure
+fig.animate("loop.mp4", fps=12)                         # a scene as a video (.mp4 .webm .gif, needs ffmpeg)
+fig.turntable("spin.mp4", n=72, swing=10)               # one turn of a structure, nodding by 10°
 fig.scene()                                             # the figure as the app's scene JSON
+```
+
+`size` is in pixels (1920 × 1440 by default). `scale=2` keeps the layout and doubles the detail, for print.
+
+An `Image` has `width`, `height` and `size`, and:
+
+```python
+img.save("fig.webp", quality=90)                        # .png .jpg .webp
+img.png()                                               # PNG bytes
+img.to_numpy()                                          # height × width × 4 uint8, RGBA
+img.to_pil()                                            # a Pillow image (pip install pillow)
 ```
 
 ## The command line

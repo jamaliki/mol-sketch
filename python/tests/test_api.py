@@ -110,3 +110,16 @@ def test_friendly_errors():
 
 def test_notebook_display():
     assert ms.load(EX / "1A8O.pdb")._repr_png_()[:8] == b"\x89PNG\r\n\x1a\n"
+
+
+def test_public_api_is_documented():
+    """every public function, method and property has a docstring (docs/api.md is written from them)"""
+    import inspect
+    missing = []
+    for name in ms.__all__:
+        obj = getattr(ms, name)
+        if not inspect.getdoc(obj): missing.append(name)
+        if inspect.isclass(obj):
+            for k, v in vars(obj).items():
+                if not k.startswith("_") and (callable(v) or isinstance(v, property)) and not inspect.getdoc(v): missing.append(f"{name}.{k}")
+    assert not missing, missing

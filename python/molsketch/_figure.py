@@ -20,13 +20,15 @@ DEFAULT_SIZE: Size = (1920, 1440)   # the app's CLI default
 
 
 class Figure:
-    """A figure of one structure, a stack of structures, or a keyframed scene.
+    """One molecular figure: a structure, a stack of structures, or a keyframed scene, plus how to draw it.
 
-    Every method that changes the figure returns it, so calls chain::
+    Make one with ``molsketch.load``, ``molsketch.fetch`` or ``molsketch.scene``. Every method that changes the figure
+    returns the figure, so calls chain::
 
         ms.fetch("5P21").look("engraved-colour").view(yaw=60, pitch=20).save("ras.png")
 
-    Nothing is drawn until you save, render or display it.
+    Nothing is drawn until you call ``render``, ``save`` or one of the video methods, or show the figure in a notebook.
+    Changes are recorded in order, and a later change to the same setting wins.
     """
 
     def __init__(self, _input: dict, name: str):
@@ -44,46 +46,55 @@ class Figure:
 
     # ------------------------------------------------------------------ the look
     def look(self, name: str) -> "Figure":
-        """Start from a named look (see ``molsketch.looks()``): watercolour, ink-colour, ink, dark-paper, chalkboard,
-        engraved, engraved-colour, assembly-surface, assembly-cartoon. Changes made with other methods stay on top."""
+        """Start from a named look: a complete style (fill, lines, colours, paper, what to draw). The looks are
+        watercolour, ink-colour, ink, dark-paper, chalkboard, engraved, engraved-colour, assembly-surface and
+        assembly-cartoon; ``molsketch.looks()`` describes each. Your other changes (``set``, ``show``, ``palette`` …)
+        apply on top, whenever you make them."""
         if name not in looks(): raise ValueError(f"unknown look {name!r}; the looks are {', '.join(looks())}")
         self._look = name; return self
 
     def apply_style(self, style: "str | os.PathLike | dict") -> "Figure":
-        """Use a whole style saved from the app (Export › Save style): a path to its JSON, or the dict. It replaces the
-        look's settings (keeping what to draw, if the style does not say); ``set`` and the other changes stay on top."""
+        """Use a complete style saved from the app (Export › Save style), given as a path to the JSON file or as a dict.
+        It replaces the look's settings. If the style does not say what to draw, the figure keeps what it had. Your
+        ``set``, ``show`` and other changes still apply on top."""
         self._style_file = json.loads(pathlib.Path(style).read_text()) if not isinstance(style, dict) else dict(style)
         return self
 
     def set(self, **style) -> "Figure":
-        """Change any style field, nested or dotted::
+        """Change style fields. Give nested fields as dicts or as dotted names::
 
-            fig.set(line={"width": 2}, palette={"helix": "#de9151"}, fill="ink colour")
-            fig.set(**{"hatch.spacing": 4})
+            fig.set(fill="ink colour", line={"width": 2}, palette={"helix": "#de9151"})
+            fig.set(**{"hatch.spacing": 4, "view.fog": 0.7})
 
-        The fields are those the app's Save style writes (``molsketch.default_style()`` lists them all)."""
+        A dict changes only the fields it names; the rest keep their values. ``molsketch.default_style()`` lists every
+        field and its default, and docs/style.md explains them."""
         for k, v in style.items(): self._style.extend(_flatten(k, v))
         return self
 
     def show(self, sticks: str | None | bool = ..., cartoon: str | None | bool = ..., surface: str | None | bool = ...) -> "Figure":
-        """What to draw, as selections: ``fig.show(sticks="hetatm and not water", cartoon="polymer", surface=None)``.
-        None or False draws nothing; True means everything (``all``) for sticks and the polymer for the others.
-        Selections: all, polymer, hetatm, protein, nucleic, water, resi 10-20, resn SER+HIS, chain A, name CA, … with
-        and / or / not and parentheses."""
+        """Choose which atoms are drawn as sticks, as cartoon and as surface, each with a selection::
+
+            fig.show(sticks="hetatm and not water", cartoon="polymer", surface=None)
+
+        ``None`` or ``False`` turns that representation off. ``True`` means all atoms for sticks and the polymer for
+        cartoon and surface. Leave an argument out to keep what it was. Selections are words like ``all``,
+        ``polymer``, ``protein``, ``nucleic``, ``hetatm``, ``water``, ``resi 10-20``, ``resn SER+HIS``, ``chain A`` and
+        ``name CA``, combined with ``and``, ``or``, ``not`` and parentheses (the full list is in docs/api.md)."""
         for rep, v, everything in (("sticks", sticks, "all"), ("cartoon", cartoon, "polymer"), ("surface", surface, "polymer")):
             if v is ...: continue
             self._style.append((f"reps.{rep}", everything if v is True else "" if v in (None, False) else str(v)))
         return self
 
     def palette(self, name: str) -> "Figure":
-        """A group palette (see ``molsketch.palettes()``): the colours residues, chains and molecules take in order,
-        and with engraved ribbons, helix, sheet and coil too, as the app's palette tiles do."""
+        """Use a group palette: the list of colours that residues, chains or molecules take, in order of appearance.
+        With engraved ribbons it also colours helix, sheet and coil. ``molsketch.palettes()`` lists the palettes."""
         if name not in palettes(): raise ValueError(f"unknown palette {name!r}; see molsketch.palettes()")
         self._palette = name; return self
 
     def color(self, group: str, colour: str | None) -> "Figure":
-        """One group's colour: a residue (``"SER195"``), a chain (``"A"``), ``"subunit:L"`` or ``"entity:1"``.
-        None gives it back to the palette."""
+        """Give one group a colour of your own. The group is a residue (``"SER195"``), a chain (``"A"``), a ribosome
+        subunit (``"subunit:L"``, ``"subunit:S"``, ``"subunit:T"``) or an mmCIF entity (``"entity:1"``). The colour is
+        any CSS colour (``"#e6a45a"``, ``"rgb(230, 164, 90)"``). ``None`` removes your colour again."""
         colors = dict(self._colors or self._info().get("groupColors") or {})
         if colour is None: colors.pop(group, None)
         else: colors[group] = colour
@@ -92,8 +103,12 @@ class Figure:
     # ------------------------------------------------------------------ the camera
     def view(self, yaw: float | None = None, pitch: float | None = None, roll: float | None = None, zoom: float | None = None,
              pan: tuple[float, float] | None = None, fov: float | None = None) -> "Figure":
-        """Turn and frame the molecule: yaw and pitch (degrees, about the vertical and horizontal), roll (about the view
-        axis), zoom (1 fits what is drawn), pan (fractions of the canvas), fov (degrees; 0 is orthographic)."""
+        """Turn and frame the molecule. Only the values you give change.
+
+        ``yaw`` turns it about the vertical axis and ``pitch`` about the horizontal one, ``roll`` spins it in the
+        picture plane (all in degrees). ``zoom`` 1 fits what is drawn; 2 is twice as close. ``pan`` shifts the picture
+        by ``(x, y)`` as fractions of the canvas. ``fov`` is the field of view in degrees; 0 gives a flat
+        (orthographic) projection."""
         for k, v in (("yaw", yaw), ("pitch", pitch), ("roll", roll), ("zoom", zoom), ("fov", fov)):
             if v is not None: self._camera[k] = float(v)
         if pan is not None: self._camera["panX"], self._camera["panY"] = float(pan[0]), float(pan[1])
@@ -102,13 +117,18 @@ class Figure:
     # ------------------------------------------------------------------ the active site
     def site(self, selection: str | None = None, *, ligand: bool = False, within: float = 5.0, cutaway: bool | None = None,
              quiet: float | None = None, scale: float | None = None) -> "Figure":
-        """The active site, shown in its protein: bold sticks over a paper halo, and with engraved ribbons, the ribbons
-        in front of it opened (cutaway) and the rest quieted.
+        """Mark an active site, so it reads clearly inside its protein. The site's atoms are drawn as bold sticks on a
+        paper-coloured halo. With engraved ribbons, the ribbon in front of the site is cut away and the rest of the
+        protein is drawn quieter::
 
             fig.site("resi 57+102+195")        # these residues
-            fig.site(ligand=True)              # the residues within 5 Å of the largest ligand, and the ligand
+            fig.site(ligand=True)              # the largest ligand and every residue within 5 Å of it
+            fig.site(ligand=True, within=8)    # a wider pocket
             fig.site(None)                     # no site
-        """
+
+        ``cutaway`` (default on) opens the ribbon in front of the site. ``quiet`` (0–1, default 0.35) is how much the
+        rest of the protein fades. ``scale`` (default 1.9) is how much thicker the site's sticks are. Follow with
+        ``frame_site()`` to turn the site towards you and ``label_site()`` to label its residues."""
         if ligand:
             r = engine().call("pocket", self._spec(), within)
             if not r["sel"]: raise ValueError(r["msg"])
@@ -119,14 +139,17 @@ class Figure:
         return self
 
     def frame_site(self, size: Size = DEFAULT_SIZE) -> "Figure":
-        """Turn the molecule so the site faces you with as little of the protein in front of it as possible, and
-        close in on it (the app's Frame the site). ``size`` is the canvas it frames for."""
+        """Turn the molecule so the site faces you with as little protein in front of it as possible, and zoom in on it
+        (the app's Frame the site button). Call ``site`` first. Pass the same ``size`` you will save at, since the
+        framing depends on the canvas shape."""
         r = engine().call("frameTheSite", self._spec(size=size))
         if not r["ok"]: raise ValueError(r["msg"])
         self._camera.update({k: r["camera"][k] for k in ("yaw", "pitch", "roll", "zoom", "panX", "panY")}); return self
 
     def label_site(self, size: Size = DEFAULT_SIZE) -> "Figure":
-        """A label on each residue of the site, at its side chain's tip (the app's Label the site)."""
+        """Put a label on each residue of the site, next to the tip of its side chain (the app's Label the site
+        button). Call ``site`` first. Labels you placed before are kept. Pass the same ``size`` you will save at, so
+        the labels land where they are meant to."""
         r = engine().call("labelTheSite", self._spec(size=size))
         if not r["labels"] and "no atoms" in r["msg"]: raise ValueError(r["msg"])
         self._labels = r["labels"]; return self
@@ -134,10 +157,15 @@ class Figure:
     # ------------------------------------------------------------------ labels
     def label(self, text: str, at: str | None = None, *, offset: tuple[float, float] | None = None, xy: tuple[float, float] | None = None,
               size: float = 1.0) -> "Figure":
-        """Place a label. ``at`` pins it to an atom so it follows the molecule: a residue (``"Tyr32"``: its Cα), a
-        residue and atom (``"Tyr32:OH"``) or an atom id (``"TYR32.A:CA"``). ``offset`` moves the text off the atom (px,
-        a leader line joins them once it is far enough). Without ``at``, ``xy`` places it on the canvas (fractions).
-        ``size`` scales the label size."""
+        """Add a label.
+
+        With ``at``, the label is pinned to an atom and moves with the molecule when you turn it. ``at`` can be a
+        residue (``"Tyr32"``, which means its Cα atom), a residue and an atom (``"Tyr32:OH"``), or a full atom id
+        (``"TYR32.A:CA"``, residue, chain and atom). ``offset=(dx, dy)`` moves the text away from the atom, in pixels
+        (default 23 px up); once the text is far enough away, a leader line joins it to the atom.
+
+        Without ``at``, the label sits on the canvas at ``xy=(x, y)``, given as fractions of the width and height
+        (default: centred, near the top). ``size`` scales the text (1 is the style's label size)."""
         labels = list(self._labels if self._labels is not None else self._info().get("labels") or [])
         if at is not None:
             atom = engine().call("atomId", self._spec(), at)
@@ -149,13 +177,15 @@ class Figure:
         self._labels = labels; return self
 
     def clear_labels(self) -> "Figure":
-        """Remove every placed label."""
+        """Remove every label placed with ``label`` or ``label_site`` (a scene's own atom labels stay)."""
         self._labels = []; return self
 
     def labels(self, show: bool = True, *, placed: bool | None = None, atoms: bool | None = None, residues: bool | None = None,
                secondary: bool | None = None) -> "Figure":
-        """Which labels show: ``fig.labels(False)`` hides every label; the keywords switch one kind (``placed``: yours,
-        ``atoms``: a scene's atom labels, ``residues``: residue labels, ``secondary``: α/β on engraved ribbons)."""
+        """Choose which labels are drawn. ``fig.labels(False)`` hides all of them; ``fig.labels()`` shows them again.
+        The keywords turn one kind on or off: ``placed`` (the labels you placed), ``atoms`` (atom labels stored in a
+        scene), ``residues`` (a label on every residue) and ``secondary`` (α1, β1 … on engraved ribbons, off by
+        default). The labels are kept either way; this only decides whether they are drawn."""
         self._style.append(("show.noLabels", not show))
         for path, v in (("show.figLabels", placed), ("show.labels", atoms), ("show.resLabels", residues), ("engrave.labels", secondary)):
             if v is not None: self._style.append((path, bool(v)))
@@ -163,21 +193,28 @@ class Figure:
 
     # ------------------------------------------------------------------ scenes
     def frame(self, n: int) -> "Figure":
-        """For a scene, the timeline frame to draw (24 per second); for a structure, which re-jitter of the lines."""
+        """Choose the frame to draw. For a scene this is a point on its timeline, at 24 frames per second. For a single
+        structure it picks a different version of the hand-drawn wobble, so the lines are redrawn slightly
+        differently (useful for picking the drawing you like best)."""
         self._frame = int(n); return self
 
     def frames(self, which: str | int = "drawn") -> list[int]:
-        """A scene's frames: ``"drawn"`` (one per new drawing, every other frame), ``"all"``, ``"keyframes"`` (the start of
-        each hold), a number, or a range ``"10-40"``."""
+        """List frame numbers of a scene. ``which`` is ``"drawn"`` (every frame that shows a new drawing; scenes
+        animate on twos, so every other frame), ``"all"``, ``"keyframes"`` (the first frame of each keyframe's hold),
+        a single frame number, or a range such as ``"10-40"`` (both ends included)."""
         return engine().call("frames", self._spec(), which)
 
     # ------------------------------------------------------------------ output
     def render(self, size: Size = DEFAULT_SIZE, *, scale: float = 1, frame: int | None = None) -> Image:
-        """Draw the figure: an Image of ``size`` × ``scale`` pixels (``scale`` 2 is a retina / print density)."""
+        """Draw the figure and return it as an ``Image``. ``size`` is ``(width, height)`` in pixels (default 1920 × 1440).
+        ``scale`` multiplies the pixel count while keeping the layout: ``scale=2`` gives the same picture with twice
+        the detail, for print or high-density screens. ``frame`` picks a frame without changing the figure's own."""
         return Image(engine().render(self._spec(size=size, scale=scale, frame=frame)))
 
     def save(self, path: str | os.PathLike, size: Size = DEFAULT_SIZE, *, scale: float = 1, frame: int | None = None) -> pathlib.Path:
-        """Save the figure: ``.png`` / ``.jpg`` / ``.webp`` draw it, ``.json`` writes the scene (the app opens it)."""
+        """Draw the figure and save it, returning the path. ``.png``, ``.jpg`` and ``.webp`` save an image (``size``,
+        ``scale`` and ``frame`` as in ``render``). ``.json`` saves the figure as a scene that the app can open, with
+        its look, labels and site."""
         path = pathlib.Path(path)
         if path.suffix.lower() == ".json":
             path.write_text(json.dumps(self.scene(), indent=1)); return path
@@ -185,23 +222,27 @@ class Figure:
 
     def save_frames(self, directory: str | os.PathLike, frames: str | int | Iterable[int] = "drawn", size: Size = DEFAULT_SIZE, *,
                     scale: float = 1) -> list[pathlib.Path]:
-        """Save a scene's frames as ``frame_0000.png`` … (as the CLI names them)."""
+        """Save frames as numbered PNG files (``frame_0000.png``, ``frame_0001.png`` …) in ``directory`` and return their
+        paths. ``frames`` is anything ``frames()`` accepts, or a list of frame numbers."""
         d = pathlib.Path(directory); d.mkdir(parents=True, exist_ok=True)
         todo = self.frames(frames) if isinstance(frames, (str, int)) else list(frames)
         return [self.render(size, scale=scale, frame=f).save(d / f"frame_{f:04d}.png") for f in todo]
 
     def animate(self, path: str | os.PathLike, frames: str | int | Iterable[int] = "drawn", size: Size = DEFAULT_SIZE, *,
                 fps: float = 12, scale: float = 1, crf: int = 18) -> pathlib.Path:
-        """A scene's loop as a video (``.mp4``, ``.webm`` or ``.gif``), through ffmpeg. 12 fps is one per drawing."""
+        """Make a video of a scene: ``.mp4``, ``.webm`` or ``.gif``. Needs ``ffmpeg`` installed. ``frames`` is as in
+        ``save_frames``. The default, every drawn frame at 12 fps, plays the scene at its real speed. ``crf`` sets
+        the video quality (lower is better and larger)."""
         return _encode(pathlib.Path(path), lambda d: self.save_frames(d, frames, size, scale=scale), fps, crf)
 
     def turntable(self, path: str | os.PathLike, n: int = 72, size: Size = DEFAULT_SIZE, *, swing: float = 0, fps: float = 24,
                   scale: float = 1, crf: int = 18) -> pathlib.Path:
-        """One full turn about the vertical in ``n`` frames, as a video or (if ``path`` is a directory) PNG frames;
-        ``swing`` nods the pitch by that many degrees."""
+        """Make a turntable: the molecule turns once around the vertical axis in ``n`` frames. ``path`` is a video
+        (``.mp4``, ``.webm``, ``.gif``; needs ``ffmpeg``) or, with no extension, a folder of PNG frames. ``swing`` tilts
+        the molecule up and down by that many degrees during the turn. ``fps`` is the video's frame rate."""
         import math
         yaw0 = self._camera.get("yaw", self._info()["camera"]["yaw"]); pitch0 = self._camera.get("pitch", self._info()["camera"]["pitch"])
-        def frames_to(d):
+        def _write(d):
             out = []; saved = dict(self._camera)
             try:
                 for f in range(n):
@@ -210,25 +251,30 @@ class Figure:
             finally: self._camera = saved
             return out
         p = pathlib.Path(path)
-        if not p.suffix: p.mkdir(parents=True, exist_ok=True); frames_to(p); return p
-        return _encode(p, frames_to, fps, crf)
+        if not p.suffix: p.mkdir(parents=True, exist_ok=True); _write(p); return p
+        return _encode(p, _write, fps, crf)
 
     def scene(self) -> dict:
-        """The figure as a scene document (what the app's Save scene JSON writes, labels, site and look included)."""
+        """The figure as a scene document (a dict): what the app's Save scene writes, with the look, labels and site.
+        ``fig.save("fig.json")`` writes the same to a file."""
         return engine().call("sceneJson", self._spec())
 
     # ------------------------------------------------------------------ inspection
     @property
     def style(self) -> dict:
-        """The style as it will be drawn, after the look and every change."""
+        """The complete style that will be drawn, after the look and all your changes (a dict; read-only, change it
+        with ``set``)."""
         return self._info()["style"]
 
     @property
     def camera(self) -> dict:
+        """The camera that will be used: ``yaw``, ``pitch``, ``roll``, ``zoom``, ``panX``, ``panY`` and ``fov``, after
+        ``view``, ``frame_site`` and the scene's own view (a dict; change it with ``view``)."""
         c = self._info()["camera"]; return {k: c[k] for k in ("yaw", "pitch", "roll", "zoom", "panX", "panY", "fov")}
 
     def copy(self) -> "Figure":
-        """An independent copy (the structure itself is shared, not re-read)."""
+        """A copy you can change without changing this figure (for variations of one figure). The molecule itself is
+        shared, so copying is instant."""
         f = copy.copy(self); f._style = list(self._style); f._camera = dict(self._camera)
         f._labels = copy.deepcopy(self._labels); f._colors = dict(self._colors) if self._colors else None; return f
 
@@ -294,15 +340,16 @@ def _cat():
 
 
 def looks() -> dict[str, str]:
-    """The looks, name → what it is."""
+    """The looks, as a dict from name (what ``Figure.look`` takes) to a short description."""
     return {k: f"{v['name']}: {v['note']}" for k, v in _cat()["looks"].items()}
 
 
 def palettes() -> dict[str, list[str]]:
-    """The group palettes, name → colours."""
+    """The group palettes, as a dict from name (what ``Figure.palette`` takes) to its list of colours."""
     return {k: v["colors"] for k, v in _cat()["palettes"].items()}
 
 
 def default_style() -> dict:
-    """Every style field with its default: what ``Figure.set`` can change."""
+    """Every style field with its default value, as a nested dict. These are the fields ``Figure.set`` changes;
+    docs/style.md explains each one."""
     return copy.deepcopy(_cat()["defaultStyle"])

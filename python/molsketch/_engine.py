@@ -76,7 +76,8 @@ globalThis.__learn = (rows) => { for (const [f, t, w] of JSON.parse(rows)) __M.s
 
 
 class CoreError(RuntimeError):
-    """an error from the drawing core (a bad selection, an unknown look, …), with its message as the core gave it"""
+    """An error reported by the drawing engine, such as a label pinned to an atom that does not exist. The message
+    says what was wrong."""
 
 
 def _init_v8():
