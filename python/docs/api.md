@@ -100,8 +100,10 @@ fig.set(fill="ink colour", line={"width": 2}, palette={"helix": "#de9151"})
 fig.set(**{"hatch.spacing": 4, "view.fog": 0.7})
 ```
 
-A dict changes only the fields it names; the others keep their values. Every field is described in
-[style.md](style.md); `ms.default_style()` returns them all with their defaults.
+A dict changes only the fields it names; the others keep their values. Field names are snake_case
+(`surface_depth`, `view.fog_start`); the app's camelCase names (`surfaceDepth`) are accepted too, so names copied from
+a style file work. Every field is described in [style.md](style.md); `ms.default_style()` returns them all with their
+defaults.
 
 #### `fig.apply_style(style)`
 
@@ -207,7 +209,7 @@ Add a label.
 - **On the canvas** (`xy`): without `at`, the label sits at `xy=(x, y)`, given as fractions of the width and height.
   By default it is centred near the top.
 
-`size` scales the text; 1 is the style's label size (the `labelSize` field).
+`size` scales the text; 1 is the style's label size (the `label_size` field).
 
 ```python
 fig.label("Switch I", at="Tyr32", offset=(110, -60))
@@ -304,7 +306,7 @@ change the style with `set`.
 
 #### `fig.camera`
 
-The camera that will be used, as a dict with `yaw`, `pitch`, `roll`, `zoom`, `panX`, `panY` and `fov`. It reflects
+The camera that will be used, as a dict with `yaw`, `pitch`, `roll`, `zoom`, `pan_x`, `pan_y` and `fov`. It reflects
 `view`, `frame_site` and a scene's own view. Change it with `view`.
 
 #### `fig.copy()`
@@ -449,7 +451,7 @@ use too:
 | `POST /api/render` | a figure spec (below) | the image, `image/png` |
 | `POST /api/call` | `{"name": …, "args": [...]}` | JSON: `info`, `frames`, `pocket`, `frameTheSite`, `labelTheSite`, `atomId`, `sceneJson`, `catalog` |
 
-A figure spec is a JSON object: `input` (`{"ref": …}` or an inline input as for `/api/put`), and optionally `look`,
+A figure spec is a JSON object, in the engine's own camelCase names (the app sends these): `input` (`{"ref": …}` or an inline input as for `/api/put`), and optionally `look`,
 `style` (dotted field names to values, as `set`), `styleFile` (a whole style, as `apply_style`), `palette`,
 `camera` (`yaw`, `pitch`, `roll`, `zoom`, `panX`, `panY`, `fov`), `labels`, `groupColors` (as `color`), `size`
 (`[w, h]`), `scale` and `frame`.

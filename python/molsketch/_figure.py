@@ -5,6 +5,7 @@ import copy
 import json
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import tempfile
@@ -54,21 +55,23 @@ class Figure:
         self._look = name; return self
 
     def apply_style(self, style: "str | os.PathLike | dict") -> "Figure":
-        """Use a complete style saved from the app (Export › Save style), given as a path to the JSON file or as a dict.
+        """Use a complete style saved from the app (Export › Save style), given as a path to the JSON file or as a dict
+        (with the app's camelCase names or snake_case ones).
         It replaces the look's settings. If the style does not say what to draw, the figure keeps what it had. Your
         ``set``, ``show`` and other changes still apply on top."""
-        self._style_file = json.loads(pathlib.Path(style).read_text()) if not isinstance(style, dict) else dict(style)
+        self._style_file = _to_engine(json.loads(pathlib.Path(style).read_text()) if not isinstance(style, dict) else style)
         return self
 
     def set(self, **style) -> "Figure":
         """Change style fields. Give nested fields as dicts or as dotted names::
 
             fig.set(fill="ink colour", line={"width": 2}, palette={"helix": "#de9151"})
-            fig.set(**{"hatch.spacing": 4, "view.fog": 0.7})
+            fig.set(surface_depth={"pooling": 0.5}, **{"hatch.spacing": 4, "view.fog_start": 0.3})
 
-        A dict changes only the fields it names; the rest keep their values. ``molsketch.default_style()`` lists every
-        field and its default, and docs/style.md explains them."""
-        for k, v in style.items(): self._style.extend(_flatten(k, v))
+        A dict changes only the fields it names; the rest keep their values. Names are snake_case, as
+        ``molsketch.default_style()`` lists them (the app's camelCase names work too). docs/style.md explains every
+        field."""
+        for k, v in style.items(): self._style.extend((_engine_path(p), x) for p, x in _flatten(k, v))
         return self
 
     def show(self, sticks: str | None | bool = ..., cartoon: str | None | bool = ..., surface: str | None | bool = ...) -> "Figure":
@@ -262,15 +265,15 @@ class Figure:
     # ------------------------------------------------------------------ inspection
     @property
     def style(self) -> dict:
-        """The complete style that will be drawn, after the look and all your changes (a dict; read-only, change it
-        with ``set``)."""
-        return self._info()["style"]
+        """The complete style that will be drawn, after the look and all your changes (a dict with snake_case names;
+        read-only, change it with ``set``)."""
+        return _to_python(self._info()["style"])
 
     @property
     def camera(self) -> dict:
-        """The camera that will be used: ``yaw``, ``pitch``, ``roll``, ``zoom``, ``panX``, ``panY`` and ``fov``, after
+        """The camera that will be used: ``yaw``, ``pitch``, ``roll``, ``zoom``, ``pan_x``, ``pan_y`` and ``fov``, after
         ``view``, ``frame_site`` and the scene's own view (a dict; change it with ``view``)."""
-        c = self._info()["camera"]; return {k: c[k] for k in ("yaw", "pitch", "roll", "zoom", "panX", "panY", "fov")}
+        c = self._info()["camera"]; return {_snake(k): c[k] for k in ("yaw", "pitch", "roll", "zoom", "panX", "panY", "fov")}
 
     def copy(self) -> "Figure":
         """A copy you can change without changing this figure (for variations of one figure). The molecule itself is
@@ -301,6 +304,30 @@ class Figure:
 
     def _info(self) -> dict:
         return engine().call("info", self._spec())
+
+
+# Python names are snake_case (surface_depth, fog_start); the engine's, and the app's style files, are camelCase
+# (surfaceDepth, fogStart). Names are converted at this boundary, both ways, and the engine's own are accepted too.
+# Element symbols (palette.C, show.H) start with a capital and are left alone.
+def _snake(k: str) -> str:
+    return re.sub(r"(?<=[a-z0-9])([A-Z])", lambda m: "_" + m.group(1).lower(), k) if k[:1].islower() else k
+
+
+def _camel(k: str) -> str:
+    head, *rest = k.split("_")
+    return head + "".join(w[:1].upper() + w[1:] for w in rest) if rest else k
+
+
+def _engine_path(path: str) -> str:
+    return ".".join(_camel(p) for p in path.split("."))
+
+
+def _to_engine(d):
+    return {_camel(k): _to_engine(v) for k, v in d.items()} if isinstance(d, dict) else d
+
+
+def _to_python(d):
+    return {_snake(k): _to_python(v) for k, v in d.items()} if isinstance(d, dict) else d
 
 
 def _flatten(key, value):
@@ -350,6 +377,6 @@ def palettes() -> dict[str, list[str]]:
 
 
 def default_style() -> dict:
-    """Every style field with its default value, as a nested dict. These are the fields ``Figure.set`` changes;
-    docs/style.md explains each one."""
-    return copy.deepcopy(_cat()["defaultStyle"])
+    """Every style field with its default value, as a nested dict with snake_case names. These are the fields
+    ``Figure.set`` changes; docs/style.md explains each one."""
+    return _to_python(copy.deepcopy(_cat()["defaultStyle"]))

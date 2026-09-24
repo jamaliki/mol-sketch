@@ -40,13 +40,13 @@ def test_chaining_returns_the_figure():
     fig = ms.load(EX / "1A8O.pdb")
     assert fig.look("engraved").view(yaw=30).show(sticks=None).set(line={"width": 2}).palette("Okabe–Ito") is fig
     st = fig.style
-    assert st["cartoonStyle"] == "engraved" and st["line"]["width"] == 2 and st["reps"]["sticks"] == "" and st["groupPaletteName"] == "Okabe–Ito"
+    assert st["cartoon_style"] == "engraved" and st["line"]["width"] == 2 and st["reps"]["sticks"] == "" and st["group_palette_name"] == "Okabe–Ito"
     assert fig.camera["yaw"] == 30
 
 
 def test_changes_survive_a_later_look():
-    fig = ms.load(EX / "1A8O.pdb").set(labelSize=31).look("chalkboard")
-    assert fig.style["labelSize"] == 31 and fig.style["fill"] == "chalk"
+    fig = ms.load(EX / "1A8O.pdb").set(label_size=31).look("chalkboard")
+    assert fig.style["label_size"] == 31 and fig.style["fill"] == "chalk"
 
 
 def test_same_figure_same_pixels():
@@ -123,3 +123,14 @@ def test_public_api_is_documented():
             for k, v in vars(obj).items():
                 if not k.startswith("_") and (callable(v) or isinstance(v, property)) and not inspect.getdoc(v): missing.append(f"{name}.{k}")
     assert not missing, missing
+
+
+def test_names_are_snake_case_and_the_apps_are_accepted():
+    """Python names are snake_case in and out; the app's camelCase names (style files) still work"""
+    fig = ms.load(EX / "1A8O.pdb").set(surface_depth={"pooling": 0.4}, **{"view.fog_start": 0.2}).set(stickRadius=0.3)
+    st = fig.style
+    assert st["surface_depth"]["pooling"] == 0.4 and st["view"]["fog_start"] == 0.2 and st["stick_radius"] == 0.3
+    assert "C" in st["palette"] and "H" in st["show"]                      # element symbols keep their capitals
+    assert set(fig.camera) == {"yaw", "pitch", "roll", "zoom", "pan_x", "pan_y", "fov"}
+    assert "surface_depth" in ms.default_style() and "surfaceDepth" not in ms.default_style()
+    assert ms.load(EX / "1A8O.pdb").apply_style({"labelSize": 27}).style["label_size"] == 27

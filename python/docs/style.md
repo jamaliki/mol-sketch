@@ -14,6 +14,9 @@ drawn with. The same fields appear in a style file saved from the app (Export �
 `fig.apply_style(path)` uses whole. The defaults below are those of `ms.default_style()`; each look changes many of
 them.
 
+Names are snake_case, as in Python. A style file saved from the app uses the same fields with camelCase names
+(`surface_depth` is `surfaceDepth` there); `apply_style` and `set` accept those too.
+
 Lengths are in pixels at `scale=1` unless marked Å (ångström, the molecule's own units).
 
 Contents: [Fill and representation](#fill-and-representation) · [Depth in a surface](#depth-in-a-watercolour-surface) · [Colour](#colour) · [What to draw](#what-to-draw) ·
@@ -29,12 +32,12 @@ Contents: [Fill and representation](#fill-and-representation) · [Depth in a sur
 |---|---|---|
 | `fill` | `"watercolour"` | how shapes are filled; the outlines are always ink. See the table below |
 | `mode` | `"sticks"` | how the stick atoms are drawn: `"sticks"` (PyMOL-style sticks, with small spheres where bonds meet) or `"ballstick"` (pencil ball-and-stick) |
-| `stickRadius` | `0.2` | stick radius, Å |
-| `sphereScale` | `0.4` | in `"sticks"` mode, the size of the balls on atoms marked as spheres (a protein's Cα atoms, and atoms a scene marks); 0 draws them as plain stick ends |
-| `cartoonScale` | `1` | width of the cartoon ribbons and tubes, relative to normal |
-| `cartoonStyle` | `"engraved"` | `"engraved"`: white ribbons shaded with lines along their length, after MOLSCRIPT. `"sketch"`: ribbons filled in the style of `fill` |
-| `stickStyle` | `"auto"` | whether sticks follow the engraved style too: `"auto"` (when the ribbons are engraved), `"engraved"` (always) or `"sketch"` (never) |
-| `sideChainHelper` | `true` | where a residue is drawn as cartoon, leave its backbone atoms out of the sticks, so only the side chain sticks out of the ribbon |
+| `stick_radius` | `0.2` | stick radius, Å |
+| `sphere_scale` | `0.4` | in `"sticks"` mode, the size of the balls on atoms marked as spheres (a protein's Cα atoms, and atoms a scene marks); 0 draws them as plain stick ends |
+| `cartoon_scale` | `1` | width of the cartoon ribbons and tubes, relative to normal |
+| `cartoon_style` | `"engraved"` | `"engraved"`: white ribbons shaded with lines along their length, after MOLSCRIPT. `"sketch"`: ribbons filled in the style of `fill` |
+| `stick_style` | `"auto"` | whether sticks follow the engraved style too: `"auto"` (when the ribbons are engraved), `"engraved"` (always) or `"sketch"` (never) |
+| `side_chain_helper` | `true` | where a residue is drawn as cartoon, leave its backbone atoms out of the sticks, so only the side chain sticks out of the ribbon |
 | `probe` | `1.4` | the surface is drawn as each residue's atom discs, enlarged by this probe radius (Å); larger values give a smoother, fatter surface |
 
 The fills:
@@ -58,24 +61,24 @@ tone. With all three at 0, the other fills draw the surface the old way, as one 
 
 | field | default | meaning |
 |---|---|---|
-| `surfaceDepth.edges` | `1` | a hand-drawn ink edge wherever a patch stands in front of something farther back, heavier the deeper the step (from 1.5 Å, full weight by 8 Å). Lobes and grooves read by their outlines, as in David Goodsell's paintings |
-| `surfaceDepth.pooling` | `1` | the grooves hold more shadow: patches with nearer surface all around them are painted darker (the same colour, more of it) and, depending on the fill, granulated, hatched or scribbled more densely |
-| `surfaceDepth.fade` | `1` | far patches fade towards the paper: paler, less painted, with lighter edges. It follows the depth fog, so `view.fog` and `view.fogStart` set how far back it starts and how strong it gets |
+| `surface_depth.edges` | `1` | a hand-drawn ink edge wherever a patch stands in front of something farther back, heavier the deeper the step (from 1.5 Å, full weight by 8 Å). Lobes and grooves read by their outlines, as in David Goodsell's paintings |
+| `surface_depth.pooling` | `1` | the grooves hold more shadow: patches with nearer surface all around them are painted darker (the same colour, more of it) and, depending on the fill, granulated, hatched or scribbled more densely |
+| `surface_depth.fade` | `1` | far patches fade towards the paper: paler, less painted, with lighter edges. It follows the depth fog, so `view.fog` and `view.fog_start` set how far back it starts and how strong it gets |
 
 ```python
-fig.set(surfaceDepth={"edges": 1, "pooling": 0.5, "fade": 0})
-fig.set(surfaceDepth={"edges": 0, "pooling": 0, "fade": 0})   # the flat wash, as before
+fig.set(surface_depth={"edges": 1, "pooling": 0.5, "fade": 0})
+fig.set(surface_depth={"edges": 0, "pooling": 0, "fade": 0})   # the flat wash, as before
 ```
 
 ## Colour
 
 | field | default | meaning |
 |---|---|---|
-| `colorBy` | `"residue"` | what decides a carbon's colour: `"element"` (grey), `"residue"`, `"chain"`, `"subunit"` or `"entity"`. Other elements keep their element colours, and the automatic colours avoid blue and red so they never look like nitrogen or oxygen |
-| `cartoonColor` | `"ss"` | the cartoon's colour: `"ss"` (by secondary structure: `palette.helix`, `sheet`, `loop`, `nucleic`), `"carbon"` (as the carbons, by `colorBy`) or `"rainbow"` (blue to red along each chain; engraved ribbons only) |
-| `surfaceColor` | `"subunit"` | the surface's colour: `"single"` (`palette.surface`), `"residue"`, `"chain"`, `"subunit"` or `"entity"` (with every depth cue at 0, fills other than watercolour colour the surface by element) |
-| `groupPalette` | `null` | the colours handed to residues, chains or molecules in order. Set it with `fig.palette(name)` rather than by hand; `null` means the built-in palette |
-| `groupPaletteName` | `"MolSketch"` | the name of that palette (set by `fig.palette`) |
+| `color_by` | `"residue"` | what decides a carbon's colour: `"element"` (grey), `"residue"`, `"chain"`, `"subunit"` or `"entity"`. Other elements keep their element colours, and the automatic colours avoid blue and red so they never look like nitrogen or oxygen |
+| `cartoon_color` | `"ss"` | the cartoon's colour: `"ss"` (by secondary structure: `palette.helix`, `sheet`, `loop`, `nucleic`), `"carbon"` (as the carbons, by `color_by`) or `"rainbow"` (blue to red along each chain; engraved ribbons only) |
+| `surface_color` | `"subunit"` | the surface's colour: `"single"` (`palette.surface`), `"residue"`, `"chain"`, `"subunit"` or `"entity"` (with every depth cue at 0, fills other than watercolour colour the surface by element) |
+| `group_palette` | `null` | the colours handed to residues, chains or molecules in order. Set it with `fig.palette(name)` rather than by hand; `null` means the built-in palette |
+| `group_palette_name` | `"MolSketch"` | the name of that palette (set by `fig.palette`) |
 | `palette` | | the named colours, below |
 
 To colour one residue, chain, subunit or entity yourself, use [`fig.color`](api.md#figcolorgroup-colour).
@@ -95,8 +98,8 @@ To colour one residue, chain, subunit or entity yourself, use [`fig.color`](api.
 | `accent` | highlights |
 | `C`, `N`, `O`, `H`, `S`, `P` | the elements |
 | `X` | any other element |
-| `helix`, `sheet`, `loop`, `nucleic` | secondary structure, with `cartoonColor="ss"` |
-| `surface` | the surface, with `surfaceColor="single"` |
+| `helix`, `sheet`, `loop`, `nucleic` | secondary structure, with `cartoon_color="ss"` |
+| `surface` | the surface, with `surface_color="single"` |
 
 ```python
 fig.set(palette={"paper": "#fbf7ee", "helix": "#de9151"})
@@ -121,14 +124,14 @@ is the easier way to set them.
 | `show.valence` | `true` | double and triple bonds drawn as such |
 | `show.hbonds` | `true` | hydrogen bonds, as dotted lines |
 | `show.charges` | `true` | charge signs (scenes) |
-| `show.lonePairs` | `true` | lone-pair dots (scenes) |
+| `show.lone_pairs` | `true` | lone-pair dots (scenes) |
 | `show.arrows` | `true` | curly arrows (scenes) |
 | `show.caption` | `true` | a scene's caption |
-| `show.stepLabel` | `true` | a scene's step title, top left (only with more than one keyframe) |
+| `show.step_label` | `true` | a scene's step title, top left (only with more than one keyframe) |
 | `show.labels` | `true` | atom labels stored in a scene |
-| `show.resLabels` | `false` | a label on every residue |
-| `show.figLabels` | `true` | labels placed with `label` and `label_site` |
-| `show.noLabels` | `false` | hide every label at once |
+| `show.res_labels` | `false` | a label on every residue |
+| `show.fig_labels` | `true` | labels placed with `label` and `label_site` |
+| `show.no_labels` | `false` | hide every label at once |
 | `construction` | `false` | faint construction lines under the drawing, as in a pencil sketch |
 
 [`fig.labels`](api.md#figlabelsshowtrue--placednone-atomsnone-residuesnone-secondarynone) sets the label switches
@@ -145,7 +148,7 @@ by name.
 | `line.passes` | `2` | how many times each line is drawn over itself; more passes look more sketched |
 | `line.pressure` | `0.55` | how much the width swells and thins along a stroke, like a pen under changing pressure |
 | `line.hierarchy` | `0.6` | how much heavier outlines are than inner lines; 0 makes every line the same weight |
-| `fillWobble` | `1` | how far fills stray from the ink outline, as in hand colouring |
+| `fill_wobble` | `1` | how far fills stray from the ink outline, as in hand colouring |
 
 ## Shading and hatching
 
@@ -155,7 +158,7 @@ by name.
 | `hatch.spacing` | `5` | the gap between hatching lines |
 | `hatch.angle` | `-40` | the hatching direction, in degrees |
 | `hatch.density` | `1.4` | how much of a shape the hatching covers |
-| `pencilFill` | `0.55` | how dense the scribbles are, with `fill="pencil"` |
+| `pencil_fill` | `0.55` | how dense the scribbles are, with `fill="pencil"` |
 | `view.light` | `-125` | the direction the light comes from, in degrees around the picture (−125: top left) |
 
 ## Paper
@@ -164,19 +167,19 @@ by name.
 |---|---|---|
 | `paper.grain` | `0.6` | the paper's texture; 0 is smooth |
 | `paper.wash` | `0.3` | how much watercolour wash is laid on the paper itself |
-| `paper.washSeed` | `1` | which pattern of wash; change it for a different arrangement of blotches |
-| `paper.washLife` | `0.6` | how much the wash changes from one drawing to the next in an animation |
+| `paper.wash_seed` | `1` | which pattern of wash; change it for a different arrangement of blotches |
+| `paper.wash_life` | `0.6` | how much the wash changes from one drawing to the next in an animation |
 
 ## Engraved ribbons
 
-These apply with `cartoonStyle="engraved"`:
+These apply with `cartoon_style="engraved"`:
 
 | field | default | meaning |
 |---|---|---|
 | `engrave.lines` | `8` | lines drawn along each face of a ribbon |
 | `engrave.width` | `0.45` | the weight of those lines |
-| `engrave.strandThickness` | `0.6` | how thick strands are drawn (the dark edge seen side-on), Å |
-| `engrave.coilWidth` | `1.25` | the width of coils and loops |
+| `engrave.strand_thickness` | `0.6` | how thick strands are drawn (the dark edge seen side-on), Å |
+| `engrave.coil_width` | `1.25` | the width of coils and loops |
 | `engrave.labels` | `false` | α1, β1 … on the helices and strands (also set by `fig.labels(secondary=True)`) |
 
 ## Active site
@@ -198,7 +201,7 @@ The camera itself (turn, zoom, pan) is set with [`fig.view`](api.md#figviewyawno
 |---|---|---|
 | `view.fov` | `20` | field of view, in degrees; 0 is a flat, orthographic projection |
 | `view.fog` | `0.5` | depth fog: how much the far side of the molecule fades into the paper, 0 to 1 |
-| `view.fogStart` | `0.45` | how far back the fog starts, as a fraction of the molecule's depth |
+| `view.fog_start` | `0.45` | how far back the fog starts, as a fraction of the molecule's depth |
 | `view.light` | `-125` | see [Shading and hatching](#shading-and-hatching) |
 
 ## Labels and lettering
@@ -206,22 +209,22 @@ The camera itself (turn, zoom, pan) is set with [`fig.view`](api.md#figviewyawno
 | field | default | meaning |
 |---|---|---|
 | `font` | `"Caveat"` | the lettering: `"Caveat"`, `"Patrick Hand"`, `"Kalam"` (handwritten) or `"Plain sans"` (IBM Plex Sans) |
-| `labelSize` | `19` | label text size |
-| `captionSize` | `24` | caption text size (scenes) |
+| `label_size` | `19` | label text size |
+| `caption_size` | `24` | caption text size (scenes) |
 | `annot` | `1` | the size of lone-pair dots, charge circles and arrow heads, relative to normal; raise it when the atoms are small on the page |
 
 ## Animation
 
 | field | default | meaning |
 |---|---|---|
-| `boilHold` | `1` | how many drawn frames keep the same hand-drawn wobble before the lines are redrawn. 1 redraws every drawing, which makes the lines "boil" like hand animation; larger values keep them still for longer |
+| `boil_hold` | `1` | how many drawn frames keep the same hand-drawn wobble before the lines are redrawn. 1 redraws every drawing, which makes the lines "boil" like hand animation; larger values keep them still for longer |
 
 ## Detail
 
 | field | default | meaning |
 |---|---|---|
 | `detail` | `"auto"` | `"auto"`: with more than 260 drawn atoms, strokes get one pass and no scribbles, and with more than 600 surface patches, fewer watercolour layers and no drying ring (large structures draw faster and stay readable). `"full"`: the whole treatment always |
-| `textureScale` | `"screen"` | `"screen"`: hatching, stroke widths and scribbles are sized in pixels. `"object"`: they scale with the drawing, so the texture on an atom stays the same however large it is drawn |
+| `texture_scale` | `"screen"` | `"screen"`: hatching, stroke widths and scribbles are sized in pixels. `"object"`: they scale with the drawing, so the texture on an atom stays the same however large it is drawn |
 
 ## Preview-only fields
 
@@ -233,5 +236,5 @@ the app round-trips unchanged.
 |---|---|
 | `water.layers`, `water.wobble`, `water.ring`, `water.granulation`, `water.tone` | the preview's watercolour |
 | `line.alpha` | the preview's line opacity |
-| `paper.washScale` | the size of the preview's paper wash |
-| `boilEvery` | the preview's line boil (the finished drawing uses `boilHold`) |
+| `paper.wash_scale` | the size of the preview's paper wash |
+| `boil_every` | the preview's line boil (the finished drawing uses `boil_hold`) |
