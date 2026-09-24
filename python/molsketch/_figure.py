@@ -214,13 +214,22 @@ class Figure:
         the detail, for print or high-density screens. ``frame`` picks a frame without changing the figure's own."""
         return Image(engine().render(self._spec(size=size, scale=scale, frame=frame)))
 
+    def svg(self, size: Size = DEFAULT_SIZE, *, scale: float = 1, frame: int | None = None) -> str:
+        """Draw the figure as SVG and return the document. Every line, fill and letter is a vector element (letters as
+        outlines, so no fonts are needed); what the style paints as texture (the paper, watercolour washes, blurs) is
+        embedded as images at ``size`` × ``scale`` pixels. Blend modes use CSS ``mix-blend-mode``, which browsers,
+        Inkscape and Affinity honour; Illustrator flattens them."""
+        return engine().render_svg(self._spec(size=size, scale=scale, frame=frame))
+
     def save(self, path: str | os.PathLike, size: Size = DEFAULT_SIZE, *, scale: float = 1, frame: int | None = None) -> pathlib.Path:
         """Draw the figure and save it, returning the path. ``.png``, ``.jpg`` and ``.webp`` save an image (``size``,
-        ``scale`` and ``frame`` as in ``render``). ``.json`` saves the figure as a scene that the app can open, with
-        its look, labels and site."""
+        ``scale`` and ``frame`` as in ``render``); ``.svg`` saves a vector drawing (see ``svg``). ``.json`` saves the
+        figure as a scene that the app can open, with its look, labels and site."""
         path = pathlib.Path(path)
         if path.suffix.lower() == ".json":
             path.write_text(json.dumps(self.scene(), indent=1)); return path
+        if path.suffix.lower() == ".svg":
+            path.parent.mkdir(parents=True, exist_ok=True); path.write_text(self.svg(size, scale=scale, frame=frame)); return path
         return self.render(size, scale=scale, frame=frame).save(path)
 
     def save_frames(self, directory: str | os.PathLike, frames: str | int | Iterable[int] = "drawn", size: Size = DEFAULT_SIZE, *,

@@ -47,7 +47,8 @@ export interface PanelHost {
   /* render */
   hasWebCodecs: () => boolean; codecSupport: (w: number, h: number) => Promise<Record<string, { codec: string; quantizer: boolean } | null>>;
   renderToFile: (o: { width: number; height: number; codec: any; quality: any; onProgress: (done: number, total: number, bytes: number, eta: number) => void }) => Promise<{ name: string; bytes: number; seconds: number; codecString: string }>;
-  cancelRender: () => void; savePoster: (w: number, h: number, frame?: number, type?: 'image/jpeg' | 'image/png') => void; posterFrame: () => number; setRenderSize: (s: [number, number] | null) => void; drawnFrames: () => number;
+  cancelRender: () => void; savePoster: (w: number, h: number, frame?: number, type?: 'image/jpeg' | 'image/png') => void;
+  saveSvg: (w: number, h: number) => void; hasSdk: () => boolean; posterFrame: () => number; setRenderSize: (s: [number, number] | null) => void; drawnFrames: () => number;
 }
 
 /** `when`: the control is shown only while this holds (e.g. engraved settings only for the engraved cartoon) */
@@ -577,7 +578,10 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     posterBtn.onclick = () => { const sz = outSize() || H.canvasSize(); H.savePoster(sz[0], sz[1], H.posterFrame(), 'image/jpeg') };
     frameBtn.onclick = () => { const sz = outSize() || H.canvasSize(); H.savePoster(sz[0], sz[1], undefined, 'image/png') };
     const posterWrap = el('span', {}, posterBtn); showWhen(posterWrap, () => H.hasScene());
-    g.append(el('div', { class: 'btns' }, frameBtn, posterWrap));
+    const svgBtn = el('button', { title: 'this frame as SVG: lines, fills and letters as vectors, paper and washes embedded (drawn by the molsketch server)' }, 'Save SVG');
+    svgBtn.onclick = () => { const sz = outSize() || H.canvasSize(); H.saveSvg(sz[0], sz[1]) };
+    const svgWrap = el('span', {}, svgBtn); showWhen(svgWrap, () => H.hasSdk());
+    g.append(el('div', { class: 'btns' }, frameBtn, posterWrap, svgWrap));
     g.append(note('The canvas keeps the output\'s shape (letterboxed), so what you frame on screen is what the file holds. Save PNG in the top bar saves the screen as it is.'));
   }
   /* render: the loop as a video file, made here */

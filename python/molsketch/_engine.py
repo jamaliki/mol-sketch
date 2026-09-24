@@ -148,18 +148,24 @@ class Engine:
         self.call("put", ref, value)
         return ref
 
-    def render(self, spec: dict) -> skia.Image:
+    def render_svg(self, spec: dict) -> str:
+        """the figure as SVG: its canvas replayed as vector elements (what it draws off screen, embedded as images)"""
+        self.raster.lazy = True
+        try: return self.render(spec, svg=True)
+        finally: self.raster.lazy = False
+
+    def render(self, spec: dict, svg: bool = False):
         # a large figure is millions of small objects (ops, paths) and none of them in a cycle: Python's collector,
         # walking them again and again as they arrive, would cost more than the drawing
         # and V8 hands records over through Python's lock: switching threads every 0.5 ms rather than 5 keeps the
         # engine from waiting on the replay while it draws
         was = gc.isenabled(); gc.disable(); sw = sys.getswitchinterval(); sys.setswitchinterval(0.0005)
-        try: return self._render(spec)
+        try: return self._render(spec, svg)
         finally:
             sys.setswitchinterval(sw)
             if was: gc.enable()
 
-    def _render(self, spec: dict) -> skia.Image:
+    def _render(self, spec: dict, svg: bool = False):
         with self._lock:
             main = None
             try:
@@ -180,7 +186,7 @@ class Engine:
                     rows = [(f, t, self.text.measure(f, t)) for f, t in {(f, t) for f, t in r["miss"]}]
                     self.v8.call("__learn", json.dumps(rows))
                     self.misses = r["miss"]
-                img = self.raster.image(main)
+                img = self.raster.vector(main, spec.get("scale", 1)) if svg else self.raster.image(main)
             finally:   # the frame's canvas and the render's paints are done with, whatever happened
                 if main is not None: self.raster.drop(main)
                 self.raster.end_render()

@@ -273,7 +273,17 @@ Draw the figure and return an [`Image`](#images). `frame` draws another frame wi
 Draw the figure and save it; returns the path. The extension decides what is written:
 
 - `.png`, `.jpg`, `.webp`: an image.
+- `.svg`: a vector drawing (see [`svg`](#figsvgsize1920-1440--scale1-framenone)).
 - `.json`: the figure as a scene that the app can open, with its look, labels and site.
+
+#### `fig.svg(size=(1920, 1440), *, scale=1, frame=None)`
+
+Draw the figure as SVG and return the document as a string. Every line, fill and letter is a vector element that
+you can edit in Inkscape, Illustrator or Affinity; letters are outlines, so the file looks the same without the fonts
+installed. What a style paints as texture (the paper, watercolour washes, blurs) is raster by nature, and is embedded
+as PNG images at `size` × `scale` pixels, so use `scale=2` or more for print. Blend modes are written as CSS
+`mix-blend-mode`, which browsers, Inkscape and Affinity honour; Illustrator flattens them. A protein is a few MB; a
+144 000-atom ribosome about 30 MB.
 
 #### `fig.save_frames(directory, frames="drawn", size=(1920, 1440), *, scale=1)`
 
@@ -408,8 +418,8 @@ molsketch palettes                           # list the group palettes
 ```
 
 `INPUT` is a `.pdb`, `.cif` or scene `.json` file, or a PDB ID (downloaded like `fetch`). `-o` decides the output:
-an image (`.png` `.jpg` `.webp`), a video (`.mp4` `.webm` `.gif`), a scene (`.json`), or a folder of frames (a path
-with no extension). Options for `render`:
+an image (`.png` `.jpg` `.webp`), a vector drawing (`.svg`), a video (`.mp4` `.webm` `.gif`), a scene (`.json`), or a
+folder of frames (a path with no extension). Options for `render`:
 
 | option | same as |
 |---|---|
@@ -448,7 +458,7 @@ use too:
 | `GET /api/health` | | `{"molsketch": "0.1.0"}` |
 | `POST /api/put` | `{"input": {"text": …, "name": "x.cif"}}` (or `{"scene": …}`, `{"stack": [...]}`) | `{"ref": "in3"}`: keeps the structure on the server |
 | `POST /api/drop` | `{"ref": "in3"}` | `{}`: forgets it |
-| `POST /api/render` | a figure spec (below) | the image, `image/png` |
+| `POST /api/render` | a figure spec (below) | the image, `image/png`; with `"format": "svg"` in the spec, the SVG (`image/svg+xml`) |
 | `POST /api/call` | `{"name": …, "args": [...]}` | JSON: `info`, `frames`, `pocket`, `frameTheSite`, `labelTheSite`, `atomId`, `sceneJson`, `catalog` |
 
 A figure spec is a JSON object, in the engine's own camelCase names (the app sends these): `input` (`{"ref": …}` or an inline input as for `/api/put`), and optionally `look`,

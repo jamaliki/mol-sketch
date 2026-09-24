@@ -506,6 +506,14 @@ async function savePoster(width: number, height: number, f = frame, type: 'image
   const a = document.createElement('a'); a.href = c.toDataURL(type, 0.86); a.download = `${name}_${sceneDoc ? 'frame' + f : 'poster'}.${type === 'image/png' ? 'png' : 'jpg'}`; a.click();
   classic().cfg = cfgFromStyle(style, R.camera, !!sceneDoc); if (sceneDoc) classic().scene = sceneDoc; invalidate();
 }
+/** This frame as SVG, drawn by the molsketch SDK (the browser has no vector route of its own). */
+async function saveSvg(width: number, height: number, f = sceneDoc ? frame : boil) {
+  if (!sdk) { status('SVG needs the molsketch server: run `molsketch serve`'); return }
+  const svg = await sdk.svg(await figureSpec(width, height, 1, f));
+  const name = (sceneDoc?.name || R.structure?.name || 'molsketch').replace(/[^\w.-]+/g, '_');
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); a.download = `${name}${sceneDoc ? '_frame' + f : ''}.svg`; a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 10000);
+}
 /** The frame with the arrows of the first keyframe fully drawn: the natural poster. */
 function posterFrame(): number { if (!sceneDoc) return 0; const h = timeline().segs.find(s => s.type === 'hold'); return h ? h.start + Math.floor(h.len * 0.9 / 2) * 2 : 0 }
 
@@ -551,7 +559,7 @@ const panel = buildPanel(document.getElementById('controls')!, {
   // views
   suggest, adoptView,
   // render
-  hasWebCodecs, codecSupport, renderToFile, cancelRender: () => { renderCancel = true }, savePoster, posterFrame, setRenderSize: (s: [number, number] | null) => { const a = s ? s[0] / s[1] : null; if (a === previewAspect && (s ? renderSize && s[0] === renderSize[0] && s[1] === renderSize[1] : !renderSize)) return; renderSize = s; setPreviewAspect(a) }, drawnFrames: () => sceneDoc ? Math.ceil(timeline().total / 2) : 12,
+  hasWebCodecs, codecSupport, renderToFile, cancelRender: () => { renderCancel = true }, savePoster, saveSvg, hasSdk: () => !!sdk, posterFrame, setRenderSize: (s: [number, number] | null) => { const a = s ? s[0] / s[1] : null; if (a === previewAspect && (s ? renderSize && s[0] === renderSize[0] && s[1] === renderSize[1] : !renderSize)) return; renderSize = s; setPreviewAspect(a) }, drawnFrames: () => sceneDoc ? Math.ceil(timeline().total / 2) : 12,
 });
 
 /** PNG of what is on screen: the sketch when it is shown, else the GPU frame */

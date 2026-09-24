@@ -10,6 +10,8 @@ export interface SDK {
   put(input: any): Promise<string>;
   drop(ref: string): void;
   render(spec: FigureSpec): Promise<ImageBitmap>;
+  /** the figure as SVG (vector lines, fills and letters; textures embedded) */
+  svg(spec: FigureSpec): Promise<string>;
   call<T = any>(name: string, ...args: any[]): Promise<T>;
 }
 
@@ -24,6 +26,7 @@ async function probe(base: string): Promise<SDK | null> {
       put: async input => (await (await post('/api/put', { input })).json()).ref,
       drop: ref => { post('/api/drop', { ref }).catch(() => { }) },
       render: async spec => createImageBitmap(await (await post('/api/render', spec)).blob()),
+      svg: async spec => (await post('/api/render', { ...spec, format: 'svg' })).text(),
       call: async (name, ...args) => (await post('/api/call', { name, args })).json(),
     };
   } catch { return null }

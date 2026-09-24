@@ -6,6 +6,7 @@ The server hands out the app (its built files, bundled here) and a small API the
     POST /api/put     {"input": …}            → {"ref": "in3"}         a structure's text, a scene or a stack, kept here
     POST /api/drop    {"ref": "in3"}          → {}
     POST /api/render  {figure spec}           → image/png              the same drawing as Figure.render
+                      (with "format": "svg")  → image/svg+xml          as Figure.svg
     POST /api/call    {"name": …, "args": […]} → JSON                  frames, info, pocket, frameTheSite, labelTheSite, …
 
 The app finds the API on its own origin (served from here) or, while developing, at http://localhost:8471 (vite's
@@ -68,6 +69,7 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/put": return self._json({"ref": E.put(body["input"])})
             if path == "/api/drop": E.call("drop", body["ref"]); return self._json({})
             if path == "/api/render":
+                if body.pop("format", "png") == "svg": return self._send(200, E.render_svg(body).encode(), "image/svg+xml")
                 img = E.render(body)
                 return self._send(200, bytes(img.encodeToData(skia.kPNG, 100)), "image/png")
             if path == "/api/call":

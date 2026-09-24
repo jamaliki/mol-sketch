@@ -134,3 +134,15 @@ def test_names_are_snake_case_and_the_apps_are_accepted():
     assert set(fig.camera) == {"yaw", "pitch", "roll", "zoom", "pan_x", "pan_y", "fov"}
     assert "surface_depth" in ms.default_style() and "surfaceDepth" not in ms.default_style()
     assert ms.load(EX / "1A8O.pdb").apply_style({"labelSize": 27}).style["label_size"] == 27
+
+
+def test_svg_is_vector_and_valid(tmp_path):
+    """SVG output: a valid document of vector elements, the same size as the PNG, text as outlines"""
+    import xml.etree.ElementTree as ET
+    fig = ms.load(EX / "1A8O.pdb").look("engraved-colour").label("A label", xy=(0.5, 0.1))
+    p = fig.save(tmp_path / "fig.svg", (640, 480))
+    root = ET.fromstring(p.read_text())
+    ns = "{http://www.w3.org/2000/svg}"
+    assert root.tag == ns + "svg" and root.get("width") == "640" and root.get("height") == "480"
+    assert len(root.findall(f".//{ns}path")) > 100 and not root.findall(f".//{ns}text")   # letters are outlines
+    assert "mix-blend-mode" in ms.load(EX / "1A8O.pdb").look("watercolour").svg((320, 240))   # watercolour multiplies

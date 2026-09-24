@@ -121,6 +121,8 @@ class Raster:
         self.specs: dict[int, list] = {}                      # the recorder's paint table, by id (see canvas.ts)
         self.paints: dict[int, skia.Paint | None] = {}        # and the paints made from it
         self.templates: dict[tuple, skia.Paint] = {}         # paints without their colour, by the rest of the spec
+        self.meta: dict[int, dict] = {}                        # what SVG needs of a paint that it does not tell: its pattern, its blur
+        self.lazy = False                                      # draw canvases only when their pixels are needed (for SVG)
         self.text = text
 
     # ---- chunks in ----
@@ -141,7 +143,8 @@ class Raster:
                 elif k == "P": ops[i] = ("P", _read_path(mv[o[1]:o[1] + o[2]]), o[3], o[4])
             if lv.i: lv.q = lv.q[lv.i:]; lv.i = 0
             lv.q.extend(ops); fed.append(lv)
-        for lv in fed: self._pump(lv)
+        if not self.lazy:
+            for lv in fed: self._pump(lv)
         for cid in d["dead"]: self.drop(cid)
 
     def _pump(self, lv: _Live, until: int | None = None):
@@ -183,6 +186,22 @@ class Raster:
         self._pump(lv)
         return lv.surface.makeImageSnapshot() if lv.surface is not None else None
 
+    def vector(self, cid: int, scale: float = 1) -> str:
+        """a canvas as SVG: its ops (none drawn yet: see ``lazy``) replayed onto an SVG canvas"""
+        from ._svg import SvgCanvas
+        lv = self.live.get(cid)
+        if lv is None: raise RuntimeError(f"canvas {cid} is not here")
+        q = lv.q; start = max((i for i in range(lv.i, len(q)) if q[i][0] == "size"), default=None)
+        if start is None: raise RuntimeError("the canvas was drawn on before SVG was asked for")
+        w, h = q[start][1], q[start][2]
+        c = SvgCanvas(w, h, scale, meta=lambda p: self.meta.get(id(p)))
+        rp = _Replay(self, lv, c, w, h); i = start + 1
+        while i < len(q):
+            i = rp.run(q, i, len(q))
+            if i < len(q): i += 1   # a resize after drawing: SVG keeps what was drawn
+        lv.i = len(q)
+        return c.svg()
+
     def drop(self, cid: int):
         """a canvas gone: its pixels and snapshots"""
         self.live.pop(cid, None)
@@ -192,6 +211,8 @@ class Raster:
 
     def end_render(self):
         """the render's paints: no op still to draw refers to them"""
+        for p in self.paints.values():
+            if p is not None and p.__class__ is not tuple: self.meta.pop(id(p), None)
         self.specs.clear(); self.paints.clear()
 
     # ---- paints ----
@@ -214,7 +235,9 @@ class Raster:
             r /= 255; g /= 255; b /= 255   # the recorder's channels are Blink's integers
             key = (comp, filt, (*pen[:4], tuple(pen[4]) if pen[4] else None, pen[5]) if pen else None)
             t = self.templates.get(key)
-            if t is None: t = self.templates[key] = _finish(skia.Paint(AntiAlias=True), comp, filt, pen)
+            if t is None:
+                t = self.templates[key] = _finish(skia.Paint(AntiAlias=True), comp, filt, pen)
+                if _blur_sigma(filt) is not None: self.meta[id(t)] = {"blur": _blur_sigma(filt)}
             # colour precision as Chrome's Skia blends: normal drawing keeps the colour in float; the other blend modes
             # (multiply, screen: watercolour and paper) run at 8 bits, so the colour is rounded there first (measured)
             if comp == "source-over": return (t, skia.Color4f(r, g, b, a * alpha), True)
@@ -231,8 +254,12 @@ class Raster:
             tx = tile if rep in ("repeat", "repeat-x") else skia.TileMode.kDecal
             ty = tile if rep in ("repeat", "repeat-y") else skia.TileMode.kDecal
             sh = self.shaders[key] = skia.Paint(AntiAlias=True, Shader=img.makeShader(tx, ty, LINEAR if smooth else skia.SamplingOptions(), _mat(m)))
+            self.meta[id(sh)] = {"pattern": (img, rep, m)}
         p = skia.Paint(sh); p.setAlphaf(alpha)
-        return _finish(p, comp, filt, pen)
+        self.meta[id(p)] = dict(self.meta.get(id(sh), {}))
+        p = _finish(p, comp, filt, pen)
+        if _blur_sigma(filt) is not None: self.meta.setdefault(id(p), {})["blur"] = _blur_sigma(filt)
+        return p
 
 
 def _finish(p: skia.Paint, comp: str, filt: str, pen) -> skia.Paint:

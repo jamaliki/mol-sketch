@@ -62,6 +62,7 @@ ms.fetch("2PTN")                        # an entry from the PDB (cached in ~/.ca
 
 ```python
 fig.save("fig.png", size=(1600, 1200), scale=2)       # .png .jpg .webp; .json saves the scene for the app
+fig.save("fig.svg")                                     # a vector drawing: lines, fills, letters as paths
 img = fig.render((800, 600))                            # an Image (below)
 fig.frames("drawn")                                     # a scene's frame numbers: "drawn", "all", "keyframes", 90, "10-40"
 fig.save_frames("out/", "drawn")                        # frame_0000.png …

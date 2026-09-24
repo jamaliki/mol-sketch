@@ -211,6 +211,7 @@ class TextEngine:
             if not gl: continue
             f = skia.Font(face.tf, size); f.setSubpixel(True); f.setEdging(self.edging); f.setHinting(skia.FontHinting.kNone)
             if style != "normal" and not face.tf.isItalic(): f.setSkewX(-0.25)   # synthetic oblique, as Chrome's
+            if hasattr(canvas, "draw_glyphs"): canvas.draw_glyphs(f, gl, xs, ys, paint); continue   # SVG: the glyphs as outlines
             b = skia.TextBlobBuilder(); b.allocRunPos(f, gl, [skia.Point(a, c) for a, c in zip(xs, ys)])
             blob = b.make()
             if blob is not None: canvas.drawTextBlob(blob, 0, 0, paint)

@@ -28,7 +28,7 @@ def main(argv=None):
     s.add_argument("--no-browser", action="store_true"); s.add_argument("--verbose", action="store_true")
     r = sub.add_parser("render", help="draw a figure")
     r.add_argument("input", help="a .pdb / .cif / scene .json, or a PDB ID")
-    r.add_argument("-o", "--out", default="figure.png", help="an image (.png .jpg .webp), a video (.mp4 .webm .gif), .json, or a directory for frames")
+    r.add_argument("-o", "--out", default="figure.png", help="an image (.png .jpg .webp), a vector drawing (.svg), a video (.mp4 .webm .gif), .json, or a directory for frames")
     r.add_argument("--look"); r.add_argument("--style", help="a style JSON saved from the app")
     r.add_argument("--set", action="append", default=[], metavar="PATH=VALUE", help="change one style field (repeatable): line.width=2")
     r.add_argument("--size", default="1920x1440"); r.add_argument("--scale", type=float, default=1)
