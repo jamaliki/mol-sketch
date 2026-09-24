@@ -811,88 +811,105 @@ function surfaceEdge(ctx,p,zAt,color,amt,seed,wk=1){
     sketchLine(ctx,run,{seed:seed+71+r++,passes:1,width:(0.45+1.1*g)*wk,color,alpha:clamp(0.2+0.6*g,0,1)*amt,ampScale:0.5,step:3,overshoot:false})}
 }
 const inHull=(h,x,y)=>{let s=0;for(let i=0;i<h.length;i++){const a=h[i],b=h[(i+1)%h.length];const c=(b[0]-a[0])*(y-a[1])-(b[1]-a[1])*(x-a[0]);if(c!==0){if(s===0)s=Math.sign(c);else if(Math.sign(c)!==s)return false}}return true};
-function buildSurface(items,st,pos,atoms,proj,seedBase,lowDetail){
-  const P=cfg.palette;const probe=cfg.rep.probe;
-  if(isWC()){ // one continuous wash over the whole surface, ring only on the silhouette; patch colour by the chosen scheme
-    if(!atoms.length)return;
-    const discs=atoms.map(a=>{const p=pos[a.id];return{x:p.x,y:p.y,r:((VDW[a.el]||1.7)+probe*0.55)*proj.pxPerA*p.d*cfg.rep.surfaceScale,z:p.z,fog:p.fog,alpha:a.alpha,a}});
-    const zMean=discs.reduce((s,d)=>s+d.z,0)/discs.length;const fogMean=discs.reduce((s,d)=>s+d.fog,0)/discs.length;
-    const groups={};for(const d of discs){const k=(d.a.chain||'')+'/'+(d.a.resi??d.a.id);(groups[k]=groups[k]||[]).push(d)}
-    items.push({z:zMean,draw:(ctx)=>{
-      const W=RF.W,H=RF.H,dpr=RF.dpr;const off=document.createElement('canvas');off.width=Math.round(W*dpr);off.height=Math.round(H*dpr);const x=off.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
-      const mode=cfg.rep.surfaceColor;const colFor=a=>mode==='single'?P.surface:mode==='chain'?chainColor(a):mode==='subunit'?subunitColor(a):mode==='entity'?entityColor(a):mode==='carbon'?carbonColor(a):mix(atomColor(a),'#ffffff',0.2);
-      // residue patches back to front: each erases what lies behind it, then is washed in a tone set by depth and a soft top-left light,
-      // so recesses read darker and the form has volume; thin rings give the Goodsell texture
-      const patches=[];for(const k in groups){const g=groups[k];const pts=[];let z=0,px=0,py=0;for(const d of g){for(let i=0;i<10;i++){const an=i/10*Math.PI*2;pts.push([d.x+Math.cos(an)*d.r,d.y+Math.sin(an)*d.r])}z+=d.z;px+=d.x;py+=d.y}
-        const h=hull(pts);if(h.length<3)continue;patches.push({h,z:z/g.length,x:px/g.length,y:py/g.length,fog:g.reduce((s,d)=>s+d.fog,0)/g.length,alpha:Math.max(...g.map(d=>d.alpha)),k,col:colFor(g[0].a)})}
-      patches.sort((a,b)=>a.z-b.z);
-      let zmin=1e9,zmax=-1e9,xmin=1e9,xmax=-1e9,ymin=1e9,ymax=-1e9;for(const p of patches){zmin=Math.min(zmin,p.z);zmax=Math.max(zmax,p.z);xmin=Math.min(xmin,p.x);xmax=Math.max(xmax,p.x);ymin=Math.min(ymin,p.y);ymax=Math.max(ymax,p.y)}
-      const zs=Math.max(1e-6,zmax-zmin);const la=cfg.style.lightAngle*Math.PI/180;const lx=Math.cos(la),ly=Math.sin(la);const R=Math.max(xmax-xmin,ymax-ymin)/2||1;const cx=(xmin+xmax)/2,cy=(ymin+ymax)/2;
-      const many=cfg.rep.detail!=='full'&&patches.length>600;
-      // depth cues, each 0..1 (0: the flat wash as before): edges where a patch stands in front of something much farther
-      // back, pigment pooling in the grooves (patches with nearer surface all round), and aerial fade with the depth fog
-      const EDG=cfg.rep.surfEdges||0,POOL=cfg.rep.surfPool||0,FADE=cfg.rep.surfFade||0,cues=EDG>0||POOL>0||FADE>0;
-      const zAt=EDG>0||POOL>0?depthMap(discs,W,H):null;
-      const occR=9*proj.pxPerA,paperW=luminance(P.paper)>0.5?'#ffffff':'#000000';
-      for(const p of patches){const depth=(zmax-p.z)/zs;const lit=((p.x-cx)*lx+(p.y-cy)*ly)/R; // lit>0 faces the light
-        let tone=clamp(0.3+0.6*depth-0.2*lit,0.15,1),col=p.col,layers=many?3:5,occ=0,fade=0;
-        if(cues){
-          if(POOL>0)occ=grooveOf(p,zAt,occR);
-          fade=FADE*p.fog;
-          // tone: the light and the grooves decide it (not raw depth, which the fade now carries)
-          tone=clamp(0.42+0.18*depth*(1-FADE)-0.2*lit+0.32*POOL*occ,0.15,1)*(1-0.45*fade);
-          if(POOL>0)col=mix(col,'#000000',0.22*POOL*occ);   // the same pigment, more of it: darker, not greyer
-          if(fade>0)col=mix(col,paperW,0.55*fade);
-          if(fade>0.5)layers=3}
-        x.save();x.globalAlpha=p.alpha;x.beginPath();p.h.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]));x.closePath();x.fillStyle='#ffffff';x.globalCompositeOperation='destination-out';x.fill();x.globalCompositeOperation='source-over';
-        const seed=seedBase+strHash('su'+p.k);
-        watercolourShape(x,p.h,col,seed,{fog:0,layers,strength:tone,offscreen:true,granulate:false,noRing:many&&depth<0.15});
-        if(EDG>0)surfaceEdge(x,p,zAt,mix(p.col,shadeInk(),0.55),EDG*(1-0.7*fade),seed);
-        if(POOL>0&&occ>0.3){ // pigment settles in the grooves: granulation inside the patch
-          const rng=mulberry32(seed+31);let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9;for(const q of p.h){bx0=Math.min(bx0,q[0]);by0=Math.min(by0,q[1]);bx1=Math.max(bx1,q[0]);by1=Math.max(by1,q[1])}
-          const n=Math.round((bx1-bx0)*(by1-by0)*0.012*POOL*(occ-0.3));
-          for(let i=0;i<n;i++){const gx=bx0+rng()*(bx1-bx0),gy=by0+rng()*(by1-by0),ga=0.12+rng()*0.2;if(!inHull(p.h,gx,gy))continue;x.fillStyle=rgba(mix(col,'#000000',0.4),ga);x.fillRect(gx,gy,1,1)}}
-        x.restore()}
-      // silhouette: union of discs minus the same union eroded → a band along the outer edge
-      const mask=document.createElement('canvas');mask.width=off.width;mask.height=off.height;const mx=mask.getContext('2d',{willReadFrequently:true});mx.scale(dpr,dpr);
-      mx.fillStyle=mix(mode==='single'?col:P.surface,shadeInk(),0.35);for(const d of discs){mx.beginPath();mx.arc(d.x,d.y,d.r,0,Math.PI*2);mx.fill()}
-      mx.globalCompositeOperation='destination-out';for(const d of discs){mx.beginPath();mx.arc(d.x,d.y,Math.max(0,d.r-2.2),0,Math.PI*2);mx.fill()}
-      x.save();x.globalAlpha=0.55;x.drawImage(mask,0,0,W,H);x.restore();
-      // granulation over the whole surface
-      const rng=mulberry32(seedBase+7);x.save();x.beginPath();for(const d of discs){x.moveTo(d.x+d.r,d.y);x.arc(d.x,d.y,d.r,0,Math.PI*2)}x.clip();
-      let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const d of discs){x0=Math.min(x0,d.x-d.r);y0=Math.min(y0,d.y-d.r);x1=Math.max(x1,d.x+d.r);y1=Math.max(y1,d.y+d.r)}
-      const g=Math.round((x1-x0)*(y1-y0)*0.0025);for(let i=0;i<g;i++){x.fillStyle=rgba(mix(mode==='single'?col:P.surface,shadeInk(),0.4),0.1+rng()*0.2);x.fillRect(x0+rng()*(x1-x0),y0+rng()*(y1-y0),1,1)}x.restore();
-      // paper under the surface, then the wash multiplied once, then a sketched silhouette line
-      ctx.save();ctx.globalAlpha=cfg.rep.surfaceOpacity;ctx.beginPath();for(const d of discs){ctx.moveTo(d.x+d.r,d.y);ctx.arc(d.x,d.y,d.r,0,Math.PI*2)}ctx.fillStyle=paperFill();ctx.fill();
-      ctx.globalCompositeOperation=luminance(P.paper)>0.5?'multiply':'screen';ctx.drawImage(off,0,0,W,H);ctx.restore();
-      ctx.save();ctx.globalAlpha=cfg.rep.surfaceOpacity*0.7;ctx.globalCompositeOperation=luminance(P.paper)>0.5?'multiply':'screen';ctx.drawImage(mask,0,0,W,H);ctx.restore();
-    }});
-    return}
-  if((cfg.rep.surfEdges||0)>0||(cfg.rep.surfPool||0)>0||(cfg.rep.surfFade||0)>0)return buildSurfacePatches(items,atoms,pos,proj,seedBase);
-  for(const a of atoms){const p=pos[a.id];const r=((VDW[a.el]||1.7)+probe*0.55)*proj.pxPerA*p.d*cfg.rep.surfaceScale;const seed=seedBase+strHash('s'+a.id);
-    const col=cfg.rep.surfaceColor==='single'?P.surface:cfg.rep.surfaceColor==='carbon'?mix(carbonColor(a),'#ffffff',0.25):mix(atomColor(a),'#ffffff',0.3);
-    items.push({z:p.z+0.02,draw:(ctx)=>drawFlatBall(ctx,p.x,p.y,r,col,{seed,fog:p.fog,d:p.d,alpha:a.alpha,fillAlpha:cfg.rep.surfaceOpacity,outlineFirst:true,outlineAlpha:0.6,passes:lowDetail?1:undefined})})}
+/* ---- surfaces: a model, the depth cues on it, and a painter per medium ----
+   surfaceModel builds the geometry (one patch per residue: the hull of its atoms' discs); applyDepthCues works out, as
+   numbers on each patch, how deep in a groove it lies, how far into the fog it is, and the depth map its edges are
+   found in; each painter shows those numbers in its own medium. The cues are data, not a filter on the picture: a
+   painter decides whether a groove means more pigment, denser hatching or heavier scribble. */
+function surfaceColour(){
+  const P=cfg.palette,mode=cfg.rep.surfaceColor;
+  return a=>mode==='single'?P.surface:mode==='chain'?chainColor(a):mode==='subunit'?subunitColor(a):mode==='entity'?entityColor(a):mode==='carbon'?carbonColor(a):mix(atomColor(a),'#ffffff',0.2);
 }
-
-/* A surface in the other fills, with depth: one patch per residue, each an item in the painter's list, drawn as its
-   fill draws (flat and wash: a tone; pencil and chalk: scribbles; ink: hatching), darker and denser in the grooves,
-   fading with the depth fog, and edged in ink where it stands in front of something farther back. */
-function buildSurfacePatches(items,atoms,pos,proj,seedBase){
-  if(!atoms.length)return;
-  const P=cfg.palette,S=cfg.style,probe=cfg.rep.probe,EDG=cfg.rep.surfEdges||0,POOL=cfg.rep.surfPool||0,FADE=cfg.rep.surfFade||0;
-  const W=RF.W,H=RF.H;
+/** the surface's discs (an atom's van der Waals radius plus half the probe) and its residue patches, in model order;
+   a patch keeps its first atom, and each painter asks for its colour when it always has */
+function surfaceModel(atoms,pos,proj){
+  const probe=cfg.rep.probe;
   const discs=atoms.map(a=>{const p=pos[a.id];return{x:p.x,y:p.y,r:((VDW[a.el]||1.7)+probe*0.55)*proj.pxPerA*p.d*cfg.rep.surfaceScale,z:p.z,d:p.d,fog:p.fog,alpha:a.alpha,a}});
   const groups={};for(const d of discs){const k=(d.a.chain||'')+'/'+(d.a.resi??d.a.id);(groups[k]=groups[k]||[]).push(d)}
-  const mode=cfg.rep.surfaceColor;const colFor=a=>mode==='single'?P.surface:mode==='chain'?chainColor(a):mode==='subunit'?subunitColor(a):mode==='entity'?entityColor(a):mode==='carbon'?carbonColor(a):mix(atomColor(a),'#ffffff',0.2);
-  const zAt=depthMap(discs,W,H),occR=9*proj.pxPerA,ink=isInk(),chalk=isChalk(),pencil=cfg.rep.fill==='pencil';
-  const la=S.lightAngle*Math.PI/180,lx=Math.cos(la),ly=Math.sin(la);
-  const patches=[];let xmin=1e9,xmax=-1e9,ymin=1e9,ymax=-1e9;
+  const patches=[];
   for(const k in groups){const g=groups[k];const pts=[];let z=0,px=0,py=0,dd=0;for(const d of g){for(let i=0;i<10;i++){const an=i/10*Math.PI*2;pts.push([d.x+Math.cos(an)*d.r,d.y+Math.sin(an)*d.r])}z+=d.z;px+=d.x;py+=d.y;dd+=d.d}
-    const h=hull(pts);if(h.length<3)continue;const p={h,k,z:z/g.length,x:px/g.length,y:py/g.length,d:dd/g.length,fog:g.reduce((s,d)=>s+d.fog,0)/g.length,alpha:Math.max(...g.map(d=>d.alpha)),col:colFor(g[0].a)};
-    patches.push(p);xmin=Math.min(xmin,p.x);xmax=Math.max(xmax,p.x);ymin=Math.min(ymin,p.y);ymax=Math.max(ymax,p.y)}
+    const h=hull(pts);if(h.length<3)continue;
+    patches.push({h,k,z:z/g.length,x:px/g.length,y:py/g.length,d:dd/g.length,fog:g.reduce((s,d)=>s+d.fog,0)/g.length,alpha:Math.max(...g.map(d=>d.alpha)),a:g[0].a})}
+  return {discs,patches,proj};
+}
+/** the depth cues, from the strengths in cfg.rep (surfEdges, surfPool, surfFade: 0 off … 1): on each patch `groove`
+   (0..1, how much nearer surface surrounds it) and `fade` (0..1, its strength times its depth fog), and on the model
+   the strengths and the depth map `zAt` the edges are found in (null when neither edges nor pooling need it) */
+function applyDepthCues(model){
+  const edges=cfg.rep.surfEdges||0,pooling=cfg.rep.surfPool||0,fade=cfg.rep.surfFade||0;
+  model.cues={edges,pooling,fade,any:edges>0||pooling>0||fade>0};
+  model.zAt=edges>0||pooling>0?depthMap(model.discs,RF.W,RF.H):null;
+  const occR=9*model.proj.pxPerA;
+  for(const p of model.patches){p.groove=pooling>0?grooveOf(p,model.zAt,occR):0;p.fade=fade*p.fog}
+  return model;
+}
+function buildSurface(items,st,pos,atoms,proj,seedBase,lowDetail){
+  const cues=(cfg.rep.surfEdges||0)>0||(cfg.rep.surfPool||0)>0||(cfg.rep.surfFade||0)>0;
+  if(!isWC()&&!cues)return paintAtomSurface(items,atoms,pos,proj,seedBase,lowDetail);   // no depth asked for: the old ball per atom
+  if(!atoms.length)return;
+  const model=applyDepthCues(surfaceModel(atoms,pos,proj));
+  if(isWC())paintWatercolourSurface(items,model,seedBase);else paintPatchSurface(items,model,seedBase);
+}
+
+/* watercolour: one continuous wash over the whole surface, ring only on the silhouette. Patches back to front, each
+   erasing what lies behind it, then washed in a tone set by the light, the groove and the fade; grooves take more of
+   the same pigment and granulate, edges are drying-ring lines */
+function paintWatercolourSurface(items,model,seedBase){
+  const P=cfg.palette,{discs,patches}=model;
+  const zMean=discs.reduce((s,d)=>s+d.z,0)/discs.length;
+  items.push({z:zMean,draw:(ctx)=>{
+    const W=RF.W,H=RF.H,dpr=RF.dpr;const off=document.createElement('canvas');off.width=Math.round(W*dpr);off.height=Math.round(H*dpr);const x=off.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
+    const colFor=surfaceColour();for(const p of patches)p.col=colFor(p.a);
+    patches.sort((a,b)=>a.z-b.z);
+    let zmin=1e9,zmax=-1e9,xmin=1e9,xmax=-1e9,ymin=1e9,ymax=-1e9;for(const p of patches){zmin=Math.min(zmin,p.z);zmax=Math.max(zmax,p.z);xmin=Math.min(xmin,p.x);xmax=Math.max(xmax,p.x);ymin=Math.min(ymin,p.y);ymax=Math.max(ymax,p.y)}
+    const zs=Math.max(1e-6,zmax-zmin);const la=cfg.style.lightAngle*Math.PI/180;const lx=Math.cos(la),ly=Math.sin(la);const R=Math.max(xmax-xmin,ymax-ymin)/2||1;const cx=(xmin+xmax)/2,cy=(ymin+ymax)/2;
+    const many=cfg.rep.detail!=='full'&&patches.length>600;
+    const {edges:EDG,pooling:POOL,fade:FADE,any}=model.cues,zAt=model.zAt,paperW=luminance(P.paper)>0.5?'#ffffff':'#000000';
+    for(const p of patches){const depth=(zmax-p.z)/zs;const lit=((p.x-cx)*lx+(p.y-cy)*ly)/R; // lit>0 faces the light
+      let tone=clamp(0.3+0.6*depth-0.2*lit,0.15,1),col=p.col,layers=many?3:5;const occ=p.groove,fade=p.fade;
+      if(any){
+        // tone: the light and the grooves decide it (not raw depth, which the fade now carries)
+        tone=clamp(0.42+0.18*depth*(1-FADE)-0.2*lit+0.32*POOL*occ,0.15,1)*(1-0.45*fade);
+        if(POOL>0)col=mix(col,'#000000',0.22*POOL*occ);   // the same pigment, more of it: darker, not greyer
+        if(fade>0)col=mix(col,paperW,0.55*fade);
+        if(fade>0.5)layers=3}
+      x.save();x.globalAlpha=p.alpha;x.beginPath();p.h.forEach((q,i)=>i?x.lineTo(q[0],q[1]):x.moveTo(q[0],q[1]));x.closePath();x.fillStyle='#ffffff';x.globalCompositeOperation='destination-out';x.fill();x.globalCompositeOperation='source-over';
+      const seed=seedBase+strHash('su'+p.k);
+      watercolourShape(x,p.h,col,seed,{fog:0,layers,strength:tone,offscreen:true,granulate:false,noRing:many&&depth<0.15});
+      if(EDG>0)surfaceEdge(x,p,zAt,mix(p.col,shadeInk(),0.55),EDG*(1-0.7*fade),seed);
+      if(POOL>0&&occ>0.3){ // pigment settles in the grooves: granulation inside the patch
+        const rng=mulberry32(seed+31);let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9;for(const q of p.h){bx0=Math.min(bx0,q[0]);by0=Math.min(by0,q[1]);bx1=Math.max(bx1,q[0]);by1=Math.max(by1,q[1])}
+        const n=Math.round((bx1-bx0)*(by1-by0)*0.012*POOL*(occ-0.3));
+        for(let i=0;i<n;i++){const gx=bx0+rng()*(bx1-bx0),gy=by0+rng()*(by1-by0),ga=0.12+rng()*0.2;if(!inHull(p.h,gx,gy))continue;x.fillStyle=rgba(mix(col,'#000000',0.4),ga);x.fillRect(gx,gy,1,1)}}
+      x.restore()}
+    // silhouette: union of discs minus the same union eroded → a band along the outer edge
+    const mask=document.createElement('canvas');mask.width=off.width;mask.height=off.height;const mx=mask.getContext('2d',{willReadFrequently:true});mx.scale(dpr,dpr);
+    mx.fillStyle=mix(P.surface,shadeInk(),0.35);for(const d of discs){mx.beginPath();mx.arc(d.x,d.y,d.r,0,Math.PI*2);mx.fill()}
+    mx.globalCompositeOperation='destination-out';for(const d of discs){mx.beginPath();mx.arc(d.x,d.y,Math.max(0,d.r-2.2),0,Math.PI*2);mx.fill()}
+    x.save();x.globalAlpha=0.55;x.drawImage(mask,0,0,W,H);x.restore();
+    // granulation over the whole surface
+    const rng=mulberry32(seedBase+7);x.save();x.beginPath();for(const d of discs){x.moveTo(d.x+d.r,d.y);x.arc(d.x,d.y,d.r,0,Math.PI*2)}x.clip();
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const d of discs){x0=Math.min(x0,d.x-d.r);y0=Math.min(y0,d.y-d.r);x1=Math.max(x1,d.x+d.r);y1=Math.max(y1,d.y+d.r)}
+    const g=Math.round((x1-x0)*(y1-y0)*0.0025);for(let i=0;i<g;i++){x.fillStyle=rgba(mix(P.surface,shadeInk(),0.4),0.1+rng()*0.2);x.fillRect(x0+rng()*(x1-x0),y0+rng()*(y1-y0),1,1)}x.restore();
+    // paper under the surface, then the wash multiplied once, then a sketched silhouette line
+    ctx.save();ctx.globalAlpha=cfg.rep.surfaceOpacity;ctx.beginPath();for(const d of discs){ctx.moveTo(d.x+d.r,d.y);ctx.arc(d.x,d.y,d.r,0,Math.PI*2)}ctx.fillStyle=paperFill();ctx.fill();
+    ctx.globalCompositeOperation=luminance(P.paper)>0.5?'multiply':'screen';ctx.drawImage(off,0,0,W,H);ctx.restore();
+    ctx.save();ctx.globalAlpha=cfg.rep.surfaceOpacity*0.7;ctx.globalCompositeOperation=luminance(P.paper)>0.5?'multiply':'screen';ctx.drawImage(mask,0,0,W,H);ctx.restore();
+  }});
+}
+
+/* the other fills: each patch an item in the painter's list, opaque, drawn as its fill draws (flat and wash: a tone;
+   pencil and chalk: scribbles; ink: hatching), darker and denser in the grooves, fading with the depth fog, and edged
+   in ink where it stands in front of something farther back */
+function paintPatchSurface(items,model,seedBase){
+  const P=cfg.palette,S=cfg.style,{patches,zAt}=model,{edges:EDG,pooling:POOL}=model.cues;
+  const colFor=surfaceColour(),ink=isInk(),chalk=isChalk(),pencil=cfg.rep.fill==='pencil';
+  const la=S.lightAngle*Math.PI/180,lx=Math.cos(la),ly=Math.sin(la);
+  let xmin=1e9,xmax=-1e9,ymin=1e9,ymax=-1e9;
+  for(const p of patches){p.col=colFor(p.a);xmin=Math.min(xmin,p.x);xmax=Math.max(xmax,p.x);ymin=Math.min(ymin,p.y);ymax=Math.max(ymax,p.y)}
   const R=Math.max(xmax-xmin,ymax-ymin)/2||1,cx=(xmin+xmax)/2,cy=(ymin+ymax)/2;
   for(const p of patches){
-    const seed=seedBase+strHash('sp'+p.k),occ=POOL>0?grooveOf(p,zAt,occR)*POOL:0,fade=FADE*p.fog,fk=1-fade;
+    const seed=seedBase+strHash('sp'+p.k),occ=p.groove*POOL,fade=p.fade,fk=1-fade;
     const lit=((p.x-cx)*lx+(p.y-cy)*ly)/R;   // >0 faces the light
     const dark=clamp(0.7*occ+S.shading*0.25*clamp(-lit,0,1),0,1);   // how much shadow the patch holds: grooves, and the side away from the light
     const shape=wcDeform(p.h,1,0.025,mulberry32(seed));   // a hand-cut outline, not a hull
@@ -917,6 +934,15 @@ function buildSurfacePatches(items,atoms,pos,proj,seedBase){
       if(EDG>0)surfaceEdge(ctx,p,zAt,P.ink,EDG*(0.55+0.45*fk),seed,S.inkWidth/1.5*(chalk?1.4:1));
       ctx.restore()}})}
 }
+
+/* no depth asked for, in a fill other than watercolour: one outlined, shaded ball per atom */
+function paintAtomSurface(items,atoms,pos,proj,seedBase,lowDetail){
+  const P=cfg.palette,probe=cfg.rep.probe;
+  for(const a of atoms){const p=pos[a.id];const r=((VDW[a.el]||1.7)+probe*0.55)*proj.pxPerA*p.d*cfg.rep.surfaceScale;const seed=seedBase+strHash('s'+a.id);
+    const col=cfg.rep.surfaceColor==='single'?P.surface:cfg.rep.surfaceColor==='carbon'?mix(carbonColor(a),'#ffffff',0.25):mix(atomColor(a),'#ffffff',0.3);
+    items.push({z:p.z+0.02,draw:(ctx)=>drawFlatBall(ctx,p.x,p.y,r,col,{seed,fog:p.fog,d:p.d,alpha:a.alpha,fillAlpha:cfg.rep.surfaceOpacity,outlineFirst:true,outlineAlpha:0.6,passes:lowDetail?1:undefined})})}
+}
+
 /* parallel hand lines across a polygon, clipped to it */
 function hatchPatch(ctx,poly,ang,spacing,o){
   let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const q of poly){x0=Math.min(x0,q[0]);y0=Math.min(y0,q[1]);x1=Math.max(x1,q[0]);y1=Math.max(y1,q[1])}

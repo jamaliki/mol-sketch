@@ -1447,7 +1447,7 @@
       }
       if (line.startsWith("_")) {
         const t = tokenize(line);
-        const [catName, col2] = t[0].split(".");
+        const [catName, col] = t[0].split(".");
         let val = t.slice(1).join(" ");
         if (t.length === 1) {
           i++;
@@ -1463,7 +1463,7 @@
           }
         }
         if (!cats[catName]) cats[catName] = { cols: [], rows: [[]] };
-        cats[catName].cols.push(col2);
+        cats[catName].cols.push(col);
         cats[catName].rows[0].push(val);
         i++;
         continue;
@@ -2508,7 +2508,7 @@
       const P = cfg.palette, S = cfg.style;
       const fog = a.fog || 0;
       const fk = 1 - fog * cfg.view.fog;
-      const col2 = fogged(elColor(a), fog), ink = fogged(P.ink, fog), hatch = fogged(P.hatch, fog);
+      const col = fogged(elColor(a), fog), ink = fogged(P.ink, fog), hatch = fogged(P.hatch, fog);
       const la = S.lightAngle * Math.PI / 180;
       const light = [Math.cos(la), Math.sin(la)];
       const isH = a.el === "H";
@@ -2519,12 +2519,12 @@
       ctx.arc(x, y, r, 0, Math.PI * 2);
       ctx.fillStyle = P.paper;
       ctx.fill();
-      ctx.fillStyle = rgba(col2, isH ? 0.35 : 0.22 * S.pencilFill + 0.06);
+      ctx.fillStyle = rgba(col, isH ? 0.35 : 0.22 * S.pencilFill + 0.06);
       ctx.fill();
       const hs = S.hatchSpacing * (1 + fog * 0.6) * Math.max(0.7, d);
       const ang = S.hatchAngle * Math.PI / 180;
       if (!isH && S.pencilFill > 0 && !lowDetail) {
-        hatchCircle(ctx, x, y, r, ang + 0.5, hs * 0.85, { seed: seed + 1, width: 1.1 * d, color: col2, alpha: 0.55 * S.pencilFill * (0.4 + 0.6 * fk) });
+        hatchCircle(ctx, x, y, r, ang + 0.5, hs * 0.85, { seed: seed + 1, width: 1.1 * d, color: col, alpha: 0.55 * S.pencilFill * (0.4 + 0.6 * fk) });
       }
       if (S.shading > 0) {
         hatchCircle(ctx, x, y, r, ang, hs, { seed: seed + 2, width: (isH ? 0.8 : 1) * d, color: hatch, alpha: 0.5 * S.shading * (0.5 + 0.5 * fk), light, thr: -r * 0.05 });
@@ -2728,7 +2728,7 @@
       x.globalCompositeOperation = "source-over";
       for (let k = 0; k < n; k++) {
         const cx = W * (0.12 + rng() * 0.76), cy = H * (0.12 + rng() * 0.76), r = Math.min(W, H) * (0.11 + rng() * 0.16);
-        const col2 = hslToHex(bh + (rng() - 0.5) * 14, clamp(bs * (0.85 + rng() * 0.3), 0, 0.75), clamp(bl + (rng() - 0.5) * 0.08, 0.3, 0.85));
+        const col = hslToHex(bh + (rng() - 0.5) * 14, clamp(bs * (0.85 + rng() * 0.3), 0, 0.75), clamp(bl + (rng() - 0.5) * 0.08, 0.3, 0.85));
         const m = 8 + Math.floor(rng() * 5);
         const poly = [];
         for (let i = 0; i < m; i++) {
@@ -2751,7 +2751,7 @@
           const sc = 0.8 + rng() * 0.24;
           const lay = deform(shape.map((p) => [cx + (p[0] - cx) * sc, cy + (p[1] - cy) * sc]), 2, (0.14 + rng() * 0.16) * (1 + 0.5 * life));
           path(lay);
-          x.fillStyle = rgba(col2, aFill);
+          x.fillStyle = rgba(col, aFill);
           x.fill();
         }
         for (let e = 0; e < 3; e++) {
@@ -2759,7 +2759,7 @@
           const lay = deform(shape.map((p) => [cx + (p[0] - cx) * sc, cy + (p[1] - cy) * sc]), 1, 0.05);
           path(lay);
           x.lineWidth = 0.7 + rng() * 0.5;
-          x.strokeStyle = rgba(mix(col2, shadeInk(), 0.25), 0.14);
+          x.strokeStyle = rgba(mix(col, shadeInk(), 0.25), 0.14);
           x.stroke();
         }
         x.save();
@@ -2769,7 +2769,7 @@
         const g2 = Math.round(r * r * 0.012);
         for (let i = 0; i < g2; i++) {
           const a = rng() * Math.PI * 2, t = Math.pow(rng(), 0.6);
-          x.fillStyle = rgba(mix(col2, shadeInk(), 0.4), 0.1 + rng() * 0.18);
+          x.fillStyle = rgba(mix(col, shadeInk(), 0.4), 0.1 + rng() * 0.18);
           const sz = rng() < 0.85 ? 1 : 1.6;
           x.fillRect(cx + Math.cos(a) * t * r * 1.2, cy + Math.sin(a) * t * r * 0.9, sz, sz);
         }
@@ -3078,16 +3078,16 @@
       }
       return null;
     }
-    function fogged(col2, fog) {
-      return mix(col2, cfg.palette.paper, clamp(fog * cfg.view.fog * 0.7, 0, 0.7));
+    function fogged(col, fog) {
+      return mix(col, cfg.palette.paper, clamp(fog * cfg.view.fog * 0.7, 0, 0.7));
     }
-    function penSphere(ctx, x, y, r, col2, el, seed, o) {
+    function penSphere(ctx, x, y, r, col, el, seed, o) {
       const S = cfg.style, P = cfg.palette;
       const fog = o.fog || 0, fk = 1 - fog * cfg.view.fog, d = (o.d || 1) * TEX, dw = (o.d || 1) * Math.max(TEX, 0.75);
       const dens = S.hatchDensity;
       const colour = cfg.rep.fill === "ink colour" || isPencil() || isWC();
       const dk = isWC() && luminance(P.paper) <= 0.5;
-      const ink = fogged(colour ? mix(col2, P.hatch, isPencil() ? 0.45 : isWC() ? dk ? 0.35 : 0.6 : 0.15) : P.hatch, fog);
+      const ink = fogged(colour ? mix(col, P.hatch, isPencil() ? 0.45 : isWC() ? dk ? 0.35 : 0.6 : 0.15) : P.hatch, fog);
       const la = S.lightAngle * Math.PI / 180;
       const light = [Math.cos(la), Math.sin(la)];
       const ang = S.hatchAngle * Math.PI / 180;
@@ -3117,13 +3117,13 @@
       hatchCircle(ctx, x, y, r, ang + 0.25, hs * 0.8, { seed: seed + 12, width: 0.9 * dw, color: ink, alpha: a * 0.8, light, thr: -r * 0.1 });
       hatchCircle(ctx, x, y, r, ang + 1.35, hs * 0.85, { seed: seed + 13, width: 0.85 * dw, color: ink, alpha: a * 0.7, light, thr: -r * 0.5 });
     }
-    function penStick(ctx, ax, ay, mx, my, R, col2, el, seed, o) {
+    function penStick(ctx, ax, ay, mx, my, R, col, el, seed, o) {
       const S = cfg.style, P = cfg.palette;
       const fog = o.fog || 0, fk = 1 - fog * cfg.view.fog, d = (o.d || 1) * TEX, dw = (o.d || 1) * Math.max(TEX, 0.75);
       const dens = S.hatchDensity;
       const colour = cfg.rep.fill === "ink colour" || isPencil() || isWC();
       const dk = isWC() && luminance(P.paper) <= 0.5;
-      const ink = fogged(colour ? mix(col2, P.hatch, isPencil() ? 0.45 : isWC() ? dk ? 0.35 : 0.6 : 0.15) : P.hatch, fog);
+      const ink = fogged(colour ? mix(col, P.hatch, isPencil() ? 0.45 : isWC() ? dk ? 0.35 : 0.6 : 0.15) : P.hatch, fog);
       const ux = mx - ax, uy = my - ay, L = Math.hypot(ux, uy) || 1, tx = ux / L, ty = uy / L, nx = -ty, ny = tx;
       const la = S.lightAngle * Math.PI / 180;
       const litSign = nx * Math.cos(la) + ny * Math.sin(la) > 0 ? 1 : -1;
@@ -3195,12 +3195,12 @@
       }
       return p;
     }
-    function watercolourShape(ctx, pts, col2, seed, o) {
+    function watercolourShape(ctx, pts, col, seed, o) {
       o = o || {};
       const rng = mulberry32(seed + 4242);
       const layers = o.layers || 9;
       const fog = o.fog || 0;
-      col2 = fogged(col2, fog);
+      col = fogged(col, fog);
       const light = luminance(cfg.palette.paper) > 0.5;
       let cx = 0, cy = 0;
       for (const p of pts) {
@@ -3218,7 +3218,7 @@
       ctx.save();
       if (!light && !o.offscreen) {
         path(shape);
-        ctx.fillStyle = rgba(col2, 0.7 * (o.strength || 0.75) / 0.75);
+        ctx.fillStyle = rgba(col, 0.7 * (o.strength || 0.75) / 0.75);
         ctx.fill();
       }
       ctx.globalCompositeOperation = o.offscreen ? "source-over" : light ? "multiply" : "screen";
@@ -3227,14 +3227,14 @@
         const sc = o.noScale ? 1 : 0.9 + rng() * 0.16;
         const lay = wcDeform(sc === 1 ? shape : shape.map((p) => [cx + (p[0] - cx) * sc, cy + (p[1] - cy) * sc]), 2, (0.08 + rng() * 0.1) * (o.noScale ? 1.6 : 1), rng);
         path(lay);
-        ctx.fillStyle = rgba(col2, aFill);
+        ctx.fillStyle = rgba(col, aFill);
         ctx.fill();
       }
       if (!o.noRing) for (let e = 0; e < 2; e++) {
         const lay = wcDeform(shape, 1, 0.03, rng);
         path(lay);
         ctx.lineWidth = 0.7 + rng() * 0.5;
-        ctx.strokeStyle = rgba(mix(col2, shadeInk(), 0.25), 0.16 * (o.strength || 0.75) / 0.75);
+        ctx.strokeStyle = rgba(mix(col, shadeInk(), 0.25), 0.16 * (o.strength || 0.75) / 0.75);
         ctx.stroke();
       }
       if (o.granulate !== false) {
@@ -3256,7 +3256,7 @@
           ye = Math.max(ye, p[1]);
         }
         for (let i = 0; i < g2; i++) {
-          ctx.fillStyle = rgba(mix(col2, shadeInk(), 0.4), 0.12 + rng() * 0.2);
+          ctx.fillStyle = rgba(mix(col, shadeInk(), 0.4), 0.12 + rng() * 0.2);
           ctx.fillRect(xs + rng() * (xe - xs), ys + rng() * (ye - ys), 1, 1);
         }
         ctx.restore();
@@ -3270,12 +3270,12 @@
     }, get faint() {
       return 0.5 - 0.15 * cfg.style.hierarchy;
     } };
-    function scribbleFill(ctx, x0, y0, x1, y1, col2, seed, o) {
+    function scribbleFill(ctx, x0, y0, x1, y1, col, seed, o) {
       const S = cfg.style;
       const fog = o.fog || 0, fk = 1 - fog * cfg.view.fog, d = (o.d || 1) * TEX, dw = (o.d || 1) * Math.max(TEX, 0.75);
       const rng = mulberry32(seed + 303);
       const ch = isChalk();
-      const c = fogged(ch ? mix(col2, "#ffffff", 0.18) : col2, fog);
+      const c = fogged(ch ? mix(col, "#ffffff", 0.18) : col, fog);
       const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, R = Math.hypot(x1 - x0, y1 - y0) / 2 + 3;
       const layers = ch ? [[S.hatchAngle * Math.PI / 180 + 0.9, S.hatchSpacing * 0.45, 0.9], [S.hatchAngle * Math.PI / 180 - 0.6, S.hatchSpacing * 0.55, 0.55]] : [[S.hatchAngle * Math.PI / 180 + 0.9, S.hatchSpacing * 0.55, 0.55], [S.hatchAngle * Math.PI / 180 - 0.5, S.hatchSpacing * 0.75, 0.35]];
       for (const [ang, sp, al] of layers) {
@@ -3295,11 +3295,11 @@
       const P = cfg.palette;
       return luminance(P.paper) > 0.5 ? P.ink : mix(P.paper, "#000000", 0.75);
     }
-    function fillFor(col2) {
+    function fillFor(col) {
       const m = cfg.rep.fill;
       if (isInk()) return cfg.palette.paper;
-      if (m === "wash") return mix(col2, cfg.palette.paper, 0.62);
-      return col2;
+      if (m === "wash") return mix(col, cfg.palette.paper, 0.62);
+      return col;
     }
     function elementPattern(ctx, el, x0, y0, x1, y1, seed, o) {
       if (!isInk() || el === "H") return;
@@ -3332,10 +3332,10 @@
         }
       });
     }
-    function shade(col2, k) {
-      return k >= 0 ? mix(col2, "#ffffff", k) : mix(col2, shadeInk(), -k);
+    function shade(col, k) {
+      return k >= 0 ? mix(col, "#ffffff", k) : mix(col, shadeInk(), -k);
     }
-    function drawFlatBall(ctx, x, y, r, col2, o) {
+    function drawFlatBall(ctx, x, y, r, col, o) {
       const P = cfg.palette, S = cfg.style;
       const fog = o.fog || 0, fk = 1 - fog * cfg.view.fog, d = (o.d || 1) * TEX;
       const la = S.lightAngle * Math.PI / 180;
@@ -3348,7 +3348,7 @@
       ctx.fillStyle = paperFill();
       ctx.fill();
       if (!isInk()) {
-        ctx.fillStyle = rgba(fogged(fillFor(col2), fog), o.fillAlpha ?? 1);
+        ctx.fillStyle = rgba(fogged(fillFor(col), fog), o.fillAlpha ?? 1);
         ctx.fill();
       }
       if (isWC()) {
@@ -3357,18 +3357,18 @@
           const a = i / 14 * Math.PI * 2;
           q.push([x + Math.cos(a) * r, y + Math.sin(a) * r]);
         }
-        watercolourShape(ctx, q, col2, o.seed, { fog, layers: 8, strength: o.wcStrength || 0.8 });
+        watercolourShape(ctx, q, col, o.seed, { fog, layers: 8, strength: o.wcStrength || 0.8 });
       }
       if (isInk()) {
         ctx.save();
         ctx.beginPath();
         ctx.arc(x, y, r + (isPencil() ? 1.5 : 0), 0, Math.PI * 2);
         ctx.clip();
-        if (isPencil()) scribbleFill(ctx, x - r, y - r, x + r, y + r, col2, o.seed, { fog, d });
-        if (!o.noPen && !isChalk()) penSphere(ctx, x, y, r, col2, o.el, o.seed, { fog, d });
+        if (isPencil()) scribbleFill(ctx, x - r, y - r, x + r, y + r, col, o.seed, { fog, d });
+        if (!o.noPen && !isChalk()) penSphere(ctx, x, y, r, col, o.el, o.seed, { fog, d });
         ctx.restore();
       } else if (S.shading > 0 && r > 3) {
-        hatchCircle(ctx, x, y, r, S.hatchAngle * Math.PI / 180, S.hatchSpacing * (1 + fog * 0.6) * Math.max(0.7, d), { seed: o.seed + 2, width: 0.9 * d, color: fogged(cfg.rep.fill === "ink colour" ? mix(col2, P.hatch, 0.4) : P.hatch, fog), alpha: 0.45 * S.shading * (0.5 + 0.5 * fk), light, thr: -r * 0.15 });
+        hatchCircle(ctx, x, y, r, S.hatchAngle * Math.PI / 180, S.hatchSpacing * (1 + fog * 0.6) * Math.max(0.7, d), { seed: o.seed + 2, width: 0.9 * d, color: fogged(cfg.rep.fill === "ink colour" ? mix(col, P.hatch, 0.4) : P.hatch, fog), alpha: 0.45 * S.shading * (0.5 + 0.5 * fk), light, thr: -r * 0.15 });
       }
       if (!o.outlineFirst) sketchCircle(ctx, x, y, r, { seed: o.seed + 4, width: S.inkWidth * d * (0.75 + 0.25 * fk) * LW.outer, color: fogged(P.ink, fog), alpha: 0.55 + 0.4 * fk, passes: isPencil() ? o.passes ?? 3 : o.passes });
       ctx.restore();
@@ -3386,7 +3386,7 @@
       pts.push([ax - nx * R, ay - ny * R], [mx - nx * Rm, my - ny * Rm]);
       return { pts, tx, ty, nx, ny };
     }
-    function drawHalfStick(ctx, ax, ay, mx, my, R, col2, o) {
+    function drawHalfStick(ctx, ax, ay, mx, my, R, col, o) {
       const P = cfg.palette, S = cfg.style;
       const fog = o.fog || 0, fk = 1 - fog * cfg.view.fog, d = (o.d || 1) * TEX;
       const Rm = o.Rm ?? R;
@@ -3413,20 +3413,20 @@
       ctx.fillStyle = paperFill();
       ctx.fill();
       if (!isInk()) {
-        ctx.fillStyle = fogged(fillFor(col2), fog);
+        ctx.fillStyle = fogged(fillFor(col), fog);
         ctx.fill();
       }
       if (isWC() && o.el !== "H") {
-        watercolourShape(ctx, q, col2, o.seed, { fog, layers: 7, strength: 0.8 });
+        watercolourShape(ctx, q, col, o.seed, { fog, layers: 7, strength: 0.8 });
       }
       if (o.el && isInk()) {
         ctx.save();
         ctx.clip();
         if (isPencil() && o.el !== "H") {
           const xs = q.map((p) => p[0]), ys = q.map((p) => p[1]);
-          scribbleFill(ctx, Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), col2, o.seed, { fog, d });
+          scribbleFill(ctx, Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys), col, o.seed, { fog, d });
         }
-        if ((!isWC() || cfg.style.shading > 0) && !isChalk()) penStick(ctx, ax, ay, mx, my, R, col2, o.el, o.seed, { fog, d });
+        if ((!isWC() || cfg.style.shading > 0) && !isChalk()) penStick(ctx, ax, ay, mx, my, R, col, o.el, o.seed, { fog, d });
         ctx.restore();
       }
       if (S.shading > 0 && !o.noShadow && !isInk()) {
@@ -3438,7 +3438,7 @@
         const L = Math.hypot(mx - ax, my - ay);
         for (const f2 of [0.5, 0.78]) {
           const off = R * f2 * side;
-          sketchLine(ctx, [[ax + nx * off - tx * R * 0.3, ay + ny * off - ty * R * 0.3], [mx + nx * off, my + ny * off]], { seed: o.seed + 7 + Math.round(f2 * 10), passes: 1, width: 0.9 * d, color: fogged(cfg.rep.fill === "ink colour" ? mix(col2, P.hatch, 0.4) : P.hatch, fog), alpha: 0.35 * S.shading * (0.5 + 0.5 * fk), ampScale: 0.5, step: 5, overshoot: false });
+          sketchLine(ctx, [[ax + nx * off - tx * R * 0.3, ay + ny * off - ty * R * 0.3], [mx + nx * off, my + ny * off]], { seed: o.seed + 7 + Math.round(f2 * 10), passes: 1, width: 0.9 * d, color: fogged(cfg.rep.fill === "ink colour" ? mix(col, P.hatch, 0.4) : P.hatch, fog), alpha: 0.35 * S.shading * (0.5 + 0.5 * fk), ampScale: 0.5, step: 5, overshoot: false });
         }
         ctx.restore();
       }
@@ -3459,13 +3459,13 @@
       }
       ctx.restore();
     }
-    function engraveTone(col2) {
+    function engraveTone(col) {
       const P = cfg.palette, mode = cfg.rep.fill;
       if (mode === "ink") return { fill: null, hatch: P.hatch, side: P.ink, coil: null, mono: true };
-      if (mode === "ink colour") return { fill: null, hatch: col2, side: mix(col2, P.ink, 0.3), coil: null, coilLine: true };
-      if (mode === "chalk") return { fill: null, hatch: col2, side: mix(col2, P.paper, 0.25), coil: null, coilLine: true };
-      if (mode === "flat") return { fill: col2, hatch: mix(col2, P.ink, 0.6), side: mix(col2, P.ink, 0.72), coil: col2 };
-      return { fill: mix(col2, P.paper, 0.55), hatch: mix(col2, P.ink, 0.5), side: mix(col2, P.ink, 0.68), coil: mix(col2, P.paper, 0.55) };
+      if (mode === "ink colour") return { fill: null, hatch: col, side: mix(col, P.ink, 0.3), coil: null, coilLine: true };
+      if (mode === "chalk") return { fill: null, hatch: col, side: mix(col, P.paper, 0.25), coil: null, coilLine: true };
+      if (mode === "flat") return { fill: col, hatch: mix(col, P.ink, 0.6), side: mix(col, P.ink, 0.72), coil: col };
+      return { fill: mix(col, P.paper, 0.55), hatch: mix(col, P.ink, 0.5), side: mix(col, P.ink, 0.68), coil: mix(col, P.paper, 0.55) };
     }
     const engravedSticks = () => {
       const s = cfg.rep.stickStyle || "auto";
@@ -3473,7 +3473,7 @@
       if (s === "engraved") return true;
       return cfg.rep.cartoonStyle === "engraved" && !!(scene && scene.reps && (scene.reps.cartoon || "").trim());
     };
-    function drawEngravedHalfStick(ctx, x0, y0, x1, y1, R, col2, o) {
+    function drawEngravedHalfStick(ctx, x0, y0, x1, y1, R, col, o) {
       const P = cfg.palette, S = cfg.style;
       const Rm = o.Rm ?? R;
       const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
@@ -3495,9 +3495,9 @@
       ctx.globalAlpha = o.alpha ?? 1;
       ctx.lineJoin = "round";
       ctx.lineCap = "round";
-      const T = engraveTone(col2);
+      const T = engraveTone(col);
       path();
-      ctx.fillStyle = T.fill ? fogged(o.site ? mix(T.fill, col2, 0.35) : T.fill, fog) : o.site ? fogged(mix(P.paper, col2, mono ? 0.12 : 0.2), fog) : paperFill();
+      ctx.fillStyle = T.fill ? fogged(o.site ? mix(T.fill, col, 0.35) : T.fill, fog) : o.site ? fogged(mix(P.paper, col, mono ? 0.12 : 0.2), fog) : paperFill();
       ctx.fill();
       const n = o.inner ? 1 : mono ? { C: 2, N: 3, O: 4, S: 5, P: 4, H: 1 }[o.el] || 2 : o.el === "H" ? 1 : 3;
       const lw = Math.max(0.5, (cfg.rep.engraveWidth ?? 0.45) * (o.site ? 1.5 : 1.15) * (o.d || 1));
@@ -3598,21 +3598,21 @@
         for (const [near, far, atom, half] of [[pa, pb, A, 0], [pb, pa, B, 1]]) {
           const site = !!(A._site && B._site), ks = site ? cfg.rep.siteScale || 1.9 : 1;
           items.push({ z: near.z - 2e-3, draw: (ctx) => {
-            const col2 = atomColor(atom);
+            const col = atomColor(atom);
             const R = R0 * near.d * ks, Rm = R0 * (near.d + far.d) / 2 * ks;
-            if (engravedSticks()) drawEngravedHalfStick(ctx, near.x, near.y, mx, my, R, col2, { Rm, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha, site, cap: (nb[atom.id] || 0) === 1 && !atom.sphere });
-            else drawHalfStick(ctx, near.x, near.y, mx, my, R, col2, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, passes: lowDetail ? 1 : void 0 });
+            if (engravedSticks()) drawEngravedHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha, site, cap: (nb[atom.id] || 0) === 1 && !atom.sphere });
+            else drawHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, passes: lowDetail ? 1 : void 0 });
             if (extra > 0.01 && !(b.partial > 0 && b.partial < 1)) {
               const frac = Math.min(1, extra);
               const off = R0 * 1.95 * near.d * side * frac;
               const r2 = R0 * 0.42 * near.d * (0.5 + 0.5 * frac);
               const sh = 0.18;
               const ax = near.x + ux * L * sh * (half ? -1 : 1), ay = near.y + uy * L * sh * (half ? -1 : 1);
-              if (engravedSticks()) drawEngravedHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2 * ks, col2, { Rm: r2 * ks, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha * frac, site, inner: true });
-              else drawHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2, col2, { Rm: r2, el: atom.el, seed: seed + half * 3 + 101, fog: near.fog, d: near.d, alpha: b.alpha * frac, partial: 0, passes: 1, noShadow: true, inner: true });
+              if (engravedSticks()) drawEngravedHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2 * ks, col, { Rm: r2 * ks, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha * frac, site, inner: true });
+              else drawHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, seed: seed + half * 3 + 101, fog: near.fog, d: near.d, alpha: b.alpha * frac, partial: 0, passes: 1, noShadow: true, inner: true });
               if (extra > 1.01) {
                 const off2 = -off;
-                drawHalfStick(ctx, ax - uy * off2, ay + ux * off2, mx - uy * off2, my + ux * off2, r2, col2, { Rm: r2, seed: seed + half * 3 + 202, fog: near.fog, d: near.d, alpha: b.alpha * (extra - 1), partial: 0, passes: 1, noShadow: true });
+                drawHalfStick(ctx, ax - uy * off2, ay + ux * off2, mx - uy * off2, my + ux * off2, r2, col, { Rm: r2, seed: seed + half * 3 + 202, fog: near.fog, d: near.d, alpha: b.alpha * (extra - 1), partial: 0, passes: 1, noShadow: true });
               }
             }
           } });
@@ -3652,10 +3652,10 @@
         const p = pos[a.id];
         const seed = seedBase + strHash(a.id);
         const cnt = nb[a.id] || 0;
-        const col2 = atomColor(a);
+        const col = atomColor(a);
         if (a.sphere || cnt === 0) {
           const r = (cnt === 0 && !a.sphere ? R0 * 1.7 : atomDrawR(a, proj)) * p.d;
-          items.push({ z: p.z + 3e-3, draw: (ctx) => drawFlatBall(ctx, p.x, p.y, r, col2, { seed, el: a.el, fog: p.fog, d: p.d, alpha: a.alpha, passes: lowDetail ? 1 : void 0 }) });
+          items.push({ z: p.z + 3e-3, draw: (ctx) => drawFlatBall(ctx, p.x, p.y, r, col, { seed, el: a.el, fog: p.fog, d: p.d, alpha: a.alpha, passes: lowDetail ? 1 : void 0 }) });
         } else if (cnt >= 2) {
           const R = R0 * p.d * (a._site ? cfg.rep.siteScale || 1.9 : 1);
           if (engravedSticks()) {
@@ -3665,10 +3665,10 @@
               ctx.save();
               ctx.globalAlpha = a.alpha;
               const fk = 1 - p.fog * cfg.view.fog;
-              const T = engraveTone(col2);
+              const T = engraveTone(col);
               ctx.beginPath();
               ctx.arc(p.x, p.y, R, 0, Math.PI * 2);
-              ctx.fillStyle = T.fill ? fogged(site ? mix(T.fill, col2, 0.35) : T.fill, p.fog) : site ? fogged(mix(P2.paper, col2, cfg.rep.fill === "ink" ? 0.12 : 0.2), p.fog) : paperFill();
+              ctx.fillStyle = T.fill ? fogged(site ? mix(T.fill, col, 0.35) : T.fill, p.fog) : site ? fogged(mix(P2.paper, col, cfg.rep.fill === "ink" ? 0.12 : 0.2), p.fog) : paperFill();
               ctx.fill();
               ctx.lineWidth = cfg.style.inkWidth * LW.outer * (site ? 1.2 : 0.85) * (0.8 + 0.2 * fk);
               ctx.strokeStyle = fogged(P2.ink, p.fog);
@@ -3691,7 +3691,7 @@
             ctx.fillStyle = paperFill();
             ctx.fill();
             if (!isInk()) {
-              ctx.fillStyle = fogged(fillFor(col2), p.fog);
+              ctx.fillStyle = fogged(fillFor(col), p.fog);
               ctx.fill();
             }
             if (isWC()) {
@@ -3700,13 +3700,13 @@
                 const an = i / 10 * Math.PI * 2;
                 q.push([p.x + Math.cos(an) * (R - 0.8), p.y + Math.sin(an) * (R - 0.8)]);
               }
-              watercolourShape(ctx, q, col2, seed, { fog: p.fog, layers: 5, strength: 0.7, granulate: false });
+              watercolourShape(ctx, q, col, seed, { fog: p.fog, layers: 5, strength: 0.7, granulate: false });
             }
             if (isInk()) {
               ctx.save();
               ctx.clip();
-              if (isPencil()) scribbleFill(ctx, p.x - R, p.y - R, p.x + R, p.y + R, col2, seed, { fog: p.fog, d: p.d });
-              penSphere(ctx, p.x, p.y, R, col2, a.el, seed, { fog: p.fog, d: p.d });
+              if (isPencil()) scribbleFill(ctx, p.x - R, p.y - R, p.x + R, p.y + R, col, seed, { fog: p.fog, d: p.d });
+              penSphere(ctx, p.x, p.y, R, col, a.el, seed, { fog: p.fog, d: p.d });
               ctx.restore();
             }
             ctx.restore();
@@ -3850,186 +3850,12 @@
       }
       return true;
     };
-    function buildSurface(items, st, pos, atoms, proj, seedBase, lowDetail) {
-      const P = cfg.palette;
-      const probe = cfg.rep.probe;
-      if (isWC()) {
-        if (!atoms.length) return;
-        const discs = atoms.map((a) => {
-          const p = pos[a.id];
-          return { x: p.x, y: p.y, r: ((VDW[a.el] || 1.7) + probe * 0.55) * proj.pxPerA * p.d * cfg.rep.surfaceScale, z: p.z, fog: p.fog, alpha: a.alpha, a };
-        });
-        const zMean = discs.reduce((s, d) => s + d.z, 0) / discs.length;
-        const fogMean = discs.reduce((s, d) => s + d.fog, 0) / discs.length;
-        const groups = {};
-        for (const d of discs) {
-          const k = (d.a.chain || "") + "/" + (d.a.resi ?? d.a.id);
-          (groups[k] = groups[k] || []).push(d);
-        }
-        items.push({ z: zMean, draw: (ctx) => {
-          const W = RF.W, H = RF.H, dpr = RF.dpr;
-          const off = document.createElement("canvas");
-          off.width = Math.round(W * dpr);
-          off.height = Math.round(H * dpr);
-          const x = off.getContext("2d", { willReadFrequently: true });
-          x.scale(dpr, dpr);
-          const mode = cfg.rep.surfaceColor;
-          const colFor = (a) => mode === "single" ? P.surface : mode === "chain" ? chainColor(a) : mode === "subunit" ? subunitColor(a) : mode === "entity" ? entityColor(a) : mode === "carbon" ? carbonColor(a) : mix(atomColor(a), "#ffffff", 0.2);
-          const patches = [];
-          for (const k in groups) {
-            const g3 = groups[k];
-            const pts = [];
-            let z = 0, px = 0, py = 0;
-            for (const d of g3) {
-              for (let i = 0; i < 10; i++) {
-                const an = i / 10 * Math.PI * 2;
-                pts.push([d.x + Math.cos(an) * d.r, d.y + Math.sin(an) * d.r]);
-              }
-              z += d.z;
-              px += d.x;
-              py += d.y;
-            }
-            const h = hull(pts);
-            if (h.length < 3) continue;
-            patches.push({ h, z: z / g3.length, x: px / g3.length, y: py / g3.length, fog: g3.reduce((s, d) => s + d.fog, 0) / g3.length, alpha: Math.max(...g3.map((d) => d.alpha)), k, col: colFor(g3[0].a) });
-          }
-          patches.sort((a, b) => a.z - b.z);
-          let zmin = 1e9, zmax = -1e9, xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9;
-          for (const p of patches) {
-            zmin = Math.min(zmin, p.z);
-            zmax = Math.max(zmax, p.z);
-            xmin = Math.min(xmin, p.x);
-            xmax = Math.max(xmax, p.x);
-            ymin = Math.min(ymin, p.y);
-            ymax = Math.max(ymax, p.y);
-          }
-          const zs = Math.max(1e-6, zmax - zmin);
-          const la = cfg.style.lightAngle * Math.PI / 180;
-          const lx = Math.cos(la), ly = Math.sin(la);
-          const R = Math.max(xmax - xmin, ymax - ymin) / 2 || 1;
-          const cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2;
-          const many = cfg.rep.detail !== "full" && patches.length > 600;
-          const EDG = cfg.rep.surfEdges || 0, POOL = cfg.rep.surfPool || 0, FADE = cfg.rep.surfFade || 0, cues = EDG > 0 || POOL > 0 || FADE > 0;
-          const zAt = EDG > 0 || POOL > 0 ? depthMap(discs, W, H) : null;
-          const occR = 9 * proj.pxPerA, paperW = luminance(P.paper) > 0.5 ? "#ffffff" : "#000000";
-          for (const p of patches) {
-            const depth = (zmax - p.z) / zs;
-            const lit = ((p.x - cx) * lx + (p.y - cy) * ly) / R;
-            let tone = clamp(0.3 + 0.6 * depth - 0.2 * lit, 0.15, 1), col2 = p.col, layers = many ? 3 : 5, occ = 0, fade = 0;
-            if (cues) {
-              if (POOL > 0) occ = grooveOf(p, zAt, occR);
-              fade = FADE * p.fog;
-              tone = clamp(0.42 + 0.18 * depth * (1 - FADE) - 0.2 * lit + 0.32 * POOL * occ, 0.15, 1) * (1 - 0.45 * fade);
-              if (POOL > 0) col2 = mix(col2, "#000000", 0.22 * POOL * occ);
-              if (fade > 0) col2 = mix(col2, paperW, 0.55 * fade);
-              if (fade > 0.5) layers = 3;
-            }
-            x.save();
-            x.globalAlpha = p.alpha;
-            x.beginPath();
-            p.h.forEach((q, i) => i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1]));
-            x.closePath();
-            x.fillStyle = "#ffffff";
-            x.globalCompositeOperation = "destination-out";
-            x.fill();
-            x.globalCompositeOperation = "source-over";
-            const seed = seedBase + strHash("su" + p.k);
-            watercolourShape(x, p.h, col2, seed, { fog: 0, layers, strength: tone, offscreen: true, granulate: false, noRing: many && depth < 0.15 });
-            if (EDG > 0) surfaceEdge(x, p, zAt, mix(p.col, shadeInk(), 0.55), EDG * (1 - 0.7 * fade), seed);
-            if (POOL > 0 && occ > 0.3) {
-              const rng2 = mulberry32(seed + 31);
-              let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9;
-              for (const q of p.h) {
-                bx0 = Math.min(bx0, q[0]);
-                by0 = Math.min(by0, q[1]);
-                bx1 = Math.max(bx1, q[0]);
-                by1 = Math.max(by1, q[1]);
-              }
-              const n = Math.round((bx1 - bx0) * (by1 - by0) * 0.012 * POOL * (occ - 0.3));
-              for (let i = 0; i < n; i++) {
-                const gx = bx0 + rng2() * (bx1 - bx0), gy = by0 + rng2() * (by1 - by0), ga = 0.12 + rng2() * 0.2;
-                if (!inHull(p.h, gx, gy)) continue;
-                x.fillStyle = rgba(mix(col2, "#000000", 0.4), ga);
-                x.fillRect(gx, gy, 1, 1);
-              }
-            }
-            x.restore();
-          }
-          const mask = document.createElement("canvas");
-          mask.width = off.width;
-          mask.height = off.height;
-          const mx = mask.getContext("2d", { willReadFrequently: true });
-          mx.scale(dpr, dpr);
-          mx.fillStyle = mix(mode === "single" ? col : P.surface, shadeInk(), 0.35);
-          for (const d of discs) {
-            mx.beginPath();
-            mx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-            mx.fill();
-          }
-          mx.globalCompositeOperation = "destination-out";
-          for (const d of discs) {
-            mx.beginPath();
-            mx.arc(d.x, d.y, Math.max(0, d.r - 2.2), 0, Math.PI * 2);
-            mx.fill();
-          }
-          x.save();
-          x.globalAlpha = 0.55;
-          x.drawImage(mask, 0, 0, W, H);
-          x.restore();
-          const rng = mulberry32(seedBase + 7);
-          x.save();
-          x.beginPath();
-          for (const d of discs) {
-            x.moveTo(d.x + d.r, d.y);
-            x.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-          }
-          x.clip();
-          let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
-          for (const d of discs) {
-            x0 = Math.min(x0, d.x - d.r);
-            y0 = Math.min(y0, d.y - d.r);
-            x1 = Math.max(x1, d.x + d.r);
-            y1 = Math.max(y1, d.y + d.r);
-          }
-          const g2 = Math.round((x1 - x0) * (y1 - y0) * 25e-4);
-          for (let i = 0; i < g2; i++) {
-            x.fillStyle = rgba(mix(mode === "single" ? col : P.surface, shadeInk(), 0.4), 0.1 + rng() * 0.2);
-            x.fillRect(x0 + rng() * (x1 - x0), y0 + rng() * (y1 - y0), 1, 1);
-          }
-          x.restore();
-          ctx.save();
-          ctx.globalAlpha = cfg.rep.surfaceOpacity;
-          ctx.beginPath();
-          for (const d of discs) {
-            ctx.moveTo(d.x + d.r, d.y);
-            ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-          }
-          ctx.fillStyle = paperFill();
-          ctx.fill();
-          ctx.globalCompositeOperation = luminance(P.paper) > 0.5 ? "multiply" : "screen";
-          ctx.drawImage(off, 0, 0, W, H);
-          ctx.restore();
-          ctx.save();
-          ctx.globalAlpha = cfg.rep.surfaceOpacity * 0.7;
-          ctx.globalCompositeOperation = luminance(P.paper) > 0.5 ? "multiply" : "screen";
-          ctx.drawImage(mask, 0, 0, W, H);
-          ctx.restore();
-        } });
-        return;
-      }
-      if ((cfg.rep.surfEdges || 0) > 0 || (cfg.rep.surfPool || 0) > 0 || (cfg.rep.surfFade || 0) > 0) return buildSurfacePatches(items, atoms, pos, proj, seedBase);
-      for (const a of atoms) {
-        const p = pos[a.id];
-        const r = ((VDW[a.el] || 1.7) + probe * 0.55) * proj.pxPerA * p.d * cfg.rep.surfaceScale;
-        const seed = seedBase + strHash("s" + a.id);
-        const col2 = cfg.rep.surfaceColor === "single" ? P.surface : cfg.rep.surfaceColor === "carbon" ? mix(carbonColor(a), "#ffffff", 0.25) : mix(atomColor(a), "#ffffff", 0.3);
-        items.push({ z: p.z + 0.02, draw: (ctx) => drawFlatBall(ctx, p.x, p.y, r, col2, { seed, fog: p.fog, d: p.d, alpha: a.alpha, fillAlpha: cfg.rep.surfaceOpacity, outlineFirst: true, outlineAlpha: 0.6, passes: lowDetail ? 1 : void 0 }) });
-      }
+    function surfaceColour() {
+      const P = cfg.palette, mode = cfg.rep.surfaceColor;
+      return (a) => mode === "single" ? P.surface : mode === "chain" ? chainColor(a) : mode === "subunit" ? subunitColor(a) : mode === "entity" ? entityColor(a) : mode === "carbon" ? carbonColor(a) : mix(atomColor(a), "#ffffff", 0.2);
     }
-    function buildSurfacePatches(items, atoms, pos, proj, seedBase) {
-      if (!atoms.length) return;
-      const P = cfg.palette, S = cfg.style, probe = cfg.rep.probe, EDG = cfg.rep.surfEdges || 0, POOL = cfg.rep.surfPool || 0, FADE = cfg.rep.surfFade || 0;
-      const W = RF.W, H = RF.H;
+    function surfaceModel(atoms, pos, proj) {
+      const probe = cfg.rep.probe;
       const discs = atoms.map((a) => {
         const p = pos[a.id];
         return { x: p.x, y: p.y, r: ((VDW[a.el] || 1.7) + probe * 0.55) * proj.pxPerA * p.d * cfg.rep.surfaceScale, z: p.z, d: p.d, fog: p.fog, alpha: a.alpha, a };
@@ -4039,12 +3865,7 @@
         const k = (d.a.chain || "") + "/" + (d.a.resi ?? d.a.id);
         (groups[k] = groups[k] || []).push(d);
       }
-      const mode = cfg.rep.surfaceColor;
-      const colFor = (a) => mode === "single" ? P.surface : mode === "chain" ? chainColor(a) : mode === "subunit" ? subunitColor(a) : mode === "entity" ? entityColor(a) : mode === "carbon" ? carbonColor(a) : mix(atomColor(a), "#ffffff", 0.2);
-      const zAt = depthMap(discs, W, H), occR = 9 * proj.pxPerA, ink = isInk(), chalk = isChalk(), pencil = cfg.rep.fill === "pencil";
-      const la = S.lightAngle * Math.PI / 180, lx = Math.cos(la), ly = Math.sin(la);
       const patches = [];
-      let xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9;
       for (const k in groups) {
         const g2 = groups[k];
         const pts = [];
@@ -4061,8 +3882,168 @@
         }
         const h = hull(pts);
         if (h.length < 3) continue;
-        const p = { h, k, z: z / g2.length, x: px / g2.length, y: py / g2.length, d: dd / g2.length, fog: g2.reduce((s, d) => s + d.fog, 0) / g2.length, alpha: Math.max(...g2.map((d) => d.alpha)), col: colFor(g2[0].a) };
-        patches.push(p);
+        patches.push({ h, k, z: z / g2.length, x: px / g2.length, y: py / g2.length, d: dd / g2.length, fog: g2.reduce((s, d) => s + d.fog, 0) / g2.length, alpha: Math.max(...g2.map((d) => d.alpha)), a: g2[0].a });
+      }
+      return { discs, patches, proj };
+    }
+    function applyDepthCues(model) {
+      const edges = cfg.rep.surfEdges || 0, pooling = cfg.rep.surfPool || 0, fade = cfg.rep.surfFade || 0;
+      model.cues = { edges, pooling, fade, any: edges > 0 || pooling > 0 || fade > 0 };
+      model.zAt = edges > 0 || pooling > 0 ? depthMap(model.discs, RF.W, RF.H) : null;
+      const occR = 9 * model.proj.pxPerA;
+      for (const p of model.patches) {
+        p.groove = pooling > 0 ? grooveOf(p, model.zAt, occR) : 0;
+        p.fade = fade * p.fog;
+      }
+      return model;
+    }
+    function buildSurface(items, st, pos, atoms, proj, seedBase, lowDetail) {
+      const cues = (cfg.rep.surfEdges || 0) > 0 || (cfg.rep.surfPool || 0) > 0 || (cfg.rep.surfFade || 0) > 0;
+      if (!isWC() && !cues) return paintAtomSurface(items, atoms, pos, proj, seedBase, lowDetail);
+      if (!atoms.length) return;
+      const model = applyDepthCues(surfaceModel(atoms, pos, proj));
+      if (isWC()) paintWatercolourSurface(items, model, seedBase);
+      else paintPatchSurface(items, model, seedBase);
+    }
+    function paintWatercolourSurface(items, model, seedBase) {
+      const P = cfg.palette, { discs, patches } = model;
+      const zMean = discs.reduce((s, d) => s + d.z, 0) / discs.length;
+      items.push({ z: zMean, draw: (ctx) => {
+        const W = RF.W, H = RF.H, dpr = RF.dpr;
+        const off = document.createElement("canvas");
+        off.width = Math.round(W * dpr);
+        off.height = Math.round(H * dpr);
+        const x = off.getContext("2d", { willReadFrequently: true });
+        x.scale(dpr, dpr);
+        const colFor = surfaceColour();
+        for (const p of patches) p.col = colFor(p.a);
+        patches.sort((a, b) => a.z - b.z);
+        let zmin = 1e9, zmax = -1e9, xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9;
+        for (const p of patches) {
+          zmin = Math.min(zmin, p.z);
+          zmax = Math.max(zmax, p.z);
+          xmin = Math.min(xmin, p.x);
+          xmax = Math.max(xmax, p.x);
+          ymin = Math.min(ymin, p.y);
+          ymax = Math.max(ymax, p.y);
+        }
+        const zs = Math.max(1e-6, zmax - zmin);
+        const la = cfg.style.lightAngle * Math.PI / 180;
+        const lx = Math.cos(la), ly = Math.sin(la);
+        const R = Math.max(xmax - xmin, ymax - ymin) / 2 || 1;
+        const cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2;
+        const many = cfg.rep.detail !== "full" && patches.length > 600;
+        const { edges: EDG, pooling: POOL, fade: FADE, any } = model.cues, zAt = model.zAt, paperW = luminance(P.paper) > 0.5 ? "#ffffff" : "#000000";
+        for (const p of patches) {
+          const depth = (zmax - p.z) / zs;
+          const lit = ((p.x - cx) * lx + (p.y - cy) * ly) / R;
+          let tone = clamp(0.3 + 0.6 * depth - 0.2 * lit, 0.15, 1), col = p.col, layers = many ? 3 : 5;
+          const occ = p.groove, fade = p.fade;
+          if (any) {
+            tone = clamp(0.42 + 0.18 * depth * (1 - FADE) - 0.2 * lit + 0.32 * POOL * occ, 0.15, 1) * (1 - 0.45 * fade);
+            if (POOL > 0) col = mix(col, "#000000", 0.22 * POOL * occ);
+            if (fade > 0) col = mix(col, paperW, 0.55 * fade);
+            if (fade > 0.5) layers = 3;
+          }
+          x.save();
+          x.globalAlpha = p.alpha;
+          x.beginPath();
+          p.h.forEach((q, i) => i ? x.lineTo(q[0], q[1]) : x.moveTo(q[0], q[1]));
+          x.closePath();
+          x.fillStyle = "#ffffff";
+          x.globalCompositeOperation = "destination-out";
+          x.fill();
+          x.globalCompositeOperation = "source-over";
+          const seed = seedBase + strHash("su" + p.k);
+          watercolourShape(x, p.h, col, seed, { fog: 0, layers, strength: tone, offscreen: true, granulate: false, noRing: many && depth < 0.15 });
+          if (EDG > 0) surfaceEdge(x, p, zAt, mix(p.col, shadeInk(), 0.55), EDG * (1 - 0.7 * fade), seed);
+          if (POOL > 0 && occ > 0.3) {
+            const rng2 = mulberry32(seed + 31);
+            let bx0 = 1e9, by0 = 1e9, bx1 = -1e9, by1 = -1e9;
+            for (const q of p.h) {
+              bx0 = Math.min(bx0, q[0]);
+              by0 = Math.min(by0, q[1]);
+              bx1 = Math.max(bx1, q[0]);
+              by1 = Math.max(by1, q[1]);
+            }
+            const n = Math.round((bx1 - bx0) * (by1 - by0) * 0.012 * POOL * (occ - 0.3));
+            for (let i = 0; i < n; i++) {
+              const gx = bx0 + rng2() * (bx1 - bx0), gy = by0 + rng2() * (by1 - by0), ga = 0.12 + rng2() * 0.2;
+              if (!inHull(p.h, gx, gy)) continue;
+              x.fillStyle = rgba(mix(col, "#000000", 0.4), ga);
+              x.fillRect(gx, gy, 1, 1);
+            }
+          }
+          x.restore();
+        }
+        const mask = document.createElement("canvas");
+        mask.width = off.width;
+        mask.height = off.height;
+        const mx = mask.getContext("2d", { willReadFrequently: true });
+        mx.scale(dpr, dpr);
+        mx.fillStyle = mix(P.surface, shadeInk(), 0.35);
+        for (const d of discs) {
+          mx.beginPath();
+          mx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+          mx.fill();
+        }
+        mx.globalCompositeOperation = "destination-out";
+        for (const d of discs) {
+          mx.beginPath();
+          mx.arc(d.x, d.y, Math.max(0, d.r - 2.2), 0, Math.PI * 2);
+          mx.fill();
+        }
+        x.save();
+        x.globalAlpha = 0.55;
+        x.drawImage(mask, 0, 0, W, H);
+        x.restore();
+        const rng = mulberry32(seedBase + 7);
+        x.save();
+        x.beginPath();
+        for (const d of discs) {
+          x.moveTo(d.x + d.r, d.y);
+          x.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        }
+        x.clip();
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (const d of discs) {
+          x0 = Math.min(x0, d.x - d.r);
+          y0 = Math.min(y0, d.y - d.r);
+          x1 = Math.max(x1, d.x + d.r);
+          y1 = Math.max(y1, d.y + d.r);
+        }
+        const g2 = Math.round((x1 - x0) * (y1 - y0) * 25e-4);
+        for (let i = 0; i < g2; i++) {
+          x.fillStyle = rgba(mix(P.surface, shadeInk(), 0.4), 0.1 + rng() * 0.2);
+          x.fillRect(x0 + rng() * (x1 - x0), y0 + rng() * (y1 - y0), 1, 1);
+        }
+        x.restore();
+        ctx.save();
+        ctx.globalAlpha = cfg.rep.surfaceOpacity;
+        ctx.beginPath();
+        for (const d of discs) {
+          ctx.moveTo(d.x + d.r, d.y);
+          ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
+        }
+        ctx.fillStyle = paperFill();
+        ctx.fill();
+        ctx.globalCompositeOperation = luminance(P.paper) > 0.5 ? "multiply" : "screen";
+        ctx.drawImage(off, 0, 0, W, H);
+        ctx.restore();
+        ctx.save();
+        ctx.globalAlpha = cfg.rep.surfaceOpacity * 0.7;
+        ctx.globalCompositeOperation = luminance(P.paper) > 0.5 ? "multiply" : "screen";
+        ctx.drawImage(mask, 0, 0, W, H);
+        ctx.restore();
+      } });
+    }
+    function paintPatchSurface(items, model, seedBase) {
+      const P = cfg.palette, S = cfg.style, { patches, zAt } = model, { edges: EDG, pooling: POOL } = model.cues;
+      const colFor = surfaceColour(), ink = isInk(), chalk = isChalk(), pencil = cfg.rep.fill === "pencil";
+      const la = S.lightAngle * Math.PI / 180, lx = Math.cos(la), ly = Math.sin(la);
+      let xmin = 1e9, xmax = -1e9, ymin = 1e9, ymax = -1e9;
+      for (const p of patches) {
+        p.col = colFor(p.a);
         xmin = Math.min(xmin, p.x);
         xmax = Math.max(xmax, p.x);
         ymin = Math.min(ymin, p.y);
@@ -4070,7 +4051,7 @@
       }
       const R = Math.max(xmax - xmin, ymax - ymin) / 2 || 1, cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2;
       for (const p of patches) {
-        const seed = seedBase + strHash("sp" + p.k), occ = POOL > 0 ? grooveOf(p, zAt, occR) * POOL : 0, fade = FADE * p.fog, fk = 1 - fade;
+        const seed = seedBase + strHash("sp" + p.k), occ = p.groove * POOL, fade = p.fade, fk = 1 - fade;
         const lit = ((p.x - cx) * lx + (p.y - cy) * ly) / R;
         const dark = clamp(0.7 * occ + S.shading * 0.25 * clamp(-lit, 0, 1), 0, 1);
         const shape = wcDeform(p.h, 1, 0.025, mulberry32(seed));
@@ -4086,17 +4067,17 @@
           path();
           ctx.fillStyle = paperFill();
           ctx.fill();
-          let col2 = p.col;
-          if (occ > 0) col2 = mix(col2, "#000000", 0.22 * occ);
-          if (fade > 0) col2 = mix(col2, P.paper, 0.6 * fade);
+          let col = p.col;
+          if (occ > 0) col = mix(col, "#000000", 0.22 * occ);
+          if (fade > 0) col = mix(col, P.paper, 0.6 * fade);
           if (!ink && !pencil && !chalk) {
-            ctx.fillStyle = fillFor(mix(col2, shadeInk(), 0.25 * dark * (cfg.rep.fill === "wash" ? 0.6 : 1)));
+            ctx.fillStyle = fillFor(mix(col, shadeInk(), 0.25 * dark * (cfg.rep.fill === "wash" ? 0.6 : 1)));
             path();
             ctx.fill();
           }
           if (pencil || chalk) {
             if (pencil) {
-              ctx.fillStyle = rgba(fillFor(col2), 0.35 * fk);
+              ctx.fillStyle = rgba(fillFor(col), 0.35 * fk);
               path();
               ctx.fill();
             }
@@ -4111,14 +4092,14 @@
               y1 = Math.max(y1, q[1]);
             }
             ctx.globalAlpha = p.alpha * clamp(0.55 + 0.6 * dark, 0, 1) * (0.45 + 0.55 * fk);
-            scribbleFill(ctx, x0, y0, x1, y1, col2, seed, { fog: 0, d: p.d });
+            scribbleFill(ctx, x0, y0, x1, y1, col, seed, { fog: 0, d: p.d });
             ctx.restore();
           }
           if (ink || cfg.rep.fill === "flat" && S.shading > 0) {
             const amt = ink ? dark : dark * 0.6;
             const inkColour = cfg.rep.fill === "ink colour";
             if (amt > 0.12 || inkColour) {
-              const hc = inkColour ? mix(col2, P.hatch, 0.12) : ink ? P.hatch : mix(col2, P.hatch, 0.5), a2 = inkColour ? Math.max(amt, 0.3) : amt;
+              const hc = inkColour ? mix(col, P.hatch, 0.12) : ink ? P.hatch : mix(col, P.hatch, 0.5), a2 = inkColour ? Math.max(amt, 0.3) : amt;
               const sp = S.hatchSpacing * Math.max(0.7, tex) * (1.5 - 0.7 * a2) * (1 + 0.6 * fade), al = clamp(0.25 + 0.65 * a2, 0, 1) * (0.35 + 0.65 * fk) * (inkColour ? 1.1 : 1);
               hatchPatch(ctx, shape, S.hatchAngle * Math.PI / 180, sp, { seed: seed + 5, width: 0.8 * tex, color: hc, alpha: al });
               if (a2 > 0.55) hatchPatch(ctx, shape, S.hatchAngle * Math.PI / 180 + 1.25, sp * 1.2, { seed: seed + 6, width: 0.7 * tex, color: hc, alpha: al * 0.8 });
@@ -4127,6 +4108,16 @@
           if (EDG > 0) surfaceEdge(ctx, p, zAt, P.ink, EDG * (0.55 + 0.45 * fk), seed, S.inkWidth / 1.5 * (chalk ? 1.4 : 1));
           ctx.restore();
         } });
+      }
+    }
+    function paintAtomSurface(items, atoms, pos, proj, seedBase, lowDetail) {
+      const P = cfg.palette, probe = cfg.rep.probe;
+      for (const a of atoms) {
+        const p = pos[a.id];
+        const r = ((VDW[a.el] || 1.7) + probe * 0.55) * proj.pxPerA * p.d * cfg.rep.surfaceScale;
+        const seed = seedBase + strHash("s" + a.id);
+        const col = cfg.rep.surfaceColor === "single" ? P.surface : cfg.rep.surfaceColor === "carbon" ? mix(carbonColor(a), "#ffffff", 0.25) : mix(atomColor(a), "#ffffff", 0.3);
+        items.push({ z: p.z + 0.02, draw: (ctx) => drawFlatBall(ctx, p.x, p.y, r, col, { seed, fog: p.fog, d: p.d, alpha: a.alpha, fillAlpha: cfg.rep.surfaceOpacity, outlineFirst: true, outlineAlpha: 0.6, passes: lowDetail ? 1 : void 0 }) });
       }
     }
     function hatchPatch(ctx, poly, ang, spacing, o) {
@@ -4273,8 +4264,8 @@
         ctx.moveTo(a[0], a[1]);
         ctx.lineTo(b[0], b[1]);
       };
-      const face = (q, kind, znorm, back, edges, alpha, col2) => {
-        const T = tone(col2 || P.loop);
+      const face = (q, kind, znorm, back, edges, alpha, col) => {
+        const T = tone(col || P.loop);
         const z = Math.max(q[0][2], q[1][2], q[2][2], q[3][2]);
         alpha *= siteFade((q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4, z);
         const d = (q[0][3] + q[1][3] + q[2][3] + q[3][3]) / 4, fog = (q[0][4] + q[2][4]) / 2, fk = 1 - fog * cfg.view.fog;
@@ -4293,7 +4284,7 @@
             for (let k = 1; k <= N; k++) if (!((k - m) % stride)) ks.push(k);
             if (wS < 2 * lw) ks.length = 0;
             const lost = clamp(Math.min(1, N * lw1 / Math.max(wS, 1e-6)) - ks.length * lw / Math.max(wS, 1e-6), 0, 1);
-            if (lost > 0.02 && !fl) fillC = fogged(mix(P.paper, T.coilLine ? col2 : T.hatch, (T.coilLine ? 0.55 : 0.3) * lost), fog);
+            if (lost > 0.02 && !fl) fillC = fogged(mix(P.paper, T.coilLine ? col : T.hatch, (T.coilLine ? 0.55 : 0.3) * lost), fog);
             hl = { lw, ks };
           }
           poly(ctx, q);
@@ -4738,9 +4729,9 @@
                 const wx = cv.getContext("2d", { willReadFrequently: true });
                 wx.scale(RF.dpr, RF.dpr);
                 wx.translate(-x0, -y0);
-                const col2 = cfg.rep.cartoonColor === "ss" ? ssColor(samp[j0].ss) : carbonColor(samp[j0].atom);
+                const col = cfg.rep.cartoonColor === "ss" ? ssColor(samp[j0].ss) : carbonColor(samp[j0].atom);
                 const fog = (fogs[j0] + fogs[j1]) / 2;
-                watercolourShape(wx, poly, col2, seed + j0 * 13, { fog, layers: 10, strength: 0.85, offscreen: true, noScale: true });
+                watercolourShape(wx, poly, col, seed + j0 * 13, { fog, layers: 10, strength: 0.85, offscreen: true, noScale: true });
                 const run = { canvas: cv, x0, y0, w: bw, h: bh };
                 for (let j = j0; j <= j1; j++) wcRuns[j] = run;
               }
@@ -4764,12 +4755,12 @@
           items.push({ z, draw: (ctx) => {
             const fog = (fogs[j] + fogs[j + 1]) / 2, fk = 1 - fog * cfg.view.fog;
             const d = (ds[j] + ds[j + 1]) / 2;
-            let col2 = cfg.rep.cartoonColor === "ss" ? ssColor(s.ss) : carbonColor(s.atom);
-            const baseCol = col2;
+            let col = cfg.rep.cartoonColor === "ss" ? ssColor(s.ss) : carbonColor(s.atom);
+            const baseCol = col;
             const isFront = front[j];
-            col2 = fillFor(col2);
-            if (!isFront && !isInk()) col2 = shade(col2, -0.14);
-            col2 = fogged(col2, fog);
+            col = fillFor(col);
+            if (!isFront && !isInk()) col = shade(col, -0.14);
+            col = fogged(col, fog);
             const q = [Lf[j], Lf[j + 1], Rf[j + 1], Rf[j]];
             ctx.save();
             ctx.globalAlpha = s.atom.alpha;
@@ -4779,10 +4770,10 @@
             ctx.fillStyle = paperFill();
             ctx.fill();
             if (!isInk()) {
-              ctx.fillStyle = col2;
+              ctx.fillStyle = col;
               ctx.fill();
               ctx.lineWidth = 0.8;
-              ctx.strokeStyle = col2;
+              ctx.strokeStyle = col;
               ctx.stroke();
             } else {
               ctx.lineWidth = 0.8;
