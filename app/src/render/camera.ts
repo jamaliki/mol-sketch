@@ -1,4 +1,4 @@
-/* The camera is the page's camera (computeFit + makeProjector in triad-sketch.html), expressed as matrices so the
+/* The camera is the classic engine's camera (computeFit + makeProjector in classic/engine.js), expressed as matrices so the
    GPU and the classic engine frame a view identically:
    - the fit points (what is drawn) are rotated by base·Ry(yaw)·Rx(pitch) about their bounding-box centre;
    - the rotated bounding box gives rx, ry (its centre on screen), spanX, spanY, zspan;

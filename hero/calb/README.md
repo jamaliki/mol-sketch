@@ -7,8 +7,8 @@ animation is one of theirs; the drawing adds nothing to the coordinates.
 
 ```bash
 python3 ../../tools/mech2scene.py data/motif_01 recipe.json calb_hero.json               # the scene from the recipe
-(cd ../../app && node cli/render.mjs ../hero/calb/calb_hero.json --size 1920x1080 --fit 57,13,92,58 --write-view)   # frame it
-cp calb_hero.json calb_hero_mobile.json && (cd ../../app && node cli/render.mjs ../hero/calb/calb_hero_mobile.json --size 1080x1920 --fit 11,15,89,45 --write-view)
+molsketch render calb_hero.json --size 1920x1080 --fit 57,13,92,58 -o calb_hero.json        # frame it
+molsketch render calb_hero.json --size 1080x1920 --fit 11,15,89,45 -o calb_hero_mobile.json # and for phones
 cd .. && ./render.sh calb            # 1920x1080 on dark paper  → out/hero_calb.{av1.mp4,webm,mp4}, poster
           ./render.sh calb-chalk      # the same as chalk on the board
           ./render.sh calb-mobile     # 1080x1920 for phones;  calb-chalk-mobile likewise

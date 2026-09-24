@@ -1,66 +1,30 @@
 {
- "rep": {
-  "mode": "sticks",
-  "fill": "ink",
-  "colorBy": "group",
-  "stickRadius": 0.2,
-  "sphereScale": 0.4,
-  "sideChainHelper": true,
-  "cartoonScale": 1,
-  "cartoonColor": "ss",
-  "probe": 1.4,
-  "surfaceScale": 1,
-  "surfaceOpacity": 1,
-  "surfaceColor": "carbon",
-  "cartoonStyle": "engraved",
-  "stickStyle": "auto",
-  "engraveLines": 8,
-  "engraveWidth": 0.45,
-  "ssLabels": false
- },
- "style": {
-  "rough": 0.99,
-  "passes": 2,
-  "pressure": 0.39,
-  "fillWobble": 0.77,
-  "hatchDensity": 1.4,
-  "hierarchy": 0.45,
-  "wash": 0.3,
-  "washSeed": 6,
-  "washLife": 0.6,
-  "inkWidth": 1.6,
-  "ballScale": 1,
-  "bondWidth": 2.1,
-  "hatchSpacing": 5,
-  "hatchAngle": -40,
-  "lightAngle": -125,
-  "shading": 0.65,
-  "pencilFill": 0.55,
-  "grain": 0.6,
-  "font": "Caveat",
-  "labelSize": 19,
-  "captionSize": 24,
-  "contextAlpha": 0.5
- },
+ "fill": "ink",
+ "mode": "sticks",
+ "sphereScale": 0.4,
  "show": {
   "H": true,
   "lonePairs": true,
   "charges": true,
   "arrows": true,
   "labels": true,
+  "resLabels": false,
   "hbonds": true,
-  "context": false,
   "caption": true,
   "stepLabel": true,
-  "colorBonds": false,
-  "resLabels": false,
   "valence": true,
-  "construction": false
+  "figLabels": true,
+  "noLabels": false
  },
+ "font": "Caveat",
+ "labelSize": 19,
+ "captionSize": 24,
+ "annot": 1,
  "palette": {
   "paper": "#faf8f3",
   "ink": "#1e1e1e",
   "hatch": "#2a2a2a",
+  "wash": "#7fb2c9",
   "arrow": "#d23b2f",
   "charge": "#1e1e1e",
   "label": "#1e1e1e",
@@ -77,12 +41,81 @@
   "sheet": "#f2d94a",
   "loop": "#6fbf6a",
   "nucleic": "#e0a23a",
-  "surface": "#cfd8e0",
-  "wash": "#7fb2c9"
+  "surface": "#cfd8e0"
  },
- "fps": 24,
- "stepEvery": 2,
- "boilEvery": 2,
- "arrowLead": 0.2,
- "pdbFrames": 2
+ "colorBy": "residue",
+ "cartoonColor": "ss",
+ "cartoonStyle": "engraved",
+ "stickStyle": "auto",
+ "engrave": {
+  "lines": 8,
+  "width": 0.45,
+  "strandThickness": 0.6,
+  "coilWidth": 1.25,
+  "labels": false
+ },
+ "site": {
+  "sel": "",
+  "cutaway": true,
+  "quiet": 0.35,
+  "scale": 1.9
+ },
+ "surfaceColor": "subunit",
+ "surfaceDepth": {
+  "edges": 1,
+  "pooling": 1,
+  "fade": 1
+ },
+ "reps": {
+  "sticks": "hetatm and not water",
+  "cartoon": "polymer",
+  "surface": ""
+ },
+ "stickRadius": 0.2,
+ "cartoonScale": 1,
+ "probe": 1.4,
+ "line": {
+  "width": 1.6,
+  "rough": 0.99,
+  "passes": 2,
+  "hierarchy": 0.45,
+  "pressure": 0.39,
+  "alpha": 0.9
+ },
+ "shading": 0.65,
+ "pencilFill": 0.55,
+ "fillWobble": 0.77,
+ "construction": false,
+ "sideChainHelper": true,
+ "hatch": {
+  "spacing": 5,
+  "angle": -40,
+  "density": 1.4
+ },
+ "paper": {
+  "grain": 0.6,
+  "wash": 0.3,
+  "washSeed": 6,
+  "washLife": 0.6,
+  "washScale": 1
+ },
+ "water": {
+  "layers": 3,
+  "wobble": 1,
+  "ring": 0.6,
+  "granulation": 0.5,
+  "tone": 0.6
+ },
+ "view": {
+  "fov": 20,
+  "fog": 0.5,
+  "fogStart": 0.45,
+  "light": -125
+ },
+ "boilEvery": 3,
+ "boilHold": 1,
+ "detail": "auto",
+ "textureScale": "screen",
+ "groupPalette": null,
+ "groupPaletteName": "MolSketch"
 }

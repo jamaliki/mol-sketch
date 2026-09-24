@@ -34,6 +34,8 @@ def main(argv=None):
     r.add_argument("--size", default="1920x1440"); r.add_argument("--scale", type=float, default=1)
     for k in ("yaw", "pitch", "roll", "zoom", "fov"): r.add_argument(f"--{k}", type=float)
     r.add_argument("--pan", help="X,Y as fractions of the canvas")
+    r.add_argument("--fit", metavar="L,T,R,B", help="after the camera: zoom and pan so the drawing fills this box of the canvas (fractions, or percent), e.g. 57,13,92,58")
+    r.add_argument("--fit-what", choices=("all", "frame"), default="all", help="what --fit measures: every keyframe of a scene (default) or this frame")
     r.add_argument("--site", help="the active site: a selection, or 'ligand'"); r.add_argument("--frame-site", action="store_true"); r.add_argument("--label-site", action="store_true")
     r.add_argument("--palette"); r.add_argument("--frame", type=int, help="a scene's frame (or a structure's boil)")
     r.add_argument("--frames", help="scenes: all | drawn | keyframes | N | A-B (with a directory or video out)")
@@ -64,6 +66,11 @@ def main(argv=None):
     if a.pan: view["pan"] = tuple(float(x) for x in a.pan.split(","))
     if view: fig.view(**view)
     size = tuple(int(x) for x in a.size.lower().split("x"))
+    if a.fit:
+        v = [float(x) for x in a.fit.split(",")]
+        if len(v) != 4: sys.exit("--fit takes four numbers: left,top,right,bottom")
+        if max(v) > 1: v = [x / 100 for x in v]
+        fig.fit(tuple(v), size, what=a.fit_what)
     if a.site: fig.site(ligand=True) if a.site == "ligand" else fig.site(a.site)
     if a.frame_site: fig.frame_site(size)
     if a.label_site: fig.label_site(size)

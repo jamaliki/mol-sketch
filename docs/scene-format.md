@@ -1,7 +1,7 @@
 # Scene JSON format
 
-A scene is what the page animates. It is what *Save scene JSON* writes and what `render.js` reads when
-given a `.json` input. Loading PDB/mmCIF files builds a scene automatically; the point of editing the JSON
+A scene is what MolSketch animates. It is what the app's *Save scene* and Python's `fig.save("fig.json")` write, and
+what the app, `molsketch.scene(...)` and `molsketch render scene.json` read. Loading PDB/mmCIF files builds a scene automatically; the point of editing the JSON
 is to add the things coordinates do not carry: curly arrows, charges, lone pairs, labels, captions, colours,
 timing, and where atoms enter from and leave to.
 
@@ -40,7 +40,7 @@ timing, and where atoms enter from and leave to.
 | key | meaning |
 |---|---|
 | `name` | shown in the SVG title |
-| `view` | optional camera applied when the scene loads: `yaw`, `pitch`, `roll` (degrees; roll turns the picture about the view axis, after yaw and pitch), `zoom`, `panX`, `panY` (fractions of the canvas), `fov`, `fog`, `fogStart`. The CLI's `--fit … --write-view` fills in zoom and pan for a target box |
+| `view` | optional camera applied when the scene loads: `yaw`, `pitch`, `roll` (degrees; roll turns the picture about the view axis, after yaw and pitch), `zoom`, `panX`, `panY` (fractions of the canvas), `fov`, `fog`, `fogStart`. `molsketch render scene.json --fit … -o scene.json` fills in zoom and pan for a target box |
 | `reps` | the three selections: `sticks`, `cartoon`, `surface` (empty string = off) |
 | `groupColors` | colour overrides, keyed by residue (`SER195`), chain ID (`A`), `subunit:S/L/T/X`, `entity:<id>` |
 | `labels` | labels placed on the figure: `{ "text", "at": atom id, "dx", "dy" }` follows that atom (the text sits `dx`, `dy` px off it, with a leader once it is far enough), or `{ "text", "x", "y" }` stays at that fraction of the canvas; optional `"size"` scales the label size |
@@ -107,7 +107,8 @@ until the motion begins, then fade.
 ## Timing
 
 Frame count = Σ (hold + transition). At `fps` 24 with `stepEvery` 2 the animation shows 12 drawings a
-second. `render.js --list` prints the timeline; `--frames drawn` renders one file per drawing.
+second. In Python, `fig.frames("keyframes")` lists where each keyframe's hold starts and `fig.frames("drawn")` every
+frame with a new drawing; `molsketch render scene.json --frames drawn -o frames` renders one file per drawing.
 
 ## Minimal hand-written example
 

@@ -5,18 +5,17 @@ no arrows, framed for the hero's layout, on the site's own colours. Two papers: 
 (`#0f172a`) and `hero_cream.json` on the site's paper (`#f2efe8`).
 
 The hero's looks are frozen in [`looks/`](looks) (`chalkboard.json`, `dark-paper.json`, `watercolour.json`: the app's
-looks as they were when the hero was made, applied after `--look`), so the app's looks can change without changing the
+looks as they were when the hero was made, applied after `--look` with `--style`), so the app's looks can change without changing the
 website. To move the hero to a newer look, delete its file here or save a new one from the app (*Export › Save style*).
 
 ```bash
-cd app && npm install && npm run build        # once
-cd ../hero
+pip install ./python                          # once, from the repository root: the molsketch package
+cd hero
 ./render.sh dark                              # → out/hero_dark.{mp4,webm}, hero_dark_poster.jpg (~3 min)
 ./render.sh cream                             # the cream variant
 ./render.sh dark-mobile                       # 1080x1920, framed for a phone
 ./render.sh calb                              # CALB / pNPA from real coordinates, with the arrows — see calb/README.md
 ./render.sh calb-chalk                        # the same as chalk on the board;  calb-mobile, calb-chalk-mobile likewise
-SOFTWARE="" ./render.sh dark                  # on a machine with a GPU
 ```
 
 `render.sh` is the whole recipe: the scene file (the mechanism with the hero's camera and residue colours), the look
@@ -29,7 +28,7 @@ itself, no render needed, so framing and colours can be checked in seconds. The 
 encode in the browser for the same purpose.
 
 To do the same for another mechanism: [`../docs/hero-workflow.md`](../docs/hero-workflow.md). In short, a recipe and
-`tools/mech2scene.py` make the scene, `node cli/render.mjs scene.json --size 1920x1080 --fit 57,13,92,58 --write-view`
+`tools/mech2scene.py` make the scene, `molsketch render scene.json --size 1920x1080 --fit 57,13,92,58 -o scene.json`
 frames it for the hero (`--fit 11,15,89,45` at 1080x1920 for phones), and a `case` line in `render.sh` renders it.
 
 ## On the page

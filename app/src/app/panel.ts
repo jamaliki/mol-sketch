@@ -626,7 +626,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     const g = group(Exp, 'Command line', { open: false, keys: 'cli render command terminal batch' });
     const cmd = el('textarea', { readonly: '', rows: '4', class: 'cmd' }) as HTMLTextAreaElement;
     const showCmd = () => { cmd.value = H.renderCommand() }; refreshers.push(showCmd);
-    g.append(note('Renders exactly this from the terminal. Save the scene JSON and the style first; the command names those files.'), cmd,
+    g.append(note('Renders exactly this from the terminal, with the molsketch Python package (pip install ./python). Save the scene JSON and the style first; the command names those files.'), cmd,
       el('div', { class: 'btns' }, el('button', { onclick: (e: any) => { showCmd(); navigator.clipboard?.writeText(cmd.value); e.target.textContent = 'Copied'; setTimeout(() => e.target.textContent = 'Copy render command', 1200) } }, 'Copy render command')));
   }
 

@@ -1,5 +1,6 @@
-/* The classic engine: the canvas renderer of triad-sketch.html, verbatim apart from the hooks at the end.
-   It is the reference look. Everything here is plain JavaScript; the app talks to it through createClassic(). */
+/* The classic engine: MolSketch's canvas renderer, and the reference look. It is the only copy: the app draws with it
+   in the browser, and the Python package (python/molsketch/_core.js, built from app/src/headless) draws with it
+   headless. Everything here is plain JavaScript; the app talks to it through createClassic(). */
 export function createClassic(){
 /* ============================ utilities ============================ */
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;

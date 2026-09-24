@@ -1084,6 +1084,7 @@
     catalog: () => catalog,
     drop: () => drop,
     engineConfig: () => engineConfig,
+    fitFrame: () => fitFrame,
     frameTheSite: () => frameTheSite,
     frames: () => frames,
     info: () => info,
@@ -5439,6 +5440,16 @@
     return performance.now() - t0;
   }
 
+  // src/classic/scene.ts
+  function sceneFitPoints(doc) {
+    const out = [];
+    for (const k of doc.keyframes) for (const id in k.atoms) {
+      const p = k.atoms[id].pos;
+      out.push(p[0], p[1], p[2]);
+    }
+    return Float32Array.from(out);
+  }
+
   // src/model/selection.ts
   var cache = /* @__PURE__ */ new Map();
   function compileSelection(str) {
@@ -5638,6 +5649,187 @@
     m[10] = e3[2];
     return m;
   }
+
+  // src/render/camera.ts
+  function mat4Identity() {
+    const m = new Float32Array(16);
+    m[0] = m[5] = m[10] = m[15] = 1;
+    return m;
+  }
+  function mat4Mul(a, b) {
+    const o = new Float32Array(16);
+    for (let c = 0; c < 4; c++) for (let r = 0; r < 4; r++) o[c * 4 + r] = a[r] * b[c * 4] + a[4 + r] * b[c * 4 + 1] + a[8 + r] * b[c * 4 + 2] + a[12 + r] * b[c * 4 + 3];
+    return o;
+  }
+  function mat4RotX(a) {
+    const m = mat4Identity();
+    const c = Math.cos(a), s = Math.sin(a);
+    m[5] = c;
+    m[6] = s;
+    m[9] = -s;
+    m[10] = c;
+    return m;
+  }
+  function mat4RotZ(a) {
+    const m = mat4Identity();
+    const c = Math.cos(a), s = Math.sin(a);
+    m[0] = c;
+    m[1] = s;
+    m[4] = -s;
+    m[5] = c;
+    return m;
+  }
+  function mat4RotY(a) {
+    const m = mat4Identity();
+    const c = Math.cos(a), s = Math.sin(a);
+    m[0] = c;
+    m[2] = -s;
+    m[8] = s;
+    m[10] = c;
+    return m;
+  }
+  function mat4Translate(x, y, z) {
+    const m = mat4Identity();
+    m[12] = x;
+    m[13] = y;
+    m[14] = z;
+    return m;
+  }
+  var Camera = class {
+    constructor() {
+      __publicField(this, "yaw", 0);
+      __publicField(this, "pitch", 0);
+      __publicField(this, "roll", 0);
+      __publicField(this, "zoom", 1);
+      __publicField(this, "panX", 0);
+      __publicField(this, "panY", 0);
+      // degrees; roll turns the picture about the view axis, after yaw and pitch
+      __publicField(this, "fov", 20);
+      // degrees; < 0.1 → orthographic
+      /** rotation applied before yaw/pitch (PCA orientation of a loaded structure) */
+      __publicField(this, "base", mat4Identity());
+      /** fractions of the height reserved for a caption at the bottom and a step label at the top (page: 0.13 / 0.05) */
+      __publicField(this, "capFrac", 0);
+      __publicField(this, "topFrac", 0);
+      __publicField(this, "pts", new Float32Array(0));
+      __publicField(this, "fitKey", "");
+      __publicField(this, "fitVersion", 0);
+      __publicField(this, "fit", { cx: 0, cy: 0, cz: 0, rx: 0, ry: 0, spanX: 10, spanY: 10, zspan: 4 });
+    }
+    /** The points the view is fitted to (xyz triples, model units). */
+    setFitPoints(p) {
+      this.pts = p;
+      this.fitVersion++;
+      this.fitKey = "";
+    }
+    get rotation() {
+      const yp = mat4Mul(mat4RotX(this.pitch * Math.PI / 180), mat4Mul(mat4RotY(this.yaw * Math.PI / 180), this.base));
+      return this.roll ? mat4Mul(mat4RotZ(this.roll * Math.PI / 180), yp) : yp;
+    }
+    computeFit() {
+      const key = this.yaw + "|" + this.pitch + "|" + this.roll + "|" + this.fitVersion;
+      if (key === this.fitKey) return;
+      this.fitKey = key;
+      const p = this.pts;
+      const n = p.length / 3;
+      if (!n) {
+        this.fit = { cx: 0, cy: 0, cz: 0, rx: 0, ry: 0, spanX: 10, spanY: 10, zspan: 4 };
+        return;
+      }
+      let mn = [Infinity, Infinity, Infinity], mx = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < n; i++) for (let k = 0; k < 3; k++) {
+        const v = p[i * 3 + k];
+        if (v < mn[k]) mn[k] = v;
+        if (v > mx[k]) mx[k] = v;
+      }
+      const cx = (mn[0] + mx[0]) / 2, cy = (mn[1] + mx[1]) / 2, cz = (mn[2] + mx[2]) / 2;
+      const R = this.rotation;
+      let rmn = [Infinity, Infinity, Infinity], rmx = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < n; i++) {
+        const x = p[i * 3] - cx, y = p[i * 3 + 1] - cy, z = p[i * 3 + 2] - cz;
+        const r0 = R[0] * x + R[4] * y + R[8] * z, r1 = R[1] * x + R[5] * y + R[9] * z, r2 = R[2] * x + R[6] * y + R[10] * z;
+        if (r0 < rmn[0]) rmn[0] = r0;
+        if (r0 > rmx[0]) rmx[0] = r0;
+        if (r1 < rmn[1]) rmn[1] = r1;
+        if (r1 > rmx[1]) rmx[1] = r1;
+        if (r2 < rmn[2]) rmn[2] = r2;
+        if (r2 > rmx[2]) rmx[2] = r2;
+      }
+      this.fit = { cx, cy, cz, rx: (rmn[0] + rmx[0]) / 2, ry: (rmn[1] + rmx[1]) / 2, spanX: Math.max(rmx[0] - rmn[0], 1), spanY: Math.max(rmx[1] - rmn[1], 1), zspan: Math.max(rmx[2] - rmn[2], 1) };
+    }
+    /** Matrices for a W×H canvas (any pixel unit: the framing is the same in CSS or device pixels). */
+    compute(W, H) {
+      this.computeFit();
+      const F = this.fit;
+      const capH = this.capFrac * H, topH = this.topFrac * H;
+      const fov = this.fov * Math.PI / 180;
+      const ext = Math.max(F.spanX, F.spanY) / 2 + 1.5;
+      const ortho = fov <= 2e-3;
+      const D = ortho ? Infinity : ext / Math.tan(fov / 2);
+      const dNear = ortho ? 1 : D / Math.max(D - F.zspan / 2, D * 0.3);
+      const base = Math.min(W * 0.9 / (F.spanX + 2.6), (H - capH - topH - 24) / (F.spanY + 2.4)) * this.zoom / Math.pow(dNear, 0.7);
+      const offX = 2 * this.panX;
+      const offY = (capH - topH) / H - 2 * this.panY;
+      const Dv = ortho ? F.zspan + 10 : D;
+      const view = mat4Mul(mat4Translate(-F.rx, -F.ry, -Dv), mat4Mul(this.rotation, mat4Translate(-F.cx, -F.cy, -F.cz)));
+      const margin = F.zspan * 0.25 + 6;
+      const near = Math.max(0.05, Dv - F.zspan / 2 - margin), far = Dv + F.zspan / 2 + margin;
+      const proj = new Float32Array(16);
+      if (ortho) {
+        proj[0] = 2 * base / W;
+        proj[5] = 2 * base / H;
+        proj[10] = -2 / (far - near);
+        proj[14] = -(far + near) / (far - near);
+        proj[15] = 1;
+        proj[12] = offX;
+        proj[13] = offY;
+      } else {
+        proj[0] = 2 * base * D / W;
+        proj[5] = 2 * base * D / H;
+        proj[8] = -offX;
+        proj[9] = -offY;
+        proj[10] = (far + near) / (near - far);
+        proj[11] = -1;
+        proj[14] = 2 * far * near / (near - far);
+      }
+      return { view, proj, near, far, ortho, D: Dv, base, rx: F.rx, ry: F.ry, spanX: F.spanX, spanY: F.spanY, zspan: F.zspan, cx: F.cx, cy: F.cy, cz: F.cz, sceneNear: Dv - F.zspan / 2, sceneFar: Dv + F.zspan / 2 };
+    }
+    /** Where points land on a W×H canvas with the current view, as fractions of the canvas (x right, y down): the bounding box
+        of `pts` (xyz triples; default: the fit points). */
+    screenBox(W, H, pts) {
+      const p = pts || this.pts;
+      const F = this.compute(W, H);
+      const M = mat4Mul(F.proj, F.view);
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (let i = 0; i < p.length; i += 3) {
+        const x = p[i], y = p[i + 1], z = p[i + 2];
+        const cx = M[0] * x + M[4] * y + M[8] * z + M[12], cy = M[1] * x + M[5] * y + M[9] * z + M[13], cw = M[3] * x + M[7] * y + M[11] * z + M[15];
+        const nx = cx / cw, ny = cy / cw;
+        const fx = (nx + 1) / 2, fy = (1 - ny) / 2;
+        if (fx < x0) x0 = fx;
+        if (fx > x1) x1 = fx;
+        if (fy < y0) y0 = fy;
+        if (fy > y1) y1 = fy;
+      }
+      return { x0, y0, x1, y1 };
+    }
+    /** Set zoom and pan so that `pts` (default: the fit points) fill the box {x0,y0,x1,y1} (fractions of the canvas) as far as
+        the aspect allows, centred in it. `margin` is a fraction of an atom's drawn size to keep clear of the box edge, in
+        canvas fractions (0.02 ≈ the stroke overshoot at hero scale). Yaw, pitch and roll are untouched. */
+    fitTo(box, W, H, pts, margin = 0.015) {
+      const bw = box.x1 - box.x0 - 2 * margin, bh = box.y1 - box.y0 - 2 * margin;
+      const tcx = (box.x0 + box.x1) / 2, tcy = (box.y0 + box.y1) / 2;
+      for (let it = 0; it < 3; it++) {
+        const b = this.screenBox(W, H, pts);
+        const w = Math.max(b.x1 - b.x0, 1e-6), h = Math.max(b.y1 - b.y0, 1e-6);
+        this.zoom *= Math.min(bw / w, bh / h);
+        const b2 = this.screenBox(W, H, pts);
+        this.panX += tcx - (b2.x0 + b2.x1) / 2;
+        this.panY += tcy - (b2.y0 + b2.y1) / 2;
+      }
+      this.fitKey = "";
+    }
+  };
 
   // src/app/site.ts
   var WATER = /* @__PURE__ */ new Set(["HOH", "WAT", "DOD", "H2O", "TIP", "TIP3", "SOL"]);
@@ -6037,6 +6229,30 @@
       for (let i = a; i <= b; i++) out.push(i);
     } else out.push(+w);
     return out;
+  }
+  function fitFrame(spec, box, what = "all") {
+    const f2 = settle(spec);
+    if (f2.scene) sceneFrame(f2);
+    const C = new Camera(), c = f2.camera;
+    Object.assign(C, { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: c.fov, base: c.base });
+    if (f2.scene) {
+      C.capFrac = f2.style.show.caption ? 0.13 : 0;
+      C.topFrac = f2.style.show.stepLabel ? 0.05 : 0;
+    }
+    const fit = f2.scene ? sceneFitPoints(f2.scene) : f2.fitPoints;
+    C.setFitPoints(fit);
+    let pts = fit;
+    if (f2.structure && (what === "frame" || !f2.scene)) {
+      const s = f2.structure;
+      pts = new Float32Array(s.count * 3);
+      for (let i = 0; i < s.count; i++) {
+        pts[i * 3] = s.x[i];
+        pts[i * 3 + 1] = s.y[i];
+        pts[i * 3 + 2] = s.z[i];
+      }
+    }
+    C.fitTo(box, f2.W, f2.H, pts);
+    return { zoom: C.zoom, panX: C.panX, panY: C.panY, box: C.screenBox(f2.W, f2.H, pts) };
   }
   function siteHostOf(f2) {
     return { engine: () => engineFor(f2), camera: f2.camera, W: f2.W, H: f2.H, frame: f2.frame, siteSel: f2.style.site.sel || "" };

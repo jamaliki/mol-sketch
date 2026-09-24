@@ -161,6 +161,14 @@ Turn and frame the molecule. Only the values you give change.
 
 The molecule starts turned so its widest spread faces you.
 
+#### `fig.fit(box, size=(1920, 1440), *, what="all")`
+
+Zoom and pan so the drawing fills a box of the canvas, keeping the turn (the app's *Fit to frame*). `box` is
+`(left, top, right, bottom)` as fractions of the canvas, x to the right and y down: `fig.fit((0.57, 0.13, 0.92, 0.58))`
+puts the drawing in the upper right, beside a headline. For a scene, `what="all"` (the default) fits every keyframe,
+so nothing leaves the box as it animates; `"frame"` fits only this frame. Pass the `size` you will save at. Saving the
+figure as `.json` afterwards stores the fitted camera in the scene.
+
 ### Active site
 
 #### `fig.site(selection=None, *, ligand=False, within=5.0, cutaway=None, quiet=None, scale=None)`
@@ -429,6 +437,7 @@ folder of frames (a path with no extension). Options for `render`:
 | `--palette NAME` | `fig.palette(NAME)` |
 | `--yaw --pitch --roll --zoom --fov` | `fig.view(...)` |
 | `--pan X,Y` | `fig.view(pan=(X, Y))` |
+| `--fit L,T,R,B`, `--fit-what all\|frame` | `fig.fit((L, T, R, B), what=…)`; fractions or percent |
 | `--site SELECTION` or `--site ligand` | `fig.site(SELECTION)` or `fig.site(ligand=True)` |
 | `--frame-site`, `--label-site` | `fig.frame_site()`, `fig.label_site()` |
 | `--size WxH` (default `1920x1440`), `--scale N` | the `size` and `scale` arguments |

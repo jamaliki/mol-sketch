@@ -146,3 +146,13 @@ def test_svg_is_vector_and_valid(tmp_path):
     assert root.tag == ns + "svg" and root.get("width") == "640" and root.get("height") == "480"
     assert len(root.findall(f".//{ns}path")) > 100 and not root.findall(f".//{ns}text")   # letters are outlines
     assert "mix-blend-mode" in ms.load(EX / "1A8O.pdb").look("watercolour").svg((320, 240))   # watercolour multiplies
+
+
+def test_fit_puts_the_drawing_in_the_box():
+    """fit(): zoom and pan so the drawing fills the box (its longer side), centred in it"""
+    from molsketch._engine import engine
+    fig = ms.load(EX / "1A8O.pdb").view(yaw=30).fit((0.55, 0.1, 0.95, 0.6), (1600, 900))
+    b = engine().call("fitFrame", fig._spec(size=(1600, 900)), {"x0": 0.55, "y0": 0.1, "x1": 0.95, "y1": 0.6}, "all")["box"]
+    assert abs((b["x0"] + b["x1"]) / 2 - 0.75) < 0.01 and abs((b["y0"] + b["y1"]) / 2 - 0.35) < 0.01   # centred
+    assert b["x0"] > 0.54 and b["x1"] < 0.96 and b["y0"] > 0.09 and b["y1"] < 0.61                     # inside
+    assert abs((b["x1"] - b["x0"]) - 0.37) < 0.02 or abs((b["y1"] - b["y0"]) - 0.47) < 0.02            # filling it

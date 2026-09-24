@@ -6,12 +6,13 @@ and is the worked example throughout; `hero/render.sh calb` reproduces it.
 
 There are two routes and they meet in the middle. The **app route** is for looking: load the scene, turn it, frame
 it, try looks, then copy the render command. The **script route** is for repeating: a recipe file describes what to
-draw, one tool builds the scene, one script renders and encodes. Both end at the same scene JSON and the same CLI.
+draw, one tool builds the scene, one script renders and encodes. Both end at the same scene JSON and the same
+`molsketch render`.
 
 ```
 computed states ──mech2scene + recipe──▶ scene JSON ──app: look, frame, save──▶ scene JSON + style JSON
                                                                                        │
-                                                        cli/render.mjs (frames) ◀──────┘
+                                                   molsketch render (frames) ◀──────┘
                                                                 │
                                                      ffmpeg: AV1 / VP9 / H.264 + poster  (hero/render.sh)
 ```
@@ -87,30 +88,30 @@ up and right). Set the three in the recipe's `view` and rebuild, or set them in 
 ### Framing for a page
 
 ```bash
-node cli/render.mjs scene.json --size 1920x1080 --fit 57,13,92,58 --write-view
-node cli/render.mjs scene.json --size 1080x1920 --fit 11,15,89,45 --write-view mobile.json
+molsketch render scene.json --size 1920x1080 --fit 57,13,92,58 -o scene.json
+molsketch render scene.json --size 1080x1920 --fit 11,15,89,45 -o mobile.json
 ```
 
 `--fit L,T,R,B` (percent of the frame, x right, y down) sets zoom and pan so the drawing fills that box as far as
-its aspect allows, centred; `--fit-what frame` measures the current frame instead of every keyframe. `--write-view`
-stores the resulting camera in the scene (or in a copy) and stops, so the file is self-contained from then on.
+its aspect allows, centred; `--fit-what frame` measures the current frame instead of every keyframe. Writing the
+result to a `.json` stores the fitted camera in the scene (or in a copy), so the file is self-contained from then on.
+In Python: `fig.fit((0.57, 0.13, 0.92, 0.58), (1920, 1080)).save("scene.json")`.
 The two boxes above are the site's hero: right of the headline and under the nav at 16:9, and the upper third of a
 9:16 frame for phones; [`hero/README.md`](../hero/README.md) has the measurements behind them.
 
 ### Rendering and encoding
 
 ```bash
-cd app && npm run build
-node cli/render.mjs scene.json --look dark-paper --frames drawn --size 1920x1080 --out frames \
-  --set show.labels=false --set show.caption=false --set show.stepLabel=false --set annot=1.5 --set boilHold=2
+molsketch render scene.json --look dark-paper --frames drawn --size 1920x1080 -o frames \
+  --set show.labels=false --set show.caption=false --set show.step_label=false --set annot=1.5 --set boil_hold=2
 ```
 
 The same, from the app: *Render* in the panel encodes the loop with WebCodecs and downloads one file (AV1 › VP9 ›
-H.264, whichever the browser has), with a poster; the CLI is for the full set and for batches.
+H.264, whichever the browser has), with a poster; the command line is for the full set and for batches.
 
 `hero/render.sh NAME` is that line plus the three encodes (AV1, VP9, H.264) and the poster, per named variant;
 add a variant by adding a `case` line. `--look` names a look from `looks/`, `--style` a style saved from the app,
-`--set` any style field. `boilHold=2` re-jitters the strokes every second drawing while the atoms move on every one,
+`--set` any style field. `boil_hold=2` re-jitters the strokes every second drawing while the atoms move on every one,
 which roughly halves the video's bitrate. The scene's own camera wins over the look; flags win over both.
 
 ## 3. The app route

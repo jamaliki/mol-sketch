@@ -1,18 +1,16 @@
 #!/usr/bin/env bash
 # Renders one hero loop and encodes it for the site: H.264 mp4, VP9 webm, poster jpg.
-#   ./render.sh NAME [OUTDIR]        from hero/; needs `cd app && npm run build` once
+#   ./render.sh NAME [OUTDIR]        needs the molsketch package (pip install ./python) and ffmpeg
 #   NAME  dark | cream          the serine hydrolase demo (no text, no arrows), 1920x1080
 #         dark-mobile           the same, framed for a phone, 1080x1920
 #         calb | calb-chalk     CALB / pNPA from mechazyme (arrows, charges, lone pairs), 1920x1080
 #         calb-mobile | calb-chalk-mobile             the same for a phone, 1080x1920
-#   SOFTWARE="" ./render.sh calb     uses the GPU (default is CPU GL, which any machine has)
 set -euo pipefail
-SOFTWARE=${SOFTWARE:---software}
-name=${1:-dark}; here="$(cd "$(dirname "$0")" && pwd)"; out=${2:-$here/.frames/$name}; cd "$here/../app"
-NOTEXT="--set show.labels=false --set show.resLabels=false --set show.caption=false --set show.stepLabel=false"
-NOCHEM="--set show.arrows=false --set show.charges=false --set show.lonePairs=false"
-CHEM="--set show.arrows=true --set show.charges=true --set show.lonePairs=true --set annot=1.5 --set sphereScale=0.3"
-HOLD="--set boilHold=${BOILHOLD:-2}"   # strokes re-jitter every 2nd drawing (motion still every drawing): a third off the file size; BOILHOLD=1 for the nervier boil
+name=${1:-dark}; here="$(cd "$(dirname "$0")" && pwd)"; out=${2:-$here/.frames/$name}
+NOTEXT="--set show.labels=false --set show.res_labels=false --set show.caption=false --set show.step_label=false"
+NOCHEM="--set show.arrows=false --set show.charges=false --set show.lone_pairs=false"
+CHEM="--set show.arrows=true --set show.charges=true --set show.lone_pairs=true --set annot=1.5 --set sphere_scale=0.3"
+HOLD="--set boil_hold=${BOILHOLD:-2}"   # strokes re-jitter every 2nd drawing (motion still every drawing): a third off the file size; BOILHOLD=1 for the nervier boil
 CREAM="--set palette.paper=#f2efe8 --set palette.ink=#0f172a --set palette.hatch=#0f172a --set palette.C=#57534e --set palette.N=#4f6fb5 --set palette.O=#ea580c --set palette.H=#faf9f5 --set palette.wash=#f97316 --set paper.wash=0.2"
 case "$name" in
   dark)              scene=$here/hero_dark.json;             look=dark-paper;  size=1920x1080; extra="$NOCHEM" ;;
@@ -26,7 +24,8 @@ case "$name" in
 esac
 # the hero looks are frozen in hero/looks/: the app's looks can change without changing the website
 pin=(); [ -f "$here/looks/$look.json" ] && pin=(--style "$here/looks/$look.json")
-node cli/render.mjs "$scene" --look "$look" ${pin[@]+"${pin[@]}"} $NOTEXT $HOLD $extra --size "$size" --frames drawn --out "$out" $SOFTWARE
+rm -rf "$out"
+molsketch render "$scene" --look "$look" ${pin[@]+"${pin[@]}"} $NOTEXT $HOLD $extra --size "$size" --frames drawn -o "$out"
 mkdir -p "$here/out"
 # three encodes, smallest first: AV1 (Chrome, Firefox, Edge, Safari 17+ on hardware with a decoder), VP9, H.264 for the rest
 ffmpeg -y -loglevel error -framerate 12 -pattern_type glob -i "$out/frame_*.png" -c:v libsvtav1 -crf 40 -preset 4 -svtav1-params tune=0 -pix_fmt yuv420p -movflags +faststart "$here/out/hero_$name.av1.mp4"

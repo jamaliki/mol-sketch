@@ -141,6 +141,16 @@ class Figure:
             if v is not None: self._style.append((f"site.{k}", v))
         return self
 
+    def fit(self, box: tuple[float, float, float, float], size: Size = DEFAULT_SIZE, *, what: str = "all") -> "Figure":
+        """Zoom and pan so the drawing fills a box of the canvas, keeping the turn (the app's Fit to frame).
+        ``box`` is ``(left, top, right, bottom)`` as fractions of the canvas, x to the right and y down:
+        ``fig.fit((0.57, 0.13, 0.92, 0.58))`` puts the drawing in the upper right. For a scene, ``what="all"`` (the
+        default) fits every keyframe, so nothing leaves the box as it animates; ``"frame"`` fits only this frame. Pass
+        the ``size`` you will save at."""
+        x0, y0, x1, y1 = box
+        r = engine().call("fitFrame", self._spec(size=size), {"x0": x0, "y0": y0, "x1": x1, "y1": y1}, what)
+        self._camera.update(zoom=r["zoom"], panX=r["panX"], panY=r["panY"]); return self
+
     def frame_site(self, size: Size = DEFAULT_SIZE) -> "Figure":
         """Turn the molecule so the site faces you with as little protein in front of it as possible, and zoom in on it
         (the app's Frame the site button). Call ``site`` first. Pass the same ``size`` you will save at, since the

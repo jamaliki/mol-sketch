@@ -12,8 +12,11 @@ cd app
 npm install
 npm run dev            # open http://localhost:5173
 npm run build          # static bundle in dist/
-npm run render -- public/examples/1A8O.pdb --look watercolour --size 1920x1440 --out out   # headless PNGs (classic engine)
 ```
+
+Headless images, videos and SVG come from the Python package, which draws with this app's engine:
+`pip install ./python`, then `molsketch render public/examples/1A8O.pdb --look watercolour -o fig.png`, or
+`molsketch serve` to run this app with its finished figures drawn by the package (see [../python](../python)).
 
 Drag a PDB, mmCIF or scene JSON file onto the canvas, use *Open…* / *Examples* in the top bar, or type a PDB ID
 (e.g. `1A8O`) and *Fetch* to load that entry from RCSB as mmCIF. Drag to rotate, shift-drag or
@@ -35,7 +38,8 @@ The side panel has one tab per task, and a search box (`/`) that finds any setti
 - **Scene** (with a scene loaded): checks, keyframes and their timing, and arrows / lone pairs / charges by clicking.
   The timeline under the drawing plays, steps and jumps to keyframes.
 - **Export**: a PNG or poster at a chosen size, the loop as a video, scene and style files, and *Copy render command*,
-  the CLI line that renders exactly what is on screen from the files *Save scene JSON* and *Save style* write.
+  the `molsketch render` line that renders exactly what is on screen from the files *Save scene JSON* and *Save style*
+  write.
 
 [../docs/hero-workflow.md](../docs/hero-workflow.md) is the route from computed states to a looping video, both in the app
 and by script. Every control edits one field of the style, which is saved in the browser and can be exported / imported
@@ -54,14 +58,14 @@ browser. While developing, `npm run dev` finds a `molsketch serve` on localhost:
 
 Three renderers share one G-buffer. The GPU resolves what is visible; the classic engine or the sketch pass draws it.
 
-**Classic (exact).** `src/classic/engine.js` is the canvas renderer of `triad-sketch.html`, verbatim. It is the
-reference look: the same code, the same seeds, the same camera, so a frame drawn here matches the page pixel for
-pixel (`scripts/mech.mjs` renders `examples/mechanism.json` at frame 28 and diffs it against
-`docs/img/mechanism_watercolour.png`: mean difference 0.0). It is what *at rest: classic*, *Render now* and the
-CLI's default engine use. Cost is the old cost (about a second for a protein, ten for the ribosome), which is why
-the app shows the GPU preview while you drag and only settles into the classic drawing once you stop.
+**Classic (exact).** `src/classic/engine.js` is MolSketch's canvas renderer and the reference look, and the only copy
+of the engine: the Python package draws with the same code, the same seeds and the same camera, so a figure from
+Python matches the app pixel for pixel (`python/tests/test_parity.py` compares them). It is what *at rest: classic*,
+*Render now* and every export use; served by `molsketch serve`, the app has the package draw them. Drawing takes a
+fraction of a second for a protein and a second or two for the ribosome, which is why the app shows the GPU preview
+while you drag and only settles into the classic drawing once you stop.
 
-The app's camera is the page's camera (`src/render/camera.ts`): the drawn atoms' bounding box in the rotated
+The app's camera is the classic engine's camera (`src/render/camera.ts`): the drawn atoms' bounding box in the rotated
 frame, an eye distance set by the field of view, the pixel scale that fits the box into the canvas minus the
 caption margins, pan as fractions of the canvas. The GPU derives its matrices from it, the classic engine runs
 its own copy of the same arithmetic, and both frame a view identically.
@@ -85,13 +89,13 @@ geometry  sticks: sphere + cylinder impostors (instanced quads, ray-cast in the 
 G-buffer  albedo + material class · view-space normal · object id + representation · linear depth
    │
    ├──► classic (at rest, by default): the original canvas engine, projecting the same atoms with the
-   │    app's camera and painting them back to front exactly as the page does.
+   │    app's camera and painting them back to front.
    │
    ├──► preview (while you drag): three screen-space passes — edge detection, coverage blur, and a
    │    style pass with paper, hatching, translucent wobbled layers and noise-jittered lines. Fast,
    │    per pixel, and only an approximation of the look.
    │
-   └──► sketch (optional at rest, `--engine sketch` in the CLI): the id and depth images are read
+   └──► sketch (optional at rest): the id and depth images are read
         back and traced into closed regions, one per visible primitive (an atom's half-sticks, a
         ribbon face of one run, a residue's patch), with every boundary segment classified as a
         silhouette (against paper or across a depth jump) or a contact (touching primitives).
@@ -121,15 +125,16 @@ src/model/     structure.ts (typed-array Structure, SS assignment, bonds), parse
 src/render/    camera.ts, gl.ts (helpers), batches.ts (instanced draws), geometry.ts (builders),
                renderer.ts (passes), shaders/gbuffer.ts, shaders/style.ts
 src/style.ts   the Style type, defaults, palettes;  src/looks.ts  the named looks
-src/classic/   engine.js (the page's canvas renderer, verbatim), adapter.ts (Structure → scene, Style → cfg,
+src/classic/   engine.js (the canvas renderer, the only engine), adapter.ts (Structure → scene, Style → cfg,
                camera → projector)
-src/ink/       strokes.ts (the stroke engine, ported from the page), paper.ts, regions.ts (label image →
+src/ink/       strokes.ts (the stroke engine, ported from the classic engine), paper.ts, regions.ts (label image →
                polygons), sketch.ts (the sketch pass)
 src/app/       panel.ts (controls generated from a schema), controls.ts (orbit), history.ts (undo), lint.ts (checks),
                diff.ts (what changes between keyframes), author.ts (hit-testing and arrow / lone pair / charge edits),
                views.ts (the view scorer), encode.ts (WebCodecs + mp4-muxer / webm-muxer)
 src/main.ts    wiring, render loop, window.MolSketch for scripts
-cli/render.mjs headless renderer (Playwright + the built app)
+src/headless/  the engine without a browser, for the Python package: a recording canvas, the figure spec, an exact port of Skia's arcTo
+cli/render.mjs the app drawn headless in Chrome (Playwright + the built app): the reference python/tests/test_parity.py compares against
 scripts/shot.mjs  development screenshots against the dev server;  scripts/mech.mjs  the pixel-identity test of the classic engine;
 scripts/features.mjs  exercises lint, diffs, authoring, keyframe edits, keyframe cameras, suggested views, undo and
                in-browser encoding headlessly;  scripts/viewsheet.mjs  a contact sheet of suggested views
@@ -144,7 +149,7 @@ Paul Tol's colour-blind-safe sets, Tableau, and the studies from jamaliki/design
 the style's `groupPaletteName`, the colours in `groupPalette`), as tiles in three families; hovering a tile previews it on
 the drawing, clicking keeps it. Under that, the groups of the loaded file with the
 colour each has now: click to override it (that is the scene's `groupColors`), right-click to hand it back to the
-palette. The same palette applies in the classic engine (`cfg.groupPalette`) and the page.
+palette. The same palette applies in the classic engine (`cfg.groupPalette`) and in Python (`fig.palette`).
 
 ## Style fields
 
@@ -156,13 +161,13 @@ interior lines), pressure, alpha. `hatch` spacing, angle, density. `water` layer
 granulation, tone. `paper` grain, wash, washSeed, washLife, washScale. `view` fov (0 = orthographic),
 fog, fogStart, light. `boilEvery` frames between re-jitters; `boilHold` drawings per re-jitter for scenes (2 keeps the motion on every drawing and the stroke jitter on every second one, which roughly halves a video's bitrate). `groupPalette` / `groupPaletteName`: see Colours.
 
-The CLI's `--set path=value` addresses these by dotted path, e.g. `--set reps.surface=polymer --set
-line.width=2 --set palette.paper=#ffffff`.
+`molsketch render --set path=value` addresses these by dotted path, e.g. `--set reps.surface=polymer --set
+line.width=2 --set palette.paper=#ffffff` (Python spells them in snake_case, `wash_seed`; both work).
 
 ## Scenes
 
-Several structure files loaded together (the file picker takes many; drop them together; `node cli/render.mjs
-step_*.pdb`) become a stack: one keyframe per file, atoms matched by residue and name, bonds inferred per file,
+Several structure files loaded together (the file picker takes many; drop them together; in Python,
+`ms.load(["step_1.pdb", "step_2.pdb", …])`) become a stack: one keyframe per file, atoms matched by residue and name, bonds inferred per file,
 2 frames per file by default. *Save scene JSON* writes it out for annotation; [../docs/mechanism-from-pdbs.md](../docs/mechanism-from-pdbs.md)
 is the workflow from a stack to a figure like the mechanism example.
 
@@ -175,15 +180,14 @@ labels and captions. The *Annotations* section switches each of those on and off
 selections, colour overrides and camera, which replace the current ones on load.
 
 ```bash
-npm run render -- public/examples/mechanism.json --look watercolour --frames drawn --out out   # every drawing
-npm run render -- public/examples/mechanism.json --look ink-colour --frames keyframes --out kf  # one per step
-npm run render -- scene.json --size 1920x1080 --fit 57,13,92,58 --write-view                   # frame it for a page, store the camera
+molsketch render public/examples/mechanism.json --look watercolour --frames drawn -o out   # every drawing
+molsketch render public/examples/mechanism.json --look ink-colour --frames keyframes -o kf  # one per step
+molsketch render scene.json --size 1920x1080 --fit 57,13,92,58 -o scene.json               # frame it for a page, store the camera
 ```
 
-The CLI's camera flags: `--yaw --pitch --roll --zoom --fov --pan X,Y`, given only when they should override the
-scene's own view; `--fit L,T,R,B` (percent of the frame) then sets zoom and pan so the drawing fills that box,
-`--fit-what frame` measures the current frame instead of every keyframe, and `--write-view [FILE]` stores the result
-in the scene JSON and stops. A scene's `path` (a computed trajectory between two keyframes), `leave`, `asNext`,
+The camera flags: `--yaw --pitch --roll --zoom --fov --pan X,Y`, given only when they should override the scene's own
+view; `--fit L,T,R,B` (percent of the frame) then sets zoom and pan so the drawing fills that box, `--fit-what frame`
+measures the current frame instead of every keyframe, and writing to a `.json` stores the result in the scene. A scene's `path` (a computed trajectory between two keyframes), `leave`, `asNext`,
 `exitDir` and `enterDir` (a cycle that closes with molecules exchanged) are in
 [../docs/scene-format.md](../docs/scene-format.md).
 
@@ -232,9 +236,10 @@ near the site's ffmpeg encodes), and *Render the loop*. WebCodecs encodes what t
 writes MP4 (AV1, H.264) or WebM (VP9), and the file downloads; a progress bar shows the size so far and the estimate.
 *Save poster (JPEG)* is the first keyframe with its arrows drawn, at the output size; *Save this frame (PNG)* the frame
 on screen. The preview canvas keeps the chosen size's aspect (letterboxed), so a fit made in *Frame* is the fit of the
-file. Chrome and Edge have VideoEncoder; Safari 17 and Firefox partly. The CLI (`cli/render.mjs` + ffmpeg, `hero/render.sh`)
-remains the way to make all three encodes at once with the tuned encoders. Per-keyframe cameras render in both.
+file. Chrome and Edge have VideoEncoder; Safari 17 and Firefox partly. `molsketch render` + ffmpeg (`hero/render.sh`) remains the
+way to make all three encodes at once with the tuned encoders. Per-keyframe cameras render in both.
 
 ## Not in the app
 
-SVG output (the canvas engine at the repository root writes it).
+SVG output without the server: *Export › Picture › Save SVG* appears when the app is served by `molsketch serve`, and
+`molsketch render … -o fig.svg` or `fig.save("fig.svg")` make one from the terminal or Python.

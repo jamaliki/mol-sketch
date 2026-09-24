@@ -220,7 +220,7 @@ function renderCommand(): string {
   const input = asScene ? name + '.json' : (R.structure?.name || 'structure') + '.pdb';
   const cam = sceneDoc ? '' : ` --yaw ${R.camera.yaw.toFixed(1)} --pitch ${R.camera.pitch.toFixed(1)} --roll ${R.camera.roll.toFixed(1)} --zoom ${R.camera.zoom.toFixed(3)} --pan ${R.camera.panX.toFixed(3)},${R.camera.panY.toFixed(3)} --fov ${R.camera.fov}`;
   const size = renderSize ? `${renderSize[0]}x${renderSize[1]}` : `${R.w}x${R.h}`;
-  return `node cli/render.mjs ${input} --style ${name}-style.json${cam} --size ${size} --frames ${sceneDoc ? 'drawn' : 1} --out out_${name}`;
+  return `molsketch render ${input} --style ${name}-style.json${cam} --size ${size}${sceneDoc ? ` --frames drawn -o out_${name}` : ` -o ${name}.png`}`;
 }
 /* the groups of what is loaded (residues, molecules, chains) and their colours, for the panel's swatches */
 function groups(): { key: string }[] {

@@ -1,9 +1,7 @@
 node_modules/
 out/
 out_*/
-.triad-sketch.tmp.html
 *.mp4
 *.webm
 .DS_Store
-.previews/
 6GZQ.cif

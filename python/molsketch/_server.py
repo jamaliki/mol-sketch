@@ -28,7 +28,7 @@ from . import __version__
 from ._engine import CoreError, engine
 
 APP = pathlib.Path(__file__).resolve().parent / "app"
-CALLS = {"frames", "info", "pocket", "frameTheSite", "labelTheSite", "atomId", "sceneJson", "catalog", "ribbons", "engineConfig"}
+CALLS = {"frames", "info", "pocket", "frameTheSite", "fitFrame", "labelTheSite", "atomId", "sceneJson", "catalog", "ribbons", "engineConfig"}
 DEV_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
 
 

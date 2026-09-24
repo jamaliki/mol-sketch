@@ -31,7 +31,7 @@ of MOLSCRIPT, on paper, with lines that boil from frame to frame so an animation
 ## Quick start
 
 ```bash
-git clone git@github.com:jamaliki/triad-sketch.git && cd triad-sketch/app
+git clone git@github.com:jamaliki/mol-sketch.git && cd mol-sketch/app
 npm install
 npm run dev            # open http://localhost:5173
 ```
@@ -92,15 +92,16 @@ watercolour lays a pale wash of the colour under darker lines.
 
 The *hand* slider is at the top of *Look › Lines*.
 
-A look sets everything at once; change anything afterwards. The app's *Looks* and the settings files in
-[`looks/`](looks) are the same set, documented setting by setting in [docs/looks.md](docs/looks.md).
+A look sets everything at once; change anything afterwards. The app's *Looks* and the style files in [`looks/`](looks)
+are the same set (the files are what *Export › Save style* writes, and *Load style*, `Figure.apply_style` and
+`molsketch render --style` read them), described look by look in [docs/looks.md](docs/looks.md).
 
 | look | | file |
 |---|---|---|
 | Watercolour | translucent washes on cream paper; the default for finished work | `looks/watercolour.json` |
 | Ink colour | pen and ink with coloured hatching on white | `looks/ink-colour.json` |
 | Ink | the same in black ink only | `looks/ink.json` |
-| Pencil | coloured-pencil scribble fills with construction lines (page only) | `looks/pencil.json` |
+| Pencil | coloured-pencil scribble fills with construction lines: any look with `fill="pencil"` | |
 | Dark paper | pastel pigment on the lab website's navy, pale ink, no wash | `looks/dark-paper.json` |
 | Chalkboard | chalk on the same navy: dusty fills, soft pitted lines | `looks/chalkboard.json` |
 | Engraved | line-shaded ribbons, black on white, after MOLSCRIPT (Kraulis 1991) | `looks/engraved.json` |
@@ -159,25 +160,23 @@ interpolates between them, draws bonds forming and breaking, and times the arrow
 
 ## The command line
 
-The app renders headlessly with the same engine, so a file from the terminal matches what the app shows.
+The Python package's `molsketch` command draws any figure from the terminal, with the same engine as the app:
 
 ```bash
-cd app && npm run build                       # the CLI renders the built app
-curl -O https://files.rcsb.org/download/5P21.cif
-node cli/render.mjs 5P21.cif --look engraved-colour --set "reps.sticks=hetatm and not water" \
-                    --yaw 60 --pitch 20 --size 1600x1200 --out out
-node cli/render.mjs public/examples/mechanism.json --look watercolour --frames drawn --out mech
-node cli/render.mjs 6GZQ.cif --look assembly-surface --turntable 72 --size 1080x1080 --out turn
-                                              # 6GZQ: the 70S ribosome, from RCSB as above
+pip install ./python
+molsketch render 5P21 --look engraved-colour --yaw 60 --pitch 20 --size 1600x1200 -o ras.png
+molsketch render 5P21 --look engraved -o ras.svg                  # a vector drawing
+molsketch render examples/mechanism.json --look watercolour -o mech.mp4
+molsketch render 6GZQ --look assembly-surface --turntable 72 --size 1080x1080 -o turn.mp4
 ```
 
 `--style` takes a style saved from the app, `--set path=value` changes one field (`palette.helix=#de9151`,
-`line.width=2`), `--fit` frames the drawing into a box of the canvas, and `node cli/render.mjs --help` lists the rest.
-In the app, *Export › Command line* copies the exact command for what is on screen.
+`line.width=2`), `--fit L,T,R,B` frames the drawing into a box of the canvas, and `molsketch render --help` lists the
+rest. Every option is in [python/docs/api.md](python/docs/api.md#the-command-line). In the app, *Export › Command line*
+copies the exact command for what is on screen.
 
-`render.js` at the top level drives the standalone page `triad-sketch.html` the same way and is the route to **SVG**:
-every line and fill as an editable vector path. It is documented, with the page's panels and every engine setting, in
-[docs/reference.md](docs/reference.md).
+The app has its own headless renderer, `app/cli/render.mjs`, which draws through Chrome. It is the reference the
+Python package is tested against (`python/tests/test_parity.py`), not a tool you need.
 
 ## Inputs and selections
 
@@ -200,35 +199,26 @@ for example `hetatm and not water`, `chain A and resi 50-120`, `subunit L`.
 
 | path | what it is |
 |---|---|
-| [`app/`](app) | the interactive app (Vite + TypeScript, WebGL2) and its headless CLI, `app/cli/render.mjs` |
-| `triad-sketch.html` | the standalone page: the drawing engine with its own panels, no server needed |
-| `render.js` | renders the page headlessly to PNG or SVG |
-| [`looks/`](looks) | the looks as settings files |
+| [`app/`](app) | the interactive app (Vite + TypeScript, WebGL2); its drawing engine, `app/src/classic/engine.js`, is the only one |
+| [`python/`](python) | the `molsketch` package: the same engine without a browser, the command line, and the server the app draws through |
+| [`looks/`](looks) | the looks as style files |
 | [`examples/`](examples) | a mechanism scene, test structures, a synthetic 12k-atom assembly |
 | [`hero/`](hero) | the lab website's animated hero, scenes and render script |
-| [`tools/`](tools) | `mech2scene.py`: a scene from computed reaction states |
+| [`tools/`](tools) | `make_images.py`: every image in this README; `mech2scene.py`: a scene from computed reaction states |
 | [`docs/`](docs) | the guides below, and the images in this README |
 
 ## Reproducing the images
 
-The looks gallery comes from `./make-previews.sh` (the commands, look by look, are in [docs/looks.md](docs/looks.md)).
-The engraved images are Ras with GppNHp and Mg²⁺ (PDB 5P21) and 7SXY, rendered with the app's CLI from `app/` after
-`npm run build`:
+Every image here except the app screenshot comes from one script, with the Python package:
 
 ```bash
-for look in engraved engraved-colour; do
-  node cli/render.mjs 5P21.cif --look $look --set "reps.sticks=hetatm and not water" \
-                      --yaw 60 --pitch 20 --size 1600x1200 --out $look
-done
-# palettes: the ribbon colours the app picks from Coastal Harvest
-# (Okabe–Ito gives #e69f00 #56b4e9 #009e73, Tol muted #cc6677 #332288 #117733)
-node cli/render.mjs 7SXY.cif --look engraved-colour --set reps.sticks= --zoom 1.15 --size 1200x900 \
-     --set palette.helix=#a799b7 --set palette.sheet=#47a8bd --set palette.loop=#de9151
+pip install ./python
+python tools/make_images.py                # everything; the ribosome takes a few minutes
+python tools/make_images.py ras palettes   # or some of it: looks, ras, palettes, protein, ribosome, turntable, styles
 ```
 
-The labelled figure is the same view of 5P21 with labels placed on Gly12 (P-loop), Tyr32 (Switch I),
-Gln61 (Switch II), the nucleotide and the magnesium ion, saved as a scene and rendered with `--look engraved-colour
---set labelSize=30 --zoom 1.3`.
+It also writes the style files in `looks/`. Each group is a short function in
+[`tools/make_images.py`](tools/make_images.py), so it doubles as a set of examples.
 
 ## Documentation
 
@@ -237,8 +227,10 @@ Gln61 (Switch II), the nucleotide and the magnesium ion, saved as a scene and re
 - [docs/scene-format.md](docs/scene-format.md): the scene JSON
 - [docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): a mechanism figure from your own structures
 - [docs/hero-workflow.md](docs/hero-workflow.md): computed states to a looping video
-- [docs/reference.md](docs/reference.md): the standalone page, `render.js`, every engine setting, performance, how
-  the drawing works, and known limitations
+- [python/README.md](python/README.md), [python/docs/api.md](python/docs/api.md) and
+  [python/docs/style.md](python/docs/style.md): the Python package, its whole API, and every style field
+- [docs/reference.md](docs/reference.md): what the engine reads from a structure, how the drawing works, performance,
+  and known limitations
 
 MolSketch was called Triad Sketch until September 2026; scripts that use `window.TriadSketch` still work.
 

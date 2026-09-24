@@ -13,6 +13,7 @@ import { classic, cfgFromStyle, sceneFromStructure, renderClassic, renderScene }
 import { sceneFitPoints, type SceneDoc } from '../classic/scene';
 import { selectAtoms } from '../model/selection';
 import { pcaBasis } from '../render/pca';
+import { Camera as ViewCamera } from '../render/camera';
 import { pocketSel, frameSite, labelSite, type FigLabel, type SiteHost } from '../app/site';
 import { RecCanvas, endRender, release, setMeasure } from './canvas';
 
@@ -180,6 +181,21 @@ export function frames(spec: FigureSpec, which: string | number = 'drawn'): numb
   else if (/^\d+-\d+$/.test(w)) { const [a, b] = w.split('-').map(Number); for (let i = a; i <= b; i++) out.push(i) }
   else out.push(+w);
   return out;
+}
+
+/** zoom and pan so the drawing fills a box of the canvas ({x0, y0, x1, y1}, fractions, x right, y down), as the app's
+    Fit to frame: `what` measures every keyframe of a scene ('all') or the atoms of this frame ('frame'). Returns the
+    camera's new zoom and pan and where the drawing now sits. */
+export function fitFrame(spec: FigureSpec, box: { x0: number; y0: number; x1: number; y1: number }, what: 'all' | 'frame' = 'all') {
+  const f = settle(spec); if (f.scene) sceneFrame(f);
+  const C = new ViewCamera(), c = f.camera;
+  Object.assign(C, { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: c.fov, base: c.base });
+  if (f.scene) { C.capFrac = f.style.show.caption ? 0.13 : 0; C.topFrac = f.style.show.stepLabel ? 0.05 : 0 }
+  const fit = f.scene ? sceneFitPoints(f.scene) : f.fitPoints; C.setFitPoints(fit);
+  let pts = fit;   // as the app's framePoints: a structure's every atom, or the scene's keyframes
+  if (f.structure && (what === 'frame' || !f.scene)) { const s = f.structure; pts = new Float32Array(s.count * 3); for (let i = 0; i < s.count; i++) { pts[i * 3] = s.x[i]; pts[i * 3 + 1] = s.y[i]; pts[i * 3 + 2] = s.z[i] } }
+  C.fitTo(box, f.W, f.H, pts);
+  return { zoom: C.zoom, panX: C.panX, panY: C.panY, box: C.screenBox(f.W, f.H, pts) };
 }
 
 /* ---- the active site, on a spec: each returns the spec's new camera / labels / site selection ---- */

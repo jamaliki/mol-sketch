@@ -15,8 +15,8 @@ it has only the end states, raise `transition` in the JSON (step 3) to 40–60 s
 
 ## 2. Load and frame
 
-In the app: *Open…* and select all the files, or drop them together on the canvas. In the
-CLI: `node cli/render.mjs step_*.pdb …`. The stack is oriented by its principal axes and the first frame
+In the app: *Open…* and select all the files, or drop them together on the canvas. In Python:
+`ms.load(sorted(glob.glob("step_*.pdb")))`. The stack is oriented by its principal axes and the first frame
 appears.
 
 Then reduce the view to the mechanism. In *Show*, set `cartoon` to nothing and `sticks` to the
@@ -59,18 +59,26 @@ Residue colours go in `groupColors` at the top level, keyed by residue and chain
 the automatic palette. Delete atoms you do not want from the keyframes, or keep them and narrow the `sticks`
 selection; the selection language is the same as in the app.
 
-Load the JSON back (drop it on the canvas) and iterate: the classic engine draws it at rest, exactly as the CLI
-will.
+Load the JSON back (drop it on the canvas) and iterate: the app draws it at rest exactly as the Python package will.
 
 ## 4. Render
 
 ```bash
-cd app && npm run build
+pip install ./python
 # one figure, the end of the first hold, at print size
-node cli/render.mjs mechanism.json --look watercolour --frames 28 --size 2400x1800 --out fig
-# the animation: one PNG per drawing, then a video
-node cli/render.mjs mechanism.json --look watercolour --frames drawn --out frames
-ffmpeg -framerate 12 -pattern_type glob -i 'frames/frame_*.png' -c:v libx264 -pix_fmt yuv420p -crf 16 mechanism.mp4
+molsketch render mechanism.json --look watercolour --frame 28 --size 2400x1800 -o fig.png
+# the animation as a video (ffmpeg), or as one PNG per drawing
+molsketch render mechanism.json --look watercolour -o mechanism.mp4
+molsketch render mechanism.json --look watercolour --frames drawn -o frames
+```
+
+or in Python:
+
+```python
+import molsketch as ms
+fig = ms.scene("mechanism.json").look("watercolour")
+fig.save("fig.png", (2400, 1800), frame=28)
+fig.animate("mechanism.mp4")
 ```
 
 `--look ink-colour` or `--set fill=pencil --set construction=true` for the other looks; `--style my.json` for
