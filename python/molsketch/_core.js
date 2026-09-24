@@ -1572,6 +1572,7 @@
       carve: 0,
       zone: "",
       finish: "drawn",
+      marks: "ink",
       smoothing: 4,
       opacity: 0.55,
       context: "hide",
@@ -4797,17 +4798,21 @@
         if (!body.length && !rest.length) return;
         const alone = !M.hasModel, op = alone ? 1 : o.opacity ?? 0.55, lineCol = o.line || inkCol, lw = o.lineWidth ?? 0.9, blur = Math.max(1, 1.6 * TEX);
         const base = mapCol, darkC = mix(mapCol, light ? "#1c2330" : "#000000", light ? 0.62 : 0.7), lite = light ? "#ffffff" : mix(mapCol, "#ffffff", 0.5);
-        const hatchy = drawn && (ink || pencil || chalk), washy = drawn && wc;
+        const hatchy = drawn && ((o.marks ?? "ink") === "ink" || ink || pencil || chalk), washy = drawn && wc && !hatchy;
         if (hatchy) {
           ctx.save();
           ringsPath(ctx, body);
           ctx.fillStyle = paperFill();
-          ctx.globalAlpha = alone ? 1 : 0.6;
+          ctx.globalAlpha = alone ? 1 : 0.45;
           ctx.fill("evenodd");
           ctx.restore();
+          if (wc) washRings(ctx, body, mapCol, seedBase + 93, { strength: alone ? 0.16 : 0.1, layers: 2, noRing: true });
           const inkColour = cfg.rep.fill === "ink colour", colorAt = () => inkColour || pencil || chalk ? mix(mapCol, P.hatch, 0.3) : P.hatch, sp = S.hatchSpacing * Math.max(0.7, TEX), ang = S.hatchAngle * Math.PI / 180;
-          hatch(ctx, sh, own, 0.4, ang, sp, colorAt, 0.7 * (o.shade ?? 0.35) / 0.35);
-          hatch(ctx, sh, own, 0.68, ang + 1.25, sp * 1.2, colorAt, 0.55 * (o.shade ?? 0.35) / 0.35);
+          const kk = (o.shade ?? 0.35) / 0.35;
+          if (alone) {
+            hatch(ctx, sh, own, 0.4, ang, sp, colorAt, 0.7 * kk);
+            hatch(ctx, sh, own, 0.68, ang + 1.25, sp * 1.2, colorAt, 0.55 * kk);
+          } else hatch(ctx, sh, own, 0.62, ang, sp * 1.3, colorAt, 0.5 * kk);
         }
         const off = hatchy ? null : document.createElement("canvas");
         if (off) {
