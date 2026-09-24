@@ -4,6 +4,8 @@ import { createClassic } from './engine.js';
 import type { Renderer } from '../render/renderer';
 import type { Structure } from '../model/structure';
 import type { Style } from '../style';
+import type { DensityMap } from '../model/map';
+import { prepareMap, mapBasis, mapLevel } from './mapprep';
 
 export type Classic = ReturnType<typeof createClassic>;
 let engine: Classic | null = null;
@@ -43,19 +45,30 @@ export function sceneFromStructure(s: Structure, style: Style, overrides: Record
     }
   }
   const bonds: [string, string, number][] = []; for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], 1]);
+  (sceneFromStructure as any).lastIds = ids;
   const fp = new Float32Array(fitPoints.length); for (let i = 0; i < fitPoints.length; i += 3) { const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]); fp[i] = r[0]; fp[i + 1] = r[1]; fp[i + 2] = r[2] }
   return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: fp, keyframes: [{ name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }] };
 }
 
 /** Draw the current structure with the classic engine onto a 2D context of the renderer's pixel size. Returns ms. */
 export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style: Style, boil: number, dpr = 1): number {
-  const t0 = performance.now(); const E = classic(); const s = R.structure; if (!s) return 0;
+  const t0 = performance.now(); const E = classic(); const s = R.structure; const map: DensityMap | null = (R as any).map || null; if (!s && !map) return 0;
   E.cfg = cfgFromStyle(style, R.camera, false);
-  E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels); (E.scene as any)._src = s;   // which structure it was built from
+  if (s) { E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels); (E.scene as any)._src = s; (E.scene as any).atomIds = (sceneFromStructure as any).lastIds }   // which structure it was built from
+  else E.scene = mapScene(map!, style, R.camera.base, R.labels);
+  (E.scene as any).map = map ? prepareMap(map, style, s, R.camera.base, (R as any).localRes || null) : null;
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, R.w, R.h); ctx.restore();
   E.renderFrame(ctx, R.w / dpr, R.h / dpr, boil, dpr);
   return performance.now() - t0;
 }
+
+/** a map on its own: a scene without atoms, fitted to the map's isosurface */
+export function mapScene(map: DensityMap, style: Style, base: Float32Array, labels: any[] = []) {
+  const em = prepareMap(map, style, null, base); const L = em.levels[em.primary] || em.levels[0];
+  return { name: map.name, fromPdb: true, reps: { sticks: '', cartoon: '', surface: '' }, groupColors: {}, labels, fitPoints: L ? L.pos : new Float32Array(0), atomIds: [],
+    keyframes: [{ name: map.name, hold: 24, transition: 0, atoms: {}, bonds: [], arrows: [] }] };
+}
+export { mapBasis, mapLevel };
 
 /** Draw a frame of a loaded scene document with the classic engine. */
 export function renderScene(ctx: CanvasRenderingContext2D, R: Renderer, style: Style, doc: any, frame: number, dpr = 1): number {

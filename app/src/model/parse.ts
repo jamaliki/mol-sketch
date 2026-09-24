@@ -35,7 +35,7 @@ function parsePDB(text: string): Structure[] {
       const alt = line.substr(16, 1).trim(); if (alt && alt !== 'A') continue;
       const name = line.substr(12, 4).trim(); let el = line.substr(76, 2).trim().toUpperCase(); if (!el) el = elementFromName(name);
       const resn = line.substr(17, 3).trim();
-      recs.push({ serial: parseInt(line.substr(6, 5)), name, el, resn, chain: line.substr(21, 1).trim(), resi: parseInt(line.substr(22, 4)), x: parseFloat(line.substr(30, 8)), y: parseFloat(line.substr(38, 8)), z: parseFloat(line.substr(46, 8)), het: rec === 'HETATM' || resn === 'HOH' });
+      recs.push({ serial: parseInt(line.substr(6, 5)), name, el, resn, chain: line.substr(21, 1).trim(), resi: parseInt(line.substr(22, 4)), x: parseFloat(line.substr(30, 8)), y: parseFloat(line.substr(38, 8)), z: parseFloat(line.substr(46, 8)), het: rec === 'HETATM' || resn === 'HOH', b: parseFloat(line.substr(60, 6)) });
     }
     return Structure.fromRecords(recs, { H, E }, {}, {});
   });
@@ -84,7 +84,7 @@ function readCIF(text: string): Record<string, Cat> {
 function parseCIF(text: string): Structure[] {
   const cats = readCIF(text); const AS = cats['_atom_site']; if (!AS) return [];
   const ci = (n: string) => AS.cols.indexOf(n);
-  const ix = { grp: ci('group_PDB'), id: ci('id'), el: ci('type_symbol'), name: ci('label_atom_id'), alt: ci('label_alt_id'), resn: ci('label_comp_id'), asym: ci('label_asym_id'), auth_asym: ci('auth_asym_id'), seq: ci('label_seq_id'), auth_seq: ci('auth_seq_id'), x: ci('Cartn_x'), y: ci('Cartn_y'), z: ci('Cartn_z'), model: ci('pdbx_PDB_model_num') };
+  const ix = { grp: ci('group_PDB'), id: ci('id'), el: ci('type_symbol'), name: ci('label_atom_id'), alt: ci('label_alt_id'), resn: ci('label_comp_id'), asym: ci('label_asym_id'), auth_asym: ci('auth_asym_id'), seq: ci('label_seq_id'), auth_seq: ci('auth_seq_id'), x: ci('Cartn_x'), y: ci('Cartn_y'), z: ci('Cartn_z'), model: ci('pdbx_PDB_model_num'), b: ci('B_iso_or_equiv') };
   const models = new Map<string, AtomRecord[]>();
   for (const r of AS.rows) {
     const m = ix.model >= 0 ? r[ix.model] : '1'; let M = models.get(m); if (!M) { M = []; models.set(m, M) }
@@ -93,7 +93,7 @@ function parseCIF(text: string): Structure[] {
     let seqS = ix.auth_seq >= 0 ? r[ix.auth_seq] : r[ix.seq]; if (seqS === '.' || seqS === '?') seqS = ix.seq >= 0 ? r[ix.seq] : '0';
     let el = (ix.el >= 0 ? r[ix.el] : '').toUpperCase(); if (!el || el === '.' || el === '?') el = elementFromName(name);
     const het = (ix.grp >= 0 ? r[ix.grp] : 'ATOM') === 'HETATM' || resn === 'HOH';
-    M.push({ serial: +r[ix.id], name, el, resn, chain, resi: parseInt(seqS), x: +r[ix.x], y: +r[ix.y], z: +r[ix.z], het });
+    M.push({ serial: +r[ix.id], name, el, resn, chain, resi: parseInt(seqS), x: +r[ix.x], y: +r[ix.y], z: +r[ix.z], het, b: ix.b >= 0 ? parseFloat(r[ix.b]) : NaN });
   }
   const H: SSRecord[] = [], E: SSRecord[] = [];
   const SC = cats['_struct_conf'];

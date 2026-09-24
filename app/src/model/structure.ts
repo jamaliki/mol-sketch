@@ -35,6 +35,8 @@ export class Structure {
   name = '';
   count = 0;
   x!: Float32Array; y!: Float32Array; z!: Float32Array;
+  /** B-factor (Å²) of each atom, NaN where the file gives none */
+  b!: Float32Array;
   element: string[] = [];
   atomName: string[] = [];
   residueOf!: Int32Array;      // atom → residue index
@@ -55,7 +57,7 @@ export class Structure {
     const order = new Map<string, AtomRecord[]>();
     for (const r of recs) { let g = order.get(key(r)); if (!g) { g = []; order.set(key(r), g) } g.push(r) }
     const n = recs.length; s.count = n;
-    s.x = new Float32Array(n); s.y = new Float32Array(n); s.z = new Float32Array(n);
+    s.x = new Float32Array(n); s.y = new Float32Array(n); s.z = new Float32Array(n); s.b = new Float32Array(n);
     s.residueOf = new Int32Array(n); s.het = new Uint8Array(n); s.flags = new Uint8Array(n);
     let ai = 0;
     const subunitOf = (d: string): Subunit => {
@@ -73,7 +75,7 @@ export class Structure {
       const res: Residue = { index: ri, chain: first.chain, resi: first.resi, resn: first.resn, atomStart: ai, atomEnd: ai + g.length, het: first.het, nucleic, trace: -1, ss: nucleic ? 'N' : 'L', entity: chainEntity[first.chain] ?? '', subunit: 'X', orient: -1 };
       res.subunit = res.entity && entities[res.entity] ? subunitOf(entities[res.entity].desc) : 'X';
       for (const a of g) {
-        s.x[ai] = a.x; s.y[ai] = a.y; s.z[ai] = a.z; s.element.push(a.el); s.atomName.push(a.name); s.residueOf[ai] = ri; s.het[ai] = a.het ? 1 : 0;
+        s.x[ai] = a.x; s.y[ai] = a.y; s.z[ai] = a.z; s.b[ai] = a.b ?? NaN; s.element.push(a.el); s.atomName.push(a.name); s.residueOf[ai] = ri; s.het[ai] = a.het ? 1 : 0;
         if (nucleic) { if (a.name === 'P') res.trace = ai; else if (res.trace < 0 && a.name === "C4'") res.trace = ai; if (a.name === "C1'") res.orient = ai }
         else { if (a.name === 'CA') res.trace = ai; if (a.name === 'O') res.orient = ai }
         ai++;
@@ -159,4 +161,4 @@ export class Structure {
   }
 }
 
-export interface AtomRecord { serial: number; name: string; el: string; resn: string; chain: string; resi: number; x: number; y: number; z: number; het: boolean }
+export interface AtomRecord { serial: number; name: string; el: string; resn: string; chain: string; resi: number; x: number; y: number; z: number; het: boolean; b?: number }

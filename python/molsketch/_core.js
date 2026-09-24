@@ -1091,6 +1091,7 @@
     labelTheSite: () => labelTheSite,
     pocket: () => pocket,
     put: () => put,
+    putMap: () => putMap,
     render: () => render,
     ribbons: () => ribbons,
     sceneJson: () => sceneJson,
@@ -1108,6 +1109,8 @@
       __publicField(this, "x");
       __publicField(this, "y");
       __publicField(this, "z");
+      /** B-factor (Å²) of each atom, NaN where the file gives none */
+      __publicField(this, "b");
       __publicField(this, "element", []);
       __publicField(this, "atomName", []);
       __publicField(this, "residueOf");
@@ -1140,6 +1143,7 @@
       s.x = new Float32Array(n);
       s.y = new Float32Array(n);
       s.z = new Float32Array(n);
+      s.b = new Float32Array(n);
       s.residueOf = new Int32Array(n);
       s.het = new Uint8Array(n);
       s.flags = new Uint8Array(n);
@@ -1162,6 +1166,7 @@
           s.x[ai] = a.x;
           s.y[ai] = a.y;
           s.z[ai] = a.z;
+          s.b[ai] = a.b ?? NaN;
           s.element.push(a.el);
           s.atomName.push(a.name);
           s.residueOf[ai] = ri;
@@ -1376,7 +1381,7 @@
         let el = line.substr(76, 2).trim().toUpperCase();
         if (!el) el = elementFromName(name);
         const resn = line.substr(17, 3).trim();
-        recs.push({ serial: parseInt(line.substr(6, 5)), name, el, resn, chain: line.substr(21, 1).trim(), resi: parseInt(line.substr(22, 4)), x: parseFloat(line.substr(30, 8)), y: parseFloat(line.substr(38, 8)), z: parseFloat(line.substr(46, 8)), het: rec === "HETATM" || resn === "HOH" });
+        recs.push({ serial: parseInt(line.substr(6, 5)), name, el, resn, chain: line.substr(21, 1).trim(), resi: parseInt(line.substr(22, 4)), x: parseFloat(line.substr(30, 8)), y: parseFloat(line.substr(38, 8)), z: parseFloat(line.substr(46, 8)), het: rec === "HETATM" || resn === "HOH", b: parseFloat(line.substr(60, 6)) });
       }
       return Structure.fromRecords(recs, { H, E }, {}, {});
     });
@@ -1477,7 +1482,7 @@
     const AS = cats["_atom_site"];
     if (!AS) return [];
     const ci = (n) => AS.cols.indexOf(n);
-    const ix = { grp: ci("group_PDB"), id: ci("id"), el: ci("type_symbol"), name: ci("label_atom_id"), alt: ci("label_alt_id"), resn: ci("label_comp_id"), asym: ci("label_asym_id"), auth_asym: ci("auth_asym_id"), seq: ci("label_seq_id"), auth_seq: ci("auth_seq_id"), x: ci("Cartn_x"), y: ci("Cartn_y"), z: ci("Cartn_z"), model: ci("pdbx_PDB_model_num") };
+    const ix = { grp: ci("group_PDB"), id: ci("id"), el: ci("type_symbol"), name: ci("label_atom_id"), alt: ci("label_alt_id"), resn: ci("label_comp_id"), asym: ci("label_asym_id"), auth_asym: ci("auth_asym_id"), seq: ci("label_seq_id"), auth_seq: ci("auth_seq_id"), x: ci("Cartn_x"), y: ci("Cartn_y"), z: ci("Cartn_z"), model: ci("pdbx_PDB_model_num"), b: ci("B_iso_or_equiv") };
     const models = /* @__PURE__ */ new Map();
     for (const r of AS.rows) {
       const m = ix.model >= 0 ? r[ix.model] : "1";
@@ -1495,7 +1500,7 @@
       let el = (ix.el >= 0 ? r[ix.el] : "").toUpperCase();
       if (!el || el === "." || el === "?") el = elementFromName(name);
       const het = (ix.grp >= 0 ? r[ix.grp] : "ATOM") === "HETATM" || resn === "HOH";
-      M.push({ serial: +r[ix.id], name, el, resn, chain, resi: parseInt(seqS), x: +r[ix.x], y: +r[ix.y], z: +r[ix.z], het });
+      M.push({ serial: +r[ix.id], name, el, resn, chain, resi: parseInt(seqS), x: +r[ix.x], y: +r[ix.y], z: +r[ix.z], het, b: ix.b >= 0 ? parseFloat(r[ix.b]) : NaN });
     }
     const H = [], E = [];
     const SC = cats["_struct_conf"];
@@ -1558,6 +1563,23 @@
     site: { sel: "", cutaway: true, quiet: 0.35, scale: 1.9 },
     surfaceColor: "subunit",
     surfaceDepth: { edges: 1, pooling: 1, fade: 1 },
+    map: {
+      style: "surface",
+      level: null,
+      smooth: "auto",
+      crop: 8,
+      levels: [0.7, 1, 1.5],
+      carve: 0,
+      color: "model",
+      unexplained: true,
+      unsupported: true,
+      localResolution: "none",
+      layer: "auto",
+      caption: true,
+      maxVoxels: 192,
+      meshSpacing: 1,
+      slice: { offset: 0, cut: true }
+    },
     reps: { sticks: "hetatm and not water", cartoon: "polymer", surface: "" },
     stickRadius: 0.2,
     cartoonScale: 1,
@@ -2229,6 +2251,19 @@
       const cr = Math.cos(VIEW_ROLL * Math.PI / 180), sr = Math.sin(VIEW_ROLL * Math.PI / 180);
       return [x1 * cr - y1 * sr, x1 * sr + y1 * cr, z2];
     }
+    function unrot3(r, cy, sy, cp, sp) {
+      let x1 = r[0], y1 = r[1];
+      const z2 = r[2];
+      if (VIEW_ROLL) {
+        const cr = Math.cos(VIEW_ROLL * Math.PI / 180), sr = Math.sin(VIEW_ROLL * Math.PI / 180);
+        const a = x1 * cr + y1 * sr, b = -x1 * sr + y1 * cr;
+        x1 = a;
+        y1 = b;
+      }
+      const y = y1 * cp + z2 * sp, z1 = -y1 * sp + z2 * cp;
+      const x = x1 * cy - z1 * sy, z = x1 * sy + z1 * cy;
+      return [x + FIT.cx, y + FIT.cy, z + FIT.cz];
+    }
     let VIEW_YAW = 0, VIEW_PITCH = 0, VIEW_ROLL = 0, VIEW_ZOOM = 1, VIEW_PANX = 0, VIEW_PANY = 0;
     let TEX = 1;
     function computeFit() {
@@ -2314,6 +2349,15 @@
         dir2(v) {
           const r = this.rot([v[0] + FIT.cx, v[1] + FIT.cy, v[2] + FIT.cz]);
           return [r[0], -r[1]];
+        },
+        /** the point of the scene at screen (x, y) and view depth rz (the rotated frame's z): proj's inverse */
+        unproj(x, y, rz) {
+          const d = D === Infinity ? 1 : clamp(D / (D - rz), 0.2, 4);
+          return unrot3([(x - ox - FIT.rx * base) / (base * d) + FIT.rx, (oy - y - FIT.ry * base) / (base * d) + FIT.ry, rz], cy, sy, cp, sp);
+        },
+        /** where the eye is, in the rotated frame (null: orthographic, looking down −z) */
+        eye() {
+          return D === Infinity ? null : [FIT.rx, FIT.ry, D];
         }
       };
     }
@@ -4137,6 +4181,662 @@
       for (let s = -R + spacing * rng(); s < R; s += spacing * (0.85 + 0.3 * rng())) sketchLine(ctx, [[cx + nx * s - dx * R, cy + ny * s - dy * R], [cx + nx * s + dx * R, cy + ny * s + dy * R]], { seed: (o.seed | 0) + Math.round(s * 10), passes: 1, width: o.width, color: o.color, alpha: o.alpha, ampScale: 0.5, step: 5, overshoot: false });
       ctx.restore();
     }
+    function mapRaster(L, px, py, pz, W, H) {
+      const zb = new Float32Array(W * H).fill(-1e9), tb = new Int32Array(W * H).fill(-1), tri = L.tri;
+      for (let t = 0; t < tri.length; t += 3) {
+        const a = tri[t], b = tri[t + 1], c = tri[t + 2];
+        const ax = px[a], ay = py[a], bx = px[b], by = py[b], cx = px[c], cy = py[c];
+        const area = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+        if (Math.abs(area) < 1e-9) continue;
+        const x0 = Math.max(0, Math.floor(Math.min(ax, bx, cx))), x1 = Math.min(W - 1, Math.ceil(Math.max(ax, bx, cx))), y0 = Math.max(0, Math.floor(Math.min(ay, by, cy))), y1 = Math.min(H - 1, Math.ceil(Math.max(ay, by, cy)));
+        const inv = 1 / area;
+        for (let y = y0; y <= y1; y++) {
+          const qy = y + 0.5;
+          for (let x = x0; x <= x1; x++) {
+            const qx = x + 0.5;
+            const w0 = ((bx - qx) * (cy - qy) - (by - qy) * (cx - qx)) * inv, w1 = ((cx - qx) * (ay - qy) - (cy - qy) * (ax - qx)) * inv, w2 = 1 - w0 - w1;
+            if (w0 < 0 || w1 < 0 || w2 < 0) continue;
+            const z = w0 * pz[a] + w1 * pz[b] + w2 * pz[c], i = y * W + x;
+            if (z > zb[i]) {
+              zb[i] = z;
+              tb[i] = t / 3;
+            }
+          }
+        }
+      }
+      return { zb, tb };
+    }
+    function maskRings(mask, W, H, x0 = 0, y0 = 0, x1 = W - 1, y1 = H - 1) {
+      const pts = [], segA = [], segB = [], keyIx = /* @__PURE__ */ new Map();
+      const id = (x, y) => {
+        const k = Math.round(x * 2) * 65536 + Math.round(y * 2);
+        let i = keyIx.get(k);
+        if (i === void 0) {
+          i = pts.length;
+          pts.push([x, y]);
+          keyIx.set(k, i);
+        }
+        return i;
+      };
+      const at = (x, y) => x < 0 || y < 0 || x >= W || y >= H ? 0 : mask[y * W + x];
+      const E = { T: (x, y) => [x + 1, y + 0.5], R: (x, y) => [x + 1.5, y + 1], B: (x, y) => [x + 1, y + 1.5], L: (x, y) => [x + 0.5, y + 1] };
+      const CASES = { 1: ["LT"], 2: ["TR"], 3: ["LR"], 4: ["RB"], 5: ["LT", "RB"], 6: ["TB"], 7: ["LB"], 8: ["BL"], 9: ["BT"], 10: ["TR", "BL"], 11: ["BR"], 12: ["RL"], 13: ["RT"], 14: ["TL"] };
+      for (let y = y0 - 1; y <= y1; y++) for (let x = x0 - 1; x <= x1; x++) {
+        const idx = at(x, y) | at(x + 1, y) << 1 | at(x + 1, y + 1) << 2 | at(x, y + 1) << 3;
+        if (idx === 0 || idx === 15) continue;
+        for (const pq of CASES[idx]) {
+          const p = E[pq[0]](x, y), q = E[pq[1]](x, y);
+          segA.push(id(p[0], p[1]));
+          segB.push(id(q[0], q[1]));
+        }
+      }
+      const adj = /* @__PURE__ */ new Map();
+      for (let i = 0; i < segA.length; i++) for (const k of [segA[i], segB[i]]) {
+        let l = adj.get(k);
+        if (!l) adj.set(k, l = []);
+        l.push(i);
+      }
+      const used = new Uint8Array(segA.length), rings = [];
+      for (let s0 = 0; s0 < segA.length; s0++) {
+        if (used[s0]) continue;
+        used[s0] = 1;
+        const start = segA[s0];
+        let cur = segB[s0];
+        const ring = [pts[start]];
+        for (let guard = 0; guard < 4e6 && cur !== start; guard++) {
+          ring.push(pts[cur]);
+          const nx = (adj.get(cur) || []).find((j) => !used[j]);
+          if (nx === void 0) break;
+          used[nx] = 1;
+          cur = segA[nx] === cur ? segB[nx] : segA[nx];
+        }
+        if (ring.length >= 3) rings.push(simplifyRing(ring, 0.6));
+      }
+      return rings.filter((r) => r.length >= 3 && Math.abs(ringArea(r)) > 3);
+    }
+    function ringArea(r) {
+      let a = 0;
+      for (let i = 0; i < r.length; i++) {
+        const p = r[i], q = r[(i + 1) % r.length];
+        a += p[0] * q[1] - q[0] * p[1];
+      }
+      return a / 2;
+    }
+    function simplifyRing(r, eps) {
+      const dp = (pts) => {
+        if (pts.length < 3) return pts;
+        let dm = 0, im = 0;
+        const a = pts[0], b = pts[pts.length - 1], L = Math.hypot(b[0] - a[0], b[1] - a[1]) || 1;
+        for (let i = 1; i < pts.length - 1; i++) {
+          const d = Math.abs((b[0] - a[0]) * (a[1] - pts[i][1]) - (a[0] - pts[i][0]) * (b[1] - a[1])) / L;
+          if (d > dm) {
+            dm = d;
+            im = i;
+          }
+        }
+        if (dm <= eps) return [a, b];
+        const l = dp(pts.slice(0, im + 1)), rr = dp(pts.slice(im));
+        return l.slice(0, -1).concat(rr);
+      };
+      const h = Math.floor(r.length / 2);
+      return dp(r.slice(0, h + 1)).slice(0, -1).concat(dp(r.slice(h).concat([r[0]])).slice(0, -1));
+    }
+    function ringsPath(ctx, rings) {
+      ctx.beginPath();
+      for (const r of rings) {
+        r.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]));
+        ctx.closePath();
+      }
+    }
+    function washRings(ctx, rings, col, seed, o) {
+      const rng = mulberry32(seed + 909), layers = o.layers || 5, light = luminance(cfg.palette.paper) > 0.5;
+      const def = (v, sc) => rings.map((r) => wcDeform(r, sc > 1 ? 2 : 1, v, rng));
+      ctx.save();
+      ctx.globalCompositeOperation = o.offscreen ? "source-over" : light ? "multiply" : "screen";
+      for (let L = 0; L < layers; L++) {
+        const lay = def(0.04 + rng() * 0.05, 2);
+        ringsPath(ctx, lay);
+        ctx.fillStyle = rgba(col, (o.strength || 0.7) / layers * 1.15);
+        ctx.fill("evenodd");
+      }
+      if (!o.noRing) {
+        const lay = def(0.02, 1);
+        ringsPath(ctx, lay);
+        ctx.lineWidth = 0.8;
+        ctx.strokeStyle = rgba(mix(col, shadeInk(), 0.3), 0.22 * (o.strength || 0.7));
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    function buildMap(items, st, pos, proj, seedBase) {
+      const M = scene.map, o = M.opts, P = cfg.palette, S = cfg.style, W = Math.max(1, Math.round(RF.W)), H = Math.max(1, Math.round(RF.H));
+      const EDG = cfg.rep.surfEdges || 0, POOL = cfg.rep.surfPool || 0, FADE = cfg.rep.surfFade || 0, ink = cfg.rep.fill === "ink" || cfg.rep.fill === "ink colour", chalk = isChalk(), wc = isWC(), pencil = cfg.rep.fill === "pencil";
+      const light = luminance(P.paper) > 0.5, inkCol = P.ink, eye = proj.eye();
+      const colFor = surfaceColour(), byIndex = scene.atomIds || [], atomsById = {};
+      for (const a of st.atoms) atomsById[a.id] = a;
+      const classes = [], classIx = /* @__PURE__ */ new Map();
+      const classOf = (c) => {
+        let i = classIx.get(c);
+        if (i === void 0) {
+          i = classes.length;
+          classes.push(c);
+          classIx.set(c, i);
+        }
+        return i;
+      };
+      const mapCol = P.surface, accent = P.accent, contextCol = mix(P.surface, P.paper, 0.5);
+      const prep = (L) => {
+        const n = L.pos.length / 3, px = new Float32Array(n), py = new Float32Array(n), pz = new Float32Array(n), fog = new Float32Array(n), rn = new Float32Array(n * 3), cls = new Int32Array(n);
+        for (let v = 0; v < n; v++) {
+          const p = proj.proj([L.pos[v * 3], L.pos[v * 3 + 1], L.pos[v * 3 + 2]]);
+          px[v] = p.x;
+          py[v] = p.y;
+          pz[v] = p.z;
+          fog[v] = p.fog;
+          const r = proj.rot([L.nor[v * 3] + FIT.cx, L.nor[v * 3 + 1] + FIT.cy, L.nor[v * 3 + 2] + FIT.cz]);
+          rn[v * 3] = r[0];
+          rn[v * 3 + 1] = r[1];
+          rn[v * 3 + 2] = r[2];
+        }
+        const far = new Uint8Array(n);
+        if (M.hasModel && o.unexplained) for (let v = 0; v < n; v++) far[v] = L.dist[v] > 3.4 ? 1 : 0;
+        const comp = new Int32Array(n).fill(-1);
+        if (M.hasModel && o.unexplained) {
+          const par = new Int32Array(n);
+          for (let v = 0; v < n; v++) par[v] = v;
+          const find = (x) => {
+            while (par[x] !== x) {
+              par[x] = par[par[x]];
+              x = par[x];
+            }
+            return x;
+          };
+          for (let t = 0; t < L.tri.length; t += 3) {
+            const a = L.tri[t], b = L.tri[t + 1], c = L.tri[t + 2];
+            if (far[a] && far[b]) par[find(a)] = find(b);
+            if (far[b] && far[c]) par[find(b)] = find(c);
+            if (far[a] && far[c]) par[find(a)] = find(c);
+          }
+          let explained = 0;
+          for (let v = 0; v < n; v++) if (!far[v]) explained++;
+          const size = /* @__PURE__ */ new Map();
+          for (let v = 0; v < n; v++) if (far[v]) {
+            const r = find(v);
+            size.set(r, (size.get(r) || 0) + 1);
+          }
+          for (let v = 0; v < n; v++) if (far[v]) {
+            const k = size.get(find(v));
+            comp[v] = k < 24 ? 0 : k <= 0.1 * explained ? 1 : 2;
+          }
+        }
+        for (let v = 0; v < n; v++) {
+          let c = mapCol;
+          if (comp[v] === 1) c = accent;
+          else if (comp[v] === 2) c = contextCol;
+          else if (o.color === "model" && L.near[v] >= 0) {
+            const a = atomsById[byIndex[L.near[v]]];
+            if (a) c = colFor(a);
+          }
+          cls[v] = classOf(c);
+        }
+        return { ...L, px, py, pz, fog, rn, cls };
+      };
+      const levels = M.levels.map(prep), main = levels[M.primary] || levels[0];
+      const style = o.style, layer = o.layer === "auto" ? style === "slice" ? "plane" : style === "surface" ? M.hasModel ? "under" : "over" : "over" : o.layer;
+      const zItem = layer === "under" ? -1e9 : layer === "over" ? 1e9 : 0;
+      const silhouettes = (L, buf) => {
+        const n = L.pos.length / 3, f2 = new Float32Array(n);
+        for (let v = 0; v < n; v++) {
+          let vx = 0, vy = 0, vz = 1;
+          if (eye) {
+            const r = proj.rot([L.pos[v * 3], L.pos[v * 3 + 1], L.pos[v * 3 + 2]]);
+            vx = eye[0] - r[0];
+            vy = eye[1] - r[1];
+            vz = eye[2] - r[2];
+            const l = Math.hypot(vx, vy, vz) || 1;
+            vx /= l;
+            vy /= l;
+            vz /= l;
+          }
+          f2[v] = L.rn[v * 3] * vx + L.rn[v * 3 + 1] * vy + L.rn[v * 3 + 2] * vz;
+        }
+        const segs = [];
+        const tri = L.tri;
+        for (let t = 0; t < tri.length; t += 3) {
+          const vs = [tri[t], tri[t + 1], tri[t + 2]];
+          const pts = [];
+          for (let e = 0; e < 3; e++) {
+            const a = vs[e], b = vs[(e + 1) % 3];
+            if (f2[a] > 0 !== f2[b] > 0) {
+              const u = f2[a] / (f2[a] - f2[b]);
+              pts.push({
+                x: L.px[a] + (L.px[b] - L.px[a]) * u,
+                y: L.py[a] + (L.py[b] - L.py[a]) * u,
+                z: L.pz[a] + (L.pz[b] - L.pz[a]) * u,
+                h: L.hand ? L.hand[a] + (L.hand[b] - L.hand[a]) * u : 0,
+                fog: L.fog[a] + (L.fog[b] - L.fog[a]) * u,
+                k: a < b ? a + "_" + b : b + "_" + a,
+                nx: L.rn[a * 3],
+                ny: -L.rn[a * 3 + 1]
+              });
+            }
+          }
+          if (pts.length === 2) segs.push(pts);
+        }
+        const byKey = /* @__PURE__ */ new Map();
+        segs.forEach((s, i) => {
+          for (const p of s) {
+            let l = byKey.get(p.k);
+            if (!l) byKey.set(p.k, l = []);
+            l.push(i);
+          }
+        });
+        const used = new Uint8Array(segs.length), lines2 = [];
+        for (let i = 0; i < segs.length; i++) {
+          if (used[i]) continue;
+          used[i] = 1;
+          const line = [segs[i][0], segs[i][1]];
+          for (const tail of [1, 0]) {
+            for (; ; ) {
+              const end = tail ? line[line.length - 1] : line[0];
+              const nx = (byKey.get(end.k) || []).find((j) => !used[j]);
+              if (nx === void 0) break;
+              used[nx] = 1;
+              const s = segs[nx];
+              const far = s[0].k === end.k ? s[1] : s[0];
+              if (tail) line.push(far);
+              else line.unshift(far);
+            }
+          }
+          lines2.push(line);
+        }
+        const vis = (p) => {
+          const x = Math.floor(p.x), y = Math.floor(p.y);
+          if (x < 0 || y < 0 || x >= W || y >= H) return false;
+          return buf.zb[y * W + x] <= p.z + 2.2;
+        };
+        const out = [];
+        for (const line of lines2) {
+          let run = [];
+          for (const p of line) {
+            if (vis(p)) {
+              const L2 = Math.hypot(p.nx, p.ny) || 1, qx = Math.floor(p.x + p.nx / L2 * 3), qy = Math.floor(p.y + p.ny / L2 * 3);
+              const zb = qx < 0 || qy < 0 || qx >= W || qy >= H ? -1e9 : buf.zb[qy * W + qx];
+              p.gap = zb < -1e8 ? 1 : clamp((p.z - zb - 1.5) / 8, 0, 1);
+              run.push(p);
+            } else {
+              if (run.length > 1) out.push(run);
+              run = [];
+            }
+          }
+          if (run.length > 1) out.push(run);
+        }
+        return out;
+      };
+      const drawLines = (ctx, lines2, o2) => {
+        let k = 0;
+        for (const line of lines2) {
+          let cur = [], hb = -1;
+          const flush2 = () => {
+            if (cur.length > 1) {
+              const h = (hb + 0.5) / 3, g2 = cur.reduce((s, p) => s + (p.gap ?? 1), 0) / cur.length, fg = cur.reduce((s, p) => s + p.fog, 0) / cur.length, fk = 1 - FADE * fg * 0.8;
+              sketchLine(ctx, cur.map((p) => [p.x, p.y]), { seed: seedBase + 1301 + k++, passes: h > 0.5 ? 2 : 1, width: o2.width * (EDG > 0 ? 0.55 + 0.75 * g2 * EDG + 0.25 * (1 - EDG) : 1) * (0.75 + 0.25 * fk), color: o2.color, alpha: o2.alpha * (1 - 0.35 * h) * (0.4 + 0.6 * fk), ampScale: 0.55 + 1.9 * h, step: 3, overshoot: false });
+            }
+          };
+          for (const p of line) {
+            const b = L0hand(p.h);
+            if (b !== hb && cur.length) {
+              cur.push(p);
+              flush2();
+              cur = [p];
+            } else cur.push(p);
+            hb = b;
+          }
+          flush2();
+        }
+      };
+      const L0hand = (h) => main.hand ? Math.min(2, Math.floor(h * 3)) : 0;
+      const shadeOf = (L, buf) => {
+        const n = W * H, dark = new Float32Array(n), fogp = new Float32Array(n), cls = new Int32Array(n).fill(-1), hand2 = new Float32Array(n);
+        const la = S.lightAngle * Math.PI / 180, l0 = Math.cos(la) * 0.75, l1 = -Math.sin(la) * 0.75, l2 = 0.66, occR = 6 * proj.pxPerA;
+        for (let i = 0; i < n; i++) {
+          const t = buf.tb[i];
+          if (t < 0) continue;
+          const a = L.tri[t * 3], b = L.tri[t * 3 + 1], c = L.tri[t * 3 + 2];
+          const nx = L.rn[a * 3] + L.rn[b * 3] + L.rn[c * 3], ny = L.rn[a * 3 + 1] + L.rn[b * 3 + 1] + L.rn[c * 3 + 1], nz = L.rn[a * 3 + 2] + L.rn[b * 3 + 2] + L.rn[c * 3 + 2], ln = Math.hypot(nx, ny, nz) || 1;
+          const lam = Math.max(0, (nx * l0 + ny * l1 * -1 + nz * l2) / ln);
+          let occ = 0;
+          if (POOL > 0) {
+            const x = i % W, y = i / W | 0, z = buf.zb[i];
+            let s = 0;
+            for (let k = 0; k < 8; k++) {
+              const an = k * Math.PI / 4, qx = Math.round(x + Math.cos(an) * occR), qy = Math.round(y + Math.sin(an) * occR);
+              if (qx >= 0 && qy >= 0 && qx < W && qy < H) {
+                const zq = buf.zb[qy * W + qx];
+                if (zq > -1e8) s += clamp((zq - z - 1) / 6, 0, 1);
+              }
+            }
+            occ = s / 8;
+          }
+          dark[i] = clamp(0.62 * (1 - lam) * S.shading / 0.65 + 0.9 * POOL * occ, 0, 1);
+          fogp[i] = (L.fog[a] + L.fog[b] + L.fog[c]) / 3;
+          cls[i] = L.cls[a];
+          hand2[i] = L.hand ? (L.hand[a] + L.hand[b] + L.hand[c]) / 3 : 0;
+        }
+        softenCovered(dark, buf.tb, W, H, Math.max(1, Math.round(2.5 * TEX)));
+        return { dark, fogp, cls, hand: hand2 };
+      };
+      const bbox = (test) => {
+        let x0 = W, y0 = H, x1 = -1, y1 = -1;
+        for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (test(y * W + x)) {
+          if (x < x0) x0 = x;
+          if (x > x1) x1 = x;
+          if (y < y0) y0 = y;
+          if (y > y1) y1 = y;
+        }
+        return x1 < 0 ? null : [x0, y0, x1, y1];
+      };
+      const regions = (test) => {
+        const m = new Uint8Array(W * H);
+        for (let i = 0; i < m.length; i++) m[i] = test(i) ? 1 : 0;
+        const b = bbox((i) => m[i]);
+        return b ? maskRings(m, W, H, b[0], b[1], b[2], b[3]) : [];
+      };
+      const hatch = (ctx, sh, covered, t, ang, sp, colorAt, alpha) => {
+        const dx = Math.cos(ang), dy = Math.sin(ang), nx = -dy, ny = dx, R = Math.hypot(W, H) / 2, cx = W / 2, cy = H / 2;
+        let k = 0;
+        for (let s = -R; s < R; s += sp) {
+          let run = null;
+          const step = 1.5;
+          const end = () => {
+            if (run && run.n > 2) {
+              const c = colorAt(run.c), hh = run.h / run.n, fg = run.f / run.n;
+              sketchLine(ctx, [run.a, run.b], { seed: seedBase + 7001 + k++, passes: 1, width: 0.7 * TEX, color: c, alpha: alpha * clamp(0.35 + 0.8 * run.d / run.n, 0, 1) * (1 - 0.6 * FADE * fg), ampScale: 0.4 + 1.6 * hh, step: 5, overshoot: false });
+            }
+            run = null;
+          };
+          for (let u = -R; u < R; u += step) {
+            const x = cx + nx * s + dx * u, y = cy + ny * s + dy * u, xi = Math.floor(x), yi = Math.floor(y);
+            const i = xi >= 0 && yi >= 0 && xi < W && yi < H ? yi * W + xi : -1, on = i >= 0 && covered(i) && sh.dark[i] >= t;
+            if (on && run && sh.cls[i] !== run.c) end();
+            if (on) {
+              if (!run) run = { a: [x, y], b: [x, y], n: 0, d: 0, h: 0, f: 0, c: sh.cls[i] };
+              run.b = [x, y];
+              run.n++;
+              run.d += sh.dark[i];
+              run.h += sh.hand[i];
+              run.f += sh.fogp[i];
+            } else end();
+          }
+          end();
+        }
+      };
+      const surfaceItem = (L, buf, sh, strength, withLines) => (ctx) => {
+        ctx.save();
+        const covered = (i) => buf.tb[i] >= 0;
+        const all = regions(covered);
+        if (!all.length) {
+          ctx.restore();
+          return;
+        }
+        const opaque = layer !== "over" || !wc;
+        if (opaque || ink || pencil || chalk) {
+          ringsPath(ctx, all);
+          ctx.fillStyle = paperFill();
+          ctx.fill("evenodd");
+        }
+        const byClass = classes.map((c, ci) => ({ c, rings: regions((i) => buf.tb[i] >= 0 && sh.cls[i] === ci) }));
+        if (wc) {
+          for (const { c, rings } of byClass) if (rings.length) washRings(ctx, rings, c, seedBase + 71 + classIx.get(c), { strength: (c === contextCol ? 0.22 : 0.42) * strength, layers: 4 });
+          const ctxIx = classIx.has(contextCol) ? classIx.get(contextCol) : -2, lit = (i) => covered(i) && sh.cls[i] !== ctxIx;
+          const g1 = regions((i) => lit(i) && sh.dark[i] > 0.34), g2 = regions((i) => lit(i) && sh.dark[i] > 0.6);
+          const glaze = mix(P.paper, shadeInk(), light ? 0.55 : 0.4);
+          if (g1.length) washRings(ctx, g1, glaze, seedBase + 501, { strength: 0.26 * strength, layers: 3, noRing: true });
+          if (g2.length) washRings(ctx, g2, glaze, seedBase + 502, { strength: 0.24 * strength, layers: 3, noRing: true });
+        } else if (!ink && !pencil && !chalk) {
+          for (const { c, rings } of byClass) if (rings.length) {
+            ringsPath(ctx, rings);
+            ctx.fillStyle = fillFor(c);
+            ctx.fill("evenodd");
+          }
+          const g1 = regions((i) => covered(i) && sh.dark[i] > 0.34);
+          if (g1.length) {
+            ringsPath(ctx, g1);
+            ctx.fillStyle = rgba(shadeInk(), 0.16 * (cfg.rep.fill === "wash" ? 0.6 : 1));
+            ctx.fill("evenodd");
+          }
+        } else if (pencil || chalk) {
+          for (const { c, rings } of byClass) {
+            if (!rings.length) continue;
+            ctx.save();
+            ringsPath(ctx, rings);
+            ctx.clip("evenodd");
+            let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+            for (const r of rings) for (const q of r) {
+              x0 = Math.min(x0, q[0]);
+              y0 = Math.min(y0, q[1]);
+              x1 = Math.max(x1, q[0]);
+              y1 = Math.max(y1, q[1]);
+            }
+            if (pencil) {
+              ctx.fillStyle = rgba(fillFor(c), 0.3);
+              ctx.fill("evenodd");
+            }
+            scribbleFill(ctx, x0, y0, x1, y1, c, seedBase + 901 + classIx.get(c), { fog: 0, d: 1 });
+            ctx.restore();
+          }
+        }
+        if (ink || pencil || chalk || cfg.rep.fill === "flat" && S.shading > 0) {
+          const inkColour = cfg.rep.fill === "ink colour", colorAt = (ci) => inkColour || pencil || chalk ? mix(classes[ci] || mapCol, P.hatch, 0.15) : P.hatch, sp = S.hatchSpacing * Math.max(0.7, TEX), ang = S.hatchAngle * Math.PI / 180;
+          hatch(ctx, sh, covered, inkColour ? 0.12 : 0.3, ang, sp, colorAt, inkColour ? 0.85 : 0.75);
+          hatch(ctx, sh, covered, 0.6, ang + 1.25, sp * 1.2, colorAt, 0.6);
+        }
+        if (FADE > 0) {
+          const far = regions((i) => covered(i) && sh.fogp[i] > 0.35);
+          if (far.length) {
+            ringsPath(ctx, far);
+            ctx.fillStyle = rgba(P.paper, 0.35 * FADE);
+            ctx.fill("evenodd");
+          }
+        }
+        if (withLines) {
+          const lines2 = silhouettes(L, buf);
+          drawLines(ctx, lines2, { width: S.inkWidth * 0.95 * (chalk ? 1.3 : 1), color: wc ? mix(mapCol, shadeInk(), 0.6) : inkCol, alpha: 0.9 });
+          const seams = [];
+          for (let t = 0; t < L.tri.length; t += 3) {
+            const vs = [L.tri[t], L.tri[t + 1], L.tri[t + 2]];
+            const m = [];
+            for (let e = 0; e < 3; e++) {
+              const a = vs[e], b = vs[(e + 1) % 3];
+              if (L.cls[a] !== L.cls[b]) m.push({ x: (L.px[a] + L.px[b]) / 2, y: (L.py[a] + L.py[b]) / 2, z: Math.max(L.pz[a], L.pz[b]), fog: L.fog[a], h: L.hand ? L.hand[a] : 0, gap: 0.5 });
+            }
+            if (m.length === 2) {
+              const vis = (p) => {
+                const x = Math.floor(p.x), y = Math.floor(p.y);
+                return x >= 0 && y >= 0 && x < W && y < H && buf.zb[y * W + x] <= p.z + 1.2;
+              };
+              if (vis(m[0]) && vis(m[1])) seams.push(m);
+            }
+          }
+          drawLines(ctx, seams, { width: S.inkWidth * 0.5, color: wc ? mix(mapCol, shadeInk(), 0.5) : inkCol, alpha: 0.55 });
+        }
+        ctx.restore();
+      };
+      if (style === "surface" || style === "layers") {
+        const list = style === "layers" ? [...levels].sort((a, b) => a.level - b.level) : [main];
+        list.forEach((L, li) => {
+          const buf = mapRaster(L, L.px, L.py, L.pz, W, H), sh = shadeOf(L, buf);
+          const primary = L === main;
+          const strength = style === "layers" ? primary ? 0.8 : li === 0 ? 0.35 : 1 : 1;
+          items.push({ z: zItem + li, map: true, draw: style === "layers" && !primary && !(ink || pencil || chalk) ? (ctx) => {
+            const covered = (i) => buf.tb[i] >= 0, rings = regions(covered);
+            if (!rings.length) return;
+            ctx.save();
+            if (wc) washRings(ctx, rings, mapCol, seedBase + 333 + li, { strength: 0.45 * strength, layers: 3 });
+            else {
+              ringsPath(ctx, rings);
+              ctx.fillStyle = rgba(fillFor(mapCol), 0.22 * strength);
+              ctx.fill("evenodd");
+            }
+            drawLines(ctx, silhouettes(L, buf), { width: S.inkWidth * (li === 0 ? 0.5 : 0.8), color: mix(mapCol, shadeInk(), 0.55), alpha: li === 0 ? 0.45 : 0.7 });
+            ctx.restore();
+          } : style === "layers" && !primary ? (ctx) => {
+            drawLines(ctx, silhouettes(L, buf), { width: S.inkWidth * (li === 0 ? 0.45 : 0.8), color: inkCol, alpha: li === 0 ? 0.45 : 0.8 });
+          } : surfaceItem(L, buf, sh, strength, true) });
+        });
+      } else if (style === "mesh") {
+        const buf = o.carve > 0 ? null : mapRaster(main, main.px, main.py, main.pz, W, H);
+        const lines2 = [];
+        for (const w of M.wire) {
+          let run = [];
+          for (const q of w) {
+            const p = proj.proj(q);
+            const x = Math.floor(p.x), y = Math.floor(p.y);
+            const vis = !buf || x >= 0 && y >= 0 && x < W && y < H && buf.zb[y * W + x] <= p.z + 1.5;
+            if (vis) run.push({ x: p.x, y: p.y, fog: p.fog, h: 0, gap: 1 });
+            else {
+              if (run.length > 1) lines2.push(run);
+              run = [];
+            }
+          }
+          if (run.length > 1) lines2.push(run);
+        }
+        const col = o.color === "single" || !M.hasModel ? mix(mapCol, shadeInk(), light ? 0.45 : 0.1) : mix(P.N, shadeInk(), 0.2);
+        items.push({ z: zItem, map: true, draw: (ctx) => {
+          ctx.save();
+          drawLines(ctx, lines2, { width: S.inkWidth * 0.45, color: col, alpha: 0.85 });
+          ctx.restore();
+        } });
+      } else if (style === "slice") {
+        const rz = M.box.map((c) => proj.rot(c)[2]), zc = (Math.min(...rz) + Math.max(...rz)) / 2 + (o.slice?.offset || 0) * (Math.max(...rz) - Math.min(...rz));
+        const R = M.box.map((c) => proj.rot(c)), E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]], cut = [];
+        for (const [a, b] of E) {
+          const za = R[a][2], zb = R[b][2];
+          if ((za - zc) * (zb - zc) < 0) {
+            const u = (zc - za) / (zb - za);
+            const q = M.box[a].map((v, k) => v + (M.box[b][k] - v) * u);
+            const p = proj.proj(q);
+            cut.push([p.x, p.y]);
+          }
+        }
+        const poly = hull(cut);
+        if (poly.length < 3) return;
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (const q of poly) {
+          x0 = Math.min(x0, q[0]);
+          y0 = Math.min(y0, q[1]);
+          x1 = Math.max(x1, q[0]);
+          y1 = Math.max(y1, q[1]);
+        }
+        const st2 = 1.5, gw = Math.ceil((x1 - x0) / st2) + 1, gh = Math.ceil((y1 - y0) / st2) + 1, val = new Float32Array(gw * gh).fill(-1e9), lv = M.primaryLevel;
+        for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+          const x = x0 + i * st2, y = y0 + j * st2;
+          if (!inHull(poly, x, y)) continue;
+          const q = proj.unproj(x, y, zc);
+          val[j * gw + i] = M.sample(q[0], q[1], q[2]) / lv;
+        }
+        if (o.slice?.cut !== false) {
+          for (let i = items.length - 1; i >= 0; i--) if (!items[i].map && items[i].z > zc + 0.5) items.splice(i, 1);
+        }
+        items.push({ z: zc, map: true, draw: (ctx) => {
+          const rng = mulberry32(seedBase + 4401);
+          ctx.save();
+          ctx.beginPath();
+          poly.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]));
+          ctx.closePath();
+          ctx.fillStyle = paperFill();
+          ctx.fill();
+          ctx.fillStyle = rgba(light ? inkCol : mix(inkCol, P.paper, 0.2), 0.85);
+          for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+            const v = val[j * gw + i];
+            if (v < 0.3) continue;
+            const pr = Math.pow(clamp((v - 0.3) / 1.4, 0, 1), 1.2) * 0.85;
+            if (rng() > pr) continue;
+            const x = x0 + (i + rng()) * st2, y = y0 + (j + rng()) * st2;
+            ctx.beginPath();
+            ctx.arc(x, y, 0.5 + 0.35 * rng(), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          const mask = new Uint8Array(gw * gh);
+          for (let k2 = 0; k2 < mask.length; k2++) mask[k2] = val[k2] >= 1 ? 1 : 0;
+          const rings = maskRings(mask, gw, gh).map((r) => r.map((q) => [x0 + q[0] * st2, y0 + q[1] * st2]));
+          let k = 0;
+          for (const r of rings) sketchLine(ctx, [...r, r[0]], { seed: seedBase + 4501 + k++, passes: 1, width: S.inkWidth * 0.8, color: wc ? mix(mapCol, shadeInk(), 0.6) : inkCol, alpha: 0.85, ampScale: 0.6, step: 3, overshoot: false });
+          sketchLine(ctx, [...poly, poly[0]], { seed: seedBase + 4601, passes: 1, width: S.inkWidth * 0.6, color: inkCol, alpha: 0.6, ampScale: 0.5, overshoot: false });
+          ctx.restore();
+        } });
+      }
+      if (M.hasModel && o.unsupported && M.unsupported.length) items.push({ z: 2e9, map: true, draw: (ctx) => {
+        ctx.save();
+        let k = 0;
+        for (const ti of M.unsupported) {
+          const a = atomsById[byIndex[ti]];
+          if (!a || !pos[a.id]) continue;
+          const p = pos[a.id];
+          sketchCircle(ctx, p.x, p.y, 3.2 * Math.max(0.7, TEX), { seed: seedBase + 8001 + k++, width: 1, color: accent, alpha: 0.9, passes: 1 });
+        }
+        ctx.restore();
+      } });
+    }
+    function softenCovered(v, tb, W, H, r) {
+      const tmp = new Float32Array(v.length);
+      for (let pass = 0; pass < 2; pass++) {
+        for (let y = 0; y < H; y++) {
+          let s = 0, n = 0;
+          const o = y * W;
+          for (let x = -r; x < W; x++) {
+            const a = x + r, b = x - r - 1;
+            if (a < W && tb[o + a] >= 0) {
+              s += v[o + a];
+              n++;
+            }
+            if (b >= 0 && tb[o + b] >= 0) {
+              s -= v[o + b];
+              n--;
+            }
+            if (x >= 0) tmp[o + x] = tb[o + x] >= 0 && n ? s / n : 0;
+          }
+        }
+        for (let x = 0; x < W; x++) {
+          let s = 0, n = 0;
+          for (let y = -r; y < H; y++) {
+            const a = y + r, b = y - r - 1;
+            if (a < H && tb[a * W + x] >= 0) {
+              s += tmp[a * W + x];
+              n++;
+            }
+            if (b >= 0 && tb[b * W + x] >= 0) {
+              s -= tmp[b * W + x];
+              n--;
+            }
+            if (y >= 0) v[y * W + x] = tb[y * W + x] >= 0 && n ? s / n : 0;
+          }
+        }
+      }
+    }
+    function drawMapCaption(ctx, W, H) {
+      const M = scene.map;
+      if (!M || !M.opts.caption || !M.caption) return;
+      const S = cfg.style, P = cfg.palette;
+      ctx.save();
+      ctx.font = `${Math.max(9, Math.round(S.labelSize * 0.6))}px "IBM Plex Sans", system-ui, sans-serif`;
+      ctx.fillStyle = rgba(P.label, 0.8);
+      ctx.textAlign = "left";
+      ctx.textBaseline = "bottom";
+      const parts = M.caption.split(" \xB7 "), lines2 = [];
+      let cur = "";
+      for (const p of parts) {
+        const t = cur ? cur + " \xB7 " + p : p;
+        if (cur && ctx.measureText(t).width > W - 24) {
+          lines2.push(cur);
+          cur = p;
+        } else cur = t;
+      }
+      if (cur) lines2.push(cur);
+      const lh = Math.max(9, Math.round(S.labelSize * 0.6)) * 1.3;
+      lines2.reverse().forEach((l, i) => ctx.fillText(l, 12, H - 10 - i * lh));
+      ctx.restore();
+    }
     function v3(a, b, f2) {
       return [a[0] + b[0] * f2, a[1] + b[1] * f2, a[2] + b[2] * f2];
     }
@@ -5070,8 +5770,10 @@
       else buildBallStick(items, st, pos, stickAtoms, stickBonds, proj, seedBase, lowDetail);
       if (cartoonOn) buildCartoon(items, st, pos, st.atoms, selC, proj, seedBase, lowDetail);
       if (surfAtoms.length) buildSurface(items, st, pos, surfAtoms, proj, seedBase, lowDetail);
+      if (scene.map) buildMap(items, st, pos, proj, seedBase);
       items.sort((u, v) => u.z - v.z);
       for (const it of items) it.draw(ctx);
+      drawMapCaption(ctx, W, H);
       const fontFam = S.font === "Plain sans" ? '"IBM Plex Sans", system-ui, sans-serif' : `"${S.font}", "Caveat", cursive`;
       for (const a of stickAtoms) {
         const p = pos[a.id];
@@ -5286,6 +5988,507 @@
     };
   }
 
+  // src/model/map.ts
+  function mapStats(data) {
+    let s = 0, s2 = 0, mn = Infinity, mx = -Infinity;
+    for (let i = 0; i < data.length; i++) {
+      const v = data[i];
+      s += v;
+      s2 += v * v;
+      if (v < mn) mn = v;
+      if (v > mx) mx = v;
+    }
+    const mean = s / data.length;
+    return { mean, rms: Math.sqrt(Math.max(0, s2 / data.length - mean * mean)), min: mn, max: mx };
+  }
+  function downsample(m, maxDim) {
+    const f2 = Math.ceil(Math.max(m.nx, m.ny, m.nz) / maxDim);
+    if (f2 <= 1) return m;
+    const nx = Math.floor(m.nx / f2), ny = Math.floor(m.ny / f2), nz = Math.floor(m.nz / f2), out = new Float32Array(nx * ny * nz), w = 1 / (f2 * f2 * f2);
+    for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
+      let s = 0;
+      for (let c = 0; c < f2; c++) for (let b = 0; b < f2; b++) {
+        const o = (k * f2 + c) * m.nx * m.ny + (j * f2 + b) * m.nx + i * f2;
+        for (let a = 0; a < f2; a++) s += m.data[o + a];
+      }
+      out[k * nx * ny + j * nx + i] = s * w;
+    }
+    const origin = [0, 1, 2].map((a) => m.origin[a] + (f2 - 1) / 2 * m.step[a]);
+    return { ...m, nx, ny, nz, data: out, origin, step: [m.step[0] * f2, m.step[1] * f2, m.step[2] * f2], ...mapStats(out), binned: (m.binned || 1) * f2 };
+  }
+  function lowpass(m, R) {
+    const sd = 0.225 * R, n = [m.nx, m.ny, m.nz], strides = [1, m.nx, m.nx * m.ny];
+    let a = Float32Array.from(m.data), b = new Float32Array(a.length);
+    for (let ax = 0; ax < 3; ax++) {
+      const s = sd / m.step[ax], r = Math.ceil(3 * s);
+      if (r < 1) continue;
+      const k = new Float32Array(2 * r + 1);
+      let tot = 0;
+      for (let i = -r; i <= r; i++) tot += k[i + r] = Math.exp(-i * i / (2 * s * s));
+      for (let i = 0; i < k.length; i++) k[i] /= tot;
+      const len = n[ax], st = strides[ax], lines2 = a.length / len;
+      const [o1, o2] = [0, 1, 2].filter((x) => x !== ax), n1 = n[o1], s1 = strides[o1], s2 = strides[o2];
+      for (let l = 0; l < lines2; l++) {
+        const base = l % n1 * s1 + Math.floor(l / n1) * s2;
+        for (let i = 0; i < len; i++) {
+          let v = 0;
+          for (let t = -r; t <= r; t++) {
+            const q = Math.min(len - 1, Math.max(0, i + t));
+            v += a[base + q * st] * k[t + r];
+          }
+          b[base + i * st] = v;
+        }
+      }
+      [a, b] = [b, a];
+    }
+    return { ...m, data: a, ...mapStats(a), lowpassed: R };
+  }
+  function cropMap(m, lo, hi) {
+    const a = [0, 1, 2].map((k) => Math.max(0, Math.floor((lo[k] - m.origin[k]) / m.step[k]))), n = [m.nx, m.ny, m.nz];
+    const b = [0, 1, 2].map((k) => Math.min(n[k] - 1, Math.ceil((hi[k] - m.origin[k]) / m.step[k])));
+    if (a.every((v) => v === 0) && b.every((v, k) => v === n[k] - 1)) return m;
+    const [nx, ny, nz] = [0, 1, 2].map((k) => Math.max(2, b[k] - a[k] + 1)), out = new Float32Array(nx * ny * nz);
+    for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) {
+      const src = (a[2] + k) * m.nx * m.ny + (a[1] + j) * m.nx + a[0];
+      out.set(m.data.subarray(src, src + nx), (k * ny + j) * nx);
+    }
+    return { ...m, nx, ny, nz, data: out, origin: [0, 1, 2].map((k) => m.origin[k] + a[k] * m.step[k]) };
+  }
+  function levelEnclosing(m, volume, zone) {
+    const n = Math.round(volume / (m.step[0] * m.step[1] * m.step[2])), sorted = (zone ? Float32Array.from(m.data.filter((_, i) => zone[i])) : Float32Array.from(m.data)).sort();
+    return sorted[Math.max(0, Math.min(sorted.length - 1, sorted.length - n))];
+  }
+  function sampleMap(m, x, y, z) {
+    const fx = (x - m.origin[0]) / m.step[0], fy = (y - m.origin[1]) / m.step[1], fz = (z - m.origin[2]) / m.step[2];
+    const i = Math.floor(fx), j = Math.floor(fy), k = Math.floor(fz);
+    if (i < 0 || j < 0 || k < 0 || i >= m.nx - 1 || j >= m.ny - 1 || k >= m.nz - 1) return m.min;
+    const u = fx - i, v = fy - j, w = fz - k, sx = 1, sy = m.nx, sz = m.nx * m.ny, o = k * sz + j * sy + i, d = m.data;
+    const c00 = d[o] * (1 - u) + d[o + sx] * u, c10 = d[o + sy] * (1 - u) + d[o + sy + sx] * u;
+    const c01 = d[o + sz] * (1 - u) + d[o + sz + sx] * u, c11 = d[o + sz + sy] * (1 - u) + d[o + sz + sy + sx] * u;
+    return (c00 * (1 - v) + c10 * v) * (1 - w) + (c01 * (1 - v) + c11 * v) * w;
+  }
+  function isosurface(m, level) {
+    const { nx, ny, nz, data: d } = m, sy = nx, sz = nx * ny;
+    const cx = nx - 1, cy = ny - 1, cellIndex = new Int32Array(cx * cy * (nz - 1)).fill(-1);
+    const pos = [], nor = [], tri = [];
+    const corner = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
+    const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
+    const v = new Float64Array(8);
+    for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      let mask = 0;
+      for (let c = 0; c < 8; c++) {
+        const q = corner[c];
+        const val = d[(k + q[2]) * sz + (j + q[1]) * sy + i + q[0]];
+        v[c] = val;
+        if (val >= level) mask |= 1 << c;
+      }
+      if (mask === 0 || mask === 255) continue;
+      let px = 0, py = 0, pz = 0, n = 0;
+      for (const [a, b] of edges) {
+        const ia = mask >> a & 1, ib = mask >> b & 1;
+        if (ia === ib) continue;
+        const t = (level - v[a]) / (v[b] - v[a]), qa = corner[a], qb = corner[b];
+        px += qa[0] + (qb[0] - qa[0]) * t;
+        py += qa[1] + (qb[1] - qa[1]) * t;
+        pz += qa[2] + (qb[2] - qa[2]) * t;
+        n++;
+      }
+      px = i + px / n;
+      py = j + py / n;
+      pz = k + pz / n;
+      const fx = px - i, fy = py - j, fz = pz - k;
+      const gx = ((v[1] - v[0]) * (1 - fy) + (v[3] - v[2]) * fy) * (1 - fz) + ((v[5] - v[4]) * (1 - fy) + (v[7] - v[6]) * fy) * fz;
+      const gy = ((v[2] - v[0]) * (1 - fx) + (v[3] - v[1]) * fx) * (1 - fz) + ((v[6] - v[4]) * (1 - fx) + (v[7] - v[5]) * fx) * fz;
+      const gz = ((v[4] - v[0]) * (1 - fx) + (v[5] - v[1]) * fx) * (1 - fy) + ((v[6] - v[2]) * (1 - fx) + (v[7] - v[3]) * fx) * fy;
+      const ux = -gx / m.step[0], uy = -gy / m.step[1], uz = -gz / m.step[2], L = Math.hypot(ux, uy, uz) || 1;
+      cellIndex[k * cx * cy + j * cx + i] = pos.length / 3;
+      pos.push(m.origin[0] + px * m.step[0], m.origin[1] + py * m.step[1], m.origin[2] + pz * m.step[2]);
+      nor.push(ux / L, uy / L, uz / L);
+    }
+    const cell = (i, j, k) => cellIndex[k * cx * cy + j * cx + i];
+    const quad = (a, b, c, e, flip) => {
+      if (a < 0 || b < 0 || c < 0 || e < 0) return;
+      if (flip) tri.push(a, c, b, b, c, e);
+      else tri.push(a, b, c, b, e, c);
+    };
+    for (let k = 1; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
+      const o = k * sz + j * sy + i, a = d[o] >= level, b = d[o + 1] >= level;
+      if (a === b) continue;
+      quad(cell(i, j - 1, k - 1), cell(i, j, k - 1), cell(i, j - 1, k), cell(i, j, k), a);
+    }
+    for (let k = 1; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+      const o = k * sz + j * sy + i, a = d[o] >= level, b = d[o + sy] >= level;
+      if (a === b) continue;
+      quad(cell(i - 1, j, k - 1), cell(i - 1, j, k), cell(i, j, k - 1), cell(i, j, k), a);
+    }
+    for (let k = 0; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
+      const o = k * sz + j * sy + i, a = d[o] >= level, b = d[o + sz] >= level;
+      if (a === b) continue;
+      quad(cell(i - 1, j - 1, k), cell(i, j - 1, k), cell(i - 1, j, k), cell(i, j, k), a);
+    }
+    return { level, positions: new Float32Array(pos), normals: new Float32Array(nor), triangles: new Uint32Array(tri) };
+  }
+  function sliceContours(m, axis, index, level) {
+    const dims = [m.nx, m.ny, m.nz], [ua, va] = axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1];
+    const nu = dims[ua], nv = dims[va], sy = m.nx, sz = m.nx * m.ny;
+    const at = (u, w) => {
+      const q = [0, 0, 0];
+      q[axis] = index;
+      q[ua] = u;
+      q[va] = w;
+      return m.data[q[2] * sz + q[1] * sy + q[0]];
+    };
+    const P = (u, w) => {
+      const q = [0, 0, 0];
+      q[axis] = index;
+      q[ua] = u;
+      q[va] = w;
+      return [m.origin[0] + q[0] * m.step[0], m.origin[1] + q[1] * m.step[1], m.origin[2] + q[2] * m.step[2]];
+    };
+    const segs = [];
+    for (let w = 0; w < nv - 1; w++) for (let u = 0; u < nu - 1; u++) {
+      const a = at(u, w), b = at(u + 1, w), c = at(u + 1, w + 1), e = at(u, w + 1);
+      const idx = (a >= level ? 1 : 0) | (b >= level ? 2 : 0) | (c >= level ? 4 : 0) | (e >= level ? 8 : 0);
+      if (idx === 0 || idx === 15) continue;
+      const cross = (x0, y0, v0, x1, y1, v1) => {
+        const t = (level - v0) / (v1 - v0);
+        return P(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
+      };
+      const pts = [];
+      if ((idx & 1) !== (idx >> 1 & 1)) pts.push(cross(u, w, a, u + 1, w, b));
+      if ((idx >> 1 & 1) !== (idx >> 2 & 1)) pts.push(cross(u + 1, w, b, u + 1, w + 1, c));
+      if ((idx >> 2 & 1) !== (idx >> 3 & 1)) pts.push(cross(u + 1, w + 1, c, u, w + 1, e));
+      if ((idx >> 3 & 1) !== (idx & 1)) pts.push(cross(u, w + 1, e, u, w, a));
+      for (let s = 0; s + 1 < pts.length; s += 2) segs.push([...pts[s], ...pts[s + 1]]);
+    }
+    return segs;
+  }
+  function joinSegments(segs, tol = 1e-4) {
+    const key = (x, y, z) => `${Math.round(x / tol)},${Math.round(y / tol)},${Math.round(z / tol)}`;
+    const ends = /* @__PURE__ */ new Map();
+    const used = new Uint8Array(segs.length);
+    segs.forEach((s, i) => {
+      for (const e of [key(s[0], s[1], s[2]), key(s[3], s[4], s[5])]) {
+        let l = ends.get(e);
+        if (!l) ends.set(e, l = []);
+        l.push(i);
+      }
+    });
+    const lines2 = [];
+    for (let i = 0; i < segs.length; i++) {
+      if (used[i]) continue;
+      used[i] = 1;
+      const s = segs[i];
+      const line = [[s[0], s[1], s[2]], [s[3], s[4], s[5]]];
+      for (const dir of [1, 0]) {
+        for (; ; ) {
+          const p = dir ? line[line.length - 1] : line[0];
+          const cand = ends.get(key(p[0], p[1], p[2])) || [];
+          const nx = cand.find((c) => !used[c]);
+          if (nx === void 0) break;
+          used[nx] = 1;
+          const t = segs[nx];
+          const a = [t[0], t[1], t[2]], b = [t[3], t[4], t[5]];
+          const far = key(a[0], a[1], a[2]) === key(p[0], p[1], p[2]) ? b : a;
+          if (dir) line.push(far);
+          else line.unshift(far);
+        }
+      }
+      lines2.push(line);
+    }
+    return lines2;
+  }
+
+  // src/render/pca.ts
+  function pcaBasis(s) {
+    const n = s.count;
+    const c = s.center;
+    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
+    const step = Math.max(1, Math.floor(n / 2e4));
+    for (let i = 0; i < n; i += step) {
+      const d = [s.x[i] - c[0], s.y[i] - c[1], s.z[i] - c[2]];
+      for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) M[a][b] += d[a] * d[b];
+    }
+    const V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
+    const A = M.map((r) => r.slice());
+    for (let it = 0; it < 60; it++) {
+      let p = 0, q = 1, mx = Math.abs(A[0][1]);
+      if (Math.abs(A[0][2]) > mx) {
+        p = 0;
+        q = 2;
+        mx = Math.abs(A[0][2]);
+      }
+      if (Math.abs(A[1][2]) > mx) {
+        p = 1;
+        q = 2;
+        mx = Math.abs(A[1][2]);
+      }
+      if (mx < 1e-9) break;
+      const th = 0.5 * Math.atan2(2 * A[p][q], A[q][q] - A[p][p]);
+      const cs = Math.cos(th), sn = Math.sin(th);
+      for (let k = 0; k < 3; k++) {
+        const akp = A[k][p], akq = A[k][q];
+        A[k][p] = cs * akp - sn * akq;
+        A[k][q] = sn * akp + cs * akq;
+      }
+      for (let k = 0; k < 3; k++) {
+        const apk = A[p][k], aqk = A[q][k];
+        A[p][k] = cs * apk - sn * aqk;
+        A[q][k] = sn * apk + cs * aqk;
+      }
+      for (let k = 0; k < 3; k++) {
+        const vkp = V[k][p], vkq = V[k][q];
+        V[k][p] = cs * vkp - sn * vkq;
+        V[k][q] = sn * vkp + cs * vkq;
+      }
+    }
+    const ev = [0, 1, 2].map((i) => ({ l: A[i][i], v: [V[0][i], V[1][i], V[2][i]] })).sort((a, b) => b.l - a.l);
+    const e1 = ev[0].v, e2 = ev[1].v;
+    const e3 = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
+    const m = new Float32Array(16);
+    m[15] = 1;
+    m[0] = e1[0];
+    m[4] = e1[1];
+    m[8] = e1[2];
+    m[1] = e2[0];
+    m[5] = e2[1];
+    m[9] = e2[2];
+    m[2] = e3[0];
+    m[6] = e3[1];
+    m[10] = e3[2];
+    return m;
+  }
+
+  // src/classic/mapprep.ts
+  var cache = /* @__PURE__ */ new WeakMap();
+  function mapBasis(m, level) {
+    const iso = isosurface(downsample(m, 96), level);
+    const n = iso.positions.length / 3;
+    const x = new Float32Array(n), y = new Float32Array(n), z = new Float32Array(n);
+    let cx = 0, cy = 0, cz = 0;
+    for (let i = 0; i < n; i++) {
+      x[i] = iso.positions[i * 3];
+      y[i] = iso.positions[i * 3 + 1];
+      z[i] = iso.positions[i * 3 + 2];
+      cx += x[i];
+      cy += y[i];
+      cz += z[i];
+    }
+    return pcaBasis({ count: n, center: [cx / (n || 1), cy / (n || 1), cz / (n || 1)], x, y, z });
+  }
+  function mapLevel(m, style) {
+    return style.map.level ?? m.level ?? m.mean + 3 * m.rms;
+  }
+  function prepareMap(whole, style, s, base, localRes = null) {
+    const o = style.map, level = mapLevel(whole, style);
+    const factors = o.style === "layers" ? o.levels : [1];
+    const key = JSON.stringify([level, o.smooth, o.crop, factors, o.carve, o.maxVoxels, o.localResolution, o.style === "mesh" ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
+    let per = cache.get(whole);
+    if (!per) cache.set(whole, per = /* @__PURE__ */ new Map());
+    const hit = per.get(key);
+    if (hit) return { ...hit, opts: o };
+    let m = whole;
+    if (s && o.crop > 0 && s.count) {
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < s.count; i++) {
+        const p = [s.x[i], s.y[i], s.z[i]];
+        for (let k = 0; k < 3; k++) {
+          if (p[k] < lo[k]) lo[k] = p[k];
+          if (p[k] > hi[k]) hi[k] = p[k];
+        }
+      }
+      m = cropMap(whole, lo.map((v) => v - o.crop), hi.map((v) => v + o.crop));
+    }
+    let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
+    for (let k = 0, q = 0; k < m.nz; k++) for (let j = 0; j < m.ny; j++) for (let i = 0; i < m.nx; i++, q++) if (m.data[q] >= level) {
+      if (i < bx0) bx0 = i;
+      if (i > bx1) bx1 = i;
+      if (j < by0) by0 = j;
+      if (j > by1) by1 = j;
+      if (k < bz0) bz0 = k;
+      if (k > bz1) bz1 = k;
+    }
+    let extent = bx1 < 0 ? m.nx * m.step[0] : Math.max((bx1 - bx0 + 1) * m.step[0], (by1 - by0 + 1) * m.step[1], (bz1 - bz0 + 1) * m.step[2]);
+    if (s && s.count) {
+      const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
+      for (let i = 0; i < s.count; i++) {
+        const p = [s.x[i], s.y[i], s.z[i]];
+        for (let k = 0; k < 3; k++) {
+          if (p[k] < lo[k]) lo[k] = p[k];
+          if (p[k] > hi[k]) hi[k] = p[k];
+        }
+      }
+      extent = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
+    }
+    const R = o.smooth === "auto" ? (m.resolution ?? 2 * m.step[0]) < extent / 20 * 0.8 ? Math.round(extent / 20) : 0 : Math.max(0, +o.smooth || 0);
+    const above = R > 0 ? { ...m, data: m.data.map((v) => v >= level ? v : 0) } : m;
+    const g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels), g2 = R > 0 ? lowpass(g0, R) : g0;
+    const EL = { C: 12.01, N: 14.01, O: 16, S: 32.07, P: 30.97, SE: 78.97 };
+    let mass = 0;
+    if (s) for (let i = 0; i < s.count; i++) {
+      const e = s.element[i].toUpperCase();
+      if (e !== "H" && s.residues[s.residueOf[i]].resn !== "HOH") mass += (EL[e] ?? 12) + 1;
+    }
+    const massFrom = mass > 0 ? "the model" : m.mass ? "the sample" : "";
+    if (!mass) mass = m.mass || 0;
+    let zone;
+    if (R > 0 && massFrom === "the model") {
+      zone = new Uint8Array(g2.data.length);
+      const r = 6;
+      for (let i = 0; i < s.count; i++) {
+        if (s.element[i] === "H") continue;
+        const c = [s.x[i], s.y[i], s.z[i]].map((v, k) => (v - g2.origin[k]) / g2.step[k]), n = [g2.nx, g2.ny, g2.nz], rv = r / g2.step[0];
+        for (let z = Math.max(0, Math.floor(c[2] - rv)); z <= Math.min(n[2] - 1, Math.ceil(c[2] + rv)); z++) for (let y = Math.max(0, Math.floor(c[1] - rv)); y <= Math.min(n[1] - 1, Math.ceil(c[1] + rv)); y++)
+          for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) zone[(z * n[1] + y) * n[0] + x] = 1;
+      }
+    }
+    const byVolume = R > 0, vLevel = !byVolume ? 0 : mass > 0 ? levelEnclosing(g2, mass * 1.21, zone) : g2.mean + 2 * g2.rms;
+    let sorted = null;
+    const same = (lv) => {
+      if (byVolume) return vLevel * lv / level;
+      if (g2 === m) return lv;
+      let n = 0;
+      for (let i = 0; i < m.data.length; i++) if (m.data[i] >= lv) n++;
+      sorted ?? (sorted = Float32Array.from(g2.data).sort());
+      return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((1 - n / m.data.length) * sorted.length)))];
+    };
+    const turn = (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
+    const unturn = (x, y, z) => [base[0] * x + base[1] * y + base[2] * z, base[4] * x + base[5] * y + base[6] * z, base[8] * x + base[9] * y + base[10] * z];
+    const atoms = [];
+    if (s) for (let i = 0; i < s.count; i++) {
+      const r = s.residues[s.residueOf[i]];
+      if (r.resn !== "HOH" && s.element[i] !== "H") atoms.push(i);
+    }
+    const cell = 4, grid = /* @__PURE__ */ new Map();
+    const kf = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
+    for (const i of atoms) {
+      const k = kf(s.x[i], s.y[i], s.z[i]);
+      let l = grid.get(k);
+      if (!l) grid.set(k, l = []);
+      l.push(i);
+    }
+    const nearest = (x, y, z) => {
+      let best = -1, bd = 64;
+      const ci = Math.floor(x / cell), cj = Math.floor(y / cell), ck = Math.floor(z / cell);
+      for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) for (let c = -2; c <= 2; c++) {
+        const l = grid.get(`${ci + a},${cj + b},${ck + c}`);
+        if (!l) continue;
+        for (const i of l) {
+          const d = (s.x[i] - x) ** 2 + (s.y[i] - y) ** 2 + (s.z[i] - z) ** 2;
+          if (d < bd) {
+            bd = d;
+            best = i;
+          }
+        }
+      }
+      return [best, Math.sqrt(bd)];
+    };
+    const levels = factors.map((f2) => {
+      const iso = isosurface(g2, same(level * f2));
+      const nv = iso.positions.length / 3;
+      const near = new Int32Array(nv).fill(-1), dist = new Float32Array(nv).fill(99);
+      if (atoms.length) for (let v = 0; v < nv; v++) {
+        const [i, d] = nearest(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2]);
+        near[v] = i;
+        dist[v] = d;
+      }
+      let tri = iso.triangles;
+      if (o.carve > 0 && atoms.length) {
+        const keep = [];
+        for (let t = 0; t < tri.length; t += 3) if (dist[tri[t]] <= o.carve || dist[tri[t + 1]] <= o.carve || dist[tri[t + 2]] <= o.carve) keep.push(tri[t], tri[t + 1], tri[t + 2]);
+        tri = new Uint32Array(keep);
+      }
+      let hand2 = null;
+      const raw = new Float32Array(nv).fill(NaN);
+      if (o.localResolution === "map" && localRes) for (let v = 0; v < nv; v++) raw[v] = sampleMap(localRes, iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2]);
+      else if (o.localResolution === "bfactor" && s) {
+        for (let v = 0; v < nv; v++) if (near[v] >= 0) raw[v] = s.b[near[v]];
+      }
+      if (o.localResolution !== "none") {
+        const ok = Array.from(raw).filter((x) => isFinite(x)).sort((a, b) => a - b);
+        if (ok.length) {
+          const lo = ok[Math.floor(ok.length * 0.05)], hi = ok[Math.floor(ok.length * 0.95)], span = Math.max(hi - lo, 1e-6);
+          hand2 = new Float32Array(nv);
+          for (let v = 0; v < nv; v++) hand2[v] = isFinite(raw[v]) ? Math.min(1, Math.max(0, (raw[v] - lo) / span)) : 1;
+        }
+      }
+      const pos = new Float32Array(nv * 3), nor = new Float32Array(nv * 3);
+      for (let v = 0; v < nv; v++) {
+        const p = turn(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2]);
+        pos[v * 3] = p[0];
+        pos[v * 3 + 1] = p[1];
+        pos[v * 3 + 2] = p[2];
+        const q = turn(iso.normals[v * 3], iso.normals[v * 3 + 1], iso.normals[v * 3 + 2]);
+        nor[v * 3] = q[0];
+        nor[v * 3 + 1] = q[1];
+        nor[v * 3 + 2] = q[2];
+      }
+      return { level: level * f2, pos, nor, tri, near, dist, hand: hand2 };
+    });
+    const primary = Math.max(0, factors.indexOf(1));
+    const wire = [], gLevel = same(level);
+    if (o.style === "mesh") {
+      const sp = Math.max(1, Math.round(o.meshSpacing / g2.step[0]));
+      for (const ax of [0, 1, 2]) {
+        const n = [g2.nx, g2.ny, g2.nz][ax];
+        for (let i = 0; i < n; i += sp) for (const line of joinSegments(sliceContours(g2, ax, i, gLevel))) {
+          let run = [];
+          for (const p of line) {
+            const inZone = !(o.carve > 0 && atoms.length) || nearest(p[0], p[1], p[2])[1] <= o.carve;
+            if (inZone) run.push(turn(p[0], p[1], p[2]));
+            else {
+              if (run.length > 1) wire.push(run);
+              run = [];
+            }
+          }
+          if (run.length > 1) wire.push(run);
+        }
+      }
+    }
+    const unsupported = [];
+    if (s) for (const r of s.residues) {
+      if (r.het || r.trace < 0) continue;
+      let n = 0, low = 0;
+      for (let i = r.atomStart; i < r.atomEnd; i++) {
+        if (s.element[i] === "H") continue;
+        n++;
+        if (sampleMap(m, s.x[i], s.y[i], s.z[i]) < level * 0.5) low++;
+      }
+      if (n && low / n > 0.5) unsupported.push(r.trace);
+    }
+    const sigma = (level - m.mean) / (m.rms || 1);
+    const caption = [
+      m.name,
+      R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && m.level != null ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
+      byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
+      o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
+      o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of the model` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
+      g0 !== m && !byVolume ? `drawn at ${g2.step[0].toFixed(1)} \xC5 per voxel${R > 0 ? "" : ", at the level enclosing the same volume"}` : "",
+      o.localResolution === "bfactor" && s ? "line looseness from B-factors" : o.localResolution === "map" && localRes ? "line looseness from local resolution" : ""
+    ].filter(Boolean).join(" \xB7 ");
+    const corners = [];
+    for (const a of [0, 1]) for (const b of [0, 1]) for (const c of [0, 1]) corners.push(turn(g2.origin[0] + a * (g2.nx - 1) * g2.step[0], g2.origin[1] + b * (g2.ny - 1) * g2.step[1], g2.origin[2] + c * (g2.nz - 1) * g2.step[2]));
+    const out = {
+      name: m.name,
+      levels,
+      primary,
+      wire,
+      unsupported,
+      caption,
+      sample: (x, y, z) => {
+        const p = unturn(x, y, z);
+        return sampleMap(g2, p[0], p[1], p[2]) * level / gLevel;
+      },
+      box: corners,
+      opts: o,
+      hasModel: atoms.length > 0,
+      primaryLevel: level
+    };
+    per.set(key, out);
+    if (per.size > 6) per.delete(per.keys().next().value);
+    return out;
+  }
+
   // src/classic/adapter.ts
   var engine = null;
   function classic() {
@@ -5391,6 +6594,7 @@
     }
     const bonds = [];
     for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], 1]);
+    sceneFromStructure.lastIds = ids;
     const fp = new Float32Array(fitPoints.length);
     for (let i = 0; i < fitPoints.length; i += 3) {
       const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]);
@@ -5404,16 +6608,35 @@
     const t0 = performance.now();
     const E = classic();
     const s = R.structure;
-    if (!s) return 0;
+    const map = R.map || null;
+    if (!s && !map) return 0;
     E.cfg = cfgFromStyle(style, R.camera, false);
-    E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels);
-    E.scene._src = s;
+    if (s) {
+      E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels);
+      E.scene._src = s;
+      E.scene.atomIds = sceneFromStructure.lastIds;
+    } else E.scene = mapScene(map, style, R.camera.base, R.labels);
+    E.scene.map = map ? prepareMap(map, style, s, R.camera.base, R.localRes || null) : null;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, R.w, R.h);
     ctx.restore();
     E.renderFrame(ctx, R.w / dpr, R.h / dpr, boil, dpr);
     return performance.now() - t0;
+  }
+  function mapScene(map, style, base, labels = []) {
+    const em = prepareMap(map, style, null, base);
+    const L = em.levels[em.primary] || em.levels[0];
+    return {
+      name: map.name,
+      fromPdb: true,
+      reps: { sticks: "", cartoon: "", surface: "" },
+      groupColors: {},
+      labels,
+      fitPoints: L ? L.pos : new Float32Array(0),
+      atomIds: [],
+      keyframes: [{ name: map.name, hold: 24, transition: 0, atoms: {}, bonds: [], arrows: [] }]
+    };
   }
   function renderScene(ctx, R, style, doc, frame, dpr = 1) {
     const t0 = performance.now();
@@ -5442,10 +6665,10 @@
   }
 
   // src/model/selection.ts
-  var cache = /* @__PURE__ */ new Map();
+  var cache2 = /* @__PURE__ */ new Map();
   function compileSelection(str) {
     str = (str || "").trim();
-    const hit = cache.get(str);
+    const hit = cache2.get(str);
     if (hit) return hit;
     const toks = str.match(/\(|\)|[^\s()]+/g) || [];
     let i = 0;
@@ -5571,73 +6794,13 @@
       return f3;
     }
     const f2 = str ? expr() : () => false;
-    cache.set(str, f2);
+    cache2.set(str, f2);
     return f2;
   }
   function selectAtoms(s, sel) {
     const f2 = compileSelection(sel);
     const m = new Uint8Array(s.count);
     for (let i = 0; i < s.count; i++) m[i] = f2(s, i) ? 1 : 0;
-    return m;
-  }
-
-  // src/render/pca.ts
-  function pcaBasis(s) {
-    const n = s.count;
-    const c = s.center;
-    const M = [[0, 0, 0], [0, 0, 0], [0, 0, 0]];
-    const step = Math.max(1, Math.floor(n / 2e4));
-    for (let i = 0; i < n; i += step) {
-      const d = [s.x[i] - c[0], s.y[i] - c[1], s.z[i] - c[2]];
-      for (let a = 0; a < 3; a++) for (let b = 0; b < 3; b++) M[a][b] += d[a] * d[b];
-    }
-    const V = [[1, 0, 0], [0, 1, 0], [0, 0, 1]];
-    const A = M.map((r) => r.slice());
-    for (let it = 0; it < 60; it++) {
-      let p = 0, q = 1, mx = Math.abs(A[0][1]);
-      if (Math.abs(A[0][2]) > mx) {
-        p = 0;
-        q = 2;
-        mx = Math.abs(A[0][2]);
-      }
-      if (Math.abs(A[1][2]) > mx) {
-        p = 1;
-        q = 2;
-        mx = Math.abs(A[1][2]);
-      }
-      if (mx < 1e-9) break;
-      const th = 0.5 * Math.atan2(2 * A[p][q], A[q][q] - A[p][p]);
-      const cs = Math.cos(th), sn = Math.sin(th);
-      for (let k = 0; k < 3; k++) {
-        const akp = A[k][p], akq = A[k][q];
-        A[k][p] = cs * akp - sn * akq;
-        A[k][q] = sn * akp + cs * akq;
-      }
-      for (let k = 0; k < 3; k++) {
-        const apk = A[p][k], aqk = A[q][k];
-        A[p][k] = cs * apk - sn * aqk;
-        A[q][k] = sn * apk + cs * aqk;
-      }
-      for (let k = 0; k < 3; k++) {
-        const vkp = V[k][p], vkq = V[k][q];
-        V[k][p] = cs * vkp - sn * vkq;
-        V[k][q] = sn * vkp + cs * vkq;
-      }
-    }
-    const ev = [0, 1, 2].map((i) => ({ l: A[i][i], v: [V[0][i], V[1][i], V[2][i]] })).sort((a, b) => b.l - a.l);
-    const e1 = ev[0].v, e2 = ev[1].v;
-    const e3 = [e1[1] * e2[2] - e1[2] * e2[1], e1[2] * e2[0] - e1[0] * e2[2], e1[0] * e2[1] - e1[1] * e2[0]];
-    const m = new Float32Array(16);
-    m[15] = 1;
-    m[0] = e1[0];
-    m[4] = e1[1];
-    m[8] = e1[2];
-    m[1] = e2[0];
-    m[5] = e2[1];
-    m[9] = e2[2];
-    m[2] = e3[0];
-    m[6] = e3[1];
-    m[10] = e3[2];
     return m;
   }
 
@@ -5971,6 +7134,29 @@
     inputs.set(ref, input);
     return ref;
   }
+  var maps = /* @__PURE__ */ new Map();
+  function putMap(ref, header, data) {
+    const n = header.nx * header.ny * header.nz;
+    if (data.length !== n) throw new Error(`the map has ${data.length} values, not ${header.nx}\xD7${header.ny}\xD7${header.nz}`);
+    maps.set(ref, { name: header.name || ref, nx: header.nx, ny: header.ny, nz: header.nz, data, origin: header.origin, step: header.step, level: header.level ?? void 0, binned: header.binned || 1, mass: header.mass ?? void 0, resolution: header.resolution ?? void 0, ...mapStats(data) });
+    return ref;
+  }
+  function mapOf(ref) {
+    const m = maps.get(ref);
+    if (!m) throw new Error(`unknown map ${ref}`);
+    return m;
+  }
+  var bases = /* @__PURE__ */ new WeakMap();
+  function basisOf(m, level) {
+    let b = bases.get(m);
+    if (!b) bases.set(m, b = /* @__PURE__ */ new Map());
+    let r = b.get(level);
+    if (!r) {
+      r = mapBasis(m, level);
+      b.set(level, r);
+    }
+    return r;
+  }
   function drop(ref) {
     inputs.delete(ref);
   }
@@ -6058,7 +7244,10 @@
       inp = inputs.get(inp.ref);
       if (!inp) throw new Error(`unknown input ${spec.input.ref}`);
     }
-    if (inp.scene || inp.stack) {
+    let map = null;
+    if (inp.map !== void 0) {
+      map = mapOf(inp.map);
+    } else if (inp.scene || inp.stack) {
       const doc = inp.scene ? JSON.parse(JSON.stringify(inp.scene)) : stackScene(inp.stack, style);
       scene = doc;
       if (doc.look && LOOKS[doc.look]) {
@@ -6128,7 +7317,13 @@
     if (spec.groupColors) overrides = { ...spec.groupColors };
     const [W, H] = spec.size || [960, 720];
     const dpr = spec.scale || 1;
-    return { style, look, camera: cam, structure, scene, overrides, labels, fitPoints: structure ? fitPointsOf(structure, style) : new Float32Array(0), frame: spec.frame || 0, W, H, dpr };
+    if (spec.map) map = mapOf(spec.map.ref);
+    const localRes = spec.map?.localResolution ? mapOf(spec.map.localResolution) : null;
+    if (map && !structure && !scene) {
+      const b = basisOf(map, mapLevel(map, style));
+      cam.base = b;
+    }
+    return { style, look, camera: cam, structure, scene, overrides, labels, fitPoints: structure ? fitPointsOf(structure, style) : new Float32Array(0), frame: spec.frame || 0, W, H, dpr, map, localRes };
   }
   function engineFor(f2) {
     const E = classic();
@@ -6165,7 +7360,7 @@
     c.width = Math.round(f2.W * f2.dpr);
     c.height = Math.round(f2.H * f2.dpr);
     const ctx = c.getContext("2d");
-    const R = { structure: f2.structure, camera: f2.camera, overrides: f2.overrides, fitPoints: f2.fitPoints, labels: f2.labels, w: c.width, h: c.height };
+    const R = { structure: f2.structure, camera: f2.camera, overrides: f2.overrides, fitPoints: f2.fitPoints, labels: f2.labels, w: c.width, h: c.height, map: f2.map, localRes: f2.localRes };
     const t0 = Date.now();
     try {
       if (f2.scene) {
@@ -6190,6 +7385,10 @@
     if (f2.structure) {
       const s = f2.structure;
       out.structure = { name: s.name, atoms: s.count, residues: s.residues.length, chains: s.chains.map((c) => c.id) };
+    }
+    if (f2.map) {
+      const m = f2.map;
+      out.map = { name: m.name, level: mapLevel(m, f2.style), recommended: m.level ?? null, mean: m.mean, rms: m.rms, min: m.min, max: m.max, size: [m.nx, m.ny, m.nz], step: m.step, origin: m.origin, binned: m.binned || 1, mass: m.mass ?? null, resolution: m.resolution ?? null };
     }
     if (f2.scene) {
       const E = classic();

@@ -9,7 +9,8 @@ import type { Structure } from '../model/structure';
 import { DEFAULT_STYLE, cloneStyle, mergeStyle, PALETTES, type Style } from '../style';
 import { LOOKS } from '../looks';
 import { GROUP_PALETTES, ribbonColours } from '../palettes';
-import { classic, cfgFromStyle, sceneFromStructure, renderClassic, renderScene } from '../classic/adapter';
+import { classic, cfgFromStyle, sceneFromStructure, renderClassic, renderScene, mapBasis, mapLevel } from '../classic/adapter';
+import { mapStats, type DensityMap } from '../model/map';
 import { sceneFitPoints, type SceneDoc } from '../classic/scene';
 import { selectAtoms } from '../model/selection';
 import { pcaBasis } from '../render/pca';
@@ -20,7 +21,9 @@ import { RecCanvas, endRender, release, setMeasure } from './canvas';
 export type Camera = { yaw: number; pitch: number; roll: number; zoom: number; panX: number; panY: number; fov?: number | null };
 export interface FigureSpec {
   /** what to draw: a structure's text (PDB or mmCIF), a scene document, or several structures (a stack of keyframes) */
-  input: { text: string; name: string } | { scene: SceneDoc; name?: string } | { stack: { text: string; name: string }[] } | { ref: string };
+  input: { text: string; name: string } | { scene: SceneDoc; name?: string } | { stack: { text: string; name: string }[] } | { ref: string } | { map: string };
+  /** a density map to draw with the structure (a ref from putMap), and optionally a local-resolution map (values in Å) */
+  map?: { ref: string; localResolution?: string } | null;
   /** a group palette by name (as a palette tile): the colours groups take, and with engraved ribbons, helix, sheet and coil */
   palette?: string | null;
   look?: string | null;
@@ -40,6 +43,16 @@ const FPS = 24;
 /** inputs the host registered once (a structure's text can be megabytes): specs name them as {ref} */
 const inputs = new Map<string, any>();
 export function put(ref: string, input: any) { inputs.set(ref, input); return ref }
+const maps = new Map<string, DensityMap>();
+/** register a density map: its grid (x fastest) and header ({name, nx, ny, nz, origin, step, level?, binned?}) */
+export function putMap(ref: string, header: any, data: Float32Array) {
+  const n = header.nx * header.ny * header.nz; if (data.length !== n) throw new Error(`the map has ${data.length} values, not ${header.nx}×${header.ny}×${header.nz}`);
+  maps.set(ref, { name: header.name || ref, nx: header.nx, ny: header.ny, nz: header.nz, data, origin: header.origin, step: header.step, level: header.level ?? undefined, binned: header.binned || 1, mass: header.mass ?? undefined, resolution: header.resolution ?? undefined, ...mapStats(data) });
+  return ref;
+}
+function mapOf(ref: string) { const m = maps.get(ref); if (!m) throw new Error(`unknown map ${ref}`); return m }
+const bases = new WeakMap<DensityMap, Map<number, Float32Array>>();
+function basisOf(m: DensityMap, level: number) { let b = bases.get(m); if (!b) bases.set(m, b = new Map()); let r = b.get(level); if (!r) { r = mapBasis(m, level); b.set(level, r) } return r }
 export function drop(ref: string) { inputs.delete(ref) }
 const parsed = new Map<string, Structure>();
 function structureOf(text: string, name: string): Structure {
@@ -53,6 +66,7 @@ interface Settled {
   style: Style; look: string; camera: Camera & { fov: number; base: Float32Array };
   structure: Structure | null; scene: SceneDoc | null; overrides: Record<string, string>; labels: FigLabel[];
   fitPoints: Float32Array; frame: number; W: number; H: number; dpr: number;
+  map: DensityMap | null; localRes: DensityMap | null;
 }
 
 const identity = () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
@@ -94,7 +108,9 @@ export function settle(spec: FigureSpec): Settled {
   const cam: any = { yaw: 0, pitch: 0, roll: 0, zoom: 1, panX: 0, panY: 0, base: identity() };
   let structure: Structure | null = null, scene: SceneDoc | null = null; let overrides: Record<string, string> = {}; let labels: FigLabel[] = [];
   let inp: any = spec.input; if (inp.ref !== undefined) { inp = inputs.get(inp.ref); if (!inp) throw new Error(`unknown input ${(spec.input as any).ref}`) }
-  if (inp.scene || inp.stack) {   // loadScene
+  let map: DensityMap | null = null;
+  if (inp.map !== undefined) { map = mapOf(inp.map) }   // a map on its own
+  else if (inp.scene || inp.stack) {   // loadScene
     const doc: any = inp.scene ? JSON.parse(JSON.stringify(inp.scene)) : stackScene(inp.stack, style); scene = doc;
     if (doc.look && LOOKS[doc.look]) { style = withLook(style, doc.look); look = doc.look }
     if (doc.site) style.site = { ...style.site, ...doc.site };
@@ -121,7 +137,10 @@ export function settle(spec: FigureSpec): Settled {
   if (spec.labels) labels = spec.labels.map(l => ({ ...l }));
   if (spec.groupColors) overrides = { ...spec.groupColors };
   const [W, H] = spec.size || [960, 720]; const dpr = spec.scale || 1;
-  return { style, look, camera: cam, structure, scene, overrides, labels, fitPoints: structure ? fitPointsOf(structure, style) : new Float32Array(0), frame: spec.frame || 0, W, H, dpr };
+  if (spec.map) map = mapOf(spec.map.ref);
+  const localRes = spec.map?.localResolution ? mapOf(spec.map.localResolution) : null;
+  if (map && !structure && !scene) { const b = basisOf(map, mapLevel(map, style)); cam.base = b }   // a map alone: turned by its own principal axes
+  return { style, look, camera: cam, structure, scene, overrides, labels, fitPoints: structure ? fitPointsOf(structure, style) : new Float32Array(0), frame: spec.frame || 0, W, H, dpr, map, localRes };
 }
 
 /** the engine made ready for a settled figure, as the app's structScene / setFrame do */
@@ -148,7 +167,7 @@ function sceneFrame(f: Settled) {
 export function render(spec: FigureSpec, measure?: (font: string, text: string) => number) {
   if (measure) setMeasure(measure);
   const f = settle(spec); const c = new RecCanvas(); c.width = Math.round(f.W * f.dpr); c.height = Math.round(f.H * f.dpr);
-  const ctx = c.getContext('2d') as any; const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: c.width, h: c.height };
+  const ctx = c.getContext('2d') as any; const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: c.width, h: c.height, map: f.map, localRes: f.localRes };
   const t0 = Date.now();
   try {
     if (f.scene) { sceneFrame(f); renderScene(ctx, R, f.style, f.scene, f.frame, f.dpr) }
@@ -165,6 +184,7 @@ export function render(spec: FigureSpec, measure?: (font: string, text: string) 
 export function info(spec: FigureSpec) {
   const f = settle(spec); const out: any = { look: f.look, style: f.style, camera: { ...f.camera, base: undefined }, labels: f.labels, groupColors: f.overrides };
   if (f.structure) { const s = f.structure; out.structure = { name: s.name, atoms: s.count, residues: s.residues.length, chains: s.chains.map(c => c.id) } }
+  if (f.map) { const m = f.map; out.map = { name: m.name, level: mapLevel(m, f.style), recommended: m.level ?? null, mean: m.mean, rms: m.rms, min: m.min, max: m.max, size: [m.nx, m.ny, m.nz], step: m.step, origin: m.origin, binned: m.binned || 1, mass: m.mass ?? null, resolution: m.resolution ?? null } }
   if (f.scene) { const E = classic(); E.cfg = cfgFromStyle(f.style, f.camera, true); if (E.scene !== f.scene) E.scene = f.scene; const TL = (E as any).TL;
     out.scene = { name: (f.scene as any).name, keyframes: f.scene.keyframes.map((k: any) => k.name), frames: TL.total, fps: FPS, segs: TL.segs } }
   return out;

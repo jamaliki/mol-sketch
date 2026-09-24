@@ -33,6 +33,14 @@ export interface Style {
   /** depth in a watercolour surface, each 0..1: ink edges where it stands in front of something far behind, pigment
       pooling in the grooves, and far parts fading into the paper with the depth fog */
   surfaceDepth: { edges: number; pooling: number; fade: number };
+  /** a density map (cryo-EM), when the figure has one: how it is drawn (surface: the isosurface in the look's medium;
+      layers: several contour levels as nested washes or lines; mesh: chicken wire; slice: a stippled section), its
+      contour level (null: the recommended one), carving (Å of the model, 0 off), what the line's looseness follows,
+      and the honest marks: density the model does not explain (accent), residues the density does not support, and
+      a caption that states the level */
+  map: { style: 'surface' | 'layers' | 'mesh' | 'slice'; level: number | null; smooth: number | 'auto'; crop: number; levels: number[]; carve: number; color: 'model' | 'single';
+    unexplained: boolean; unsupported: boolean; localResolution: 'none' | 'bfactor' | 'map'; layer: 'auto' | 'under' | 'over';
+    caption: boolean; maxVoxels: number; meshSpacing: number; slice: { offset: number; cut: boolean } };
   reps: { sticks: string; cartoon: string; surface: string };   // selections
   stickRadius: number;       // Å
   cartoonScale: number;
@@ -75,6 +83,8 @@ export const DEFAULT_STYLE: Style = {
   engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: false },
   site: { sel: '', cutaway: true, quiet: 0.35, scale: 1.9 },
   surfaceColor: 'subunit', surfaceDepth: { edges: 1, pooling: 1, fade: 1 },
+  map: { style: 'surface', level: null, smooth: 'auto', crop: 8, levels: [0.7, 1, 1.5], carve: 0, color: 'model', unexplained: true, unsupported: true, localResolution: 'none',
+    layer: 'auto', caption: true, maxVoxels: 192, meshSpacing: 1, slice: { offset: 0, cut: true } },
   reps: { sticks: 'hetatm and not water', cartoon: 'polymer', surface: '' },
   stickRadius: 0.2,
   cartoonScale: 1,

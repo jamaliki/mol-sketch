@@ -11,6 +11,8 @@ import pathlib
 import sys
 import threading
 
+import numpy as np
+
 import skia
 import py_mini_racer
 from py_mini_racer import MiniRacer
@@ -62,6 +64,10 @@ globalThis.__RING = new ArrayBuffer(%RING%);
 })();
 // what the ring did not take stays here for the host to pull
 globalThis.__last = null;
+// a density map's grid, written by the host straight into this buffer (no JSON), then registered
+globalThis.__MB = null;
+globalThis.__mapBuf = (n) => { __MB = new Float32Array(n); return __MB.buffer };
+globalThis.__putMap = (ref, header) => { const r = MolSketchCore.putMap(ref, JSON.parse(header), __MB); __MB = null; return r };
 globalThis.__abort = null;
 globalThis.__render = (spec) => { __miss = []; __abort = null; let r;
   try { r = MolSketchCore.render(JSON.parse(spec), __measure) } catch (e) { __last = (e && e.chunks) || []; __abort = e && e.canvas; throw e }
@@ -102,6 +108,7 @@ class Engine:
         self.raster = Raster(self.text)
         # the ring the engine writes its recording into, read in place, and the notification that a record is there:
         # handled on mini-racer's event-loop thread, so the replay runs while V8 goes on drawing
+        self._maps: dict[int, tuple] = {}
         self._ring = self.v8.eval("__RING"); self._i32 = self._ring.cast("i"); self._read = 0; self._err = None
         ctx = self.v8._ctx
 
@@ -142,6 +149,18 @@ class Engine:
                 return json.loads(self.v8.call("__call", name, json.dumps(args)))
             except Exception as e:  # mini-racer wraps JS errors; give the core's message, not V8's frame dump
                 raise CoreError(_js_message(e)) from None
+
+    def put_map(self, m) -> str:
+        """register a DensityMap with the core (once per map): its grid copied straight into a V8 buffer"""
+        cached = self._maps.get(id(m))
+        if cached and cached[0] is m: return cached[1]
+        ref = f"map{next(self._ids)}"
+        with self._lock:
+            buf = self.v8.eval(f"__mapBuf({m.data.size})")
+            np.frombuffer(buf, np.float32)[:] = m.data.ravel()   # (z, y, x) C order: x fastest, as the core reads it
+            self.v8.call("__putMap", ref, json.dumps(m.header()))
+        self._maps[id(m)] = (m, ref)
+        return ref
 
     def put(self, value) -> str:
         ref = f"in{next(self._ids)}"

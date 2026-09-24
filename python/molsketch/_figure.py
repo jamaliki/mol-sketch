@@ -44,6 +44,8 @@ class Figure:
         self._palette: str | None = None
         self._style_file: dict | None = None
         self._frame = 0
+        self._map: dict | None = None      # a density map drawn with the structure: {"ref", "localResolution"?}
+        self._map_obj = None
 
     # ------------------------------------------------------------------ the look
     def look(self, name: str) -> "Figure":
@@ -102,6 +104,47 @@ class Figure:
         if colour is None: colors.pop(group, None)
         else: colors[group] = colour
         self._colors = colors; return self
+
+    # ------------------------------------------------------------------ density maps
+    def map(self, source="auto", *, level: float | None = None, local_resolution=None, max_voxels: int = 320, **style) -> "Figure":
+        """Draw a density map (cryo-EM) with the structure. ``source`` is ``"auto"`` (the map this PDB entry was built
+        into, from EMDB), an EMDB ID (``"EMD-11638"``), a path to an MRC / CCP4 file, a ``DensityMap``, or another
+        figure's map (``ms.load_map(...)``). ``None`` removes the map.
+
+        ``level`` is the contour level (by default the depositors' recommended one; the caption states it).
+        ``local_resolution`` is a local-resolution map (a path, an EMDB ID, or a ``DensityMap``, values in Å) that sets
+        how loose the lines are, or ``"bfactor"`` to use the model's B-factors as a stand-in. Any other keyword is a
+        map style field (docs/style.md): ``fig.map("auto", style="layers", carve=2.5)``."""
+        from ._engine import engine
+        if source is None: self._map = None; self._map_obj = None; return self
+        # "auto" on a figure that already has a map (a map-only figure, or a second call) keeps that map: only the style changes
+        m = self._map_obj if source == "auto" and self._map_obj is not None else self._resolve_map(source, max_voxels)
+        spec = {"ref": engine().put_map(m)}
+        if local_resolution == "bfactor": style["local_resolution"] = "bfactor"
+        elif local_resolution is not None:
+            lr = self._resolve_map(local_resolution, max_voxels); spec["localResolution"] = engine().put_map(lr); style["local_resolution"] = "map"
+        self._map = spec; self._map_obj = m
+        if level is not None: style["level"] = float(level)
+        if style: self.set(map=style)
+        return self
+
+    def _resolve_map(self, source, max_voxels):
+        from ._maps import DensityMap, fetch_map, map_for_pdb, read_map, emdb_id
+        if isinstance(source, DensityMap): return source
+        if isinstance(source, Figure):
+            if source._map_obj is None: raise ValueError("that figure has no map")
+            return source._map_obj
+        if source == "auto": return fetch_map(map_for_pdb(self.name), max_voxels=max_voxels)
+        s = str(source)
+        if os.path.exists(s): return read_map(s, max_voxels=max_voxels)
+        try: return fetch_map(emdb_id(s), max_voxels=max_voxels)
+        except ValueError: raise FileNotFoundError(f"no such map file, and not an EMDB ID: {s}") from None
+
+    @property
+    def map_info(self) -> dict | None:
+        """The map this figure draws, if any: its name, the contour level in use (and the recommended one), the map's
+        mean, rms (σ) and range, its size and voxel size as drawn, and how much it was averaged down."""
+        return self._info().get("map")
 
     # ------------------------------------------------------------------ the camera
     def view(self, yaw: float | None = None, pitch: float | None = None, roll: float | None = None, zoom: float | None = None,
@@ -302,7 +345,8 @@ class Figure:
 
     def __repr__(self):
         i = self._info(); what = i.get("structure") or i.get("scene") or {}
-        if "atoms" in what: body = f"{what['atoms']:,} atoms, {what['residues']:,} residues"
+        if not what and i.get("map"): m = i["map"]; body = f"a {m['size'][0]}×{m['size'][1]}×{m['size'][2]} map at {m['step'][0]:.2f} Å, level {m['level']:.3g}"
+        elif "atoms" in what: body = f"{what['atoms']:,} atoms, {what['residues']:,} residues"
         else: body = f"{len(what.get('keyframes', []))} keyframe{'s' if len(what.get('keyframes', [])) != 1 else ''}, {what.get('frames', 0) / 24:.1f} s"
         return f"<molsketch.Figure {self.name!r}: {body}, look {i['look'] or 'default'}>"
 
@@ -319,6 +363,7 @@ class Figure:
         if self._camera: spec["camera"] = self._camera
         if self._labels is not None: spec["labels"] = self._labels
         if self._colors is not None: spec["groupColors"] = self._colors
+        if self._map is not None: spec["map"] = self._map
         return spec
 
     def _info(self) -> dict:

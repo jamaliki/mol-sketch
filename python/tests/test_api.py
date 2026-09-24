@@ -156,3 +156,61 @@ def test_fit_puts_the_drawing_in_the_box():
     assert abs((b["x0"] + b["x1"]) / 2 - 0.75) < 0.01 and abs((b["y0"] + b["y1"]) / 2 - 0.35) < 0.01   # centred
     assert b["x0"] > 0.54 and b["x1"] < 0.96 and b["y0"] > 0.09 and b["y1"] < 0.61                     # inside
     assert abs((b["x1"] - b["x0"]) - 0.37) < 0.02 or abs((b["y1"] - b["y0"]) - 0.47) < 0.02            # filling it
+
+
+# ---------------------------------------------------------------------------------------------- density maps
+def _write_mrc(path, vol_zyx, origin, step, axes=(1, 2, 3)):
+    """an MRC2014 file of a (z, y, x) volume; axes = (mapc, mapr, maps), the model axis of each file axis"""
+    import struct
+    order = [2 - (a - 1) for a in axes[::-1]]   # the file's (section, row, column) as (z, y, x) axes
+    data = np.ascontiguousarray(np.transpose(vol_zyx, order), dtype=np.float32)
+    ns, nr, nc = data.shape; n = {axes[0]: nc, axes[1]: nr, axes[2]: ns}
+    head = bytearray(1024)
+    struct.pack_into("<3ii3i3i3f3f3i", head, 0, nc, nr, ns, 2, 0, 0, 0, n[1], n[2], n[3], n[1] * step, n[2] * step, n[3] * step, 90, 90, 90, *axes)
+    struct.pack_into("<3f", head, 49 * 4, *origin); head[208:212] = b"MAP "
+    path.write_bytes(bytes(head) + data.tobytes())
+
+
+def _model_map(tmp_path, axes=(1, 2, 3)):
+    """a map of 1A8O made from its own atoms (a Gaussian on each), written with the given axis order"""
+    xyz = np.array([[float(l[30:38]), float(l[38:46]), float(l[46:54])] for l in (EX / "1A8O.pdb").read_text().splitlines() if l.startswith("ATOM")])
+    step = 1.0; origin = xyz.min(0) - 6; shape = np.ceil((xyz.max(0) + 6 - origin) / step).astype(int)
+    z, y, x = np.indices(shape[::-1]).astype(np.float32)
+    vol = np.zeros(shape[::-1], np.float32)
+    for p in xyz:
+        q = (p - origin) / step; i0 = np.maximum(0, (q - 3).astype(int)); i1 = np.minimum(shape, (q + 4).astype(int))
+        sl = (slice(i0[2], i1[2]), slice(i0[1], i1[1]), slice(i0[0], i1[0]))
+        vol[sl] += np.exp(-((x[sl] - q[0]) ** 2 + (y[sl] - q[1]) ** 2 + (z[sl] - q[2]) ** 2) / 2)
+    p = tmp_path / f"model_{''.join(map(str, axes))}.mrc"; _write_mrc(p, vol, tuple(origin), step, axes); return p, xyz, origin
+
+
+@pytest.mark.parametrize("axes", [(1, 2, 3), (3, 2, 1), (2, 3, 1)])
+def test_read_map_puts_density_on_the_atoms(tmp_path, axes):
+    """whatever the file's axis order, the grid read back is (z, y, x) in the model's frame, origin included"""
+    p, xyz, origin = _model_map(tmp_path, axes)
+    m = ms.read_map(p)
+    assert np.allclose(m.origin, origin, atol=1e-3) and m.step == (1.0, 1.0, 1.0)
+    idx = np.round((xyz - np.array(m.origin)) / 1.0).astype(int)
+    at_atoms = m.data[idx[:, 2], idx[:, 1], idx[:, 0]].mean()
+    assert at_atoms > 5 * m.data.mean()
+
+
+def test_read_map_bins_large_maps(tmp_path):
+    p, xyz, _ = _model_map(tmp_path)
+    full, small = ms.read_map(p), ms.read_map(p, max_voxels=20)
+    assert small.binned > 1 and max(small.shape) <= 20 and small.step[0] == full.step[0] * small.binned
+    assert abs(small.data.mean() - full.data[: small.shape[2] * small.binned, : small.shape[1] * small.binned, : small.shape[0] * small.binned].mean()) < 1e-4
+
+
+def test_map_with_its_model_and_on_its_own(tmp_path):
+    p, _, _ = _model_map(tmp_path)
+    fig = ms.load(EX / "1A8O.pdb").map(p, level=0.5)
+    info = fig.map_info
+    assert info["level"] == 0.5 and info["recommended"] is None and info["size"][0] > 10
+    assert fig.render(SMALL).to_numpy()[..., :3].std() > 5
+    for style in ("layers", "mesh", "slice"):
+        assert fig.copy().map(style=style).render(SMALL).to_numpy()[..., :3].std() > 5, style
+    alone = ms.load_map(p, level=0.5)
+    assert "map" in repr(alone) and alone.render(SMALL).to_numpy()[..., :3].std() > 5
+    assert alone.copy().map(smooth=4).render(SMALL).to_numpy()[..., :3].std() > 5   # low-passed: the "auto" keeps its map
+    assert ms.load(EX / "1A8O.pdb").map(p).map(None).map_info is None

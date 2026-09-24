@@ -22,8 +22,9 @@ from typing import Iterable
 from ._engine import CoreError
 from ._figure import Figure, looks, palettes, default_style
 from ._image import Image
+from ._maps import DensityMap, read_map
 
-__all__ = ["load", "fetch", "scene", "Figure", "Image", "looks", "palettes", "default_style", "CoreError"]
+__all__ = ["load", "fetch", "scene", "load_map", "fetch_map", "read_map", "Figure", "Image", "DensityMap", "looks", "palettes", "default_style", "CoreError"]
 __version__ = "0.1.0"
 
 
@@ -56,10 +57,12 @@ def load(source, *, name: str | None = None, format: str | None = None) -> Figur
     return Figure({"text": text, "name": (name or "structure") + ext}, name or "structure")
 
 
-def fetch(pdb_id: str, **kw) -> Figure:
+def fetch(pdb_id: str, *, map: bool = False, **kw) -> Figure:
     """Make a figure of a PDB entry, such as ``"2PTN"``. The file is downloaded from RCSB once and kept in
-    ``~/.cache/molsketch`` (or the folder in the ``MOLSKETCH_CACHE`` environment variable). Takes the same keywords as
+    ``~/.cache/molsketch`` (or the folder in the ``MOLSKETCH_CACHE`` environment variable). With ``map=True``, the
+    cryo-EM map the model was built into comes too (from EMDB; see ``Figure.map``). Takes the same keywords as
     ``load``."""
+    if map: return fetch(pdb_id, **kw).map("auto")
     pid = pdb_id.strip().upper()
     if not re.fullmatch(r"[0-9][A-Z0-9]{3}", pid): raise ValueError(f"{pdb_id!r} is not a PDB ID: four characters, starting with a digit, e.g. 1A8O")
     cache = pathlib.Path(os.environ.get("MOLSKETCH_CACHE", pathlib.Path.home() / ".cache" / "molsketch")); cache.mkdir(parents=True, exist_ok=True)
@@ -72,6 +75,25 @@ def fetch(pdb_id: str, **kw) -> Figure:
             raise ValueError(f"{pid} is not in the PDB") from None
         f.write_bytes(data)
     return load(f, name=kw.pop("name", pid), **kw)
+
+
+def load_map(source, *, name: str | None = None, level: float | None = None, max_voxels: int = 320) -> Figure:
+    """Make a figure of a density map on its own: a path to an MRC / CCP4 file (``.mrc``, ``.map``, ``.ccp4``, or any
+    of them ``.gz``), or a ``DensityMap``. ``level`` is the contour level to recommend (the figure starts from it; see
+    ``Figure.map`` for the rest). Maps larger than ``max_voxels`` a side are averaged down on reading."""
+    from ._engine import engine
+    from ._maps import DensityMap as _DM
+    m = source if isinstance(source, _DM) else read_map(source, name=name, level=level, max_voxels=max_voxels)
+    if level is not None: m.level = level
+    fig = Figure({"map": engine().put_map(m)}, name or m.name); fig._map_obj = m
+    return fig
+
+
+def fetch_map(emdb_id: str, *, max_voxels: int = 320) -> Figure:
+    """Make a figure of an EMDB entry's map on its own, such as ``"EMD-11638"``: downloaded once (kept in
+    ``~/.cache/molsketch/emdb``), with the depositors' recommended contour level."""
+    from ._maps import fetch_map as _fm
+    return load_map(_fm(emdb_id, max_voxels=max_voxels))
 
 
 def scene(path_or_dict) -> Figure:

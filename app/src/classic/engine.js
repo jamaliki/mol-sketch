@@ -206,6 +206,9 @@ function sampleState(frame){
 /* ============================ projection ============================ */
 let FIT={cx:0,cy:0,cz:0,rx:0,ry:0,spanX:10,spanY:10,zspan:4,key:''};
 function rot3(p,cy,sy,cp,sp){const x=p[0]-FIT.cx,y=p[1]-FIT.cy,z=p[2]-FIT.cz;const x1=x*cy+z*sy,z1=-x*sy+z*cy;const y1=y*cp-z1*sp,z2=y*sp+z1*cp;if(!VIEW_ROLL)return[x1,y1,z2];const cr=Math.cos(VIEW_ROLL*Math.PI/180),sr=Math.sin(VIEW_ROLL*Math.PI/180);return[x1*cr-y1*sr,x1*sr+y1*cr,z2]} // yaw about y, pitch about x, then roll about the view axis
+/** rot3's inverse: a point of the rotated, centred frame back to the scene's */
+function unrot3(r,cy,sy,cp,sp){let x1=r[0],y1=r[1];const z2=r[2];if(VIEW_ROLL){const cr=Math.cos(VIEW_ROLL*Math.PI/180),sr=Math.sin(VIEW_ROLL*Math.PI/180);const a=x1*cr+y1*sr,b=-x1*sr+y1*cr;x1=a;y1=b}
+  const y=y1*cp+z2*sp,z1=-y1*sp+z2*cp;const x=x1*cy-z1*sy,z=x1*sy+z1*cy;return[x+FIT.cx,y+FIT.cy,z+FIT.cz]}
 let VIEW_YAW=0,VIEW_PITCH=0,VIEW_ROLL=0,VIEW_ZOOM=1,VIEW_PANX=0,VIEW_PANY=0; // the camera of the frame being drawn: cfg.view, or the interpolated keyframe views when the scene has them
 let TEX=1; // texture scale for the frame: 1 = marks in screen pixels; with rep.textureScale 'object' they follow the drawing's scale, so the hatching stays the same relative to an atom however large or small it is on the page // effective angles for the frame being drawn (base + turntable)
 function computeFit(){
@@ -241,7 +244,11 @@ function makeProjector(W,H){
       const t=clamp(0.5-r[2]/(FIT.zspan+1e-6),0,1);            // 0 nearest … 1 farthest
       const fog=clamp((t-fs)/(1-fs),0,1);                       // fog begins at fogStart, like PyMOL's depth cue
       return{x:ox+(r[0]-FIT.rx)*base*d+FIT.rx*base,y:oy-((r[1]-FIT.ry)*base*d+FIT.ry*base),z:r[2],d,fog}},
-    dir2(v){const r=this.rot([v[0]+FIT.cx,v[1]+FIT.cy,v[2]+FIT.cz]);return[r[0],-r[1]]}
+    dir2(v){const r=this.rot([v[0]+FIT.cx,v[1]+FIT.cy,v[2]+FIT.cz]);return[r[0],-r[1]]},
+    /** the point of the scene at screen (x, y) and view depth rz (the rotated frame's z): proj's inverse */
+    unproj(x,y,rz){const d=D===Infinity?1:clamp(D/(D-rz),0.2,4);return unrot3([(x-ox-FIT.rx*base)/(base*d)+FIT.rx,(oy-y-FIT.ry*base)/(base*d)+FIT.ry,rz],cy,sy,cp,sp)},
+    /** where the eye is, in the rotated frame (null: orthographic, looking down −z) */
+    eye(){return D===Infinity?null:[FIT.rx,FIT.ry,D]}
   };
 }
 
@@ -952,6 +959,214 @@ function hatchPatch(ctx,poly,ang,spacing,o){
   ctx.restore();
 }
 
+/* ---- density maps ----
+   A cryo-EM map (scene.map, made ready by the app's classic/mapprep.ts: isosurfaces in the drawing's frame, each vertex
+   tied to its nearest model atom, and the local resolution) drawn in the look's medium. The isosurface is rasterised
+   into a depth and triangle buffer; silhouettes are found on the mesh itself (where the surface turns away from the
+   eye) and kept where the buffer says they are seen; regions (one per colour, and the shadow bands) are traced from the
+   buffers into hand-cut polygons; then each medium draws them: washes and shadow glazes in watercolour, hatching in ink,
+   tones in flat, scribbles in pencil and chalk. The line loosens where the local resolution is worse. */
+function mapRaster(L,px,py,pz,W,H){
+  const zb=new Float32Array(W*H).fill(-1e9),tb=new Int32Array(W*H).fill(-1),tri=L.tri;
+  for(let t=0;t<tri.length;t+=3){const a=tri[t],b=tri[t+1],c=tri[t+2];
+    const ax=px[a],ay=py[a],bx=px[b],by=py[b],cx=px[c],cy=py[c];const area=(bx-ax)*(cy-ay)-(by-ay)*(cx-ax);if(Math.abs(area)<1e-9)continue;
+    const x0=Math.max(0,Math.floor(Math.min(ax,bx,cx))),x1=Math.min(W-1,Math.ceil(Math.max(ax,bx,cx))),y0=Math.max(0,Math.floor(Math.min(ay,by,cy))),y1=Math.min(H-1,Math.ceil(Math.max(ay,by,cy)));
+    const inv=1/area;
+    for(let y=y0;y<=y1;y++){const qy=y+0.5;for(let x=x0;x<=x1;x++){const qx=x+0.5;
+      const w0=((bx-qx)*(cy-qy)-(by-qy)*(cx-qx))*inv,w1=((cx-qx)*(ay-qy)-(cy-qy)*(ax-qx))*inv,w2=1-w0-w1;
+      if(w0<0||w1<0||w2<0)continue;const z=w0*pz[a]+w1*pz[b]+w2*pz[c],i=y*W+x;if(z>zb[i]){zb[i]=z;tb[i]=t/3}}}}
+  return {zb,tb};
+}
+/* the outlines of a mask (1 inside) by marching squares on pixel centres: closed rings in pixel coordinates, simplified
+   (their orientation is arbitrary: fill them even-odd, which also makes holes of the inner ones) */
+function maskRings(mask,W,H,x0=0,y0=0,x1=W-1,y1=H-1){
+  const pts=[],segA=[],segB=[],keyIx=new Map();
+  const id=(x,y)=>{const k=Math.round(x*2)*65536+Math.round(y*2);let i=keyIx.get(k);if(i===undefined){i=pts.length;pts.push([x,y]);keyIx.set(k,i)}return i};
+  const at=(x,y)=>x<0||y<0||x>=W||y>=H?0:mask[y*W+x];
+  const E={T:(x,y)=>[x+1,y+0.5],R:(x,y)=>[x+1.5,y+1],B:(x,y)=>[x+1,y+1.5],L:(x,y)=>[x+0.5,y+1]};   // edge midpoints of the cell between four pixel centres
+  const CASES={1:['LT'],2:['TR'],3:['LR'],4:['RB'],5:['LT','RB'],6:['TB'],7:['LB'],8:['BL'],9:['BT'],10:['TR','BL'],11:['BR'],12:['RL'],13:['RT'],14:['TL']};
+  for(let y=y0-1;y<=y1;y++)for(let x=x0-1;x<=x1;x++){
+    const idx=at(x,y)|at(x+1,y)<<1|at(x+1,y+1)<<2|at(x,y+1)<<3;if(idx===0||idx===15)continue;
+    for(const pq of CASES[idx]){const p=E[pq[0]](x,y),q=E[pq[1]](x,y);segA.push(id(p[0],p[1]));segB.push(id(q[0],q[1]))}}
+  const adj=new Map();for(let i=0;i<segA.length;i++)for(const k of [segA[i],segB[i]]){let l=adj.get(k);if(!l)adj.set(k,l=[]);l.push(i)}
+  const used=new Uint8Array(segA.length),rings=[];
+  for(let s0=0;s0<segA.length;s0++){if(used[s0])continue;used[s0]=1;const start=segA[s0];let cur=segB[s0];const ring=[pts[start]];
+    for(let guard=0;guard<4e6&&cur!==start;guard++){ring.push(pts[cur]);const nx=(adj.get(cur)||[]).find(j=>!used[j]);if(nx===undefined)break;used[nx]=1;cur=segA[nx]===cur?segB[nx]:segA[nx]}
+    if(ring.length>=3)rings.push(simplifyRing(ring,0.6))}
+  return rings.filter(r=>r.length>=3&&Math.abs(ringArea(r))>3);
+}
+function ringArea(r){let a=0;for(let i=0;i<r.length;i++){const p=r[i],q=r[(i+1)%r.length];a+=p[0]*q[1]-q[0]*p[1]}return a/2}
+function simplifyRing(r,eps){ // Douglas–Peucker on an open copy, closed again
+  const dp=(pts)=>{if(pts.length<3)return pts;let dm=0,im=0;const a=pts[0],b=pts[pts.length-1],L=Math.hypot(b[0]-a[0],b[1]-a[1])||1;
+    for(let i=1;i<pts.length-1;i++){const d=Math.abs((b[0]-a[0])*(a[1]-pts[i][1])-(a[0]-pts[i][0])*(b[1]-a[1]))/L;if(d>dm){dm=d;im=i}}
+    if(dm<=eps)return[a,b];const l=dp(pts.slice(0,im+1)),rr=dp(pts.slice(im));return l.slice(0,-1).concat(rr)};
+  const h=Math.floor(r.length/2);return dp(r.slice(0,h+1)).slice(0,-1).concat(dp(r.slice(h).concat([r[0]])).slice(0,-1));
+}
+function ringsPath(ctx,rings){ctx.beginPath();for(const r of rings){r.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.closePath()}}
+/* a watercolour wash over rings (holes allowed): the rings deformed and laid down in translucent layers, their edges
+   piling into a drying ring (the surface's watercolourShape, for shapes with holes) */
+function washRings(ctx,rings,col,seed,o){
+  const rng=mulberry32(seed+909),layers=o.layers||5,light=luminance(cfg.palette.paper)>0.5;
+  const def=(v,sc)=>rings.map(r=>wcDeform(r,sc>1?2:1,v,rng));
+  ctx.save();ctx.globalCompositeOperation=o.offscreen?'source-over':light?'multiply':'screen';
+  for(let L=0;L<layers;L++){const lay=def(0.04+rng()*0.05,2);ringsPath(ctx,lay);ctx.fillStyle=rgba(col,(o.strength||0.7)/layers*1.15);ctx.fill('evenodd')}
+  if(!o.noRing){const lay=def(0.02,1);ringsPath(ctx,lay);ctx.lineWidth=0.8;ctx.strokeStyle=rgba(mix(col,shadeInk(),0.3),0.22*(o.strength||0.7));ctx.stroke()}
+  ctx.restore();
+}
+function buildMap(items,st,pos,proj,seedBase){
+  const M=scene.map,o=M.opts,P=cfg.palette,S=cfg.style,W=Math.max(1,Math.round(RF.W)),H=Math.max(1,Math.round(RF.H));
+  const EDG=cfg.rep.surfEdges||0,POOL=cfg.rep.surfPool||0,FADE=cfg.rep.surfFade||0,ink=cfg.rep.fill==='ink'||cfg.rep.fill==='ink colour',chalk=isChalk(),wc=isWC(),pencil=cfg.rep.fill==='pencil';
+  const light=luminance(P.paper)>0.5,inkCol=P.ink,eye=proj.eye();
+  // colour classes: the model's colour (by the surface scheme) at each vertex's nearest atom, the accent where the
+  // model explains no density (a patch of it, not a speck of noise), or the map's own colour
+  const colFor=surfaceColour(),byIndex=scene.atomIds||[],atomsById={};for(const a of st.atoms)atomsById[a.id]=a;
+  const classes=[],classIx=new Map();const classOf=c=>{let i=classIx.get(c);if(i===undefined){i=classes.length;classes.push(c);classIx.set(c,i)}return i};
+  const mapCol=P.surface,accent=P.accent,contextCol=mix(P.surface,P.paper,0.5);
+  const prep=L=>{const n=L.pos.length/3,px=new Float32Array(n),py=new Float32Array(n),pz=new Float32Array(n),fog=new Float32Array(n),rn=new Float32Array(n*3),cls=new Int32Array(n);
+    for(let v=0;v<n;v++){const p=proj.proj([L.pos[v*3],L.pos[v*3+1],L.pos[v*3+2]]);px[v]=p.x;py[v]=p.y;pz[v]=p.z;fog[v]=p.fog;
+      const r=proj.rot([L.nor[v*3]+FIT.cx,L.nor[v*3+1]+FIT.cy,L.nor[v*3+2]+FIT.cz]);rn[v*3]=r[0];rn[v*3+1]=r[1];rn[v*3+2]=r[2]}
+    // unexplained density: connected pieces of surface far from every atom, big enough not to be noise
+    const far=new Uint8Array(n);if(M.hasModel&&o.unexplained)for(let v=0;v<n;v++)far[v]=L.dist[v]>3.4?1:0;
+    const comp=new Int32Array(n).fill(-1);if(M.hasModel&&o.unexplained){const par=new Int32Array(n);for(let v=0;v<n;v++)par[v]=v;const find=x=>{while(par[x]!==x){par[x]=par[par[x]];x=par[x]}return x};
+      for(let t=0;t<L.tri.length;t+=3){const a=L.tri[t],b=L.tri[t+1],c=L.tri[t+2];if(far[a]&&far[b])par[find(a)]=find(b);if(far[b]&&far[c])par[find(b)]=find(c);if(far[a]&&far[c])par[find(a)]=find(c)}
+      // a piece is unexplained (the accent) when it is big enough not to be noise and small beside the model (a ligand,
+      // a loop left out); a piece larger than a tenth of the explained surface is the rest of an assembly the model
+      // does not cover (context, in a paler map colour)
+      let explained=0;for(let v=0;v<n;v++)if(!far[v])explained++;
+      const size=new Map();for(let v=0;v<n;v++)if(far[v]){const r=find(v);size.set(r,(size.get(r)||0)+1)}
+      for(let v=0;v<n;v++)if(far[v]){const k=size.get(find(v));comp[v]=k<24?0:k<=0.1*explained?1:2}}
+    for(let v=0;v<n;v++){let c=mapCol;if(comp[v]===1)c=accent;else if(comp[v]===2)c=contextCol;else if(o.color==='model'&&L.near[v]>=0){const a=atomsById[byIndex[L.near[v]]];if(a)c=colFor(a)}cls[v]=classOf(c)}
+    return {...L,px,py,pz,fog,rn,cls}};   // projected afresh every frame: the camera moves
+  const levels=M.levels.map(prep),main=levels[M.primary]||levels[0];
+  const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':style==='surface'?(M.hasModel?'under':'over'):'over'):o.layer;
+  const zItem=layer==='under'?-1e9:layer==='over'?1e9:0;
+  // the surface's silhouette on the mesh: where n·(eye − p) changes sign, kept where the buffer sees it
+  const silhouettes=(L,buf)=>{
+    const n=L.pos.length/3,f=new Float32Array(n);
+    for(let v=0;v<n;v++){let vx=0,vy=0,vz=1;if(eye){const r=proj.rot([L.pos[v*3],L.pos[v*3+1],L.pos[v*3+2]]);vx=eye[0]-r[0];vy=eye[1]-r[1];vz=eye[2]-r[2];const l=Math.hypot(vx,vy,vz)||1;vx/=l;vy/=l;vz/=l}
+      f[v]=L.rn[v*3]*vx+L.rn[v*3+1]*vy+L.rn[v*3+2]*vz}
+    const segs=[];const tri=L.tri;
+    for(let t=0;t<tri.length;t+=3){const vs=[tri[t],tri[t+1],tri[t+2]];const pts=[];
+      for(let e=0;e<3;e++){const a=vs[e],b=vs[(e+1)%3];if((f[a]>0)!==(f[b]>0)){const u=f[a]/(f[a]-f[b]);pts.push({x:L.px[a]+(L.px[b]-L.px[a])*u,y:L.py[a]+(L.py[b]-L.py[a])*u,z:L.pz[a]+(L.pz[b]-L.pz[a])*u,
+        h:L.hand?L.hand[a]+(L.hand[b]-L.hand[a])*u:0,fog:L.fog[a]+(L.fog[b]-L.fog[a])*u,k:a<b?a+'_'+b:b+'_'+a,nx:L.rn[a*3],ny:-L.rn[a*3+1]})}}
+      if(pts.length===2)segs.push(pts)}
+    // chain the segments through their shared mesh edges
+    const byKey=new Map();segs.forEach((s,i)=>{for(const p of s){let l=byKey.get(p.k);if(!l)byKey.set(p.k,l=[]);l.push(i)}});
+    const used=new Uint8Array(segs.length),lines=[];
+    for(let i=0;i<segs.length;i++){if(used[i])continue;used[i]=1;const line=[segs[i][0],segs[i][1]];
+      for(const tail of [1,0]){for(;;){const end=tail?line[line.length-1]:line[0];const nx=(byKey.get(end.k)||[]).find(j=>!used[j]);if(nx===undefined)break;used[nx]=1;const s=segs[nx];const far=s[0].k===end.k?s[1]:s[0];if(tail)line.push(far);else line.unshift(far)}}
+      lines.push(line)}
+    // visible, and the depth step behind (heavier line for a deeper step, full weight against the paper)
+    const vis=p=>{const x=Math.floor(p.x),y=Math.floor(p.y);if(x<0||y<0||x>=W||y>=H)return false;return buf.zb[y*W+x]<=p.z+2.2};
+    const out=[];for(const line of lines){let run=[];for(const p of line){if(vis(p)){const L2=Math.hypot(p.nx,p.ny)||1,qx=Math.floor(p.x+p.nx/L2*3),qy=Math.floor(p.y+p.ny/L2*3);
+        const zb=qx<0||qy<0||qx>=W||qy>=H?-1e9:buf.zb[qy*W+qx];p.gap=zb<-1e8?1:clamp((p.z-zb-1.5)/8,0,1);run.push(p)}else{if(run.length>1)out.push(run);run=[]}}if(run.length>1)out.push(run)}
+    return out};
+  const drawLines=(ctx,lines,o2)=>{let k=0;for(const line of lines){ // split by looseness (local resolution) into three hands
+      let cur=[],hb=-1;const flush=()=>{if(cur.length>1){const h=(hb+0.5)/3,g=cur.reduce((s,p)=>s+(p.gap??1),0)/cur.length,fg=cur.reduce((s,p)=>s+p.fog,0)/cur.length,fk=1-FADE*fg*0.8;
+          sketchLine(ctx,cur.map(p=>[p.x,p.y]),{seed:seedBase+1301+k++,passes:h>0.5?2:1,width:o2.width*(EDG>0?0.55+0.75*g*EDG+0.25*(1-EDG):1)*(0.75+0.25*fk),color:o2.color,alpha:o2.alpha*(1-0.35*h)*(0.4+0.6*fk),ampScale:0.55+1.9*h,step:3,overshoot:false})}};
+      for(const p of line){const b=L0hand(p.h);if(b!==hb&&cur.length){cur.push(p);flush();cur=[p]}else cur.push(p);hb=b}flush()}};
+  const L0hand=h=>main.hand?Math.min(2,Math.floor(h*3)):0;
+  // per pixel: which triangle, how dark (light and grooves), how far into the fog, and its colour class
+  const shadeOf=(L,buf)=>{
+    const n=W*H,dark=new Float32Array(n),fogp=new Float32Array(n),cls=new Int32Array(n).fill(-1),hand=new Float32Array(n);
+    const la=S.lightAngle*Math.PI/180,l0=Math.cos(la)*0.75,l1=-Math.sin(la)*0.75,l2=0.66,occR=6*proj.pxPerA;
+    for(let i=0;i<n;i++){const t=buf.tb[i];if(t<0)continue;const a=L.tri[t*3],b=L.tri[t*3+1],c=L.tri[t*3+2];
+      const nx=L.rn[a*3]+L.rn[b*3]+L.rn[c*3],ny=L.rn[a*3+1]+L.rn[b*3+1]+L.rn[c*3+1],nz=L.rn[a*3+2]+L.rn[b*3+2]+L.rn[c*3+2],ln=Math.hypot(nx,ny,nz)||1;
+      const lam=Math.max(0,(nx*l0+ny*l1*-1+nz*l2)/ln);   // the light, from the style's angle (screen y down)
+      let occ=0;if(POOL>0){const x=i%W,y=(i/W)|0,z=buf.zb[i];let s=0;for(let k=0;k<8;k++){const an=k*Math.PI/4,qx=Math.round(x+Math.cos(an)*occR),qy=Math.round(y+Math.sin(an)*occR);if(qx>=0&&qy>=0&&qx<W&&qy<H){const zq=buf.zb[qy*W+qx];if(zq>-1e8)s+=clamp((zq-z-1)/6,0,1)}}occ=s/8}
+      dark[i]=clamp(0.62*(1-lam)*S.shading/0.65+0.9*POOL*occ,0,1);fogp[i]=(L.fog[a]+L.fog[b]+L.fog[c])/3;cls[i]=L.cls[a];hand[i]=L.hand?(L.hand[a]+L.hand[b]+L.hand[c])/3:0}
+    softenCovered(dark,buf.tb,W,H,Math.max(1,Math.round(2.5*TEX)));   // the facets of the mesh smoothed away: shadows as broad shapes, not specks
+    return {dark,fogp,cls,hand}};
+  const bbox=(test)=>{let x0=W,y0=H,x1=-1,y1=-1;for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(test(y*W+x)){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}return x1<0?null:[x0,y0,x1,y1]};
+  const regions=(test)=>{const m=new Uint8Array(W*H);for(let i=0;i<m.length;i++)m[i]=test(i)?1:0;const b=bbox(i=>m[i]);return b?maskRings(m,W,H,b[0],b[1],b[2],b[3]):[]};
+  // ink hatching over the region where `dark` passes a threshold: straight hand lines, one direction, then crossed
+  const hatch=(ctx,sh,covered,t,ang,sp,colorAt,alpha)=>{const dx=Math.cos(ang),dy=Math.sin(ang),nx=-dy,ny=dx,R=Math.hypot(W,H)/2,cx=W/2,cy=H/2;let k=0;
+    for(let s=-R;s<R;s+=sp){let run=null;const step=1.5;
+      const end=()=>{if(run&&run.n>2){const c=colorAt(run.c),hh=run.h/run.n,fg=run.f/run.n;sketchLine(ctx,[run.a,run.b],{seed:seedBase+7001+k++,passes:1,width:0.7*TEX,color:c,alpha:alpha*clamp(0.35+0.8*run.d/run.n,0,1)*(1-0.6*FADE*fg),ampScale:0.4+1.6*hh,step:5,overshoot:false})}run=null};
+      for(let u=-R;u<R;u+=step){const x=cx+nx*s+dx*u,y=cy+ny*s+dy*u,xi=Math.floor(x),yi=Math.floor(y);
+        const i=xi>=0&&yi>=0&&xi<W&&yi<H?yi*W+xi:-1,on=i>=0&&covered(i)&&sh.dark[i]>=t;
+        if(on&&run&&sh.cls[i]!==run.c)end();
+        if(on){if(!run)run={a:[x,y],b:[x,y],n:0,d:0,h:0,f:0,c:sh.cls[i]};run.b=[x,y];run.n++;run.d+=sh.dark[i];run.h+=sh.hand[i];run.f+=sh.fogp[i]}else end()}end()}};
+  const surfaceItem=(L,buf,sh,strength,withLines)=>ctx=>{
+    ctx.save();const covered=i=>buf.tb[i]>=0;const all=regions(covered);if(!all.length){ctx.restore();return}
+    const opaque=layer!=='over'||!wc;
+    if(opaque||ink||pencil||chalk){ringsPath(ctx,all);ctx.fillStyle=paperFill();ctx.fill('evenodd')}
+    const byClass=classes.map((c,ci)=>({c,rings:regions(i=>buf.tb[i]>=0&&sh.cls[i]===ci)}));
+    if(wc){for(const {c,rings} of byClass)if(rings.length)washRings(ctx,rings,c,seedBase+71+classIx.get(c),{strength:(c===contextCol?0.22:0.42)*strength,layers:4});
+      // shadow glazes: a neutral wash over the shadowed parts and the grooves, then a deeper one
+      const ctxIx=classIx.has(contextCol)?classIx.get(contextCol):-2,lit=i=>covered(i)&&sh.cls[i]!==ctxIx;   // the context takes no glaze: it stays quieter than the model's own density
+      const g1=regions(i=>lit(i)&&sh.dark[i]>0.34),g2=regions(i=>lit(i)&&sh.dark[i]>0.6);const glaze=mix(P.paper,shadeInk(),light?0.55:0.4);
+      if(g1.length)washRings(ctx,g1,glaze,seedBase+501,{strength:0.26*strength,layers:3,noRing:true});if(g2.length)washRings(ctx,g2,glaze,seedBase+502,{strength:0.24*strength,layers:3,noRing:true})}
+    else if(!ink&&!pencil&&!chalk){for(const {c,rings} of byClass)if(rings.length){ringsPath(ctx,rings);ctx.fillStyle=fillFor(c);ctx.fill('evenodd')}   // flat / wash: a tone, darker in shadow
+      const g1=regions(i=>covered(i)&&sh.dark[i]>0.34);if(g1.length){ringsPath(ctx,g1);ctx.fillStyle=rgba(shadeInk(),0.16*(cfg.rep.fill==='wash'?0.6:1));ctx.fill('evenodd')}}
+    else if(pencil||chalk){for(const {c,rings} of byClass){if(!rings.length)continue;ctx.save();ringsPath(ctx,rings);ctx.clip('evenodd');let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const r of rings)for(const q of r){x0=Math.min(x0,q[0]);y0=Math.min(y0,q[1]);x1=Math.max(x1,q[0]);y1=Math.max(y1,q[1])}
+        if(pencil){ctx.fillStyle=rgba(fillFor(c),0.3);ctx.fill('evenodd')}scribbleFill(ctx,x0,y0,x1,y1,c,seedBase+901+classIx.get(c),{fog:0,d:1});ctx.restore()}}
+    if(ink||pencil||chalk||(cfg.rep.fill==='flat'&&S.shading>0)){ // hatching in the shadow and the grooves, crossed where deepest
+      const inkColour=cfg.rep.fill==='ink colour',colorAt=ci=>inkColour||pencil||chalk?mix(classes[ci]||mapCol,P.hatch,0.15):P.hatch,sp=S.hatchSpacing*Math.max(0.7,TEX),ang=S.hatchAngle*Math.PI/180;
+      hatch(ctx,sh,covered,inkColour?0.12:0.3,ang,sp,colorAt,inkColour?0.85:0.75);hatch(ctx,sh,covered,0.6,ang+1.25,sp*1.2,colorAt,0.6)}
+    // aerial fade: a veil of paper over the far parts
+    if(FADE>0){const far=regions(i=>covered(i)&&sh.fogp[i]>0.35);if(far.length){ringsPath(ctx,far);ctx.fillStyle=rgba(P.paper,0.35*FADE);ctx.fill('evenodd')}}
+    if(withLines){const lines=silhouettes(L,buf);drawLines(ctx,lines,{width:S.inkWidth*0.95*(chalk?1.3:1),color:wc?mix(mapCol,shadeInk(),0.6):inkCol,alpha:0.9})
+      // where one colour meets another (chains, or the unexplained density): a thinner line
+      const seams=[];for(let t=0;t<L.tri.length;t+=3){const vs=[L.tri[t],L.tri[t+1],L.tri[t+2]];const m=[];for(let e=0;e<3;e++){const a=vs[e],b=vs[(e+1)%3];if(L.cls[a]!==L.cls[b])m.push({x:(L.px[a]+L.px[b])/2,y:(L.py[a]+L.py[b])/2,z:Math.max(L.pz[a],L.pz[b]),fog:L.fog[a],h:L.hand?L.hand[a]:0,gap:0.5})}
+        if(m.length===2){const vis=p=>{const x=Math.floor(p.x),y=Math.floor(p.y);return x>=0&&y>=0&&x<W&&y<H&&buf.zb[y*W+x]<=p.z+1.2};if(vis(m[0])&&vis(m[1]))seams.push(m)}}
+      drawLines(ctx,seams,{width:S.inkWidth*0.5,color:wc?mix(mapCol,shadeInk(),0.5):inkCol,alpha:0.55})}
+    ctx.restore()};
+  if(style==='surface'||style==='layers'){
+    const list=style==='layers'?[...levels].sort((a,b)=>a.level-b.level):[main];
+    list.forEach((L,li)=>{const buf=mapRaster(L,L.px,L.py,L.pz,W,H),sh=shadeOf(L,buf);const primary=L===main;
+      const strength=style==='layers'?(primary?0.8:li===0?0.35:1):1;
+      items.push({z:zItem+li,map:true,draw:style==='layers'&&!primary&&!(ink||pencil||chalk)?ctx=>{ // an outer or inner level: a translucent wash and a thin line
+          const covered=i=>buf.tb[i]>=0,rings=regions(covered);if(!rings.length)return;ctx.save();
+          if(wc)washRings(ctx,rings,mapCol,seedBase+333+li,{strength:0.45*strength,layers:3});else{ringsPath(ctx,rings);ctx.fillStyle=rgba(fillFor(mapCol),0.22*strength);ctx.fill('evenodd')}
+          drawLines(ctx,silhouettes(L,buf),{width:S.inkWidth*(li===0?0.5:0.8),color:mix(mapCol,shadeInk(),0.55),alpha:li===0?0.45:0.7});ctx.restore()}
+        :style==='layers'&&!primary?ctx=>{drawLines(ctx,silhouettes(L,buf),{width:S.inkWidth*(li===0?0.45:0.8),color:inkCol,alpha:li===0?0.45:0.8})}   // ink: nested contour lines
+        :surfaceItem(L,buf,sh,strength,true)})})}
+  else if(style==='mesh'){ // chicken wire: the map's contours on the grid planes, hidden where the surface is in front
+    const buf=o.carve>0?null:mapRaster(main,main.px,main.py,main.pz,W,H);
+    const lines=[];for(const w of M.wire){let run=[];for(const q of w){const p=proj.proj(q);const x=Math.floor(p.x),y=Math.floor(p.y);const vis=!buf||(x>=0&&y>=0&&x<W&&y<H&&buf.zb[y*W+x]<=p.z+1.5);if(vis)run.push({x:p.x,y:p.y,fog:p.fog,h:0,gap:1});else{if(run.length>1)lines.push(run);run=[]}}if(run.length>1)lines.push(run)}
+    const col=o.color==='single'||!M.hasModel?mix(mapCol,shadeInk(),light?0.45:0.1):mix(P.N,shadeInk(),0.2);
+    items.push({z:zItem,map:true,draw:ctx=>{ctx.save();drawLines(ctx,lines,{width:S.inkWidth*0.45,color:col,alpha:0.85});ctx.restore()}})}
+  else if(style==='slice'){ // a section through the map at the view's depth: stipple for density, the contour in ink
+    const rz=M.box.map(c=>proj.rot(c)[2]),zc=(Math.min(...rz)+Math.max(...rz))/2+(o.slice?.offset||0)*(Math.max(...rz)-Math.min(...rz));
+    // the plane's outline: where it cuts the box's edges
+    const R=M.box.map(c=>proj.rot(c)),E=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]],cut=[];
+    for(const [a,b] of E){const za=R[a][2],zb=R[b][2];if((za-zc)*(zb-zc)<0){const u=(zc-za)/(zb-za);const q=M.box[a].map((v,k)=>v+(M.box[b][k]-v)*u);const p=proj.proj(q);cut.push([p.x,p.y])}}
+    const poly=hull(cut);if(poly.length<3)return;
+    let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const q of poly){x0=Math.min(x0,q[0]);y0=Math.min(y0,q[1]);x1=Math.max(x1,q[0]);y1=Math.max(y1,q[1])}
+    const st2=1.5,gw=Math.ceil((x1-x0)/st2)+1,gh=Math.ceil((y1-y0)/st2)+1,val=new Float32Array(gw*gh).fill(-1e9),lv=M.primaryLevel;
+    for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){const x=x0+i*st2,y=y0+j*st2;if(!inHull(poly,x,y))continue;const q=proj.unproj(x,y,zc);val[j*gw+i]=M.sample(q[0],q[1],q[2])/lv}
+    if(o.slice?.cut!==false)for(let i=items.length-1;i>=0;i--)if(!items[i].map&&items[i].z>zc+0.5)items.splice(i,1);   // what lies in front of the plane is cut away
+    items.push({z:zc,map:true,draw:ctx=>{const rng=mulberry32(seedBase+4401);ctx.save();
+      ctx.beginPath();poly.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.closePath();ctx.fillStyle=paperFill();ctx.fill();
+      ctx.fillStyle=rgba(light?inkCol:mix(inkCol,P.paper,0.2),0.85);   // stipple: dots as dense as the density (from a third of the contour level up)
+      for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){const v=val[j*gw+i];if(v<0.3)continue;const pr=Math.pow(clamp((v-0.3)/1.4,0,1),1.2)*0.85;if(rng()>pr)continue;
+        const x=x0+(i+rng())*st2,y=y0+(j+rng())*st2;ctx.beginPath();ctx.arc(x,y,0.5+0.35*rng(),0,Math.PI*2);ctx.fill()}
+      const mask=new Uint8Array(gw*gh);for(let k=0;k<mask.length;k++)mask[k]=val[k]>=1?1:0;
+      const rings=maskRings(mask,gw,gh).map(r=>r.map(q=>[x0+q[0]*st2,y0+q[1]*st2]));
+      let k=0;for(const r of rings)sketchLine(ctx,[...r,r[0]],{seed:seedBase+4501+k++,passes:1,width:S.inkWidth*0.8,color:wc?mix(mapCol,shadeInk(),0.6):inkCol,alpha:0.85,ampScale:0.6,step:3,overshoot:false});
+      sketchLine(ctx,[...poly,poly[0]],{seed:seedBase+4601,passes:1,width:S.inkWidth*0.6,color:inkCol,alpha:0.6,ampScale:0.5,overshoot:false});
+      ctx.restore()}})}
+  // residues the density does not support: an open accent circle on their trace atom
+  if(M.hasModel&&o.unsupported&&M.unsupported.length)items.push({z:2e9,map:true,draw:ctx=>{ctx.save();let k=0;
+    for(const ti of M.unsupported){const a=atomsById[byIndex[ti]];if(!a||!pos[a.id])continue;const p=pos[a.id];sketchCircle(ctx,p.x,p.y,3.2*Math.max(0.7,TEX),{seed:seedBase+8001+k++,width:1,color:accent,alpha:0.9,passes:1})}ctx.restore()}});
+}
+/* a box blur (twice, near a Gaussian) of a per-pixel field over the covered pixels only, in place */
+function softenCovered(v,tb,W,H,r){
+  const tmp=new Float32Array(v.length);
+  for(let pass=0;pass<2;pass++){
+    for(let y=0;y<H;y++){let s=0,n=0;const o=y*W;for(let x=-r;x<W;x++){const a=x+r,b=x-r-1;if(a<W&&tb[o+a]>=0){s+=v[o+a];n++}if(b>=0&&tb[o+b]>=0){s-=v[o+b];n--}if(x>=0)tmp[o+x]=tb[o+x]>=0&&n?s/n:0}}
+    for(let x=0;x<W;x++){let s=0,n=0;for(let y=-r;y<H;y++){const a=y+r,b=y-r-1;if(a<H&&tb[a*W+x]>=0){s+=tmp[a*W+x];n++}if(b>=0&&tb[b*W+x]>=0){s-=tmp[b*W+x];n--}if(y>=0)v[y*W+x]=tb[y*W+x]>=0&&n?s/n:0}}}
+}
+/* the map's caption: how it is shown (contour level, carving, sampling, what the line's looseness means) */
+function drawMapCaption(ctx,W,H){
+  const M=scene.map;if(!M||!M.opts.caption||!M.caption)return;const S=cfg.style,P=cfg.palette;
+  ctx.save();ctx.font=`${Math.max(9,Math.round(S.labelSize*0.6))}px "IBM Plex Sans", system-ui, sans-serif`;ctx.fillStyle=rgba(P.label,0.8);ctx.textAlign='left';ctx.textBaseline='bottom';
+  // wrapped at its ' · ' joints to the width, bottom up
+  const parts=M.caption.split(' · '),lines=[];let cur='';for(const p of parts){const t=cur?cur+' · '+p:p;if(cur&&ctx.measureText(t).width>W-24){lines.push(cur);cur=p}else cur=t}if(cur)lines.push(cur);
+  const lh=Math.max(9,Math.round(S.labelSize*0.6))*1.3;lines.reverse().forEach((l,i)=>ctx.fillText(l,12,H-10-i*lh));ctx.restore();
+}
+
 /* ---- cartoon representation ---- */
 function v3(a,b,f){return[a[0]+b[0]*f,a[1]+b[1]*f,a[2]+b[2]*f]}
 function sub3(a,b){return[a[0]-b[0],a[1]-b[1],a[2]-b[2]]}
@@ -1316,8 +1531,10 @@ function renderFrame(ctx,W,H,frame,dpr){
   if(cfg.rep.mode==='sticks')buildSticks(items,st,pos,stickAtoms,stickBonds,proj,seedBase,lowDetail);else buildBallStick(items,st,pos,stickAtoms,stickBonds,proj,seedBase,lowDetail);
   if(cartoonOn)buildCartoon(items,st,pos,st.atoms,selC,proj,seedBase,lowDetail);
   if(surfAtoms.length)buildSurface(items,st,pos,surfAtoms,proj,seedBase,lowDetail);
+  if(scene.map)buildMap(items,st,pos,proj,seedBase);
   items.sort((u,v)=>u.z-v.z);
   for(const it of items)it.draw(ctx);
+  drawMapCaption(ctx,W,H);
   // annotations on stick atoms
   const fontFam=S.font==='Plain sans'?'"IBM Plex Sans", system-ui, sans-serif':`"${S.font}", "Caveat", cursive`;
   for(const a of stickAtoms){const p=pos[a.id];const r=atomDrawR(a,proj)*p.d;const seed=seedBase+strHash(a.id);
