@@ -1571,6 +1571,10 @@
       levels: [0.7, 1, 1.5],
       carve: 0,
       zone: "",
+      finish: "drawn",
+      smoothing: 4,
+      opacity: 0.55,
+      context: "hide",
       color: "single",
       line: null,
       lineWidth: 0.9,
@@ -4280,6 +4284,31 @@
       }
       return rings.filter((r) => r.length >= 3 && Math.abs(ringArea(r)) > 3);
     }
+    function chaikin(r, n) {
+      let p = r;
+      for (let k = 0; k < n; k++) {
+        const q = [];
+        for (let i = 0; i < p.length; i++) {
+          const a = p[i], b = p[(i + 1) % p.length];
+          q.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+        }
+        p = q;
+      }
+      return p;
+    }
+    function chaikinOpen(r, n) {
+      let p = r;
+      for (let k = 0; k < n; k++) {
+        const q = [p[0]];
+        for (let i = 0; i < p.length - 1; i++) {
+          const a = p[i], b = p[i + 1];
+          q.push([a[0] * 0.75 + b[0] * 0.25, a[1] * 0.75 + b[1] * 0.25], [a[0] * 0.25 + b[0] * 0.75, a[1] * 0.25 + b[1] * 0.75]);
+        }
+        q.push(p[p.length - 1]);
+        p = q;
+      }
+      return p;
+    }
     function ringArea(r) {
       let a = 0;
       for (let i = 0; i < r.length; i++) {
@@ -4336,6 +4365,7 @@
     }
     function buildMap(items, st, pos, proj, seedBase) {
       const M = scene.map, o = M.opts, P = cfg.palette, S = cfg.style, W = Math.max(1, Math.round(RF.W)), H = Math.max(1, Math.round(RF.H));
+      M.contextHidden = false;
       const EDG = cfg.rep.surfEdges || 0, POOL = cfg.rep.surfPool || 0, FADE = cfg.rep.surfFade || 0, ink = cfg.rep.fill === "ink" || cfg.rep.fill === "ink colour", chalk = isChalk(), wc = isWC(), pencil = cfg.rep.fill === "pencil";
       const light = luminance(P.paper) > 0.5, inkCol = P.ink, eye = proj.eye();
       const colFor = surfaceColour(), byIndex = scene.atomIds || [], atomsById = {};
@@ -4405,7 +4435,23 @@
           }
           cls[v] = classOf(c);
         }
-        return { ...L, px, py, pz, fog, rn, cls };
+        let tri = L.tri;
+        if (o.finish !== "sketch" && M.hasModel && (o.context ?? "hide") === "hide") {
+          const keep = [];
+          let cut = 0;
+          for (let t = 0; t < tri.length; t += 3) {
+            if (comp[tri[t]] === 2 && comp[tri[t + 1]] === 2 && comp[tri[t + 2]] === 2) {
+              cut++;
+              continue;
+            }
+            keep.push(tri[t], tri[t + 1], tri[t + 2]);
+          }
+          if (cut) {
+            tri = new Uint32Array(keep);
+            M.contextHidden = true;
+          }
+        }
+        return { ...L, tri, px, py, pz, fog, rn, cls };
       };
       const levels = M.levels.map(prep), main = levels[M.primary] || levels[0];
       const style = o.style, layer = o.layer === "auto" ? style === "slice" ? "plane" : "over" : o.layer;
@@ -4744,6 +4790,129 @@
         drawLines(ctx, folds, { width: S.inkWidth * W2 * 0.7, color: lineCol, alpha: 0.7 });
         ctx.restore();
       };
+      const smoothItem = (L, buf, sh, drawn) => (ctx) => {
+        const covered = (i) => buf.tb[i] >= 0, ctxIx = classIx.has(contextCol) ? classIx.get(contextCol) : -2, accIx = classIx.has(accent) ? classIx.get(accent) : -2;
+        const own = (i) => covered(i) && sh.cls[i] !== ctxIx, rest = ctxIx >= 0 ? regions((i) => covered(i) && sh.cls[i] === ctxIx) : [];
+        const body = regions(own).map((r) => chaikin(r, 2));
+        if (!body.length && !rest.length) return;
+        const alone = !M.hasModel, op = alone ? 1 : o.opacity ?? 0.55, lineCol = o.line || inkCol, lw = o.lineWidth ?? 0.9, blur = Math.max(1, 1.6 * TEX);
+        const base = mapCol, darkC = mix(mapCol, light ? "#1c2330" : "#000000", light ? 0.62 : 0.7), lite = light ? "#ffffff" : mix(mapCol, "#ffffff", 0.5);
+        const hatchy = drawn && (ink || pencil || chalk), washy = drawn && wc;
+        if (hatchy) {
+          ctx.save();
+          ringsPath(ctx, body);
+          ctx.fillStyle = paperFill();
+          ctx.globalAlpha = alone ? 1 : 0.6;
+          ctx.fill("evenodd");
+          ctx.restore();
+          const inkColour = cfg.rep.fill === "ink colour", colorAt = () => inkColour || pencil || chalk ? mix(mapCol, P.hatch, 0.3) : P.hatch, sp = S.hatchSpacing * Math.max(0.7, TEX), ang = S.hatchAngle * Math.PI / 180;
+          hatch(ctx, sh, own, 0.4, ang, sp, colorAt, 0.7 * (o.shade ?? 0.35) / 0.35);
+          hatch(ctx, sh, own, 0.68, ang + 1.25, sp * 1.2, colorAt, 0.55 * (o.shade ?? 0.35) / 0.35);
+        }
+        const off = hatchy ? null : document.createElement("canvas");
+        if (off) {
+          off.width = Math.max(1, Math.round(W * RF.dpr));
+          off.height = Math.max(1, Math.round(H * RF.dpr));
+          const x = off.getContext("2d");
+          x.scale(RF.dpr, RF.dpr);
+          ringsPath(x, body);
+          x.fillStyle = base;
+          x.fill("evenodd");
+          x.lineWidth = blur * 3;
+          x.lineJoin = "round";
+          x.strokeStyle = base;
+          x.stroke();
+          for (let k = 1; k <= 9; k++) {
+            const t = k / 10;
+            const r = regions((i) => own(i) && sh.dark[i] > t * 0.9);
+            if (r.length) {
+              ringsPath(x, r);
+              x.fillStyle = rgba(darkC, washy ? 0.085 : 0.13);
+              x.fill("evenodd");
+            }
+          }
+          for (const [t, a] of [[0.14, 0.22], [0.07, 0.25]]) {
+            const r = regions((i) => own(i) && sh.dark[i] < t);
+            if (r.length) {
+              ringsPath(x, r);
+              x.fillStyle = rgba(lite, a);
+              x.fill("evenodd");
+            }
+          }
+          if (accIx >= 0) {
+            const r = regions((i) => covered(i) && sh.cls[i] === accIx);
+            if (r.length) {
+              ringsPath(x, r);
+              x.fillStyle = rgba(accent, 0.55);
+              x.fill("evenodd");
+            }
+          }
+        }
+        ctx.save();
+        if (rest.length) {
+          const rr = rest.map((r) => chaikin(r, 2));
+          ringsPath(ctx, rr);
+          ctx.fillStyle = rgba(base, 0.25 * op);
+          ctx.fill("evenodd");
+          ctx.lineWidth = S.inkWidth * 0.45;
+          ctx.strokeStyle = rgba(lineCol, 0.25);
+          ctx.stroke();
+        }
+        if (off) {
+          ctx.save();
+          ringsPath(ctx, body);
+          ctx.clip("evenodd");
+          ctx.globalAlpha = washy ? alone ? 0.8 : op * 0.6 : op;
+          if (washy) ctx.globalCompositeOperation = light ? "multiply" : "screen";
+          try {
+            ctx.filter = `blur(${blur.toFixed(2)}px)`;
+          } catch (e) {
+          }
+          ctx.drawImage(off, 0, 0, W, H);
+          ctx.restore();
+        }
+        if (washy) washRings(ctx, body, mapCol, seedBase + 91, { strength: 0.18, layers: 2 });
+        const inside = (p) => {
+          for (const [dx, dy] of [[4, 0], [-4, 0], [0, 4], [0, -4]]) {
+            const xi = Math.floor(p.x + dx), yi = Math.floor(p.y + dy);
+            if (xi < 0 || yi < 0 || xi >= W || yi >= H || !own(yi * W + xi)) return false;
+          }
+          return true;
+        };
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+        ctx.strokeStyle = lineCol;
+        const folds = [];
+        for (const ln of silhouettes(L, buf)) {
+          let run = [];
+          const flush2 = () => {
+            if (run.length > 3) folds.push(chaikinOpen(run, 2));
+            run = [];
+          };
+          for (const p of ln) {
+            if (inside(p) && (p.gap ?? 0) > 0.2) run.push([p.x, p.y]);
+            else flush2();
+          }
+          flush2();
+        }
+        if (drawn) {
+          let k = 0;
+          const hand2 = (pts, w, a) => sketchLine(ctx, pts, { seed: seedBase + 1501 + k++, passes: 1, width: S.inkWidth * w, color: lineCol, alpha: a, ampScale: 0.35, step: 4, overshoot: false });
+          for (const f2 of folds) hand2(f2, lw * 0.6, 0.6);
+          for (const r of body) hand2([...r, r[0]], lw, 0.9);
+        } else {
+          ctx.globalAlpha = 0.55 * Math.max(op, 0.6);
+          ctx.lineWidth = S.inkWidth * lw * 0.6;
+          ctx.beginPath();
+          for (const c of folds) c.forEach((q, i) => i ? ctx.lineTo(q[0], q[1]) : ctx.moveTo(q[0], q[1]));
+          ctx.stroke();
+          ctx.globalAlpha = 0.9;
+          ctx.lineWidth = S.inkWidth * lw;
+          ringsPath(ctx, body);
+          ctx.stroke();
+        }
+        ctx.restore();
+      };
       if (style === "surface" || style === "layers") {
         const list = style === "layers" ? [...levels].sort((a, b) => a.level - b.level) : [main];
         list.forEach((L, li) => {
@@ -4764,7 +4933,7 @@
             ctx.restore();
           } : style === "layers" && !primary ? (ctx) => {
             drawLines(ctx, silhouettes(L, buf), { width: S.inkWidth * (li === 0 ? 0.45 : 0.8), color: inkCol, alpha: li === 0 ? 0.45 : 0.8 });
-          } : style === "surface" && layer === "over" && (M.hasModel || o.glass) ? glassItem(L, buf, sh) : surfaceItem(L, buf, sh, strength, true) });
+          } : style === "surface" && (o.finish === "smooth" || o.finish === "drawn") ? smoothItem(L, buf, sh, o.finish === "drawn") : style === "surface" && layer === "over" && (M.hasModel || o.glass) ? glassItem(L, buf, sh) : surfaceItem(L, buf, sh, strength, true) });
         });
       } else if (style === "mesh") {
         const buf = o.carve > 0 ? null : mapRaster(main, main.px, main.py, main.pz, W, H);
@@ -4786,7 +4955,16 @@
         const col = o.color === "single" || !M.hasModel ? mix(mapCol, shadeInk(), light ? 0.45 : 0.1) : mix(P.N, shadeInk(), 0.2);
         items.push({ z: zItem, map: true, draw: (ctx) => {
           ctx.save();
-          drawLines(ctx, lines2, { width: S.inkWidth * 0.45, color: col, alpha: 0.85 });
+          if (o.finish === "smooth") {
+            ctx.lineJoin = "round";
+            ctx.lineCap = "round";
+            ctx.strokeStyle = o.line || mix(mapCol, shadeInk(), light ? 0.55 : 0.1);
+            ctx.globalAlpha = 0.9;
+            ctx.lineWidth = S.inkWidth * 0.6;
+            ctx.beginPath();
+            for (const l of lines2) l.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+            ctx.stroke();
+          } else drawLines(ctx, lines2, { width: S.inkWidth * 0.45, color: col, alpha: 0.85 });
           ctx.restore();
         } });
       } else if (style === "slice") {
@@ -4905,7 +5083,7 @@
       ctx.fillStyle = rgba(P.label, 0.8);
       ctx.textAlign = "left";
       ctx.textBaseline = "bottom";
-      const parts = M.caption.split(" \xB7 "), lines2 = [];
+      const parts = (M.caption + (M.contextHidden ? " \xB7 the rest of the assembly (not in the model) left out" : "")).split(" \xB7 "), lines2 = [];
       let cur = "";
       for (const p of parts) {
         const t = cur ? cur + " \xB7 " + p : p;
@@ -6126,6 +6304,71 @@
     }
     return { ...m, data: a, ...mapStats(a), lowpassed: R };
   }
+  function upsample(m, step) {
+    const f2 = m.step[0] / step;
+    if (f2 <= 1.05) return m;
+    const nx = Math.max(2, Math.round((m.nx - 1) * f2) + 1), ny = Math.max(2, Math.round((m.ny - 1) * f2) + 1), nz = Math.max(2, Math.round((m.nz - 1) * f2) + 1);
+    const st = [(m.nx - 1) * m.step[0] / (nx - 1), (m.ny - 1) * m.step[1] / (ny - 1), (m.nz - 1) * m.step[2] / (nz - 1)];
+    const out = new Float32Array(nx * ny * nz);
+    const edge = { ...m, min: m.data[0] };
+    for (let k = 0, q = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++, q++) {
+      const x = Math.min(i * st[0], (m.nx - 1) * m.step[0] - 1e-4), y = Math.min(j * st[1], (m.ny - 1) * m.step[1] - 1e-4), z = Math.min(k * st[2], (m.nz - 1) * m.step[2] - 1e-4);
+      out[q] = sampleMap(edge, m.origin[0] + x, m.origin[1] + y, m.origin[2] + z);
+    }
+    return { ...m, nx, ny, nz, data: out, step: st, ...mapStats(out), mean: m.mean, rms: m.rms };
+  }
+  function smoothSurface(iso, iterations) {
+    const n = iso.positions.length / 3, tri = iso.triangles;
+    if (!iterations || !n) return iso;
+    const nb = Array.from({ length: n }, () => []);
+    for (let t = 0; t < tri.length; t += 3) for (let e = 0; e < 3; e++) {
+      const a = tri[t + e], b = tri[t + (e + 1) % 3];
+      nb[a].push(b);
+      nb[b].push(a);
+    }
+    let p = Float32Array.from(iso.positions);
+    const q = new Float32Array(p.length);
+    for (let it = 0; it < iterations * 2; it++) {
+      const w = it % 2 ? -0.53 : 0.5;
+      for (let v = 0; v < n; v++) {
+        const l = nb[v];
+        if (!l.length) {
+          q[v * 3] = p[v * 3];
+          q[v * 3 + 1] = p[v * 3 + 1];
+          q[v * 3 + 2] = p[v * 3 + 2];
+          continue;
+        }
+        let sx = 0, sy = 0, sz = 0;
+        for (const u of l) {
+          sx += p[u * 3];
+          sy += p[u * 3 + 1];
+          sz += p[u * 3 + 2];
+        }
+        const k = 1 / l.length;
+        for (let c = 0; c < 3; c++) q[v * 3 + c] = p[v * 3 + c] + w * ((c === 0 ? sx : c === 1 ? sy : sz) * k - p[v * 3 + c]);
+      }
+      p.set(q);
+    }
+    const nor = new Float32Array(p.length);
+    for (let t = 0; t < tri.length; t += 3) {
+      const a = tri[t] * 3, b = tri[t + 1] * 3, c = tri[t + 2] * 3;
+      const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2], vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+      const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
+      for (const o of [a, b, c]) {
+        nor[o] += nx;
+        nor[o + 1] += ny;
+        nor[o + 2] += nz;
+      }
+    }
+    let agree = 0;
+    for (let v = 0; v < n; v++) agree += nor[v * 3] * iso.normals[v * 3] + nor[v * 3 + 1] * iso.normals[v * 3 + 1] + nor[v * 3 + 2] * iso.normals[v * 3 + 2];
+    const sg = agree < 0 ? -1 : 1;
+    for (let v = 0; v < n; v++) {
+      const L = Math.hypot(nor[v * 3], nor[v * 3 + 1], nor[v * 3 + 2]) || 1;
+      for (let c = 0; c < 3; c++) nor[v * 3 + c] = sg * nor[v * 3 + c] / L;
+    }
+    return { ...iso, positions: p, normals: nor };
+  }
   function cropMap(m, lo, hi) {
     const a = [0, 1, 2].map((k) => Math.max(0, Math.floor((lo[k] - m.origin[k]) / m.step[k]))), n = [m.nx, m.ny, m.nz];
     const b = [0, 1, 2].map((k) => Math.min(n[k] - 1, Math.ceil((hi[k] - m.origin[k]) / m.step[k])));
@@ -6505,7 +6748,7 @@
   function prepareMap(whole, style, s, base, localRes = null) {
     const o = style.map, level = mapLevel(whole, style);
     const factors = o.style === "layers" ? o.levels : [1];
-    const key = JSON.stringify([level, o.smooth, o.crop, o.zone, factors, o.carve, o.maxVoxels, o.localResolution, o.style === "mesh" ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
+    const key = JSON.stringify([level, o.smooth, o.crop, o.zone, o.finish, o.smoothing, factors, o.carve, o.maxVoxels, o.localResolution, o.style === "mesh" ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
     let per = cache2.get(whole);
     if (!per) cache2.set(whole, per = /* @__PURE__ */ new Map());
     const hit = per.get(key);
@@ -6553,7 +6796,9 @@
     }
     const R = o.smooth === "auto" ? (m.resolution ?? 2 * m.step[0]) < extent / 20 * 0.8 ? Math.round(extent / 20) : 0 : Math.max(0, +o.smooth || 0);
     const above = R > 0 ? { ...m, data: m.data.map((v) => v >= level ? v : 0) } : m;
-    const g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels), g2 = R > 0 ? lowpass(g0, R) : g0;
+    const g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels), g1 = R > 0 ? lowpass(g0, R) : g0;
+    const box = Math.max(g1.nx * g1.step[0], g1.ny * g1.step[1], g1.nz * g1.step[2]);
+    const g2 = o.finish !== "sketch" ? upsample(g1, Math.max(0.2, extent / 150, box / 160)) : g1;
     const EL = { C: 12.01, N: 14.01, O: 16, S: 32.07, P: 30.97, SE: 78.97 };
     let mass = 0;
     if (s) for (let i = 0; i < s.count; i++) {
@@ -6577,10 +6822,10 @@
     let sorted = null;
     const same = (lv) => {
       if (byVolume) return vLevel * lv / level;
-      if (g2 === m) return lv;
+      if (g1 === m) return lv;
       let n = 0;
       for (let i = 0; i < m.data.length; i++) if (m.data[i] >= lv) n++;
-      sorted ?? (sorted = Float32Array.from(g2.data).sort());
+      sorted ?? (sorted = Float32Array.from(g1.data).sort());
       return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((1 - n / m.data.length) * sorted.length)))];
     };
     const turn = (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
@@ -6626,7 +6871,7 @@
     };
     let dust = 0;
     const levels = factors.map((f2) => {
-      const iso = isosurface(g2, same(level * f2));
+      const iso = smoothSurface(isosurface(g2, same(level * f2)), o.finish !== "sketch" ? o.smoothing : 0);
       const nv = iso.positions.length / 3;
       const near = new Int32Array(nv).fill(-1), dist = new Float32Array(nv).fill(99);
       if (atoms.length) for (let v = 0; v < nv; v++) {

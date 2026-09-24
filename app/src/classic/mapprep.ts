@@ -2,7 +2,7 @@
    drawing's frame, each vertex tied to the nearest atom of the model (for its colour, and to find density the model
    does not explain), the local resolution at each vertex, the chicken-wire contours for a mesh drawing, the residues
    the density does not support, and the caption that says how the map is shown. Cached: turning the figure reuses it. */
-import { downsample, lowpass, levelEnclosing, cropMap, isosurface, sampleMap, sliceContours, joinSegments, type DensityMap } from '../model/map';
+import { downsample, lowpass, levelEnclosing, cropMap, upsample, smoothSurface, isosurface, sampleMap, sliceContours, joinSegments, type DensityMap } from '../model/map';
 import type { Structure } from '../model/structure';
 import type { Style } from '../style';
 import { pcaBasis } from '../render/pca';
@@ -41,7 +41,7 @@ export function mapLevel(m: DensityMap, style: Style) { return style.map.level ?
 export function prepareMap(whole: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null = null): EngineMap {
   const o = style.map, level = mapLevel(whole, style);
   const factors = o.style === 'layers' ? o.levels : [1];
-  const key = JSON.stringify([level, o.smooth, o.crop, o.zone, factors, o.carve, o.maxVoxels, o.localResolution, o.style === 'mesh' ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
+  const key = JSON.stringify([level, o.smooth, o.crop, o.zone, o.finish, o.smoothing, factors, o.carve, o.maxVoxels, o.localResolution, o.style === 'mesh' ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
   let per = cache.get(whole); if (!per) cache.set(whole, per = new Map());
   const hit = per.get(key); if (hit) return { ...hit, opts: o };
   // with a model: the map inside the model's box and a margin (a box, not a mask: density near the model that it does
@@ -69,7 +69,10 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   // what is low-passed is the density above the contour level (the rest set to zero): a sharpened map has lost its
   // low frequencies (its protein's mean density is the solvent's), so low-passing it all would leave only noise
   const above = R > 0 ? { ...m, data: m.data.map(v => v >= level ? v : 0) } : m;
-  const g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels), g = R > 0 ? lowpass(g0, R) : g0;
+  const g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels), g1 = R > 0 ? lowpass(g0, R) : g0;
+  // a close-up is sampled finer than its map (to about a 150th of what is drawn), so its surface is not the grid's facets
+  const box = Math.max(g1.nx * g1.step[0], g1.ny * g1.step[1], g1.nz * g1.step[2]);   // at most 160 voxels a side
+  const g = o.finish !== 'sketch' ? upsample(g1, Math.max(0.2, extent / 150, box / 160)) : g1;
   // the model's mass, or the sample's as deposited, as a volume (1.21 Å³ per Da, the mean protein density)
   const EL: Record<string, number> = { C: 12.01, N: 14.01, O: 16.0, S: 32.07, P: 30.97, SE: 78.97 };
   let mass = 0; if (s) for (let i = 0; i < s.count; i++) { const e = s.element[i].toUpperCase(); if (e !== 'H' && s.residues[s.residueOf[i]].resn !== 'HOH') mass += (EL[e] ?? 12) + 1.0 }   // + a hydrogen per heavy atom
@@ -85,8 +88,8 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
         for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) zone[(z * n[1] + y) * n[0] + x] = 1 } }
   const byVolume = R > 0, vLevel = !byVolume ? 0 : mass > 0 ? levelEnclosing(g, mass * 1.21, zone) : g.mean + 2 * g.rms;   // without a mass: 2 σ of the low-passed map
   let sorted: Float32Array | null = null;
-  const same = (lv: number) => { if (byVolume) return vLevel * lv / level; if (g === m) return lv; let n = 0; for (let i = 0; i < m.data.length; i++) if (m.data[i] >= lv) n++;
-    sorted ??= Float32Array.from(g.data).sort(); return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((1 - n / m.data.length) * sorted.length)))] };
+  const same = (lv: number) => { if (byVolume) return vLevel * lv / level; if (g1 === m) return lv; let n = 0; for (let i = 0; i < m.data.length; i++) if (m.data[i] >= lv) n++;
+    sorted ??= Float32Array.from(g1.data).sort(); return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((1 - n / m.data.length) * sorted.length)))] };
   const turn = (x: number, y: number, z: number): [number, number, number] => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
   const unturn = (x: number, y: number, z: number): [number, number, number] => [base[0] * x + base[1] * y + base[2] * z, base[4] * x + base[5] * y + base[6] * z, base[8] * x + base[9] * y + base[10] * z];
   // the model's atoms on a 4 Å grid, for nearest-atom lookups (waters left out: they are not what the density is judged by)
@@ -106,7 +109,7 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   const carveDist = (x: number, y: number, z: number) => { if (!zoneSel) return nearest(x, y, z)[1]; let bd = Infinity; for (const i of zoneAtoms) { const d = (s!.x[i] - x) ** 2 + (s!.y[i] - y) ** 2 + (s!.z[i] - z) ** 2; if (d < bd) bd = d } return Math.sqrt(bd) };
   let dust = 0;
   const levels: MapLevel[] = factors.map(f => {
-    const iso = isosurface(g, same(level * f)); const nv = iso.positions.length / 3;
+    const iso = smoothSurface(isosurface(g, same(level * f)), o.finish !== 'sketch' ? o.smoothing : 0); const nv = iso.positions.length / 3;
     const near = new Int32Array(nv).fill(-1), dist = new Float32Array(nv).fill(99);
     if (atoms.length) for (let v = 0; v < nv; v++) { const [i, d] = nearest(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2]); near[v] = i; dist[v] = d }
     // carving: only the density within `carve` Å of the model (off by default; the caption says when it is on)

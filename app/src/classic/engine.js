@@ -1003,6 +1003,9 @@ function maskRings(mask,W,H,x0=0,y0=0,x1=W-1,y1=H-1){
     if(ring.length>=3)rings.push(simplifyRing(ring,0.6))}
   return rings.filter(r=>r.length>=3&&Math.abs(ringArea(r))>3);
 }
+/* corner cutting (Chaikin): a pixel-traced ring or line made smooth */
+function chaikin(r,n){let p=r;for(let k=0;k<n;k++){const q=[];for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];q.push([a[0]*0.75+b[0]*0.25,a[1]*0.75+b[1]*0.25],[a[0]*0.25+b[0]*0.75,a[1]*0.25+b[1]*0.75])}p=q}return p}
+function chaikinOpen(r,n){let p=r;for(let k=0;k<n;k++){const q=[p[0]];for(let i=0;i<p.length-1;i++){const a=p[i],b=p[i+1];q.push([a[0]*0.75+b[0]*0.25,a[1]*0.75+b[1]*0.25],[a[0]*0.25+b[0]*0.75,a[1]*0.25+b[1]*0.75])}q.push(p[p.length-1]);p=q}return p}
 function ringArea(r){let a=0;for(let i=0;i<r.length;i++){const p=r[i],q=r[(i+1)%r.length];a+=p[0]*q[1]-q[0]*p[1]}return a/2}
 function simplifyRing(r,eps){ // Douglas–Peucker on an open copy, closed again
   const dp=(pts)=>{if(pts.length<3)return pts;let dm=0,im=0;const a=pts[0],b=pts[pts.length-1],L=Math.hypot(b[0]-a[0],b[1]-a[1])||1;
@@ -1022,7 +1025,7 @@ function washRings(ctx,rings,col,seed,o){
   ctx.restore();
 }
 function buildMap(items,st,pos,proj,seedBase){
-  const M=scene.map,o=M.opts,P=cfg.palette,S=cfg.style,W=Math.max(1,Math.round(RF.W)),H=Math.max(1,Math.round(RF.H));
+  const M=scene.map,o=M.opts,P=cfg.palette,S=cfg.style,W=Math.max(1,Math.round(RF.W)),H=Math.max(1,Math.round(RF.H));M.contextHidden=false;
   const EDG=cfg.rep.surfEdges||0,POOL=cfg.rep.surfPool||0,FADE=cfg.rep.surfFade||0,ink=cfg.rep.fill==='ink'||cfg.rep.fill==='ink colour',chalk=isChalk(),wc=isWC(),pencil=cfg.rep.fill==='pencil';
   const light=luminance(P.paper)>0.5,inkCol=P.ink,eye=proj.eye();
   // colour classes: the model's colour (by the surface scheme) at each vertex's nearest atom, the accent where the
@@ -1044,7 +1047,9 @@ function buildMap(items,st,pos,proj,seedBase){
       const size=new Map();for(let v=0;v<n;v++)if(far[v]){const r=find(v);size.set(r,(size.get(r)||0)+1)}
       for(let v=0;v<n;v++)if(far[v]){const k=size.get(find(v));comp[v]=k<24?0:k<=0.1*explained?1:2}}
     for(let v=0;v<n;v++){let c=mapCol;if(comp[v]===1&&o.unexplained)c=accent;else if(comp[v]===2)c=contextCol;else if((o.color==='model'||o.color==='chain')&&L.near[v]>=0){const a=atomsById[byIndex[L.near[v]]];if(a)c=o.color==='chain'?chainTint(a):colFor(a)}cls[v]=classOf(c)}
-    return {...L,px,py,pz,fog,rn,cls}};   // projected afresh every frame: the camera moves
+    // smooth finish: the rest of an assembly beyond the model is left out (cut along the mesh, so its edge is the surface's own); the caption says so
+    let tri=L.tri;if(o.finish!=='sketch'&&M.hasModel&&(o.context??'hide')==='hide'){const keep=[];let cut=0;for(let t=0;t<tri.length;t+=3){if(comp[tri[t]]===2&&comp[tri[t+1]]===2&&comp[tri[t+2]]===2){cut++;continue}keep.push(tri[t],tri[t+1],tri[t+2])}if(cut){tri=new Uint32Array(keep);M.contextHidden=true}}
+    return {...L,tri,px,py,pz,fog,rn,cls}};   // projected afresh every frame: the camera moves
   const levels=M.levels.map(prep),main=levels[M.primary]||levels[0];
   const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':'over'):o.layer;
   const zItem=layer==='under'?-1e9:layer==='over'?1e9:0;
@@ -1140,6 +1145,40 @@ function buildMap(items,st,pos,proj,seedBase){
     const folds=[];for(const ln of silhouettes(L,buf)){let run=[];for(const p of ln){if(inside(p)&&(p.gap??0)>0.25&&sh.cls[Math.floor(p.y)*W+Math.floor(p.x)]!==ctxIx)run.push(p);else{if(run.length>3)folds.push(run);run=[]}}if(run.length>3)folds.push(run)}
     drawLines(ctx,folds,{width:S.inkWidth*W2*0.7,color:lineCol,alpha:0.7});
     ctx.restore()};
+  // smooth: the map as ChimeraX shows it, a lit surface with an even outline. The light is painted in fine steps into
+  // a layer of its own, blurred into a gradient and laid inside the outline; the outline and the folds are drawn with
+  // a steady pen (no wobble), smoothed off the pixel grid
+  const smoothItem=(L,buf,sh,drawn)=>ctx=>{
+    const covered=i=>buf.tb[i]>=0,ctxIx=classIx.has(contextCol)?classIx.get(contextCol):-2,accIx=classIx.has(accent)?classIx.get(accent):-2;
+    const own=i=>covered(i)&&sh.cls[i]!==ctxIx,rest=ctxIx>=0?regions(i=>covered(i)&&sh.cls[i]===ctxIx):[];
+    const body=regions(own).map(r=>chaikin(r,2));if(!body.length&&!rest.length)return;
+    const alone=!M.hasModel,op=alone?1:(o.opacity??0.55),lineCol=o.line||inkCol,lw=o.lineWidth??0.9,blur=Math.max(1,1.6*TEX);
+    const base=mapCol,darkC=mix(mapCol,light?'#1c2330':'#000000',light?0.62:0.7),lite=light?'#ffffff':mix(mapCol,'#ffffff',0.5);
+    const hatchy=drawn&&(ink||pencil||chalk),washy=drawn&&wc;
+    if(hatchy){ // ink: paper inside the outline, hatching where the light falls away, crossed where deepest
+      ctx.save();ringsPath(ctx,body);ctx.fillStyle=paperFill();ctx.globalAlpha=alone?1:0.6;ctx.fill('evenodd');ctx.restore();
+      const inkColour=cfg.rep.fill==='ink colour',colorAt=()=>inkColour||pencil||chalk?mix(mapCol,P.hatch,0.3):P.hatch,sp=S.hatchSpacing*Math.max(0.7,TEX),ang=S.hatchAngle*Math.PI/180;
+      hatch(ctx,sh,own,0.4,ang,sp,colorAt,0.7*(o.shade??0.35)/0.35);hatch(ctx,sh,own,0.68,ang+1.25,sp*1.2,colorAt,0.55*(o.shade??0.35)/0.35)}
+    const off=hatchy?null:document.createElement('canvas');if(off){off.width=Math.max(1,Math.round(W*RF.dpr));off.height=Math.max(1,Math.round(H*RF.dpr));const x=off.getContext('2d');x.scale(RF.dpr,RF.dpr);
+    // the base colour, spread a little past the outline so the blur does not pale the edge
+    ringsPath(x,body);x.fillStyle=base;x.fill('evenodd');x.lineWidth=blur*3;x.lineJoin='round';x.strokeStyle=base;x.stroke();
+    for(let k=1;k<=9;k++){const t=k/10;const r=regions(i=>own(i)&&sh.dark[i]>t*0.9);if(r.length){ringsPath(x,r);x.fillStyle=rgba(darkC,washy?0.085:0.13);x.fill('evenodd')}}
+    for(const [t,a] of [[0.14,0.22],[0.07,0.25]]){const r=regions(i=>own(i)&&sh.dark[i]<t);if(r.length){ringsPath(x,r);x.fillStyle=rgba(lite,a);x.fill('evenodd')}}
+    if(accIx>=0){const r=regions(i=>covered(i)&&sh.cls[i]===accIx);if(r.length){ringsPath(x,r);x.fillStyle=rgba(accent,0.55);x.fill('evenodd')}}}
+    ctx.save();
+    if(rest.length){const rr=rest.map(r=>chaikin(r,2));ringsPath(ctx,rr);ctx.fillStyle=rgba(base,0.25*op);ctx.fill('evenodd');ctx.lineWidth=S.inkWidth*0.45;ctx.strokeStyle=rgba(lineCol,0.25);ctx.stroke()}
+    if(off){ctx.save();ringsPath(ctx,body);ctx.clip('evenodd');ctx.globalAlpha=washy?(alone?0.8:op*0.6):op;if(washy)ctx.globalCompositeOperation=light?'multiply':'screen';try{ctx.filter=`blur(${blur.toFixed(2)}px)`}catch(e){}ctx.drawImage(off,0,0,W,H);ctx.restore()}
+    if(washy)washRings(ctx,body,mapCol,seedBase+91,{strength:0.18,layers:2});   // watercolour: the pigment pooling at the edge
+    // the folds: where one part of the surface stands in front of another, a thinner line
+    const inside=p=>{for(const [dx,dy] of [[4,0],[-4,0],[0,4],[0,-4]]){const xi=Math.floor(p.x+dx),yi=Math.floor(p.y+dy);if(xi<0||yi<0||xi>=W||yi>=H||!own(yi*W+xi))return false}return true};
+    ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=lineCol;
+    const folds=[];for(const ln of silhouettes(L,buf)){let run=[];const flush=()=>{if(run.length>3)folds.push(chaikinOpen(run,2));run=[]};
+      for(const p of ln){if(inside(p)&&(p.gap??0)>0.2)run.push([p.x,p.y]);else flush()}flush()}
+    if(drawn){let k=0;const hand=(pts,w,a)=>sketchLine(ctx,pts,{seed:seedBase+1501+k++,passes:1,width:S.inkWidth*w,color:lineCol,alpha:a,ampScale:0.35,step:4,overshoot:false});   // a steady hand, not a ruler
+      for(const f of folds)hand(f,lw*0.6,0.6);for(const r of body)hand([...r,r[0]],lw,0.9)}
+    else{ctx.globalAlpha=0.55*Math.max(op,0.6);ctx.lineWidth=S.inkWidth*lw*0.6;ctx.beginPath();for(const c of folds)c.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.stroke();
+      ctx.globalAlpha=0.9;ctx.lineWidth=S.inkWidth*lw;ringsPath(ctx,body);ctx.stroke()}
+    ctx.restore()};
   if(style==='surface'||style==='layers'){
     const list=style==='layers'?[...levels].sort((a,b)=>a.level-b.level):[main];
     list.forEach((L,li)=>{const buf=mapRaster(L,L.px,L.py,L.pz,W,H),sh=shadeOf(L,buf);const primary=L===main;
@@ -1149,12 +1188,12 @@ function buildMap(items,st,pos,proj,seedBase){
           if(wc)washRings(ctx,rings,mapCol,seedBase+333+li,{strength:0.45*strength,layers:3});else{ringsPath(ctx,rings);ctx.fillStyle=rgba(fillFor(mapCol),0.22*strength);ctx.fill('evenodd')}
           drawLines(ctx,silhouettes(L,buf),{width:S.inkWidth*(li===0?0.5:0.8),color:mix(mapCol,shadeInk(),0.55),alpha:li===0?0.45:0.7});ctx.restore()}
         :style==='layers'&&!primary?ctx=>{drawLines(ctx,silhouettes(L,buf),{width:S.inkWidth*(li===0?0.45:0.8),color:inkCol,alpha:li===0?0.45:0.8})}   // ink: nested contour lines
-        :style==='surface'&&layer==='over'&&(M.hasModel||o.glass)?glassItem(L,buf,sh):surfaceItem(L,buf,sh,strength,true)})})}
+        :style==='surface'&&(o.finish==='smooth'||o.finish==='drawn')?smoothItem(L,buf,sh,o.finish==='drawn'):style==='surface'&&layer==='over'&&(M.hasModel||o.glass)?glassItem(L,buf,sh):surfaceItem(L,buf,sh,strength,true)})})}
   else if(style==='mesh'){ // chicken wire: the map's contours on the grid planes, hidden where the surface is in front
     const buf=o.carve>0?null:mapRaster(main,main.px,main.py,main.pz,W,H);
     const lines=[];for(const w of M.wire){let run=[];for(const q of w){const p=proj.proj(q);const x=Math.floor(p.x),y=Math.floor(p.y);const vis=!buf||(x>=0&&y>=0&&x<W&&y<H&&buf.zb[y*W+x]<=p.z+1.5);if(vis)run.push({x:p.x,y:p.y,fog:p.fog,h:0,gap:1});else{if(run.length>1)lines.push(run);run=[]}}if(run.length>1)lines.push(run)}
     const col=o.color==='single'||!M.hasModel?mix(mapCol,shadeInk(),light?0.45:0.1):mix(P.N,shadeInk(),0.2);
-    items.push({z:zItem,map:true,draw:ctx=>{ctx.save();drawLines(ctx,lines,{width:S.inkWidth*0.45,color:col,alpha:0.85});ctx.restore()}})}
+    items.push({z:zItem,map:true,draw:ctx=>{ctx.save();if(o.finish==='smooth'){ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=o.line||mix(mapCol,shadeInk(),light?0.55:0.1);ctx.globalAlpha=0.9;ctx.lineWidth=S.inkWidth*0.6;ctx.beginPath();for(const l of lines)l.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke()}else drawLines(ctx,lines,{width:S.inkWidth*0.45,color:col,alpha:0.85});ctx.restore()}})}
   else if(style==='slice'){ // a section through the map at the view's depth: stipple for density, the contour in ink
     const rz=M.box.map(c=>proj.rot(c)[2]),zc=(Math.min(...rz)+Math.max(...rz))/2+(o.slice?.offset||0)*(Math.max(...rz)-Math.min(...rz));
     // the plane's outline: where it cuts the box's edges
@@ -1191,7 +1230,7 @@ function drawMapCaption(ctx,W,H){
   const M=scene.map;if(!M||!M.opts.caption||!M.caption)return;const S=cfg.style,P=cfg.palette;
   ctx.save();ctx.font=`${Math.max(9,Math.round(S.labelSize*0.6))}px "IBM Plex Sans", system-ui, sans-serif`;ctx.fillStyle=rgba(P.label,0.8);ctx.textAlign='left';ctx.textBaseline='bottom';
   // wrapped at its ' · ' joints to the width, bottom up
-  const parts=M.caption.split(' · '),lines=[];let cur='';for(const p of parts){const t=cur?cur+' · '+p:p;if(cur&&ctx.measureText(t).width>W-24){lines.push(cur);cur=p}else cur=t}if(cur)lines.push(cur);
+  const parts=(M.caption+(M.contextHidden?' · the rest of the assembly (not in the model) left out':'')).split(' · '),lines=[];let cur='';for(const p of parts){const t=cur?cur+' · '+p:p;if(cur&&ctx.measureText(t).width>W-24){lines.push(cur);cur=p}else cur=t}if(cur)lines.push(cur);
   const lh=Math.max(9,Math.round(S.labelSize*0.6))*1.3;lines.reverse().forEach((l,i)=>ctx.fillText(l,12,H-10-i*lh));ctx.restore();
 }
 

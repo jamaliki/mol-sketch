@@ -83,6 +83,40 @@ export function lowpass(m: DensityMap, R: number): DensityMap {
   return { ...m, data: a, ...mapStats(a), lowpassed: R };
 }
 
+/** the map resampled (trilinearly) to a finer voxel, so a close-up's surface is not faceted by the grid */
+export function upsample(m: DensityMap, step: number): DensityMap {
+  const f = m.step[0] / step; if (f <= 1.05) return m;
+  const nx = Math.max(2, Math.round((m.nx - 1) * f) + 1), ny = Math.max(2, Math.round((m.ny - 1) * f) + 1), nz = Math.max(2, Math.round((m.nz - 1) * f) + 1);
+  const st: [number, number, number] = [(m.nx - 1) * m.step[0] / (nx - 1), (m.ny - 1) * m.step[1] / (ny - 1), (m.nz - 1) * m.step[2] / (nz - 1)];
+  const out = new Float32Array(nx * ny * nz); const edge = { ...m, min: m.data[0] };
+  for (let k = 0, q = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++, q++) {
+    const x = Math.min(i * st[0], (m.nx - 1) * m.step[0] - 1e-4), y = Math.min(j * st[1], (m.ny - 1) * m.step[1] - 1e-4), z = Math.min(k * st[2], (m.nz - 1) * m.step[2] - 1e-4);
+    out[q] = sampleMap(edge, m.origin[0] + x, m.origin[1] + y, m.origin[2] + z) }
+  return { ...m, nx, ny, nz, data: out, step: st, ...mapStats(out), mean: m.mean, rms: m.rms };
+}
+
+/** Taubin smoothing of an isosurface (shrink-free: a smoothing step, then an inflating one), as ChimeraX smooths
+    surfaces; the normals are then taken from the smoothed faces, pointing the way the density's gradient did */
+export function smoothSurface(iso: Isosurface, iterations: number): Isosurface {
+  const n = iso.positions.length / 3, tri = iso.triangles; if (!iterations || !n) return iso;
+  const nb: number[][] = Array.from({ length: n }, () => []);
+  for (let t = 0; t < tri.length; t += 3) for (let e = 0; e < 3; e++) { const a = tri[t + e], b = tri[t + (e + 1) % 3]; nb[a].push(b); nb[b].push(a) }
+  let p = Float32Array.from(iso.positions); const q = new Float32Array(p.length);
+  for (let it = 0; it < iterations * 2; it++) { const w = it % 2 ? -0.53 : 0.5;
+    for (let v = 0; v < n; v++) { const l = nb[v]; if (!l.length) { q[v * 3] = p[v * 3]; q[v * 3 + 1] = p[v * 3 + 1]; q[v * 3 + 2] = p[v * 3 + 2]; continue }
+      let sx = 0, sy = 0, sz = 0; for (const u of l) { sx += p[u * 3]; sy += p[u * 3 + 1]; sz += p[u * 3 + 2] } const k = 1 / l.length;
+      for (let c = 0; c < 3; c++) q[v * 3 + c] = p[v * 3 + c] + w * ((c === 0 ? sx : c === 1 ? sy : sz) * k - p[v * 3 + c]) }
+    p.set(q) }
+  const nor = new Float32Array(p.length);
+  for (let t = 0; t < tri.length; t += 3) { const a = tri[t] * 3, b = tri[t + 1] * 3, c = tri[t + 2] * 3;
+    const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2], vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
+    const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx; for (const o of [a, b, c]) { nor[o] += nx; nor[o + 1] += ny; nor[o + 2] += nz } }
+  let agree = 0; for (let v = 0; v < n; v++) agree += nor[v * 3] * iso.normals[v * 3] + nor[v * 3 + 1] * iso.normals[v * 3 + 1] + nor[v * 3 + 2] * iso.normals[v * 3 + 2];
+  const sg = agree < 0 ? -1 : 1;
+  for (let v = 0; v < n; v++) { const L = Math.hypot(nor[v * 3], nor[v * 3 + 1], nor[v * 3 + 2]) || 1; for (let c = 0; c < 3; c++) nor[v * 3 + c] = sg * nor[v * 3 + c] / L }
+  return { ...iso, positions: p, normals: nor };
+}
+
 /** the part of the map inside a box (Å, the map's frame): a sub-grid, or the map itself when the box holds it all */
 export function cropMap(m: DensityMap, lo: number[], hi: number[]): DensityMap {
   const a = [0, 1, 2].map(k => Math.max(0, Math.floor((lo[k] - m.origin[k]) / m.step[k]))), n = [m.nx, m.ny, m.nz];
