@@ -1163,7 +1163,13 @@ function buildMap(items,st,pos,proj,seedBase){
       ctx.save();ringsPath(ctx,body);ctx.fillStyle=paperFill();ctx.globalAlpha=alone?1:0.45;ctx.fill('evenodd');ctx.restore();
       if(wc)washRings(ctx,body,mapCol,seedBase+93,{strength:alone?0.16:0.1,layers:2,noRing:true});   // on watercolour paper, a faint wash under the hatching
       const inkColour=cfg.rep.fill==='ink colour',colorAt=()=>inkColour||pencil||chalk?mix(mapCol,P.hatch,0.3):P.hatch,sp=S.hatchSpacing*Math.max(0.7,TEX),ang=S.hatchAngle*Math.PI/180;
-      const kk=(o.shade??0.35)/0.35;if(alone){hatch(ctx,sh,own,0.4,ang,sp,colorAt,0.7*kk);hatch(ctx,sh,own,0.68,ang+1.25,sp*1.2,colorAt,0.55*kk)}
+      const kk=(o.shade??0.35)/0.35;
+      if(!light){ // dark paper: dark hatching would not show. The form is drawn by its light instead: a faint glaze of the
+        // map's colour, and pale hatching where the light falls, crossed where it is brightest (quieter behind a model)
+        ctx.save();ringsPath(ctx,body);ctx.fillStyle=rgba(mapCol,alone&&!M.hasModel?0.3:0.18);ctx.fill('evenodd');ctx.restore();
+        const lit={...sh,dark:sh.dark.map(d=>1-d)},pale=()=>mix(inkColour||pencil||chalk?mix(mapCol,P.ink,0.6):P.ink,P.paper,0.2),q=kk*(M.hasModel?0.55:1);
+        if(alone){hatch(ctx,lit,own,0.72,ang,sp,pale,0.5*q);hatch(ctx,lit,own,0.9,ang+1.25,sp*1.2,pale,0.4*q)}else hatch(ctx,lit,own,0.85,ang,sp*1.3,pale,0.35*q)}
+      else if(alone){hatch(ctx,sh,own,0.4,ang,sp,colorAt,0.7*kk);hatch(ctx,sh,own,0.68,ang+1.25,sp*1.2,colorAt,0.55*kk)}
       else hatch(ctx,sh,own,0.62,ang,sp*1.3,colorAt,0.5*kk)}   // over a model: only the deepest shadow, one way, so the model reads through
     const off=hatchy||lines?null:document.createElement('canvas');if(off){off.width=Math.max(1,Math.round(W*RF.dpr));off.height=Math.max(1,Math.round(H*RF.dpr));const x=off.getContext('2d');x.scale(RF.dpr,RF.dpr);
     // the base colour, spread a little past the outline so the blur does not pale the edge
