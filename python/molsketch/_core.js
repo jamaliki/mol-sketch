@@ -5264,7 +5264,7 @@
         return [q.x, q.y, q.z, q.d, q.fog];
       };
       const HA = 32 * Math.PI / 180, HB = -11 * Math.PI / 180, HH = 4.7;
-      const ssCol = (t) => t === "H" ? P.helix : t === "E" ? P.sheet : P.loop;
+      const ssCol = (t) => t === "H" ? P.helix : t === "E" ? P.sheet : t === "N" ? P.nucleic || "#e0a23a" : P.loop;
       const hsv = (h, s, v) => {
         const f2 = (k) => {
           const q = (k + h * 6) % 6;
@@ -5351,6 +5351,7 @@
           const ex = wS / Math.max(wInk, 1e-6), tri = ex < 1 ? ex : ex < 2 ? 2 - ex : 0;
           const eo = kind === "hatch" && T.coilLine ? clamp(1 - (ex - 1) / 2.5, 0, 1) : 0;
           ctx.lineWidth = wInk * (0.8 + 0.2 * fk) * (kind === "hatch" ? 1 - 0.4 * tri : 1);
+          if (kind === "plain" && luminance(col || P.loop) > 0.3) ctx.lineWidth = Math.min(ctx.lineWidth, Math.max(0.4, wS * 0.28));
           ctx.strokeStyle = eo > 0.02 ? fogged(mix(P.ink, T.side, eo), fog) : ink;
           ctx.beginPath();
           if (edges[0]) seg(ctx, q[0], q[1]);
@@ -5529,16 +5530,17 @@
             }
             const pr = path.map(P2);
             const L = [], Rr = [];
+            const ct = A[idx[0]].nucleic ? "N" : "L", cw = coilR * (ct === "N" ? 2.2 : 1), hwMin = luminance(rc(idx[0], ct)) > 0.3 ? 0.9 * wInk : 0;
             for (let j = 0; j < pr.length; j++) {
               const a = pr[Math.max(0, j - 1)], b = pr[Math.min(pr.length - 1, j + 1)];
               let tx = b[0] - a[0], ty = b[1] - a[1];
               const l = Math.hypot(tx, ty) || 1;
-              const hw = coilR * proj.pxPerA * pr[j][3];
+              const hw = Math.max(cw * proj.pxPerA * pr[j][3], hwMin);
               L.push([pr[j][0] - ty / l * hw, pr[j][1] + tx / l * hw, pr[j][2], pr[j][3], pr[j][4]]);
               Rr.push([pr[j][0] + ty / l * hw, pr[j][1] - tx / l * hw, pr[j][2], pr[j][3], pr[j][4]]);
             }
             const atEnd = (j, end) => end === 0 ? j === 0 && !first : j === pr.length - 2 && !last;
-            for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], "L"));
+            for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], ct));
           }
         }
       }

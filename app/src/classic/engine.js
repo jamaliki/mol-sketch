@@ -1292,7 +1292,7 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
   const P2=p=>{const q=proj.proj(p);return[q.x,q.y,q.z,q.d,q.fog]};
   const HA=32*Math.PI/180,HB=-11*Math.PI/180,HH=4.7;
   // colour: by secondary structure, by the carbon scheme, or a blue→red ramp along each chain (MOLSCRIPT's colourramp)
-  const ssCol=t=>t==='H'?P.helix:t==='E'?P.sheet:P.loop;
+  const ssCol=t=>t==='H'?P.helix:t==='E'?P.sheet:t==='N'?(P.nucleic||'#e0a23a'):P.loop;
   const hsv=(h,s,v)=>{const f=(k)=>{const q=(k+h*6)%6;return v-v*s*Math.max(0,Math.min(q,4-q,1))};return'#'+[f(5),f(3),f(1)].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('')};
   const mode=R.fill,colourMode=cartoonMode();
   const tone=engraveTone;
@@ -1326,7 +1326,7 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
       // edges nearly coincide, so each is drawn a little lighter and together they read as one outline, not a doubled one;
       // with colour in the lines, that outline takes the ribbon's dark shade, so a helix seen end-on stays coloured
       const ex=wS/Math.max(wInk,1e-6),tri=ex<1?ex:ex<2?2-ex:0;const eo=kind==='hatch'&&T.coilLine?clamp(1-(ex-1)/2.5,0,1):0;
-      ctx.lineWidth=wInk*(0.8+0.2*fk)*(kind==='hatch'?1-0.4*tri:1);ctx.strokeStyle=eo>0.02?fogged(mix(P.ink,T.side,eo),fog):ink;ctx.beginPath();
+      ctx.lineWidth=wInk*(0.8+0.2*fk)*(kind==='hatch'?1-0.4*tri:1);if(kind==='plain'&&luminance(col||P.loop)>0.3)ctx.lineWidth=Math.min(ctx.lineWidth,Math.max(0.4,wS*0.28));/* a thin tube's outline leaves its colour showing */ctx.strokeStyle=eo>0.02?fogged(mix(P.ink,T.side,eo),fog):ink;ctx.beginPath();
       if(edges[0])seg(ctx,q[0],q[1]);if(edges[1])seg(ctx,q[1],q[2]);if(edges[2])seg(ctx,q[2],q[3]);if(edges[3])seg(ctx,q[3],q[0]);ctx.stroke()});
   };
   const labels=[];let nH=0,nE=0;
@@ -1394,10 +1394,13 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
         for(let i=0;i<m-1;i++){const v1=v2;v2=i===m-2?(last?scl(sub3(last,p[m-2]),0.5):sub3(p[m-1],p[m-2])):scl(sub3(p[i+2],p[i]),0.5);
           for(let s=1;s<SEG;s++){path.push(herm(p[i],p[i+1],v1,v2,s/SEG));pr_i.push(idx[s/SEG<0.5?i:i+1])}path.push(p[i+1]);pr_i.push(idx[i+1])}
         const pr=path.map(P2);const L=[],Rr=[];
-        for(let j=0;j<pr.length;j++){const a=pr[Math.max(0,j-1)],b=pr[Math.min(pr.length-1,j+1)];let tx=b[0]-a[0],ty=b[1]-a[1];const l=Math.hypot(tx,ty)||1;const hw=coilR*proj.pxPerA*pr[j][3];
+        // a nucleic acid's backbone is a thicker tube; and however far away, a coil keeps some colour between its two
+        // outlines (a tube narrower than two pen widths would be a black line: a ribosome's RNA became a tangle of them)
+        const ct=A[idx[0]].nucleic?'N':'L',cw=coilR*(ct==='N'?2.2:1),hwMin=luminance(rc(idx[0],ct))>0.3?0.9*wInk:0;   // a dark coil is meant as a line (MOLSCRIPT's)
+        for(let j=0;j<pr.length;j++){const a=pr[Math.max(0,j-1)],b=pr[Math.min(pr.length-1,j+1)];let tx=b[0]-a[0],ty=b[1]-a[1];const l=Math.hypot(tx,ty)||1;const hw=Math.max(cw*proj.pxPerA*pr[j][3],hwMin);
           L.push([pr[j][0]-ty/l*hw,pr[j][1]+tx/l*hw,pr[j][2],pr[j][3],pr[j][4]]);Rr.push([pr[j][0]+ty/l*hw,pr[j][1]-tx/l*hw,pr[j][2],pr[j][3],pr[j][4]])}
         const atEnd=(j,end)=>end===0?(j===0&&!first):(j===pr.length-2&&!last);
-        for(let j=0;j<pr.length-1;j++)face([L[j],L[j+1],Rr[j+1],Rr[j]],'plain',1,false,[1,atEnd(j,1),1,atEnd(j,0)],alpha,rc(pr_i[j],'L'));
+        for(let j=0;j<pr.length-1;j++)face([L[j],L[j+1],Rr[j+1],Rr[j]],'plain',1,false,[1,atEnd(j,1),1,atEnd(j,0)],alpha,rc(pr_i[j],ct));
       }
     }
   }
