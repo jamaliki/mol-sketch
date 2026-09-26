@@ -4438,7 +4438,7 @@
           rn[v * 3 + 2] = r[2];
         }
         const far = new Uint8Array(n);
-        if (M.hasModel) for (let v = 0; v < n; v++) far[v] = L.dist[v] > 3.4 ? 1 : 0;
+        if (M.hasModel) for (let v = 0; v < n; v++) far[v] = L.dist[v] > (M.farAt ?? 3.4) ? 1 : 0;
         const comp = new Int32Array(n).fill(-1);
         if (M.hasModel) {
           const par = new Int32Array(n);
@@ -4859,6 +4859,19 @@
           ctx.fill("evenodd");
           ctx.restore();
           if (wc) washRings(ctx, body, mapCol, seedBase + 93, { strength: alone ? 0.16 : 0.1, layers: 2, noRing: true });
+          if (accIx >= 0) {
+            const r = regions((i) => covered(i) && sh.cls[i] === accIx);
+            if (r.length) {
+              if (wc) washRings(ctx, r, accent, seedBase + 95, { strength: 0.5, layers: 3 });
+              else {
+                ctx.save();
+                ringsPath(ctx, r);
+                ctx.fillStyle = rgba(accent, 0.4);
+                ctx.fill("evenodd");
+                ctx.restore();
+              }
+            }
+          }
           const inkColour = cfg.rep.fill === "ink colour", colorAt = () => inkColour || pencil || chalk ? mix(mapCol, P.hatch, 0.3) : P.hatch, sp = S.hatchSpacing * Math.max(0.7, TEX), ang = S.hatchAngle * Math.PI / 180;
           const kk = (o.shade ?? 0.35) / 0.35;
           if (!light) {
@@ -6935,8 +6948,9 @@
     const above = R > 0 ? { ...m, data: m.data.map((v) => v >= level ? v : 0) } : m;
     let g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
     const zoned = R > 0 && !!s && s.count > 0 && o.finish !== "sketch" && o.context !== "show";
+    const keepR = o.unexplained ? 10 : 5;
     if (zoned) {
-      const keep2 = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = 5;
+      const keep2 = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = keepR;
       for (let i = 0; i < s.count; i++) {
         if (s.element[i] === "H") continue;
         const c = [s.x[i], s.y[i], s.z[i]].map((v, k) => (v - g0.origin[k]) / g0.step[k]), rv = r / g0.step[0];
@@ -7119,7 +7133,7 @@
       R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
       byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
       o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
-      zoned ? "the density within 5 \xC5 of the model" : o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} \xC5` : m !== whole ? o.context === "show" ? `the density within ${Math.min(o.crop, 8)} \xC5 of the model` : `cropped to the model's box and ${o.crop} \xC5` : "",
+      zoned ? `the density within ${keepR} \xC5 of the model` : o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} \xC5` : m !== whole ? o.context === "show" ? `the density within ${Math.min(o.crop, 8)} \xC5 of the model` : `cropped to the model's box and ${o.crop} \xC5` : "",
       dust ? zoneSel ? "specks hidden" : "specks under 2% of the largest piece hidden" : "",
       g0 !== m && !byVolume ? `drawn at ${g2.step[0].toFixed(1)} \xC5 per voxel${R > 0 ? "" : ", at the level enclosing the same volume"}` : "",
       o.localResolution === "bfactor" && s ? "line looseness from B-factors" : o.localResolution === "map" && localRes ? "line looseness from local resolution" : ""
@@ -7141,7 +7155,8 @@
       zoned,
       closeUp: !!zoneSel,
       grid: g2,
-      gridLevel: gLevel
+      gridLevel: gLevel,
+      farAt: Math.max(3.4, 0.75 * R)
     };
     keep(per, key, out);
     return out;

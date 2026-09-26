@@ -91,7 +91,9 @@ Two marks tell you how well the model and map agree:
   the contour level (`unsupported`, on by default). In TRPV1 they fall on the ankyrin repeats, which are poorly
   resolved in this map.
 - **Unexplained density** is density the model does not account for, such as a ligand or a missing loop, drawn in
-  the accent colour (`unexplained`, off by default).
+  the accent colour (`unexplained`, off by default). With it on, a low-passed map keeps the density within 10 Å of the
+  model (not 5), so there is something beyond the model to see, and density counts as unexplained when it lies further
+  from every atom than three quarters of the low-pass resolution.
 
 ## A close look at residues
 

@@ -25,6 +25,7 @@ export interface EngineMap {
   opts: Style['map']; hasModel: boolean; primaryLevel: number; zoned?: boolean;
   closeUp?: boolean;                  // a zone: residues in their density, drawn over the model by default
   grid: DensityMap; gridLevel: number;   // the grid the surfaces were drawn from, and the level on it (sample reads it)
+  farAt?: number;                     // Å from every atom beyond which density is not the model's
 }
 
 const cache = new WeakMap<DensityMap, Map<string, EngineMap>>();
@@ -84,7 +85,8 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   // with a model, a low-passed map keeps only the density within 5 Å of it, before the low-pass (so its surface closes
   // smoothly, instead of being cut where the rest of an assembly joins it); the caption says so
   const zoned = R > 0 && !!s && s.count > 0 && o.finish !== 'sketch' && o.context !== 'show';
-  if (zoned) { const keep = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = 5;
+  const keepR = o.unexplained ? 10 : 5;   // looking for what the model does not explain: keep the density further out
+  if (zoned) { const keep = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = keepR;
     for (let i = 0; i < s!.count; i++) { if (s!.element[i] === 'H') continue; const c = [s!.x[i], s!.y[i], s!.z[i]].map((v, k) => (v - g0.origin[k]) / g0.step[k]), rv = r / g0.step[0];
       for (let z = Math.max(0, Math.floor(c[2] - rv)); z <= Math.min(n[2] - 1, Math.ceil(c[2] + rv)); z++) for (let y = Math.max(0, Math.floor(c[1] - rv)); y <= Math.min(n[1] - 1, Math.ceil(c[1] + rv)); y++)
         for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) keep[(z * n[1] + y) * n[0] + x] = 1 }
@@ -189,12 +191,13 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   const sigma = (level - m.mean) / (m.rms || 1);
   const caption = [m.name, R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''} low-passed to ${R} Å` : '', byVolume ? mass <= 0 ? 'contoured at 2 σ' : `contoured to enclose ${(mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + ' MDa' : Math.round(mass / 1e3) + ' kDa')} (${massFrom}'s mass, 1.21 Å³/Da)`
       : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''}, ${sigma.toFixed(1)} σ`,
-    o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', zoned ? 'the density within 5 Å of the model' : o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} Å` : m !== whole ? o.context === 'show' ? `the density within ${Math.min(o.crop, 8)} Å of the model` : `cropped to the model's box and ${o.crop} Å` : '',
+    o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', zoned ? `the density within ${keepR} Å of the model` : o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} Å` : m !== whole ? o.context === 'show' ? `the density within ${Math.min(o.crop, 8)} Å of the model` : `cropped to the model's box and ${o.crop} Å` : '',
     dust ? zoneSel ? 'specks hidden' : 'specks under 2% of the largest piece hidden' : '', g0 !== m && !byVolume ? `drawn at ${g.step[0].toFixed(1)} Å per voxel${R > 0 ? '' : ', at the level enclosing the same volume'}` : '',
     o.localResolution === 'bfactor' && s ? 'line looseness from B-factors' : o.localResolution === 'map' && localRes ? 'line looseness from local resolution' : ''].filter(Boolean).join(' · ');
   const corners: number[][] = []; for (const a of [0, 1]) for (const b of [0, 1]) for (const c of [0, 1]) corners.push(turn(g.origin[0] + a * (g.nx - 1) * g.step[0], g.origin[1] + b * (g.ny - 1) * g.step[1], g.origin[2] + c * (g.nz - 1) * g.step[2]));
   const out: EngineMap = { name: m.name, levels, primary, wire, unsupported, caption, sample: samplerOf(g, base, level, gLevel),
-    box: corners, opts: o, hasModel: atoms.length > 0, primaryLevel: level, zoned, closeUp: !!zoneSel, grid: g, gridLevel: gLevel };
+    box: corners, opts: o, hasModel: atoms.length > 0, primaryLevel: level, zoned, closeUp: !!zoneSel, grid: g, gridLevel: gLevel,
+    farAt: Math.max(3.4, 0.75 * R) };   // density this far from every atom is not the model's (a low-passed surface stands further off)
   keep(per, key, out);
   return out;
 }

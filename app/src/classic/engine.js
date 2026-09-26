@@ -1044,7 +1044,7 @@ function buildMap(items,st,pos,proj,seedBase){
     for(let v=0;v<n;v++){const p=proj.proj([L.pos[v*3],L.pos[v*3+1],L.pos[v*3+2]]);px[v]=p.x;py[v]=p.y;pz[v]=p.z;fog[v]=p.fog;
       const r=proj.rot([L.nor[v*3]+FIT.cx,L.nor[v*3+1]+FIT.cy,L.nor[v*3+2]+FIT.cz]);rn[v*3]=r[0];rn[v*3+1]=r[1];rn[v*3+2]=r[2]}
     // unexplained density: connected pieces of surface far from every atom, big enough not to be noise
-    const far=new Uint8Array(n);if(M.hasModel)for(let v=0;v<n;v++)far[v]=L.dist[v]>3.4?1:0;
+    const far=new Uint8Array(n);if(M.hasModel)for(let v=0;v<n;v++)far[v]=L.dist[v]>(M.farAt??3.4)?1:0;
     const comp=new Int32Array(n).fill(-1);if(M.hasModel){const par=new Int32Array(n);for(let v=0;v<n;v++)par[v]=v;const find=x=>{while(par[x]!==x){par[x]=par[par[x]];x=par[x]}return x};
       for(let t=0;t<L.tri.length;t+=3){const a=L.tri[t],b=L.tri[t+1],c=L.tri[t+2];if(far[a]&&far[b])par[find(a)]=find(b);if(far[b]&&far[c])par[find(b)]=find(c);if(far[a]&&far[c])par[find(a)]=find(c)}
       // a piece is unexplained (the accent) when it is big enough not to be noise and small beside the model (a ligand,
@@ -1169,6 +1169,7 @@ function buildMap(items,st,pos,proj,seedBase){
     if(hatchy){ // ink: paper inside the outline, hatching where the light falls away, crossed where deepest
       ctx.save();ringsPath(ctx,body);ctx.fillStyle=paperFill();ctx.globalAlpha=alone?1:0.45;ctx.fill('evenodd');ctx.restore();
       if(wc)washRings(ctx,body,mapCol,seedBase+93,{strength:alone?0.16:0.1,layers:2,noRing:true});   // on watercolour paper, a faint wash under the hatching
+      if(accIx>=0){const r=regions(i=>covered(i)&&sh.cls[i]===accIx);if(r.length){if(wc)washRings(ctx,r,accent,seedBase+95,{strength:0.5,layers:3});else{ctx.save();ringsPath(ctx,r);ctx.fillStyle=rgba(accent,0.4);ctx.fill('evenodd');ctx.restore()}}}   // what the model does not explain
       const inkColour=cfg.rep.fill==='ink colour',colorAt=()=>inkColour||pencil||chalk?mix(mapCol,P.hatch,0.3):P.hatch,sp=S.hatchSpacing*Math.max(0.7,TEX),ang=S.hatchAngle*Math.PI/180;
       const kk=(o.shade??0.35)/0.35;
       if(!light){ // dark paper: dark hatching would not show. The form is drawn by its light instead: a faint glaze of the
