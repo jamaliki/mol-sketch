@@ -4497,7 +4497,7 @@
         return { ...L, tri, px, py, pz, fog, rn, cls };
       };
       const levels = M.levels.map(prep), main = levels[M.primary] || levels[0];
-      const style = o.style, layer = o.layer === "auto" ? style === "slice" ? "plane" : M.hasModel && style === "surface" && !M.closeUp ? "under" : "over" : o.layer === "behind" ? "under" : o.layer;
+      const style = o.style, layer = o.layer === "auto" ? style === "slice" ? "plane" : M.hasModel && (style === "surface" || style === "layers") && !M.closeUp ? "under" : "over" : o.layer === "behind" ? "under" : o.layer;
       const zItem = layer === "under" ? -1e9 : layer === "over" || layer === "lines" ? 1e9 : 0;
       const silhouettes = (L, buf) => {
         const n = L.pos.length / 3, f2 = new Float32Array(n);
@@ -4648,7 +4648,7 @@
           cls[i] = L.cls[a];
           hand2[i] = L.hand ? (L.hand[a] + L.hand[b] + L.hand[c]) / 3 : 0;
         }
-        softenCovered(dark, buf.tb, W, H, Math.max(1, Math.round(2.5 * TEX)));
+        softenCovered(dark, buf.tb, W, H, Math.max(1, Math.round(2.5 * TEX), Math.min(Math.round(8 * TEX), Math.round(1.2 * proj.pxPerA))));
         softenCovered(face, buf.tb, W, H, Math.max(1, Math.round(2 * TEX)));
         return { dark, fogp, cls, hand: hand2, face };
       };
@@ -7058,7 +7058,7 @@
     const primary = Math.max(0, factors.indexOf(1));
     const wire = [], gLevel = same(level);
     if (o.style === "mesh") {
-      const sp = Math.max(1, Math.round(o.meshSpacing / g2.step[0]));
+      const sp = Math.max(1, Math.round(Math.max(o.meshSpacing, R / 2) / g2.step[0]));
       for (const ax of [0, 1, 2]) {
         const n = [g2.nx, g2.ny, g2.nz][ax];
         for (let i = 0; i < n; i += sp) for (const line of joinSegments(sliceContours(g2, ax, i, gLevel))) {

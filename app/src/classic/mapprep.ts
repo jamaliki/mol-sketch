@@ -164,7 +164,9 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   // mesh: the contours of the map on every few grid planes of each axis, as Coot draws it
   const wire: number[][][] = [], gLevel = same(level);
   if (o.style === 'mesh') {
-    const sp = Math.max(1, Math.round(o.meshSpacing / g.step[0]));
+    // the planes a mesh is drawn on: meshSpacing apart, and on a low-passed map no closer than half its resolution (a
+    // whole particle's mesh at 1 Å is a grey weave, not wire)
+    const sp = Math.max(1, Math.round(Math.max(o.meshSpacing, R / 2) / g.step[0]));
     for (const ax of [0, 1, 2] as const) { const n = [g.nx, g.ny, g.nz][ax]; for (let i = 0; i < n; i += sp) for (const line of joinSegments(sliceContours(g, ax, i, gLevel))) {
       let run: number[][] = [];   // carved: only the parts near the model
       for (const p of line) { const inZone = !(carve > 0 && atoms.length) || carveDist(p[0], p[1], p[2]) <= carve; if (inZone) run.push(turn(p[0], p[1], p[2])); else { if (run.length > 1) wire.push(run); run = [] } }

@@ -1058,7 +1058,7 @@ function buildMap(items,st,pos,proj,seedBase){
     let tri=L.tri;if(o.finish!=='sketch'&&M.hasModel&&!M.zoned&&(o.context??'hide')==='hide'){const keep=[];let cut=0;for(let t=0;t<tri.length;t+=3){if(comp[tri[t]]===2&&comp[tri[t+1]]===2&&comp[tri[t+2]]===2){cut++;continue}keep.push(tri[t],tri[t+1],tri[t+2])}if(cut){tri=new Uint32Array(keep);M.contextHidden=true}}
     return {...L,tri,px,py,pz,fog,rn,cls}};   // projected afresh every frame: the camera moves
   const levels=M.levels.map(prep),main=levels[M.primary]||levels[0];
-  const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':M.hasModel&&style==='surface'&&!M.closeUp?'under':'over'):o.layer==='behind'?'under':o.layer;   // with a model: behind it, so the model keeps its colour; a close-up over it, so its atoms are seen in their density
+  const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':M.hasModel&&(style==='surface'||style==='layers')&&!M.closeUp?'under':'over'):o.layer==='behind'?'under':o.layer;   // with a model: behind it, so the model keeps its colour; a close-up over it, so its atoms are seen in their density
   const zItem=layer==='under'?-1e9:layer==='over'||layer==='lines'?1e9:0;
   // the surface's silhouette on the mesh: where n·(eye − p) changes sign, kept where the buffer sees it
   const silhouettes=(L,buf)=>{
@@ -1096,7 +1096,7 @@ function buildMap(items,st,pos,proj,seedBase){
       const lam=Math.max(0,(nx*l0+ny*l1*-1+nz*l2)/ln);face[i]=Math.abs(nz)/ln;   // the light, from the style's angle (screen y down)
       let occ=0;if(POOL>0){const x=i%W,y=(i/W)|0,z=buf.zb[i];let s=0;for(let k=0;k<8;k++){const qx=x+OX[k],qy=y+OY[k];if(qx>=0&&qy>=0&&qx<W&&qy<H){const zq=buf.zb[qy*W+qx];if(zq>-1e8){const u=(zq-z-1)/6;s+=u<0?0:u>1?1:u}}}occ=s/8}
       dark[i]=clamp(0.62*(1-lam)*S.shading/0.65+0.9*POOL*occ,0,1);fogp[i]=(L.fog[a]+L.fog[b]+L.fog[c])/3;cls[i]=L.cls[a];hand[i]=L.hand?(L.hand[a]+L.hand[b]+L.hand[c])/3:0}
-    softenCovered(dark,buf.tb,W,H,Math.max(1,Math.round(2.5*TEX)));   // the facets of the mesh smoothed away: shadows as broad shapes, not specks
+    softenCovered(dark,buf.tb,W,H,Math.max(1,Math.round(2.5*TEX),Math.min(Math.round(8*TEX),Math.round(1.2*proj.pxPerA))));   // over about an ångström: shadows follow the surface's form, not every bump of it   // the facets of the mesh smoothed away: shadows as broad shapes, not specks
     softenCovered(face,buf.tb,W,H,Math.max(1,Math.round(2*TEX)));
     return {dark,fogp,cls,hand,face}};
   const bbox=(test)=>{let x0=W,y0=H,x1=-1,y1=-1;for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(test(y*W+x)){if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y}return x1<0?null:[x0,y0,x1,y1]};

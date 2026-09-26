@@ -220,10 +220,10 @@ Usually set through [`fig.map`](api.md#figmapsourceauto--levelnone-sigmanone-loc
 | `map.unsupported` | `true` | a small accent circle on residues mostly outside the density |
 | `map.unexplained` | `false` | density the model does not explain in the accent colour |
 | `map.local_resolution` | `"none"` | `"bfactor"` or `"map"`: lines looser where the resolution is worse |
-| `map.layer` | `"auto"` | with a model: `"behind"` it (the default for surfaces: the model is drawn over the map and keeps its colour), `"over"` it as a translucent envelope (`map.opacity`), or `"lines"` (only the map's outline, over the model) |
+| `map.layer` | `"auto"` | with a model: `"behind"` it (the default for surfaces and layers: the model is drawn over the map and keeps its colour; a close-up, `map.zone`, is drawn over its residues), `"over"` it as a translucent envelope (`map.opacity`), or `"lines"` (only the map's outline, over the model) |
 | `map.caption` | `true` | the line under the drawing that says how the map is shown |
 | `map.max_voxels` | `192` | the largest grid drawn from, per side (larger maps are averaged down) |
-| `map.mesh_spacing` | `1` | Å between the mesh's planes |
+| `map.mesh_spacing` | `1` | Å between the mesh's planes (on a low-passed map, at least half its resolution) |
 | `map.slice.offset`, `map.slice.cut` | `0`, `true` | where the slice lies (−0.5 to 0.5 of the depth), and whether what is in front of it is cut away |
 
 ## View and depth
