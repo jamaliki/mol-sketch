@@ -63,7 +63,7 @@ export function recommendedUsable(m: DensityMap) { return m.level != null && fra
 
 function keyOf(whole: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null) {
   const o = style.map;
-  return JSON.stringify([mapLevel(whole, style), o.speck, o.smooth, o.crop, o.zone, o.finish, o.smoothing, o.style === 'layers' ? o.levels : [1], o.carve, o.maxVoxels, o.localResolution, o.style === 'mesh' ? o.meshSpacing : 0, o.context, s ? s.count : 0, Array.from(base), !!localRes]);
+  return JSON.stringify([mapLevel(whole, style), o.speck, o.smooth, o.crop, o.zone, o.finish, o.smoothing, o.style === 'layers' ? o.levels : [1], o.carve, o.maxVoxels, o.localResolution, o.style === 'mesh' ? o.meshSpacing : 0, o.context, !!o.unexplained, s ? s.count : 0, Array.from(base), !!localRes]);
 }
 /** the prepared map if it is ready (cached), else null: for the preview, which does not wait for it */
 export function preparedMap(whole: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null = null): EngineMap | null {
