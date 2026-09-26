@@ -38,8 +38,17 @@ export function mapBasis(m: DensityMap, level: number): Float32Array {
   return pcaBasis({ count: n, center: [cx / (n || 1), cy / (n || 1), cz / (n || 1)], x, y, z } as any);
 }
 
-/** the contour level a figure uses: the style's, else the map's recommended one, else mean + 3 σ */
-export function mapLevel(m: DensityMap, style: Style) { const o = style.map; return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? m.level ?? m.mean + 3 * m.rms }
+/** the contour level a figure uses: the style's, else the map's recommended one (if it can be drawn), else mean + 3 σ */
+export function mapLevel(m: DensityMap, style: Style) { const o = style.map; return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? (recommendedUsable(m) ? m.level! : null) ?? m.mean + 3 * m.rms }
+/* a recommended level that encloses more than 40% of the map's box is not a surface that can be drawn (no particle fills
+   its box: a tomographic average with its contrast the other way, a level meant for another program); 3 σ is used then */
+const above = new WeakMap<DensityMap, number>();
+export function fractionAboveRecommended(m: DensityMap) {
+  if (m.level == null) return 0; let f = above.get(m);
+  if (f === undefined) { const d = m.data, step = Math.max(1, Math.floor(d.length / 2e6)); let n = 0, t = 0; for (let i = 0; i < d.length; i += step) { t++; if (d[i] >= m.level) n++ } f = t ? n / t : 0; above.set(m, f) }
+  return f;
+}
+export function recommendedUsable(m: DensityMap) { return m.level != null && fractionAboveRecommended(m) <= 0.4 }
 
 function keyOf(whole: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null) {
   const o = style.map;
@@ -189,8 +198,10 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
     if (n && low / n > 0.5) unsupported.push(r.trace);
   }
   const sigma = (level - m.mean) / (m.rms || 1);
-  const caption = [m.name, R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''} low-passed to ${R} Å` : '', byVolume ? mass <= 0 ? 'contoured at 2 σ' : `contoured to enclose ${(mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + ' MDa' : Math.round(mass / 1e3) + ' kDa')} (${massFrom}'s mass, 1.21 Å³/Da)`
-      : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''}, ${sigma.toFixed(1)} σ`,
+  const unusable = style.map.level == null && style.map.sigma == null && whole.level != null && !recommendedUsable(whole)
+    ? `the recommended level (${+whole.level!.toPrecision(3)}) encloses ${Math.round(100 * fractionAboveRecommended(whole))}% of the box: 3 σ instead` : '';
+  const caption = [m.name, unusable, R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && recommendedUsable(whole) ? ' (recommended)' : ''} low-passed to ${R} Å` : '', byVolume ? mass <= 0 ? 'contoured at 2 σ' : `contoured to enclose ${(mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + ' MDa' : Math.round(mass / 1e3) + ' kDa')} (${massFrom}'s mass, 1.21 Å³/Da)`
+      : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && recommendedUsable(whole) ? ' (recommended)' : ''}, ${sigma.toFixed(1)} σ`,
     o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', zoned ? `the density within ${keepR} Å of the model` : o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} Å` : m !== whole ? o.context === 'show' ? `the density within ${Math.min(o.crop, 8)} Å of the model` : `cropped to the model's box and ${o.crop} Å` : '',
     dust ? zoneSel ? 'specks hidden' : 'specks under 2% of the largest piece hidden' : '', g0 !== m && !byVolume ? `drawn at ${g.step[0].toFixed(1)} Å per voxel${R > 0 ? '' : ', at the level enclosing the same volume'}` : '',
     o.localResolution === 'bfactor' && s ? 'line looseness from B-factors' : o.localResolution === 'map' && localRes ? 'line looseness from local resolution' : ''].filter(Boolean).join(' · ');

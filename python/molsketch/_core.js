@@ -6994,7 +6994,26 @@
   }
   function mapLevel(m, style) {
     const o = style.map;
-    return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? m.level ?? m.mean + 3 * m.rms;
+    return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? (recommendedUsable(m) ? m.level : null) ?? m.mean + 3 * m.rms;
+  }
+  var above = /* @__PURE__ */ new WeakMap();
+  function fractionAboveRecommended(m) {
+    if (m.level == null) return 0;
+    let f2 = above.get(m);
+    if (f2 === void 0) {
+      const d = m.data, step = Math.max(1, Math.floor(d.length / 2e6));
+      let n = 0, t = 0;
+      for (let i = 0; i < d.length; i += step) {
+        t++;
+        if (d[i] >= m.level) n++;
+      }
+      f2 = t ? n / t : 0;
+      above.set(m, f2);
+    }
+    return f2;
+  }
+  function recommendedUsable(m) {
+    return m.level != null && fractionAboveRecommended(m) <= 0.4;
   }
   function keyOf(whole, style, s, base, localRes) {
     const o = style.map;
@@ -7051,8 +7070,8 @@
       extent = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
     }
     const R = o.smooth === "auto" ? zoneSel ? 0 : (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
-    const above = R > 0 ? { ...m, data: m.data.map((v) => v >= level ? v : 0) } : m;
-    let g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
+    const above2 = R > 0 ? { ...m, data: m.data.map((v) => v >= level ? v : 0) } : m;
+    let g0 = downsample(above2, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
     const zoned = R > 0 && !!s && s.count > 0 && o.finish !== "sketch" && o.context !== "show";
     const keepR = o.unexplained ? 10 : 5;
     if (zoned) {
@@ -7234,10 +7253,12 @@
       if (n && low / n > 0.5) unsupported.push(r.trace);
     }
     const sigma = (level - m.mean) / (m.rms || 1);
+    const unusable = style.map.level == null && style.map.sigma == null && whole.level != null && !recommendedUsable(whole) ? `the recommended level (${+whole.level.toPrecision(3)}) encloses ${Math.round(100 * fractionAboveRecommended(whole))}% of the box: 3 \u03C3 instead` : "";
     const caption = [
       m.name,
-      R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
-      byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
+      unusable,
+      R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && recommendedUsable(whole) ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
+      byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && recommendedUsable(whole) ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
       o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
       zoned ? `the density within ${keepR} \xC5 of the model` : o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} \xC5` : m !== whole ? o.context === "show" ? `the density within ${Math.min(o.crop, 8)} \xC5 of the model` : `cropped to the model's box and ${o.crop} \xC5` : "",
       dust ? zoneSel ? "specks hidden" : "specks under 2% of the largest piece hidden" : "",
