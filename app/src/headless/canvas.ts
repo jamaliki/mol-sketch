@@ -68,7 +68,12 @@ const f32 = Math.fround;
 /** a CSS colour as RGBA, the channels integers 0..255 (Blink rounds them) and alpha 0..1: #hex, rgb()/rgba(), transparent
    and a few names; null if Chrome would ignore it. The host divides the channels by 255. */
 const HEX = /^[0-9a-f]+$/, RGB = /^rgba?\(\s*([^)]*)\)$/;
+const parsed = new Map<string, number[] | null>();   // the engine sets the same colours over and over
 function parseColor(str: string): number[] | null {
+  let v = parsed.get(str); if (v !== undefined) return v;
+  v = parseColorOnce(str); if (parsed.size > 8192) parsed.clear(); parsed.set(str, v); return v;
+}
+function parseColorOnce(str: string): number[] | null {
   const s = str.trim().toLowerCase();
   if (s[0] === '#') {
     let h = s.slice(1);

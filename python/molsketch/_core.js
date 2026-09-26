@@ -179,7 +179,16 @@
   var f32 = Math.fround;
   var HEX = /^[0-9a-f]+$/;
   var RGB = /^rgba?\(\s*([^)]*)\)$/;
+  var parsed = /* @__PURE__ */ new Map();
   function parseColor(str) {
+    let v = parsed.get(str);
+    if (v !== void 0) return v;
+    v = parseColorOnce(str);
+    if (parsed.size > 8192) parsed.clear();
+    parsed.set(str, v);
+    return v;
+  }
+  function parseColorOnce(str) {
     const s = str.trim().toLowerCase();
     if (s[0] === "#") {
       let h = s.slice(1);
@@ -1839,20 +1848,32 @@
         return a * (1 - u) + b * u;
       }
     }
+    const RGBC = /* @__PURE__ */ new Map(), MIXC = /* @__PURE__ */ new Map();
     function hexToRgb(h) {
-      h = h.replace("#", "");
-      if (h.length === 3) h = h.split("").map((c) => c + c).join("");
-      const n = parseInt(h, 16);
-      return [n >> 16 & 255, n >> 8 & 255, n & 255];
+      let v = RGBC.get(h);
+      if (v) return v;
+      let x = h.replace("#", "");
+      if (x.length === 3) x = x.split("").map((c) => c + c).join("");
+      const n = parseInt(x, 16);
+      v = [n >> 16 & 255, n >> 8 & 255, n & 255];
+      if (RGBC.size > 4096) RGBC.clear();
+      RGBC.set(h, v);
+      return v;
     }
     function rgba(h, a) {
       const [r, g2, b] = hexToRgb(h);
       return `rgba(${r},${g2},${b},${a})`;
     }
     function mix(h1, h2, t) {
+      const k = h1 + h2 + t;
+      let r = MIXC.get(k);
+      if (r !== void 0) return r;
       const a = hexToRgb(h1), b = hexToRgb(h2);
       const c = a.map((v, i) => Math.round(lerp(v, b[i], t)));
-      return "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+      r = "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+      if (MIXC.size > 8192) MIXC.clear();
+      MIXC.set(k, r);
+      return r;
     }
     function luminance(h) {
       const [r, g2, b] = hexToRgb(h);
@@ -4581,6 +4602,12 @@
       const shadeOf = (L, buf) => {
         const n = W * H, dark = new Float32Array(n), fogp = new Float32Array(n), cls = new Int32Array(n).fill(-1), hand2 = new Float32Array(n), face = new Float32Array(n);
         const la = S.lightAngle * Math.PI / 180, l0 = Math.cos(la) * 0.75, l1 = -Math.sin(la) * 0.75, l2 = 0.66, occR = 6 * proj.pxPerA;
+        const OX = new Int32Array(8), OY = new Int32Array(8);
+        for (let k = 0; k < 8; k++) {
+          const an = k * Math.PI / 4;
+          OX[k] = Math.round(Math.cos(an) * occR);
+          OY[k] = Math.round(Math.sin(an) * occR);
+        }
         for (let i = 0; i < n; i++) {
           const t = buf.tb[i];
           if (t < 0) continue;
@@ -4593,10 +4620,13 @@
             const x = i % W, y = i / W | 0, z = buf.zb[i];
             let s = 0;
             for (let k = 0; k < 8; k++) {
-              const an = k * Math.PI / 4, qx = Math.round(x + Math.cos(an) * occR), qy = Math.round(y + Math.sin(an) * occR);
+              const qx = x + OX[k], qy = y + OY[k];
               if (qx >= 0 && qy >= 0 && qx < W && qy < H) {
                 const zq = buf.zb[qy * W + qx];
-                if (zq > -1e8) s += clamp((zq - z - 1) / 6, 0, 1);
+                if (zq > -1e8) {
+                  const u = (zq - z - 1) / 6;
+                  s += u < 0 ? 0 : u > 1 ? 1 : u;
+                }
               }
             }
             occ = s / 8;
@@ -5054,37 +5084,48 @@
       } });
     }
     function softenCovered(v, tb, W, H, r) {
+      let X0 = W, X1 = -1, Y0 = H, Y1 = -1;
+      for (let y = 0; y < H; y++) {
+        const o = y * W;
+        for (let x = 0; x < W; x++) if (tb[o + x] >= 0) {
+          if (x < X0) X0 = x;
+          if (x > X1) X1 = x;
+          if (y < Y0) Y0 = y;
+          Y1 = y;
+        }
+      }
+      if (X1 < 0) return;
       const tmp = new Float32Array(v.length);
       for (let pass = 0; pass < 2; pass++) {
-        for (let y = 0; y < H; y++) {
+        for (let y = Y0; y <= Y1; y++) {
           let s = 0, n = 0;
           const o = y * W;
-          for (let x = -r; x < W; x++) {
+          for (let x = X0 - r; x <= X1; x++) {
             const a = x + r, b = x - r - 1;
-            if (a < W && tb[o + a] >= 0) {
+            if (a <= X1 && tb[o + a] >= 0) {
               s += v[o + a];
               n++;
             }
-            if (b >= 0 && tb[o + b] >= 0) {
+            if (b >= X0 && tb[o + b] >= 0) {
               s -= v[o + b];
               n--;
             }
-            if (x >= 0) tmp[o + x] = tb[o + x] >= 0 && n ? s / n : 0;
+            if (x >= X0) tmp[o + x] = tb[o + x] >= 0 && n ? s / n : 0;
           }
         }
-        for (let x = 0; x < W; x++) {
+        for (let x = X0; x <= X1; x++) {
           let s = 0, n = 0;
-          for (let y = -r; y < H; y++) {
+          for (let y = Y0 - r; y <= Y1; y++) {
             const a = y + r, b = y - r - 1;
-            if (a < H && tb[a * W + x] >= 0) {
+            if (a <= Y1 && tb[a * W + x] >= 0) {
               s += tmp[a * W + x];
               n++;
             }
-            if (b >= 0 && tb[b * W + x] >= 0) {
+            if (b >= Y0 && tb[b * W + x] >= 0) {
               s -= tmp[b * W + x];
               n--;
             }
-            if (y >= 0) v[y * W + x] = tb[y * W + x] >= 0 && n ? s / n : 0;
+            if (y >= Y0) v[y * W + x] = tb[y * W + x] >= 0 && n ? s / n : 0;
           }
         }
       }
@@ -7029,25 +7070,42 @@
     return out;
   }
   function nearestAtom(s, atoms) {
-    const cell = 4, grid = /* @__PURE__ */ new Map();
-    const kf = (i, j, k) => ((i + 512) * 1024 + (j + 512)) * 1024 + (k + 512);
+    const cell = 4;
+    let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
     for (const i of atoms) {
-      const k = kf(Math.floor(s.x[i] / cell), Math.floor(s.y[i] / cell), Math.floor(s.z[i] / cell));
-      let l = grid.get(k);
-      if (!l) grid.set(k, l = []);
-      l.push(i);
+      const x = s.x[i], y = s.y[i], z = s.z[i];
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+      if (z < z0) z0 = z;
+      if (z > z1) z1 = z;
+    }
+    if (!atoms.length) return (_x, _y, _z) => [-1, 8];
+    const nx = Math.floor((x1 - x0) / cell) + 1, ny = Math.floor((y1 - y0) / cell) + 1, nz = Math.floor((z1 - z0) / cell) + 1;
+    const cellOf = (i) => (Math.floor((s.z[i] - z0) / cell) * ny + Math.floor((s.y[i] - y0) / cell)) * nx + Math.floor((s.x[i] - x0) / cell);
+    const start = new Int32Array(nx * ny * nz + 1);
+    for (const i of atoms) start[cellOf(i) + 1]++;
+    for (let c = 0; c < nx * ny * nz; c++) start[c + 1] += start[c];
+    const fill = start.slice(0, -1), list = new Int32Array(atoms.length), ax = new Float64Array(atoms.length), ay = new Float64Array(atoms.length), az = new Float64Array(atoms.length);
+    for (const i of atoms) {
+      const k = fill[cellOf(i)]++;
+      list[k] = i;
+      ax[k] = s.x[i];
+      ay[k] = s.y[i];
+      az[k] = s.z[i];
     }
     return (x, y, z) => {
       let best = -1, bd = 64;
-      const ci = Math.floor(x / cell), cj = Math.floor(y / cell), ck = Math.floor(z / cell);
-      for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) for (let c = -2; c <= 2; c++) {
-        const l = grid.get(kf(ci + a, cj + b, ck + c));
-        if (!l) continue;
-        for (const i of l) {
-          const d = (s.x[i] - x) ** 2 + (s.y[i] - y) ** 2 + (s.z[i] - z) ** 2;
+      const ci = Math.floor((x - x0) / cell), cj = Math.floor((y - y0) / cell), ck = Math.floor((z - z0) / cell);
+      for (let c = Math.max(0, ck - 2); c <= Math.min(nz - 1, ck + 2); c++) for (let b = Math.max(0, cj - 2); b <= Math.min(ny - 1, cj + 2); b++) {
+        const row = (c * ny + b) * nx, a0 = Math.max(0, ci - 2), a1 = Math.min(nx - 1, ci + 2);
+        if (a0 > a1) continue;
+        for (let a = a0; a <= a1; a++) for (let k = start[row + a], e = start[row + a + 1]; k < e; k++) {
+          const d = (ax[k] - x) ** 2 + (ay[k] - y) ** 2 + (az[k] - z) ** 2;
           if (d < bd) {
             bd = d;
-            best = i;
+            best = list[k];
           }
         }
       }
@@ -7587,14 +7645,14 @@
   function drop(ref) {
     inputs.delete(ref);
   }
-  var parsed = /* @__PURE__ */ new Map();
+  var parsed2 = /* @__PURE__ */ new Map();
   function structureOf(text, name) {
     const key = name + "\0" + text.length + "\0" + text.slice(0, 64) + text.slice(-64);
-    let s = parsed.get(key);
+    let s = parsed2.get(key);
     if (!s) {
       s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, ""));
-      parsed.set(key, s);
-      if (parsed.size > 8) parsed.delete(parsed.keys().next().value);
+      parsed2.set(key, s);
+      if (parsed2.size > 8) parsed2.delete(parsed2.keys().next().value);
     }
     return s;
   }

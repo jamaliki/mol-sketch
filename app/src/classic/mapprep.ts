@@ -191,15 +191,22 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   return out;
 }
 
-/** the nearest of some atoms to a point (and its distance, Å), up to 8 Å away, from a 4 Å grid */
+/** the nearest of some atoms to a point (and its distance, Å), up to 8 Å away, from a dense 4 Å grid of them */
 function nearestAtom(s: Structure | null, atoms: number[]) {
-  const cell = 4, grid = new Map<number, number[]>(); const kf = (i: number, j: number, k: number) => ((i + 512) * 1024 + (j + 512)) * 1024 + (k + 512);
-  for (const i of atoms) { const k = kf(Math.floor(s!.x[i] / cell), Math.floor(s!.y[i] / cell), Math.floor(s!.z[i] / cell)); let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(i) }
+  const cell = 4; let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
+  for (const i of atoms) { const x = s!.x[i], y = s!.y[i], z = s!.z[i]; if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; if (z < z0) z0 = z; if (z > z1) z1 = z }
+  if (!atoms.length) return (_x: number, _y: number, _z: number): [number, number] => [-1, 8];
+  const nx = Math.floor((x1 - x0) / cell) + 1, ny = Math.floor((y1 - y0) / cell) + 1, nz = Math.floor((z1 - z0) / cell) + 1;
+  const cellOf = (i: number) => (Math.floor((s!.z[i] - z0) / cell) * ny + Math.floor((s!.y[i] - y0) / cell)) * nx + Math.floor((s!.x[i] - x0) / cell);
+  const start = new Int32Array(nx * ny * nz + 1); for (const i of atoms) start[cellOf(i) + 1]++;
+  for (let c = 0; c < nx * ny * nz; c++) start[c + 1] += start[c];
+  const fill = start.slice(0, -1), list = new Int32Array(atoms.length), ax = new Float64Array(atoms.length), ay = new Float64Array(atoms.length), az = new Float64Array(atoms.length);
+  for (const i of atoms) { const k = fill[cellOf(i)]++; list[k] = i; ax[k] = s!.x[i]; ay[k] = s!.y[i]; az[k] = s!.z[i] }   // each cell's atoms, in the order given
   return (x: number, y: number, z: number): [number, number] => {
-    let best = -1, bd = 64; const ci = Math.floor(x / cell), cj = Math.floor(y / cell), ck = Math.floor(z / cell);
-    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) for (let c = -2; c <= 2; c++) {
-      const l = grid.get(kf(ci + a, cj + b, ck + c)); if (!l) continue;
-      for (const i of l) { const d = (s!.x[i] - x) ** 2 + (s!.y[i] - y) ** 2 + (s!.z[i] - z) ** 2; if (d < bd) { bd = d; best = i } }
+    let best = -1, bd = 64; const ci = Math.floor((x - x0) / cell), cj = Math.floor((y - y0) / cell), ck = Math.floor((z - z0) / cell);
+    for (let c = Math.max(0, ck - 2); c <= Math.min(nz - 1, ck + 2); c++) for (let b = Math.max(0, cj - 2); b <= Math.min(ny - 1, cj + 2); b++) {
+      const row = (c * ny + b) * nx, a0 = Math.max(0, ci - 2), a1 = Math.min(nx - 1, ci + 2); if (a0 > a1) continue;
+      for (let a = a0; a <= a1; a++) for (let k = start[row + a], e = start[row + a + 1]; k < e; k++) { const d = (ax[k] - x) ** 2 + (ay[k] - y) ** 2 + (az[k] - z) ** 2; if (d < bd) { bd = d; best = list[k] } }
     }
     return [best, Math.sqrt(bd)];
   };

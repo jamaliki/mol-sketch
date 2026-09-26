@@ -12,9 +12,10 @@ function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a
 function strHash(s){let h=5381;for(let i=0;i<s.length;i++)h=((h<<5)+h+s.charCodeAt(i))|0;return h}
 class Noise1{constructor(rng,n=48){this.v=[];for(let i=0;i<n;i++)this.v.push(rng()*2-1);this.n=n}
   at(t){const i=Math.floor(t),f=t-i,a=this.v[((i%this.n)+this.n)%this.n],b=this.v[(((i+1)%this.n)+this.n)%this.n];const u=(1-Math.cos(f*Math.PI))/2;return a*(1-u)+b*u}}
-function hexToRgb(h){h=h.replace('#','');if(h.length===3)h=h.split('').map(c=>c+c).join('');const n=parseInt(h,16);return[(n>>16)&255,(n>>8)&255,n&255]}
+const RGBC=new Map(),MIXC=new Map();   // parsed and mixed colours: a drawing asks for the same few thousands of times
+function hexToRgb(h){let v=RGBC.get(h);if(v)return v;let x=h.replace('#','');if(x.length===3)x=x.split('').map(c=>c+c).join('');const n=parseInt(x,16);v=[(n>>16)&255,(n>>8)&255,n&255];if(RGBC.size>4096)RGBC.clear();RGBC.set(h,v);return v}
 function rgba(h,a){const[r,g,b]=hexToRgb(h);return`rgba(${r},${g},${b},${a})`}
-function mix(h1,h2,t){const a=hexToRgb(h1),b=hexToRgb(h2);const c=a.map((v,i)=>Math.round(lerp(v,b[i],t)));return'#'+c.map(v=>v.toString(16).padStart(2,'0')).join('')}
+function mix(h1,h2,t){const k=h1+h2+t;let r=MIXC.get(k);if(r!==undefined)return r;const a=hexToRgb(h1),b=hexToRgb(h2);const c=a.map((v,i)=>Math.round(lerp(v,b[i],t)));r='#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');if(MIXC.size>8192)MIXC.clear();MIXC.set(k,r);return r}
 function luminance(h){const[r,g,b]=hexToRgb(h);return(0.2126*r+0.7152*g+0.0722*b)/255}
 
 /* ============================ config ============================ */
@@ -1082,10 +1083,11 @@ function buildMap(items,st,pos,proj,seedBase){
   const shadeOf=(L,buf)=>{
     const n=W*H,dark=new Float32Array(n),fogp=new Float32Array(n),cls=new Int32Array(n).fill(-1),hand=new Float32Array(n),face=new Float32Array(n);
     const la=S.lightAngle*Math.PI/180,l0=Math.cos(la)*0.75,l1=-Math.sin(la)*0.75,l2=0.66,occR=6*proj.pxPerA;
+    const OX=new Int32Array(8),OY=new Int32Array(8);for(let k=0;k<8;k++){const an=k*Math.PI/4;OX[k]=Math.round(Math.cos(an)*occR);OY[k]=Math.round(Math.sin(an)*occR)}   // the 8 probes of the grooves, in whole pixels
     for(let i=0;i<n;i++){const t=buf.tb[i];if(t<0)continue;const a=L.tri[t*3],b=L.tri[t*3+1],c=L.tri[t*3+2];
       const nx=L.rn[a*3]+L.rn[b*3]+L.rn[c*3],ny=L.rn[a*3+1]+L.rn[b*3+1]+L.rn[c*3+1],nz=L.rn[a*3+2]+L.rn[b*3+2]+L.rn[c*3+2],ln=Math.hypot(nx,ny,nz)||1;
       const lam=Math.max(0,(nx*l0+ny*l1*-1+nz*l2)/ln);face[i]=Math.abs(nz)/ln;   // the light, from the style's angle (screen y down)
-      let occ=0;if(POOL>0){const x=i%W,y=(i/W)|0,z=buf.zb[i];let s=0;for(let k=0;k<8;k++){const an=k*Math.PI/4,qx=Math.round(x+Math.cos(an)*occR),qy=Math.round(y+Math.sin(an)*occR);if(qx>=0&&qy>=0&&qx<W&&qy<H){const zq=buf.zb[qy*W+qx];if(zq>-1e8)s+=clamp((zq-z-1)/6,0,1)}}occ=s/8}
+      let occ=0;if(POOL>0){const x=i%W,y=(i/W)|0,z=buf.zb[i];let s=0;for(let k=0;k<8;k++){const qx=x+OX[k],qy=y+OY[k];if(qx>=0&&qy>=0&&qx<W&&qy<H){const zq=buf.zb[qy*W+qx];if(zq>-1e8){const u=(zq-z-1)/6;s+=u<0?0:u>1?1:u}}}occ=s/8}
       dark[i]=clamp(0.62*(1-lam)*S.shading/0.65+0.9*POOL*occ,0,1);fogp[i]=(L.fog[a]+L.fog[b]+L.fog[c])/3;cls[i]=L.cls[a];hand[i]=L.hand?(L.hand[a]+L.hand[b]+L.hand[c])/3:0}
     softenCovered(dark,buf.tb,W,H,Math.max(1,Math.round(2.5*TEX)));   // the facets of the mesh smoothed away: shadows as broad shapes, not specks
     softenCovered(face,buf.tb,W,H,Math.max(1,Math.round(2*TEX)));
@@ -1223,11 +1225,13 @@ function buildMap(items,st,pos,proj,seedBase){
     for(const ti of M.unsupported){const a=atomsById[byIndex[ti]];if(!a||!pos[a.id])continue;const p=pos[a.id];sketchCircle(ctx,p.x,p.y,2.6*Math.max(0.7,TEX),{seed:seedBase+8001+k++,width:0.8,color:accent,alpha:0.75,passes:1})}ctx.restore()}});
 }
 /* a box blur (twice, near a Gaussian) of a per-pixel field over the covered pixels only, in place */
-function softenCovered(v,tb,W,H,r){
+function softenCovered(v,tb,W,H,r){   // v is 0 where nothing is covered: only the covered box is walked (the same sums, in the same order)
+  let X0=W,X1=-1,Y0=H,Y1=-1;for(let y=0;y<H;y++){const o=y*W;for(let x=0;x<W;x++)if(tb[o+x]>=0){if(x<X0)X0=x;if(x>X1)X1=x;if(y<Y0)Y0=y;Y1=y}}
+  if(X1<0)return;
   const tmp=new Float32Array(v.length);
   for(let pass=0;pass<2;pass++){
-    for(let y=0;y<H;y++){let s=0,n=0;const o=y*W;for(let x=-r;x<W;x++){const a=x+r,b=x-r-1;if(a<W&&tb[o+a]>=0){s+=v[o+a];n++}if(b>=0&&tb[o+b]>=0){s-=v[o+b];n--}if(x>=0)tmp[o+x]=tb[o+x]>=0&&n?s/n:0}}
-    for(let x=0;x<W;x++){let s=0,n=0;for(let y=-r;y<H;y++){const a=y+r,b=y-r-1;if(a<H&&tb[a*W+x]>=0){s+=tmp[a*W+x];n++}if(b>=0&&tb[b*W+x]>=0){s-=tmp[b*W+x];n--}if(y>=0)v[y*W+x]=tb[y*W+x]>=0&&n?s/n:0}}}
+    for(let y=Y0;y<=Y1;y++){let s=0,n=0;const o=y*W;for(let x=X0-r;x<=X1;x++){const a=x+r,b=x-r-1;if(a<=X1&&tb[o+a]>=0){s+=v[o+a];n++}if(b>=X0&&tb[o+b]>=0){s-=v[o+b];n--}if(x>=X0)tmp[o+x]=tb[o+x]>=0&&n?s/n:0}}
+    for(let x=X0;x<=X1;x++){let s=0,n=0;for(let y=Y0-r;y<=Y1;y++){const a=y+r,b=y-r-1;if(a<=Y1&&tb[a*W+x]>=0){s+=tmp[a*W+x];n++}if(b>=Y0&&tb[b*W+x]>=0){s-=tmp[b*W+x];n--}if(y>=Y0)v[y*W+x]=tb[y*W+x]>=0&&n?s/n:0}}}
 }
 /* the map's caption: how it is shown (contour level, carving, sampling, what the line's looseness means) */
 function drawMapCaption(ctx,W,H){
