@@ -78,6 +78,12 @@ structures, but not identical, because visibility comes from pixels rather than 
 **Preview.** A per-pixel approximation on the GPU, for interaction only. A density map is in it too: the
 isosurface the drawing prepared, pushed behind the model as the drawing puts it.
 
+**Off the main thread.** Without `molsketch serve`, a figure whose drawing takes 100 ms or more (a large structure, a
+map) is drawn by the same headless core in a worker onto an OffscreenCanvas (`src/headless/drawworker.ts`, through
+`src/app/localdraw.ts`, which speaks the SDK's language), with the page's fonts: the app never freezes while a ribosome
+is drawn, and the drawing is the same to the pixel. Exports go the same way. A light figure is drawn on the main
+thread, live as it moves.
+
 **Density maps** are prepared (cropped, low-passed, contoured, their surfaces smoothed and tied to the model) in a
 worker (`src/classic/mapworker.ts`, through `src/classic/mapasync.ts`), which for a large map takes a second or more:
 while it works, the preview goes on and the drawing waits for it, so changing the level or a close-up never freezes the

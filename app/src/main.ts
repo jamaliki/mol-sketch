@@ -20,6 +20,7 @@ import { keyDiff, drawDiff, diffSummary, type KeyDiff } from './app/diff';
 import { hitTest, anchorFor, anchorText, addArrow, anchorScreen, toggleLonePair, cycleCharge, type Anchor, type Hit } from './app/author';
 import { suggestViews, holdFrames, type ViewSuggestion } from './app/views';
 import { connect, InputSync, type SDK } from './app/sdk';
+import { LocalDraw } from './app/localdraw';
 import type { FigureSpec } from './headless/core';
 import { pocketSel as sitePocket, frameSite as siteFrame, labelSite as siteLabel, type SiteHost } from './app/site';
 import { renderVideo, codecSupport, hasWebCodecs, fmtBytes, type CodecName, type Quality } from './app/encode';
@@ -101,12 +102,23 @@ function sceneJson(): string {
 /* ---------- the SDK: when molsketch serve runs, it draws the exact frames (the same engine as the Python package) ---------- */
 let sdk: SDK | null = null; let inputs: InputSync | null = null; let sdkSeq = 0; let sdkBusy = false; let sdkAgain = false;
 const sdkReady = connect().then(s => { sdk = s; if (s) { inputs = new InputSync(s); classicMs = Infinity; status(`drawing with molsketch ${s.version} (${s.url})`); invalidate() } return s });
+/* without the server, a figure whose drawing takes long (≥ 100 ms: a large structure, a map) is drawn in a worker by the
+   same core, so the app does not freeze while it is; a light one is drawn here, live while it moves */
+let local: LocalDraw | null = null; let localInputs: InputSync | null = null;
+try { local = new LocalDraw((document.querySelector('link[href*="fonts.googleapis"]') as HTMLLinkElement | null)?.href || null); localInputs = new InputSync(local) } catch { local = null }
+const HEAVY_MS = 100;
+/** who draws the finished frame: the server, else the worker for a heavy figure (or an export), else nobody (here) */
+function drawer(forExport = false): { d: SDK; inputs: InputSync } | null {
+  if (sdk) return { d: sdk, inputs: inputs! };
+  if (local && localInputs && (forExport || classicMs >= HEAVY_MS)) return { d: local, inputs: localInputs };
+  return null;
+}
 /** the current figure as the SDK's FigureSpec: the full style, the camera, labels, group colours, frame, size */
-async function figureSpec(W: number, H: number, scale: number, f: number, cam?: any): Promise<FigureSpec> {
+async function figureSpec(W: number, H: number, scale: number, f: number, cam?: any, via = drawer(true)!): Promise<FigureSpec> {
   let ref: string;
-  const mref = await mapRefOnSdk();
-  if (sceneDoc) { const json = sceneJsonForSdk(); ref = await inputs!.get(json, () => ({ scene: JSON.parse(json) })) }   // a scene: again whenever it is edited (undo included)
-  else if (structureText) ref = await inputs!.get(structureText, () => structureText);
+  const mref = await mapRefOn(via.d);
+  if (sceneDoc) { const json = sceneJsonForSdk(); ref = await via.inputs.get(json, () => ({ scene: JSON.parse(json) })) }   // a scene: again whenever it is edited (undo included)
+  else if (structureText) ref = await via.inputs.get(structureText, () => structureText);
   else ref = '';
   const c = cam || camOf();
   return { input: ref ? { ref } : { map: mref! }, ...(mref && ref ? { map: { ref: mref } } : {}), styleFile: JSON.parse(JSON.stringify(style)), camera: { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: R.camera.fov },
@@ -114,11 +126,11 @@ async function figureSpec(W: number, H: number, scale: number, f: number, cam?: 
 }
 /** a scene as the SDK gets it: its keyframes and settings (labels, colours and camera come with each spec) */
 function sceneJsonForSdk() { const d: any = { ...sceneDoc }; delete d.fitPoints; delete d._rev; return JSON.stringify(d) }
-function runSketch(mode: RestMode = restMode) {
-  if (mode === 'classic' && sdk && (sceneDoc || structureText || mapObj)) { runSketchSdk(); return }
+function runSketch(mode: RestMode = restMode, here = false) {   // here: drawn now, on this thread (a script reads the canvas straight after)
+  const via = drawer(); if (mode === 'classic' && via && !(here && via.d === local) && (sceneDoc || structureText || mapObj)) { runSketchSdk(); return }
   if (skCanvas.width !== R.w || skCanvas.height !== R.h) { skCanvas.width = R.w; skCanvas.height = R.h }
   if (mode === 'classic' && sceneDoc) { const ms = renderScene(skCtx, R, style, sceneDoc, frame, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; sceneFast = ms < 90; classicMs = ms }
-  else if (mode === 'classic') { const ms = renderClassic(skCtx, R, style, boil, dpr); if (ms < 0) { hud.textContent = 'preparing the map…'; return }   // the preview stays until the map is ready
+  else if (mode === 'classic') { const ms = here ? syncMaps(() => renderClassic(skCtx, R, style, boil, dpr)) : renderClassic(skCtx, R, style, boil, dpr); if (ms < 0) { hud.textContent = 'preparing the map…'; return }   // the preview stays until the map is ready
     sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; classicMs = ms }
   else sketchStats = drawSketch(skCtx, R, style, boil);
   sketchShown = true; skCanvas.classList.add('on'); drawOverlay();
@@ -226,7 +238,7 @@ function fitsMap(s: Structure, m: DensityMap) {
 }
 /** drop the structure (a map is then drawn on its own) */
 function unloadStructure(why: string) {
-  sceneDoc = null; structureText = null; R.fitOverride = null; R.labels = []; selLabel = -1; R.setStructure(null); inputs = sdk ? new InputSync(sdk) : null;
+  sceneDoc = null; structureText = null; R.fitOverride = null; R.labels = []; selLabel = -1; R.setStructure(null); inputs = sdk ? new InputSync(sdk) : null; localInputs = local ? new InputSync(local) : null;
   status(why ? `showing the map on its own (${why}; open that entry to see the model in it)` : 'showing the map on its own');
 }
 function clearMap() { mark('remove map'); mapObj = null; mapRaw = null; mapRef = null; R.map = null; rebuild(); panel.refresh(); status('map removed') }
@@ -269,7 +281,13 @@ function mapInfo() {
   if (s) { let n = 0, k = 0; for (let i = 0; i < s.count; i++) { if (s.element[i] === 'H' || s.residues[s.residueOf[i]].resn === 'HOH') continue; n++; if (sampleMap(m, s.x[i], s.y[i], s.z[i]) >= lv) k++ } inc = n ? k / n : null }
   return { name: m.name, level: lv, sigma: (lv - m.mean) / (m.rms || 1), recommended: m.level ?? null, mean: m.mean, rms: m.rms, size: [m.nx, m.ny, m.nz], step: m.step[0], binned: m.binned || 1, atomInclusion: inc };
 }
-/** the map on the SDK's server: sent once (its file's bytes), again only when another map is loaded */
+/** the map where the figure is drawn: sent once (to the server, its file's bytes; to the worker, its grid), again only
+    when another map is loaded */
+const localMaps = new WeakMap<object, Promise<string>>();
+async function mapRefOn(d: SDK): Promise<string | null> {
+  if (d instanceof LocalDraw) { if (!mapObj) return null; let p = localMaps.get(mapObj); if (!p) localMaps.set(mapObj, p = d.putMap(mapObj)); return p }
+  return mapRefOnSdk();
+}
 async function mapRefOnSdk(): Promise<string | null> {
   if (!mapRaw || !sdk) return null; if (mapRef && mapRefFor === mapRaw) return mapRef;
   const q = new URLSearchParams({ name: mapObj?.name || mapRaw.name }); if (mapRaw.level != null) q.set('level', String(mapRaw.level)); if (mapRaw.mass) q.set('mass', String(mapRaw.mass)); if (mapRaw.resolution) q.set('resolution', String(mapRaw.resolution));
@@ -569,19 +587,25 @@ let renderCancel = false;
 /** the exact frame from the SDK onto the sketch canvas; a newer request supersedes an older one */
 async function runSketchSdk() {
   if (sdkBusy) { sdkAgain = true; return }   // one request at a time; the loop asks every frame until a drawing is up
-  sdkBusy = true; const seq = sdkSeq; const t0 = performance.now();
+  sdkBusy = true; const seq = sdkSeq; const t0 = performance.now(); const via = drawer();
   try {
-    const spec = await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : boil);
-    const bmp = await sdk!.render(spec); if (seq !== sdkSeq) { bmp.close(); return }
-    skCanvas.width = R.w; skCanvas.height = R.h; skCtx.clearRect(0, 0, R.w, R.h); skCtx.drawImage(bmp, 0, 0); bmp.close();
+    if (!via) return;
+    const spec = await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : boil, undefined, via);
+    const bmp = await via.d.render(spec); if (seq !== sdkSeq) { bmp.close(); return }
+    if (skCanvas.width !== R.w || skCanvas.height !== R.h) { skCanvas.width = R.w; skCanvas.height = R.h } skCtx.clearRect(0, 0, R.w, R.h); skCtx.drawImage(bmp, 0, 0); bmp.close();
     sketchStats = { readMs: 0, regionMs: 0, drawMs: performance.now() - t0, regions: 0 }; sceneFast = false;
+    if (via.d === local) classicMs = local.lastMs;   // the worker's own drawing time: a figure grown light is drawn here again
+    hud.textContent = `classic ${via.d === local ? '(worker) ' : '(server) '}${Math.round(via.d === local ? local.lastMs : sketchStats.drawMs)} ms · ${R.w}×${R.h}`;
     sketchShown = true; skCanvas.classList.add('on'); drawOverlay();
-  } catch (e: any) { status('molsketch could not draw this: ' + e.message) }
+  } catch (e: any) {
+    if (via && via.d === local) { local = null; localInputs = null; status('drawing here (the drawing worker failed: ' + e.message + ')'); classicMs = 0; invalidate() }   // the main thread draws from now on
+    else status('molsketch could not draw this: ' + e.message) }
   finally { sdkBusy = false; if (sdkAgain) { sdkAgain = false; if (!sketchShown) runSketchSdk() } }
 }
 function drawFrameTo(ctx: CanvasRenderingContext2D, W: number, H: number, f: number): void | Promise<void> {
-  if (sdk && (sceneDoc || structureText || mapObj)) return (async () => {   // exports through the SDK: the same frame the Python package draws
-    const bmp = await sdk!.render(await figureSpec(W, H, 1, f)); ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.drawImage(bmp, 0, 0); ctx.restore(); bmp.close() })();
+  const via = drawer(true);
+  if (via && (sceneDoc || structureText || mapObj)) return (async () => {   // exports through the SDK (or the drawing worker): the same frame the Python package draws
+    const bmp = await via.d.render(await figureSpec(W, H, 1, f, undefined, via)); ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.drawImage(bmp, 0, 0); ctx.restore(); bmp.close() })();
   const E = classic(); const drawn = Math.floor(f / 2) * 2;
   let cam: any = { ...camOf(), fov: R.camera.fov };
   if (sceneDoc && sceneDoc.keyframes.some(k => k.view)) { E.cfg = cfgFromStyle(style, cam, true); const v = E.viewAt(drawn); if (v) cam = { ...v, fov: R.camera.fov } }
@@ -611,7 +635,7 @@ async function savePoster(width: number, height: number, f = frame, type: 'image
 /** This frame as SVG, drawn by the molsketch SDK (the browser has no vector route of its own). */
 async function saveSvg(width: number, height: number, f = sceneDoc ? frame : boil) {
   if (!sdk) { status('SVG needs the molsketch server: run `molsketch serve`'); return }
-  const svg = await sdk.svg(await figureSpec(width, height, 1, f));
+  const svg = await sdk.svg(await figureSpec(width, height, 1, f, undefined, { d: sdk, inputs: inputs! }));
   const name = (sceneDoc?.name || R.structure?.name || 'molsketch').replace(/[^\w.-]+/g, '_');
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([svg], { type: 'image/svg+xml' })); a.download = `${name}${sceneDoc ? '_frame' + f : ''}.svg`; a.click();
   setTimeout(() => URL.revokeObjectURL(a.href), 10000);
@@ -711,7 +735,7 @@ function loop(t: number) {
     const rested = t - lastChange > 220; const period = Math.max(900, (sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs) * 3);
     if ((!sketchShown && rested) || (live && sketchShown && t - lastSketchAt > period)) {
       if (sketchShown) boil++; lastSketchAt = t; runSketch();
-      hud.textContent = restMode === 'classic' ? `classic ${sketchStats.drawMs.toFixed(0)} ms · ${R.w}×${R.h}` : `sketch ${(sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs).toFixed(0)} ms (read ${sketchStats.readMs.toFixed(0)}, regions ${sketchStats.regionMs.toFixed(0)}, draw ${sketchStats.drawMs.toFixed(0)}) · ${sketchStats.regions} regions · ${R.w}×${R.h}`;
+      if (!(restMode === 'classic' && drawer())) hud.textContent = restMode === 'classic' ? `classic ${sketchStats.drawMs.toFixed(0)} ms · ${R.w}×${R.h}` : `sketch ${(sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs).toFixed(0)} ms (read ${sketchStats.readMs.toFixed(0)}, regions ${sketchStats.regionMs.toFixed(0)}, draw ${sketchStats.drawMs.toFixed(0)}) · ${sketchStats.regions} regions · ${R.w}×${R.h}`;
     }
   }
   requestAnimationFrame(loop);
@@ -728,9 +752,12 @@ const api = {
   applyLook, loadText, loadUrl, fetchPdb, render: () => { R.render(style); return R.stats.frameMs }, renderer: R, camera: R.camera,
   setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
   setSize: (w: number, h: number) => { fixedSize = [w, h]; R.resize(w, h) }, setDpr: (v: number) => { dpr = v }, rebuild,
-  sketch: (b?: number, mode?: RestMode) => { R.render(style); if (b !== undefined) boil = b; runSketch(mode || 'sketch'); return sketchStats },
+  sketch: (b?: number, mode?: RestMode) => { R.render(style); if (b !== undefined) boil = b; runSketch(mode || 'sketch', true); return sketchStats },
   renderClassic, classicEngine: () => classic(), seek: setFrame, loadScene, fetchMap: fetchEmdb, mapForEntry, loadMapBytes, clearMap, mapInfo, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
-  classic: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch('classic'); return sketchStats.drawMs },
+  /** the current frame drawn by the drawing worker (as the rested app draws a heavy figure), as a PNG data URL */
+  workerPng: async (b = 0) => { if (!local || !localInputs) return null; const via = { d: local, inputs: localInputs };
+    const bmp = await local.render(await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : b, undefined, via)); const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height; c.getContext('2d')!.drawImage(bmp, 0, 0); bmp.close(); return c.toDataURL('image/png') },
+  classic: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch('classic', true); return sketchStats.drawMs },
   setSketch: (v: boolean) => { sketchOn = v; invalidate() }, setRest: (m: RestMode) => { restMode = m; sketchOn = m !== 'preview'; invalidate() },
   fitFrame, screenBox: (what: 'all' | 'frame' = 'all') => R.camera.screenBox(R.w, R.h, framePoints(what)), framePresets: FRAME_PRESETS, renderCommand,
   history, lint: () => lintItems, suggest, adoptView, renderToFile, drawFrameTo, keyframes, setKeyView, setKeyTiming, duplicateKey, deleteKey, moveKey, setAuthorMode, authorClick, arrowsOf, editArrow, keyDiff: (i: number) => sceneDoc ? keyDiff(sceneDoc, i) : null, setPreviewAspect, projectNow,

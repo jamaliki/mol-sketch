@@ -181,6 +181,15 @@ export function render(spec: FigureSpec, measure?: (font: string, text: string) 
   return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, chunks };
 }
 
+/** draw a figure onto a real canvas (the app's drawing worker: an OffscreenCanvas), as `render` records it */
+export function drawOn<C extends { getContext(k: '2d'): any }>(spec: FigureSpec, make: (w: number, h: number) => C): { canvas: C; ms: number } {
+  const f = settle(spec); const c = make(Math.round(f.W * f.dpr), Math.round(f.H * f.dpr)); const ctx = c.getContext('2d');
+  const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: Math.round(f.W * f.dpr), h: Math.round(f.H * f.dpr), map: f.map, localRes: f.localRes };
+  const t0 = Date.now();
+  if (f.scene) { sceneFrame(f); renderScene(ctx, R, f.style, f.scene, f.frame, f.dpr) } else renderClassic(ctx, R, f.style, f.frame, f.dpr);
+  return { canvas: c, ms: Date.now() - t0 };
+}
+
 /** the settled figure, for the SDK to show: style, camera, timeline, counts */
 export function info(spec: FigureSpec) {
   const f = settle(spec); const out: any = { look: f.look, style: f.style, camera: { ...f.camera, base: undefined }, labels: f.labels, groupColors: f.overrides };

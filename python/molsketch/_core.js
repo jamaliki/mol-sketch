@@ -1091,6 +1091,7 @@
   __export(core_exports, {
     atomId: () => atomId,
     catalog: () => catalog,
+    drawOn: () => drawOn,
     drop: () => drop,
     engineConfig: () => engineConfig,
     fitFrame: () => fitFrame,
@@ -7998,6 +7999,18 @@
     release(c.id);
     const chunks = endRender();
     return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, chunks };
+  }
+  function drawOn(spec, make) {
+    const f2 = settle(spec);
+    const c = make(Math.round(f2.W * f2.dpr), Math.round(f2.H * f2.dpr));
+    const ctx = c.getContext("2d");
+    const R = { structure: f2.structure, camera: f2.camera, overrides: f2.overrides, fitPoints: f2.fitPoints, labels: f2.labels, w: Math.round(f2.W * f2.dpr), h: Math.round(f2.H * f2.dpr), map: f2.map, localRes: f2.localRes };
+    const t0 = Date.now();
+    if (f2.scene) {
+      sceneFrame(f2);
+      renderScene(ctx, R, f2.style, f2.scene, f2.frame, f2.dpr);
+    } else renderClassic(ctx, R, f2.style, f2.frame, f2.dpr);
+    return { canvas: c, ms: Date.now() - t0 };
   }
   function info(spec) {
     const f2 = settle(spec);
