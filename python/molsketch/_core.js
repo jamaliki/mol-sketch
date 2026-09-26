@@ -6559,11 +6559,34 @@
     if (f2 <= 1.05) return m;
     const nx = Math.max(2, Math.round((m.nx - 1) * f2) + 1), ny = Math.max(2, Math.round((m.ny - 1) * f2) + 1), nz = Math.max(2, Math.round((m.nz - 1) * f2) + 1);
     const st = [(m.nx - 1) * m.step[0] / (nx - 1), (m.ny - 1) * m.step[1] / (ny - 1), (m.nz - 1) * m.step[2] / (nz - 1)];
-    const out = new Float32Array(nx * ny * nz);
-    const edge = { ...m, min: m.data[0] };
-    for (let k = 0, q = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++, q++) {
-      const x = Math.min(i * st[0], (m.nx - 1) * m.step[0] - 1e-4), y = Math.min(j * st[1], (m.ny - 1) * m.step[1] - 1e-4), z = Math.min(k * st[2], (m.nz - 1) * m.step[2] - 1e-4);
-      out[q] = sampleMap(edge, m.origin[0] + x, m.origin[1] + y, m.origin[2] + z);
+    const out = new Float32Array(nx * ny * nz), d = m.data, d0 = d[0];
+    const axis = (cnt, n, s, o, t) => {
+      const c = new Int32Array(cnt), u = new Float64Array(cnt);
+      for (let a = 0; a < cnt; a++) {
+        const x = Math.min(a * t, (n - 1) * s - 1e-4), f3 = (o + x - o) / s, i = Math.floor(f3);
+        c[a] = i < 0 || i >= n - 1 ? -1 : i;
+        u[a] = f3 - i;
+      }
+      return { c, u };
+    };
+    const X = axis(nx, m.nx, m.step[0], m.origin[0], st[0]), Y = axis(ny, m.ny, m.step[1], m.origin[1], st[1]), Z = axis(nz, m.nz, m.step[2], m.origin[2], st[2]);
+    const sy = m.nx, sz = m.nx * m.ny;
+    for (let k = 0, q = 0; k < nz; k++) {
+      const kk = Z.c[k], w = Z.u[k];
+      for (let j = 0; j < ny; j++) {
+        const jj = Y.c[j], v = Y.u[j];
+        for (let i = 0; i < nx; i++, q++) {
+          const ii = X.c[i];
+          if (ii < 0 || jj < 0 || kk < 0) {
+            out[q] = d0;
+            continue;
+          }
+          const u = X.u[i], o = kk * sz + jj * sy + ii;
+          const c00 = d[o] * (1 - u) + d[o + 1] * u, c10 = d[o + sy] * (1 - u) + d[o + sy + 1] * u;
+          const c01 = d[o + sz] * (1 - u) + d[o + sz + 1] * u, c11 = d[o + sz + sy] * (1 - u) + d[o + sz + sy + 1] * u;
+          out[q] = (c00 * (1 - v) + c10 * v) * (1 - w) + (c01 * (1 - v) + c11 * v) * w;
+        }
+      }
     }
     return { ...m, nx, ny, nz, data: out, step: st, ...mapStats(out), mean: m.mean, rms: m.rms };
   }
@@ -6631,8 +6654,41 @@
     return { ...m, nx, ny, nz, data: out, origin: [0, 1, 2].map((k) => m.origin[k] + a[k] * m.step[k]) };
   }
   function levelEnclosing(m, volume, zone) {
-    const n = Math.round(volume / (m.step[0] * m.step[1] * m.step[2])), sorted = (zone ? Float32Array.from(m.data.filter((_, i) => zone[i])) : Float32Array.from(m.data)).sort();
-    return sorted[Math.max(0, Math.min(sorted.length - 1, sorted.length - n))];
+    const n = Math.round(volume / (m.step[0] * m.step[1] * m.step[2])), d = m.data;
+    let len = d.length;
+    if (zone) {
+      len = 0;
+      for (let i = 0; i < d.length; i++) if (zone[i]) len++;
+    }
+    const a = new Float32Array(len);
+    if (zone) {
+      for (let i = 0, k = 0; i < d.length; i++) if (zone[i]) a[k++] = d[i];
+    } else a.set(d);
+    return len ? kth(a, Math.max(0, Math.min(len - 1, len - n))) : void 0;
+  }
+  function kth(a, k) {
+    let lo = 0, hi = a.length - 1;
+    while (hi > lo) {
+      const mid2 = lo + hi >> 1;
+      const x = a[lo], y = a[mid2], z = a[hi];
+      const p = x < y ? y < z ? y : x < z ? z : x : x < z ? x : y < z ? z : y;
+      let i = lo, j = hi;
+      while (i <= j) {
+        while (a[i] < p) i++;
+        while (a[j] > p) j--;
+        if (i <= j) {
+          const t = a[i];
+          a[i] = a[j];
+          a[j] = t;
+          i++;
+          j--;
+        }
+      }
+      if (k <= j) hi = j;
+      else if (k >= i) lo = i;
+      else return a[k];
+    }
+    return a[k];
   }
   function sampleMap(m, x, y, z) {
     const fx = (x - m.origin[0]) / m.step[0], fy = (y - m.origin[1]) / m.step[1], fz = (z - m.origin[2]) / m.step[2];
@@ -6650,15 +6706,18 @@
     const corner = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
     const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
     const v = new Float64Array(8);
-    for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      let mask = 0;
-      for (let c = 0; c < 8; c++) {
-        const q = corner[c];
-        const val = d[(k + q[2]) * sz + (j + q[1]) * sy + i + q[0]];
-        v[c] = val;
-        if (val >= level) mask |= 1 << c;
-      }
+    for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0, o = k * sz + j * sy; i < nx - 1; i++, o++) {
+      const v0 = d[o], v1 = d[o + 1], v2 = d[o + sy], v3 = d[o + sy + 1], v4 = d[o + sz], v5 = d[o + sz + 1], v6 = d[o + sz + sy], v7 = d[o + sz + sy + 1];
+      const mask = (v0 >= level ? 1 : 0) | (v1 >= level ? 2 : 0) | (v2 >= level ? 4 : 0) | (v3 >= level ? 8 : 0) | (v4 >= level ? 16 : 0) | (v5 >= level ? 32 : 0) | (v6 >= level ? 64 : 0) | (v7 >= level ? 128 : 0);
       if (mask === 0 || mask === 255) continue;
+      v[0] = v0;
+      v[1] = v1;
+      v[2] = v2;
+      v[3] = v3;
+      v[4] = v4;
+      v[5] = v5;
+      v[6] = v6;
+      v[7] = v7;
       let px = 0, py = 0, pz = 0, n = 0;
       for (const [a, b] of edges) {
         const ia = mask >> a & 1, ib = mask >> b & 1;
@@ -7075,14 +7134,10 @@
     const zoned = R > 0 && !!s && s.count > 0 && o.finish !== "sketch" && o.context !== "show";
     const keepR = o.unexplained ? 10 : 5;
     if (zoned) {
-      const keep2 = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = keepR;
-      for (let i = 0; i < s.count; i++) {
-        if (s.element[i] === "H") continue;
-        const c = [s.x[i], s.y[i], s.z[i]].map((v, k) => (v - g0.origin[k]) / g0.step[k]), rv = r / g0.step[0];
-        for (let z = Math.max(0, Math.floor(c[2] - rv)); z <= Math.min(n[2] - 1, Math.ceil(c[2] + rv)); z++) for (let y = Math.max(0, Math.floor(c[1] - rv)); y <= Math.min(n[1] - 1, Math.ceil(c[1] + rv)); y++)
-          for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) keep2[(z * n[1] + y) * n[0] + x] = 1;
-      }
-      g0 = { ...g0, data: g0.data.map((v, q) => keep2[q] ? v : 0) };
+      const keep2 = stampAtoms(g0, s, keepR);
+      const d = new Float32Array(g0.data.length);
+      for (let q = 0; q < d.length; q++) d[q] = keep2[q] ? g0.data[q] : 0;
+      g0 = { ...g0, data: d };
     }
     const g1 = R > 0 ? lowpass(g0, R) : g0;
     const box = Math.max(g1.nx * g1.step[0], g1.ny * g1.step[1], g1.nz * g1.step[2]);
@@ -7096,16 +7151,7 @@
     const massFrom = mass > 0 ? "the model" : m.mass ? "the sample" : "";
     if (!mass) mass = m.mass || 0;
     let zone;
-    if (R > 0 && massFrom === "the model") {
-      zone = new Uint8Array(g2.data.length);
-      const r = 6;
-      for (let i = 0; i < s.count; i++) {
-        if (s.element[i] === "H") continue;
-        const c = [s.x[i], s.y[i], s.z[i]].map((v, k) => (v - g2.origin[k]) / g2.step[k]), n = [g2.nx, g2.ny, g2.nz], rv = r / g2.step[0];
-        for (let z = Math.max(0, Math.floor(c[2] - rv)); z <= Math.min(n[2] - 1, Math.ceil(c[2] + rv)); z++) for (let y = Math.max(0, Math.floor(c[1] - rv)); y <= Math.min(n[1] - 1, Math.ceil(c[1] + rv)); y++)
-          for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) zone[(z * n[1] + y) * n[0] + x] = 1;
-      }
-    }
+    if (R > 0 && massFrom === "the model") zone = stampAtoms(g2, s, 6);
     const byVolume = R > 0, vLevel = !byVolume ? 0 : mass > 0 ? levelEnclosing(g2, mass * 1.21, zone) : g2.mean + 2 * g2.rms;
     let sorted = null;
     const same = (lv) => {
@@ -7363,6 +7409,23 @@
       out[o++] = base[8] * x + base[9] * y + base[10] * z;
     }
     return out.subarray(0, o);
+  }
+  function stampAtoms(g2, s, r) {
+    const out = new Uint8Array(g2.data.length), nx = g2.nx, ny = g2.ny, nz = g2.nz, rv = r / g2.step[0], rv2 = rv * rv;
+    for (let i = 0; i < s.count; i++) {
+      if (s.element[i] === "H") continue;
+      const c0 = (s.x[i] - g2.origin[0]) / g2.step[0], c1 = (s.y[i] - g2.origin[1]) / g2.step[1], c2 = (s.z[i] - g2.origin[2]) / g2.step[2];
+      const x0 = Math.max(0, Math.floor(c0 - rv)), x1 = Math.min(nx - 1, Math.ceil(c0 + rv)), y0 = Math.max(0, Math.floor(c1 - rv)), y1 = Math.min(ny - 1, Math.ceil(c1 + rv));
+      for (let z = Math.max(0, Math.floor(c2 - rv)), z1 = Math.min(nz - 1, Math.ceil(c2 + rv)); z <= z1; z++) {
+        const dz = (z - c2) ** 2;
+        if (dz > rv2) continue;
+        for (let y = y0; y <= y1; y++) {
+          const dy = (y - c1) ** 2, row = (z * ny + y) * nx;
+          for (let x = x0; x <= x1; x++) if ((x - c0) ** 2 + dy + dz <= rv2) out[row + x] = 1;
+        }
+      }
+    }
+    return out;
   }
 
   // src/classic/adapter.ts

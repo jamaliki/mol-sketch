@@ -95,11 +95,7 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   // smoothly, instead of being cut where the rest of an assembly joins it); the caption says so
   const zoned = R > 0 && !!s && s.count > 0 && o.finish !== 'sketch' && o.context !== 'show';
   const keepR = o.unexplained ? 10 : 5;   // looking for what the model does not explain: keep the density further out
-  if (zoned) { const keep = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = keepR;
-    for (let i = 0; i < s!.count; i++) { if (s!.element[i] === 'H') continue; const c = [s!.x[i], s!.y[i], s!.z[i]].map((v, k) => (v - g0.origin[k]) / g0.step[k]), rv = r / g0.step[0];
-      for (let z = Math.max(0, Math.floor(c[2] - rv)); z <= Math.min(n[2] - 1, Math.ceil(c[2] + rv)); z++) for (let y = Math.max(0, Math.floor(c[1] - rv)); y <= Math.min(n[1] - 1, Math.ceil(c[1] + rv)); y++)
-        for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) keep[(z * n[1] + y) * n[0] + x] = 1 }
-    g0 = { ...g0, data: g0.data.map((v, q) => keep[q] ? v : 0) } }
+  if (zoned) { const keep = stampAtoms(g0, s!, keepR); const d = new Float32Array(g0.data.length); for (let q = 0; q < d.length; q++) d[q] = keep[q] ? g0.data[q] : 0; g0 = { ...g0, data: d } }
   const g1 = R > 0 ? lowpass(g0, R) : g0;
   // a close-up is sampled finer than its map (to about a 150th of what is drawn), so its surface is not the grid's facets
   const box = Math.max(g1.nx * g1.step[0], g1.ny * g1.step[1], g1.nz * g1.step[2]);   // at most 160 voxels a side
@@ -113,10 +109,7 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   // the level that encloses the same volume as the chosen one does on the map itself
   // with a model, only the density within 6 Å of it counts towards that volume (the rest of an assembly is not in the model)
   let zone: Uint8Array | undefined;
-  if (R > 0 && massFrom === 'the model') { zone = new Uint8Array(g.data.length); const r = 6;
-    for (let i = 0; i < s!.count; i++) { if (s!.element[i] === 'H') continue; const c = [s!.x[i], s!.y[i], s!.z[i]].map((v, k) => (v - g.origin[k]) / g.step[k]), n = [g.nx, g.ny, g.nz], rv = r / g.step[0];
-      for (let z = Math.max(0, Math.floor(c[2] - rv)); z <= Math.min(n[2] - 1, Math.ceil(c[2] + rv)); z++) for (let y = Math.max(0, Math.floor(c[1] - rv)); y <= Math.min(n[1] - 1, Math.ceil(c[1] + rv)); y++)
-        for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) zone[(z * n[1] + y) * n[0] + x] = 1 } }
+  if (R > 0 && massFrom === 'the model') zone = stampAtoms(g, s!, 6);
   const byVolume = R > 0, vLevel = !byVolume ? 0 : mass > 0 ? levelEnclosing(g, mass * 1.21, zone) : g.mean + 2 * g.rms;   // without a mass: 2 σ of the low-passed map
   let sorted: Float32Array | null = null;
   const same = (lv: number) => { if (byVolume) return vLevel * lv / level; if (g1 === m) return lv; let n = 0; for (let i = 0; i < m.data.length; i++) if (m.data[i] >= lv) n++;
@@ -260,4 +253,17 @@ export function closeUpFit(em: EngineMap, base: Float32Array, atoms: Float32Arra
   for (let q = 0; q < vs.length; q += k) { const v = vs[q], x = L.pos[v * 3], y = L.pos[v * 3 + 1], z = L.pos[v * 3 + 2];
     out[o++] = base[0] * x + base[1] * y + base[2] * z; out[o++] = base[4] * x + base[5] * y + base[6] * z; out[o++] = base[8] * x + base[9] * y + base[10] * z }
   return out.subarray(0, o);
+}
+
+/** the voxels of a grid within r Å of a structure's heavy atoms (a sphere stamped round each; the grid's first step
+    as its unit, as the masks have always measured) */
+function stampAtoms(g: DensityMap, s: Structure, r: number): Uint8Array {
+  const out = new Uint8Array(g.data.length), nx = g.nx, ny = g.ny, nz = g.nz, rv = r / g.step[0], rv2 = rv * rv;
+  for (let i = 0; i < s.count; i++) { if (s.element[i] === 'H') continue;
+    const c0 = (s.x[i] - g.origin[0]) / g.step[0], c1 = (s.y[i] - g.origin[1]) / g.step[1], c2 = (s.z[i] - g.origin[2]) / g.step[2];
+    const x0 = Math.max(0, Math.floor(c0 - rv)), x1 = Math.min(nx - 1, Math.ceil(c0 + rv)), y0 = Math.max(0, Math.floor(c1 - rv)), y1 = Math.min(ny - 1, Math.ceil(c1 + rv));
+    for (let z = Math.max(0, Math.floor(c2 - rv)), z1 = Math.min(nz - 1, Math.ceil(c2 + rv)); z <= z1; z++) { const dz = (z - c2) ** 2; if (dz > rv2) continue;
+      for (let y = y0; y <= y1; y++) { const dy = (y - c1) ** 2, row = (z * ny + y) * nx;
+        for (let x = x0; x <= x1; x++) if ((x - c0) ** 2 + dy + dz <= rv2) out[row + x] = 1 } } }
+  return out;
 }
