@@ -4164,18 +4164,18 @@
         mask.height = off.height;
         const mx = mask.getContext("2d", { willReadFrequently: true });
         mx.scale(dpr, dpr);
+        const rim = unionDiscs(discs, 0), core = unionDiscs(discs, 2.2);
         mx.fillStyle = mix(P.surface, shadeInk(), 0.35);
         mx.beginPath();
-        for (const d of discs) {
+        for (const d of rim) {
           mx.moveTo(d.x + d.r, d.y);
           mx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
         }
         mx.fill();
         mx.globalCompositeOperation = "destination-out";
         mx.beginPath();
-        for (const d of discs) {
+        for (const d of core) {
           const r = d.r - 2.2;
-          if (r <= 0) continue;
           mx.moveTo(d.x + r, d.y);
           mx.arc(d.x, d.y, r, 0, Math.PI * 2);
         }
@@ -4187,7 +4187,7 @@
         const rng = mulberry32(seedBase + 7);
         x.save();
         x.beginPath();
-        for (const d of discs) {
+        for (const d of rim) {
           x.moveTo(d.x + d.r, d.y);
           x.arc(d.x, d.y, d.r, 0, Math.PI * 2);
         }
@@ -4209,7 +4209,7 @@
         ctx.save();
         ctx.globalAlpha = cfg.rep.surfaceOpacity;
         ctx.beginPath();
-        for (const d of discs) {
+        for (const d of rim) {
           ctx.moveTo(d.x + d.r, d.y);
           ctx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
         }
@@ -5272,6 +5272,54 @@
         }
       }
       return out;
+    }
+    function unionDiscs(discs, shrink) {
+      const cs = 2;
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      const ds = [];
+      for (const d of discs) {
+        const r = d.r - shrink;
+        if (r <= 0) continue;
+        ds.push(d);
+        if (d.x - r < x0) x0 = d.x - r;
+        if (d.y - r < y0) y0 = d.y - r;
+        if (d.x + r > x1) x1 = d.x + r;
+        if (d.y + r > y1) y1 = d.y + r;
+      }
+      if (ds.length < 64) return ds;
+      const gw = Math.ceil((x1 - x0) / cs) + 1, gh = Math.ceil((y1 - y0) / cs) + 1, cnt = new Uint16Array(gw * gh);
+      const full = (d, f2) => {
+        const r = d.r - shrink, r2 = r * r;
+        const i0 = Math.max(0, Math.floor((d.x - r - x0) / cs)), i1 = Math.min(gw - 1, Math.floor((d.x + r - x0) / cs)), j0 = Math.max(0, Math.floor((d.y - r - y0) / cs)), j1 = Math.min(gh - 1, Math.floor((d.y + r - y0) / cs));
+        for (let j = j0; j <= j1; j++) {
+          const ya = y0 + j * cs - d.y, yb = ya + cs, yy = Math.max(ya * ya, yb * yb);
+          for (let i = i0; i <= i1; i++) {
+            const xa = x0 + i * cs - d.x, xb = xa + cs;
+            if (Math.max(xa * xa, xb * xb) + yy <= r2) f2(j * gw + i, true);
+            else if (f2.length > 2) f2(j * gw + i, false, xa, xb, ya, yb, r2);
+          }
+        }
+      };
+      for (const d of ds) full(d, (c) => {
+        if (cnt[c] < 65535) cnt[c]++;
+      });
+      const keep2 = [];
+      for (const d of ds) {
+        let needed = false;
+        full(d, function(c, inside, xa, xb, ya, yb, r2) {
+          if (needed) return;
+          if (!inside) {
+            const nx = Math.max(xa, Math.min(0, xb)), ny = Math.max(ya, Math.min(0, yb));
+            if (nx * nx + ny * ny >= r2) return;
+          }
+          if (cnt[c] - (inside ? 1 : 0) <= 0) needed = true;
+        });
+        if (needed) keep2.push(d);
+        else full(d, (c) => {
+          cnt[c]--;
+        });
+      }
+      return keep2;
     }
     function softenCovered(v, tb, W, H, r) {
       let X0 = W, X1 = -1, Y0 = H, Y1 = -1;

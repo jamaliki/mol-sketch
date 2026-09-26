@@ -922,15 +922,16 @@ function paintWatercolourSurface(items,model,seedBase){
     // silhouette: union of discs minus the same union eroded → a band along the outer edge
     const mask=document.createElement('canvas');mask.width=off.width;mask.height=off.height;const mx=mask.getContext('2d',{willReadFrequently:true});mx.scale(dpr,dpr);
     // (each union one path, filled once: a disc at a time was two draws per atom, 440 000 for a ribosome)
-    mx.fillStyle=mix(P.surface,shadeInk(),0.35);mx.beginPath();for(const d of discs){mx.moveTo(d.x+d.r,d.y);mx.arc(d.x,d.y,d.r,0,Math.PI*2)}mx.fill();
-    mx.globalCompositeOperation='destination-out';mx.beginPath();for(const d of discs){const r=d.r-2.2;if(r<=0)continue;mx.moveTo(d.x+r,d.y);mx.arc(d.x,d.y,r,0,Math.PI*2)}mx.fill();
+    const rim=unionDiscs(discs,0),core=unionDiscs(discs,2.2);   // (the discs each union needs: most of a large assembly's are inside others)
+    mx.fillStyle=mix(P.surface,shadeInk(),0.35);mx.beginPath();for(const d of rim){mx.moveTo(d.x+d.r,d.y);mx.arc(d.x,d.y,d.r,0,Math.PI*2)}mx.fill();
+    mx.globalCompositeOperation='destination-out';mx.beginPath();for(const d of core){const r=d.r-2.2;mx.moveTo(d.x+r,d.y);mx.arc(d.x,d.y,r,0,Math.PI*2)}mx.fill();
     x.save();x.globalAlpha=0.55;x.drawImage(mask,0,0,W,H);x.restore();
     // granulation over the whole surface
-    const rng=mulberry32(seedBase+7);x.save();x.beginPath();for(const d of discs){x.moveTo(d.x+d.r,d.y);x.arc(d.x,d.y,d.r,0,Math.PI*2)}x.clip();
+    const rng=mulberry32(seedBase+7);x.save();x.beginPath();for(const d of rim){x.moveTo(d.x+d.r,d.y);x.arc(d.x,d.y,d.r,0,Math.PI*2)}x.clip();
     let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const d of discs){x0=Math.min(x0,d.x-d.r);y0=Math.min(y0,d.y-d.r);x1=Math.max(x1,d.x+d.r);y1=Math.max(y1,d.y+d.r)}
     const g=Math.round((x1-x0)*(y1-y0)*0.0025),gp=[];for(let i=0;i<g;i++){const a=0.1+rng()*0.2;gp.push([x0+rng()*(x1-x0),y0+rng()*(y1-y0),a])}grains(x,gp,mix(P.surface,shadeInk(),0.4));x.restore();
     // paper under the surface, then the wash multiplied once, then a sketched silhouette line
-    ctx.save();ctx.globalAlpha=cfg.rep.surfaceOpacity;ctx.beginPath();for(const d of discs){ctx.moveTo(d.x+d.r,d.y);ctx.arc(d.x,d.y,d.r,0,Math.PI*2)}ctx.fillStyle=paperFill();ctx.fill();
+    ctx.save();ctx.globalAlpha=cfg.rep.surfaceOpacity;ctx.beginPath();for(const d of rim){ctx.moveTo(d.x+d.r,d.y);ctx.arc(d.x,d.y,d.r,0,Math.PI*2)}ctx.fillStyle=paperFill();ctx.fill();
     ctx.globalCompositeOperation=luminance(P.paper)>0.5?'multiply':'screen';ctx.drawImage(off,0,0,W,H);ctx.restore();
     ctx.save();ctx.globalAlpha=cfg.rep.surfaceOpacity*0.7;ctx.globalCompositeOperation=luminance(P.paper)>0.5?'multiply':'screen';ctx.drawImage(mask,0,0,W,H);ctx.restore();
   }});
@@ -1285,6 +1286,23 @@ function hiddenPatches(patches,W,H,wobble=0){   // wobble: how far (a fraction o
     if(!seen){if(y1>=y0)out[pi]=1;continue}
     if((p.alpha??1)>=0.999&&kIn>0)for(let y=y0;y<=y1;y++){const sp=span(q,cx,cy,kIn,y);if(!sp)continue;cov.fill(1,y*w+sp[0],y*w+sp[1]+1)}}
   return out}
+/* the discs (radius r − shrink, those of positive radius) a union of them needs: a disc whose every 2-px cell lies
+   wholly inside some other disc still kept adds nothing, and is left out (one at a time, so that of two equal discs
+   one stays). The union is the same; for a ribosome, a fifth of the discs */
+function unionDiscs(discs,shrink){
+  const cs=2;let x0=Infinity,y0=Infinity,x1=-Infinity,y1=-Infinity;const ds=[];
+  for(const d of discs){const r=d.r-shrink;if(r<=0)continue;ds.push(d);if(d.x-r<x0)x0=d.x-r;if(d.y-r<y0)y0=d.y-r;if(d.x+r>x1)x1=d.x+r;if(d.y+r>y1)y1=d.y+r}
+  if(ds.length<64)return ds;
+  const gw=Math.ceil((x1-x0)/cs)+1,gh=Math.ceil((y1-y0)/cs)+1,cnt=new Uint16Array(gw*gh);
+  const full=(d,f)=>{const r=d.r-shrink,r2=r*r;const i0=Math.max(0,Math.floor((d.x-r-x0)/cs)),i1=Math.min(gw-1,Math.floor((d.x+r-x0)/cs)),j0=Math.max(0,Math.floor((d.y-r-y0)/cs)),j1=Math.min(gh-1,Math.floor((d.y+r-y0)/cs));
+    for(let j=j0;j<=j1;j++){const ya=y0+j*cs-d.y,yb=ya+cs,yy=Math.max(ya*ya,yb*yb);for(let i=i0;i<=i1;i++){const xa=x0+i*cs-d.x,xb=xa+cs;if(Math.max(xa*xa,xb*xb)+yy<=r2)f(j*gw+i,true);else if(f.length>2)f(j*gw+i,false,xa,xb,ya,yb,r2)}}};
+  for(const d of ds)full(d,(c)=>{if(cnt[c]<65535)cnt[c]++});
+  const keep=[];
+  for(const d of ds){let needed=false;
+    full(d,function(c,inside,xa,xb,ya,yb,r2){if(needed)return;if(!inside){const nx=Math.max(xa,Math.min(0,xb)),ny=Math.max(ya,Math.min(0,yb));if(nx*nx+ny*ny>=r2)return}   // a cell the disc does not reach
+      if(cnt[c]-(inside?1:0)<=0)needed=true});
+    if(needed)keep.push(d);else full(d,(c)=>{cnt[c]--})}
+  return keep}
 function softenCovered(v,tb,W,H,r){   // v is 0 where nothing is covered: only the covered box is walked (the same sums, in the same order)
   let X0=W,X1=-1,Y0=H,Y1=-1;for(let y=0;y<H;y++){const o=y*W;for(let x=0;x<W;x++)if(tb[o+x]>=0){if(x<X0)X0=x;if(x>X1)X1=x;if(y<Y0)Y0=y;Y1=y}}
   if(X1<0)return;
