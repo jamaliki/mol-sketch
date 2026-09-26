@@ -109,6 +109,7 @@ Warm render times at 900 × 900 on a laptop, with the Python package:
 |---|---|
 | a single protein, any look | 0.05 to 0.3 s |
 | a mechanism scene frame, watercolour | about 0.2 s |
+| a protein with its cryo-EM map (TRPV1, EMD-5778), watercolour | about 0.7 s (the first, with the map prepared, about 2 s) |
 | the 70S ribosome (144 000 atoms), cartoon | about 1 s |
 | the 70S ribosome, watercolour surface | about 2.5 s |
 | the 70S ribosome, ink or pencil surface | 1 to 1.8 s |
