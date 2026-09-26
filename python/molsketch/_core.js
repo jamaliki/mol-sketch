@@ -5502,6 +5502,7 @@
         const b = bases2[_a = a.group] ?? (bases2[_a] = {});
         b[a.name] = a;
       }
+      const rungs = Object.keys(bases2).length <= 600;
       const baseEnd = (g2) => {
         const b = bases2[g2];
         return b ? (b.N9 ? b.N1 : b.N3) || null : null;
@@ -5672,7 +5673,7 @@
             }
             const pr = path.map(P2);
             const L = [], Rr = [];
-            const ct = A[idx[0]].nucleic ? "N" : "L", cw = coilR * (ct === "N" ? 2.2 : 1), hwMin = luminance(rc(idx[0], ct)) > 0.3 ? 0.9 * wInk : 0;
+            const ct = A[idx[0]].nucleic ? "N" : "L", cw = coilR * (ct === "N" ? 1.6 : 1), hwMin = luminance(rc(idx[0], ct)) > 0.3 ? 0.9 * wInk : 0;
             for (let j = 0; j < pr.length; j++) {
               const a = pr[Math.max(0, j - 1)], b = pr[Math.min(pr.length - 1, j + 1)];
               let tx = b[0] - a[0], ty = b[1] - a[1];
@@ -5683,7 +5684,7 @@
             }
             const atEnd = (j, end) => end === 0 ? j === 0 && !first : j === pr.length - 2 && !last;
             for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], ct));
-            if (ct === "N") for (let k = 0; k < m; k++) {
+            if (ct === "N" && rungs) for (let k = 0; k < m; k++) {
               const a = A[idx[k]], e2 = baseEnd(a.group);
               if (!e2 || rungDone.has(a.group)) continue;
               rungDone.add(a.group);

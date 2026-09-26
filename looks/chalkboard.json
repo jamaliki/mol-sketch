@@ -66,6 +66,43 @@
   "pooling": 1,
   "fade": 1
  },
+ "map": {
+  "visible": true,
+  "style": "surface",
+  "level": null,
+  "sigma": null,
+  "speck": 8,
+  "smooth": "auto",
+  "crop": 8,
+  "levels": [
+   0.7,
+   1,
+   1.5
+  ],
+  "carve": 0,
+  "zone": "",
+  "finish": "drawn",
+  "marks": "ink",
+  "smoothing": 4,
+  "opacity": 0.55,
+  "context": "hide",
+  "color": "single",
+  "line": null,
+  "lineWidth": 0.9,
+  "shade": 0.35,
+  "glass": false,
+  "unexplained": false,
+  "unsupported": true,
+  "localResolution": "none",
+  "layer": "auto",
+  "caption": true,
+  "maxVoxels": 192,
+  "meshSpacing": 1,
+  "slice": {
+   "offset": 0,
+   "cut": true
+  }
+ },
  "reps": {
   "sticks": "hetatm and not water",
   "cartoon": "polymer",
