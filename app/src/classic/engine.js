@@ -1050,7 +1050,7 @@ function buildMap(items,st,pos,proj,seedBase){
     let tri=L.tri;if(o.finish!=='sketch'&&M.hasModel&&!M.zoned&&(o.context??'hide')==='hide'){const keep=[];let cut=0;for(let t=0;t<tri.length;t+=3){if(comp[tri[t]]===2&&comp[tri[t+1]]===2&&comp[tri[t+2]]===2){cut++;continue}keep.push(tri[t],tri[t+1],tri[t+2])}if(cut){tri=new Uint32Array(keep);M.contextHidden=true}}
     return {...L,tri,px,py,pz,fog,rn,cls}};   // projected afresh every frame: the camera moves
   const levels=M.levels.map(prep),main=levels[M.primary]||levels[0];
-  const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':M.hasModel&&style==='surface'?'under':'over'):o.layer==='behind'?'under':o.layer;   // with a model: behind it, so the model keeps its colour
+  const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':M.hasModel&&style==='surface'&&!M.closeUp?'under':'over'):o.layer==='behind'?'under':o.layer;   // with a model: behind it, so the model keeps its colour; a close-up over it, so its atoms are seen in their density
   const zItem=layer==='under'?-1e9:layer==='over'||layer==='lines'?1e9:0;
   // the surface's silhouette on the mesh: where n·(eye − p) changes sign, kept where the buffer sees it
   const silhouettes=(L,buf)=>{
@@ -1197,7 +1197,7 @@ function buildMap(items,st,pos,proj,seedBase){
     const buf=o.carve>0?null:mapRaster(main,main.px,main.py,main.pz,W,H);
     const lines=[];for(const w of M.wire){let run=[];for(const q of w){const p=proj.proj(q);const x=Math.floor(p.x),y=Math.floor(p.y);const vis=!buf||(x>=0&&y>=0&&x<W&&y<H&&buf.zb[y*W+x]<=p.z+1.5);if(vis)run.push({x:p.x,y:p.y,fog:p.fog,h:0,gap:1});else{if(run.length>1)lines.push(run);run=[]}}if(run.length>1)lines.push(run)}
     const col=o.color==='single'||!M.hasModel?mix(mapCol,shadeInk(),light?0.45:0.1):mix(P.N,shadeInk(),0.2);
-    items.push({z:zItem,map:true,draw:ctx=>{ctx.save();if(o.finish==='smooth'){ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=o.line||mix(mapCol,shadeInk(),light?0.55:0.1);ctx.globalAlpha=0.9;ctx.lineWidth=S.inkWidth*0.6;ctx.beginPath();for(const l of lines)l.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke()}else drawLines(ctx,lines,{width:S.inkWidth*0.45,color:col,alpha:0.85});ctx.restore()}})}
+    items.push({z:zItem,map:true,draw:ctx=>{ctx.save();if(o.finish==='smooth'){ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=o.line||mix(mapCol,shadeInk(),light?0.55:0.1);ctx.globalAlpha=0.9;ctx.lineWidth=S.inkWidth*0.6;ctx.beginPath();for(const l of lines)l.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke()}else drawLines(ctx,lines,{width:S.inkWidth*(M.closeUp?0.6:0.45),color:col,alpha:0.85});ctx.restore()}})}
   else if(style==='slice'){ // a section through the map at the view's depth: stipple for density, the contour in ink
     const rz=M.box.map(c=>proj.rot(c)[2]),zc=(Math.min(...rz)+Math.max(...rz))/2+(o.slice?.offset||0)*(Math.max(...rz)-Math.min(...rz));
     // the plane's outline: where it cuts the box's edges

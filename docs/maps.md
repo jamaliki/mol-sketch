@@ -74,7 +74,7 @@ contoured to enclose 0.30 MDa (the sample's mass, 1.21 Å³/Da) · specks under 
 
 ## A map with its model
 
-The map is drawn **behind** the model: the model is painted over it and keeps its colour, and the map shows around
+For a whole model, the map is drawn **behind** it: the model is painted over it and keeps its colour, and the map shows around
 it and through its gaps. `layer="over"` draws the map over the model instead, as a translucent envelope (`opacity`,
 0.55 by default), and `layer="lines"` draws only the map's outline over the model. In the app: Map › Drawing › *with
 the model*. Two more choices keep the picture about this model:
@@ -102,11 +102,14 @@ sel = "resi 93 and not hydro"
 fig = ms.fetch("7A4M", map=True).map(zone=sel, carve=2, sigma=3).show(sticks=sel, cartoon=None)
 ```
 
-- `zone` crops the map closely around the selection, so it keeps its full resolution. Only these residues get the
-  unsupported mark.
-- `carve=2` keeps only the density within 2 Å of the selection's atoms. This makes the picture clean, but it hides
+- `zone` keeps the map around the selection at its full resolution (it is never low-passed) and draws it over the
+  sticks, as a translucent envelope, so the atoms are seen in their density (`layer="behind"` puts it back behind
+  them). Only these residues get the unsupported mark.
+- Without carving, the zone shows the density joined to the selection, up to 5 Å from its atoms: what the model
+  explains, and any density it does not explain that touches it (a ligand, a missing side chain), but not the
+  islands of the neighbours' density around it.
+- `carve=2` keeps only the density within 2 Å of the selection's atoms. This makes the picture cleanest, but it hides
   density the model does not explain nearby, so it is off unless you ask, and the caption says when it is on.
-  Without carving you also see the density of neighbouring residues.
 - Residue numbers are the author numbers in the file, not the sequential label numbers.
 
 Acidic side chains (Asp, Glu) often have little density in cryo-EM maps, because radiation damage removes their

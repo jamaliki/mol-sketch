@@ -4464,7 +4464,7 @@
         return { ...L, tri, px, py, pz, fog, rn, cls };
       };
       const levels = M.levels.map(prep), main = levels[M.primary] || levels[0];
-      const style = o.style, layer = o.layer === "auto" ? style === "slice" ? "plane" : M.hasModel && style === "surface" ? "under" : "over" : o.layer === "behind" ? "under" : o.layer;
+      const style = o.style, layer = o.layer === "auto" ? style === "slice" ? "plane" : M.hasModel && style === "surface" && !M.closeUp ? "under" : "over" : o.layer === "behind" ? "under" : o.layer;
       const zItem = layer === "under" ? -1e9 : layer === "over" || layer === "lines" ? 1e9 : 0;
       const silhouettes = (L, buf) => {
         const n = L.pos.length / 3, f2 = new Float32Array(n);
@@ -4979,7 +4979,7 @@
             ctx.beginPath();
             for (const l of lines2) l.forEach((p, i) => i ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
             ctx.stroke();
-          } else drawLines(ctx, lines2, { width: S.inkWidth * 0.45, color: col, alpha: 0.85 });
+          } else drawLines(ctx, lines2, { width: S.inkWidth * (M.closeUp ? 0.6 : 0.45), color: col, alpha: 0.85 });
           ctx.restore();
         } });
       } else if (style === "slice") {
@@ -6775,6 +6775,7 @@
       if (!zoneSel.some((v) => v)) zoneSel = null;
     }
     let m = whole;
+    const zonePad = Math.max(o.carve, 2) + 3;
     if (s && s.count && (o.crop > 0 || zoneSel)) {
       const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
       for (let i = 0; i < s.count; i++) {
@@ -6785,7 +6786,7 @@
           if (p[k] > hi[k]) hi[k] = p[k];
         }
       }
-      const pad = zoneSel ? Math.max(o.carve, 2) + 3 : o.crop;
+      const pad = zoneSel ? zonePad : o.crop;
       m = cropMap(whole, lo.map((v) => v - pad), hi.map((v) => v + pad));
     }
     let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
@@ -6810,7 +6811,7 @@
       }
       extent = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
     }
-    const R = o.smooth === "auto" ? (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
+    const R = o.smooth === "auto" ? zoneSel ? 0 : (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
     const above = R > 0 ? { ...m, data: m.data.map((v) => v >= level ? v : 0) } : m;
     let g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
     const zoned = R > 0 && !!s && s.count > 0 && o.finish !== "sketch" && o.context !== "show";
@@ -6863,40 +6864,10 @@
       const r = s.residues[s.residueOf[i]];
       if (r.resn !== "HOH" && s.element[i] !== "H") atoms.push(i);
     }
-    const cell = 4, grid = /* @__PURE__ */ new Map();
-    const kf = (x, y, z) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
-    for (const i of atoms) {
-      const k = kf(s.x[i], s.y[i], s.z[i]);
-      let l = grid.get(k);
-      if (!l) grid.set(k, l = []);
-      l.push(i);
-    }
-    const nearest = (x, y, z) => {
-      let best = -1, bd = 64;
-      const ci = Math.floor(x / cell), cj = Math.floor(y / cell), ck = Math.floor(z / cell);
-      for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) for (let c = -2; c <= 2; c++) {
-        const l = grid.get(`${ci + a},${cj + b},${ck + c}`);
-        if (!l) continue;
-        for (const i of l) {
-          const d = (s.x[i] - x) ** 2 + (s.y[i] - y) ** 2 + (s.z[i] - z) ** 2;
-          if (d < bd) {
-            bd = d;
-            best = i;
-          }
-        }
-      }
-      return [best, Math.sqrt(bd)];
-    };
-    const zoneAtoms = zoneSel ? atoms.filter((i) => zoneSel[i]) : atoms;
-    const carveDist = (x, y, z) => {
-      if (!zoneSel) return nearest(x, y, z)[1];
-      let bd = Infinity;
-      for (const i of zoneAtoms) {
-        const d = (s.x[i] - x) ** 2 + (s.y[i] - y) ** 2 + (s.z[i] - z) ** 2;
-        if (d < bd) bd = d;
-      }
-      return Math.sqrt(bd);
-    };
+    const nearest = nearestAtom(s, atoms);
+    const nearZone = zoneSel ? nearestAtom(s, atoms.filter((i) => zoneSel[i])) : nearest;
+    const carveDist = (x, y, z) => nearZone(x, y, z)[1];
+    const carve = o.carve > 0 ? o.carve : zoneSel ? zonePad : 0;
     let dust = 0;
     const levels = factors.map((f2) => {
       const iso = smoothSurface(isosurface(g2, same(level * f2)), o.finish !== "sketch" ? o.smoothing : 0);
@@ -6933,11 +6904,32 @@
         else dust++;
         tri = new Uint32Array(keep);
       }
-      if (o.carve > 0 && atoms.length) {
+      if (carve > 0 && atoms.length) {
         const cd = zoneSel ? Float32Array.from({ length: nv }, (_, v) => carveDist(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2])) : dist;
         const keep = [];
-        for (let t = 0; t < tri.length; t += 3) if (cd[tri[t]] <= o.carve || cd[tri[t + 1]] <= o.carve || cd[tri[t + 2]] <= o.carve) keep.push(tri[t], tri[t + 1], tri[t + 2]);
+        for (let t = 0; t < tri.length; t += 3) if (cd[tri[t]] <= carve || cd[tri[t + 1]] <= carve || cd[tri[t + 2]] <= carve) keep.push(tri[t], tri[t + 1], tri[t + 2]);
         tri = new Uint32Array(keep);
+        if (zoneSel && !(o.carve > 0)) {
+          const par = new Int32Array(nv);
+          for (let v = 0; v < nv; v++) par[v] = v;
+          const find = (x) => {
+            while (par[x] !== x) {
+              par[x] = par[par[x]];
+              x = par[x];
+            }
+            return x;
+          };
+          for (let t = 0; t < tri.length; t += 3) {
+            const a = find(tri[t]), b = find(tri[t + 1]), c = find(tri[t + 2]);
+            par[b] = a;
+            par[find(c)] = a;
+          }
+          const touch = /* @__PURE__ */ new Set();
+          for (let t = 0; t < tri.length; t++) if (cd[tri[t]] <= 2.5) touch.add(find(tri[t]));
+          const k2 = [];
+          for (let t = 0; t < tri.length; t += 3) if (touch.has(find(tri[t]))) k2.push(tri[t], tri[t + 1], tri[t + 2]);
+          tri = new Uint32Array(k2);
+        }
       }
       let hand2 = null;
       const raw = new Float32Array(nv).fill(NaN);
@@ -6975,7 +6967,7 @@
         for (let i = 0; i < n; i += sp) for (const line of joinSegments(sliceContours(g2, ax, i, gLevel))) {
           let run = [];
           for (const p of line) {
-            const inZone = !(o.carve > 0 && atoms.length) || carveDist(p[0], p[1], p[2]) <= o.carve;
+            const inZone = !(carve > 0 && atoms.length) || carveDist(p[0], p[1], p[2]) <= carve;
             if (inZone) run.push(turn(p[0], p[1], p[2]));
             else {
               if (run.length > 1) wire.push(run);
@@ -7003,7 +6995,7 @@
       R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
       byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
       o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
-      zoned ? "the density within 5 \xC5 of the model" : o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `around ${o.zone}` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
+      zoned ? "the density within 5 \xC5 of the model" : o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} \xC5` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
       dust ? "specks under 2% of the largest piece hidden" : "",
       g0 !== m && !byVolume ? `drawn at ${g2.step[0].toFixed(1)} \xC5 per voxel${R > 0 ? "" : ", at the level enclosing the same volume"}` : "",
       o.localResolution === "bfactor" && s ? "line looseness from B-factors" : o.localResolution === "map" && localRes ? "line looseness from local resolution" : ""
@@ -7025,11 +7017,38 @@
       opts: o,
       hasModel: atoms.length > 0,
       primaryLevel: level,
-      zoned
+      zoned,
+      closeUp: !!zoneSel
     };
     per.set(key, out);
     if (per.size > 6) per.delete(per.keys().next().value);
     return out;
+  }
+  function nearestAtom(s, atoms) {
+    const cell = 4, grid = /* @__PURE__ */ new Map();
+    const kf = (i, j, k) => ((i + 512) * 1024 + (j + 512)) * 1024 + (k + 512);
+    for (const i of atoms) {
+      const k = kf(Math.floor(s.x[i] / cell), Math.floor(s.y[i] / cell), Math.floor(s.z[i] / cell));
+      let l = grid.get(k);
+      if (!l) grid.set(k, l = []);
+      l.push(i);
+    }
+    return (x, y, z) => {
+      let best = -1, bd = 64;
+      const ci = Math.floor(x / cell), cj = Math.floor(y / cell), ck = Math.floor(z / cell);
+      for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) for (let c = -2; c <= 2; c++) {
+        const l = grid.get(kf(ci + a, cj + b, ck + c));
+        if (!l) continue;
+        for (const i of l) {
+          const d = (s.x[i] - x) ** 2 + (s.y[i] - y) ** 2 + (s.z[i] - z) ** 2;
+          if (d < bd) {
+            bd = d;
+            best = i;
+          }
+        }
+      }
+      return [best, Math.sqrt(bd)];
+    };
   }
 
   // src/classic/adapter.ts

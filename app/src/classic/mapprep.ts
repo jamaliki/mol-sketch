@@ -23,6 +23,7 @@ export interface EngineMap {
   sample: (x: number, y: number, z: number) => number;   // density at a point of the drawing's frame
   box: number[][];                    // the map's corners, drawing frame
   opts: Style['map']; hasModel: boolean; primaryLevel: number; zoned?: boolean;
+  closeUp?: boolean;                  // a zone: residues in their density, drawn over the model by default
 }
 
 const cache = new WeakMap<DensityMap, Map<string, EngineMap>>();
@@ -50,14 +51,14 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   // measured from them; for looking at how residues sit in their density
   let zoneSel: Uint8Array | null = null;
   if (s && o.zone) { zoneSel = selectAtoms(s, o.zone); if (!zoneSel.some(v => v)) zoneSel = null }
-  let m = whole;
+  let m = whole; const zonePad = Math.max(o.carve, 2) + 3;
   if (s && s.count && (o.crop > 0 || zoneSel)) { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
     for (let i = 0; i < s.count; i++) { if (zoneSel && !zoneSel[i]) continue; const p = [s.x[i], s.y[i], s.z[i]]; for (let k = 0; k < 3; k++) { if (p[k] < lo[k]) lo[k] = p[k]; if (p[k] > hi[k]) hi[k] = p[k] } }
-    const pad = zoneSel ? Math.max(o.carve, 2) + 3 : o.crop;
+    const pad = zoneSel ? zonePad : o.crop;
     m = cropMap(whole, lo.map(v => v - pad), hi.map(v => v + pad)) }
   // smoothing: the map low-passed to a resolution the picture can show (a whole particle cannot show atoms), on a grid
   // no finer than a third of it. 'auto' low-passes to a 20th of what is drawn (4 Å at the finest) (the model, or else the particle: the
-  // density above the level), when the map is finer than that
+  // density above the level), when the map is finer than that; never a zone, which is a close-up at the map's own resolution
   let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
   for (let k = 0, q = 0; k < m.nz; k++) for (let j = 0; j < m.ny; j++) for (let i = 0; i < m.nx; i++, q++) if (m.data[q] >= level) {
     if (i < bx0) bx0 = i; if (i > bx1) bx1 = i; if (j < by0) by0 = j; if (j > by1) by1 = j; if (k < bz0) bz0 = k; if (k > bz1) bz1 = k }
@@ -65,7 +66,7 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   if (s && s.count) { const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
     for (let i = 0; i < s.count; i++) { if (zoneSel && !zoneSel[i]) continue; const p = [s.x[i], s.y[i], s.z[i]]; for (let k = 0; k < 3; k++) { if (p[k] < lo[k]) lo[k] = p[k]; if (p[k] > hi[k]) hi[k] = p[k] } }
     extent = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]) }
-  const R = o.smooth === 'auto' ? (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
+  const R = o.smooth === 'auto' ? zoneSel ? 0 : (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
   // what is low-passed is the density above the contour level (the rest set to zero): a sharpened map has lost its
   // low frequencies (its protein's mean density is the solvent's), so low-passing it all would leave only noise
   const above = R > 0 ? { ...m, data: m.data.map(v => v >= level ? v : 0) } : m;
@@ -103,19 +104,13 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   const unturn = (x: number, y: number, z: number): [number, number, number] => [base[0] * x + base[1] * y + base[2] * z, base[4] * x + base[5] * y + base[6] * z, base[8] * x + base[9] * y + base[10] * z];
   // the model's atoms on a 4 Å grid, for nearest-atom lookups (waters left out: they are not what the density is judged by)
   const atoms: number[] = []; if (s) for (let i = 0; i < s.count; i++) { const r = s.residues[s.residueOf[i]]; if (r.resn !== 'HOH' && s.element[i] !== 'H') atoms.push(i) }
-  const cell = 4, grid = new Map<string, number[]>(); const kf = (x: number, y: number, z: number) => `${Math.floor(x / cell)},${Math.floor(y / cell)},${Math.floor(z / cell)}`;
-  for (const i of atoms) { const k = kf(s!.x[i], s!.y[i], s!.z[i]); let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(i) }
-  const nearest = (x: number, y: number, z: number): [number, number] => {
-    let best = -1, bd = 64; const ci = Math.floor(x / cell), cj = Math.floor(y / cell), ck = Math.floor(z / cell);
-    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) for (let c = -2; c <= 2; c++) {
-      const l = grid.get(`${ci + a},${cj + b},${ck + c}`); if (!l) continue;
-      for (const i of l) { const d = (s!.x[i] - x) ** 2 + (s!.y[i] - y) ** 2 + (s!.z[i] - z) ** 2; if (d < bd) { bd = d; best = i } }
-    }
-    return [best, Math.sqrt(bd)];
-  };
+  const nearest = nearestAtom(s, atoms);
   // carving's distance: to the zone's atoms when there is a zone, else to the model's
-  const zoneAtoms = zoneSel ? atoms.filter(i => zoneSel![i]) : atoms;
-  const carveDist = (x: number, y: number, z: number) => { if (!zoneSel) return nearest(x, y, z)[1]; let bd = Infinity; for (const i of zoneAtoms) { const d = (s!.x[i] - x) ** 2 + (s!.y[i] - y) ** 2 + (s!.z[i] - z) ** 2; if (d < bd) bd = d } return Math.sqrt(bd) };
+  const nearZone = zoneSel ? nearestAtom(s, atoms.filter(i => zoneSel![i])) : nearest;
+  const carveDist = (x: number, y: number, z: number) => nearZone(x, y, z)[1];
+  // a zone without carving keeps the density within its crop margin of the selection (a sphere around each atom, not
+  // the box, whose corners would be filled with pieces of the neighbours' density)
+  const carve = o.carve > 0 ? o.carve : zoneSel ? zonePad : 0;
   let dust = 0;
   const levels: MapLevel[] = factors.map(f => {
     const iso = smoothSurface(isosurface(g, same(level * f)), o.finish !== 'sketch' ? o.smoothing : 0); const nv = iso.positions.length / 3;
@@ -130,8 +125,14 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
       const big = Math.max(0, ...size.values()) * 0.02, keep: number[] = [];
       for (let t = 0; t < tri.length; t += 3) if (size.get(find(tri[t]))! >= big) keep.push(tri[t], tri[t + 1], tri[t + 2]); else dust++;
       tri = new Uint32Array(keep) }
-    if (o.carve > 0 && atoms.length) { const cd = zoneSel ? Float32Array.from({ length: nv }, (_, v) => carveDist(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2])) : dist;
-      const keep: number[] = []; for (let t = 0; t < tri.length; t += 3) if (cd[tri[t]] <= o.carve || cd[tri[t + 1]] <= o.carve || cd[tri[t + 2]] <= o.carve) keep.push(tri[t], tri[t + 1], tri[t + 2]); tri = new Uint32Array(keep) }
+    if (carve > 0 && atoms.length) { const cd = zoneSel ? Float32Array.from({ length: nv }, (_, v) => carveDist(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2])) : dist;
+      const keep: number[] = []; for (let t = 0; t < tri.length; t += 3) if (cd[tri[t]] <= carve || cd[tri[t + 1]] <= carve || cd[tri[t + 2]] <= carve) keep.push(tri[t], tri[t + 1], tri[t + 2]); tri = new Uint32Array(keep)
+      // a zone without carving: only the pieces of surface that touch its atoms (the density joined to them, explained
+      // or not), not the islands of the neighbours' density that the margin happens to take in
+      if (zoneSel && !(o.carve > 0)) { const par = new Int32Array(nv); for (let v = 0; v < nv; v++) par[v] = v; const find = (x: number) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x] } return x };
+        for (let t = 0; t < tri.length; t += 3) { const a = find(tri[t]), b = find(tri[t + 1]), c = find(tri[t + 2]); par[b] = a; par[find(c)] = a }
+        const touch = new Set<number>(); for (let t = 0; t < tri.length; t++) if (cd[tri[t]] <= 2.5) touch.add(find(tri[t]));
+        const k2: number[] = []; for (let t = 0; t < tri.length; t += 3) if (touch.has(find(tri[t]))) k2.push(tri[t], tri[t + 1], tri[t + 2]); tri = new Uint32Array(k2) } }
     // local resolution as looseness: a local-resolution map's value at the vertex, or the nearest atom's B-factor,
     // spread between the 5th and 95th percentile of the figure (so the best-resolved parts are ruled, the worst loose)
     let hand: Float32Array | null = null;
@@ -157,7 +158,7 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
     const sp = Math.max(1, Math.round(o.meshSpacing / g.step[0]));
     for (const ax of [0, 1, 2] as const) { const n = [g.nx, g.ny, g.nz][ax]; for (let i = 0; i < n; i += sp) for (const line of joinSegments(sliceContours(g, ax, i, gLevel))) {
       let run: number[][] = [];   // carved: only the parts near the model
-      for (const p of line) { const inZone = !(o.carve > 0 && atoms.length) || carveDist(p[0], p[1], p[2]) <= o.carve; if (inZone) run.push(turn(p[0], p[1], p[2])); else { if (run.length > 1) wire.push(run); run = [] } }
+      for (const p of line) { const inZone = !(carve > 0 && atoms.length) || carveDist(p[0], p[1], p[2]) <= carve; if (inZone) run.push(turn(p[0], p[1], p[2])); else { if (run.length > 1) wire.push(run); run = [] } }
       if (run.length > 1) wire.push(run);
     } }
   }
@@ -171,12 +172,26 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   const sigma = (level - m.mean) / (m.rms || 1);
   const caption = [m.name, R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''} low-passed to ${R} Å` : '', byVolume ? mass <= 0 ? 'contoured at 2 σ' : `contoured to enclose ${(mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + ' MDa' : Math.round(mass / 1e3) + ' kDa')} (${massFrom}'s mass, 1.21 Å³/Da)`
       : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''}, ${sigma.toFixed(1)} σ`,
-    o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', zoned ? 'the density within 5 Å of the model' : o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `around ${o.zone}` : m !== whole ? `cropped to the model's box and ${o.crop} Å` : '',
+    o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', zoned ? 'the density within 5 Å of the model' : o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} Å` : m !== whole ? `cropped to the model's box and ${o.crop} Å` : '',
     dust ? 'specks under 2% of the largest piece hidden' : '', g0 !== m && !byVolume ? `drawn at ${g.step[0].toFixed(1)} Å per voxel${R > 0 ? '' : ', at the level enclosing the same volume'}` : '',
     o.localResolution === 'bfactor' && s ? 'line looseness from B-factors' : o.localResolution === 'map' && localRes ? 'line looseness from local resolution' : ''].filter(Boolean).join(' · ');
   const corners: number[][] = []; for (const a of [0, 1]) for (const b of [0, 1]) for (const c of [0, 1]) corners.push(turn(g.origin[0] + a * (g.nx - 1) * g.step[0], g.origin[1] + b * (g.ny - 1) * g.step[1], g.origin[2] + c * (g.nz - 1) * g.step[2]));
   const out: EngineMap = { name: m.name, levels, primary, wire, unsupported, caption, sample: (x, y, z) => { const p = unturn(x, y, z); return sampleMap(g, p[0], p[1], p[2]) * level / gLevel },
-    box: corners, opts: o, hasModel: atoms.length > 0, primaryLevel: level, zoned };
+    box: corners, opts: o, hasModel: atoms.length > 0, primaryLevel: level, zoned, closeUp: !!zoneSel };
   per.set(key, out); if (per.size > 6) per.delete(per.keys().next().value!);
   return out;
+}
+
+/** the nearest of some atoms to a point (and its distance, Å), up to 8 Å away, from a 4 Å grid */
+function nearestAtom(s: Structure | null, atoms: number[]) {
+  const cell = 4, grid = new Map<number, number[]>(); const kf = (i: number, j: number, k: number) => ((i + 512) * 1024 + (j + 512)) * 1024 + (k + 512);
+  for (const i of atoms) { const k = kf(Math.floor(s!.x[i] / cell), Math.floor(s!.y[i] / cell), Math.floor(s!.z[i] / cell)); let l = grid.get(k); if (!l) grid.set(k, l = []); l.push(i) }
+  return (x: number, y: number, z: number): [number, number] => {
+    let best = -1, bd = 64; const ci = Math.floor(x / cell), cj = Math.floor(y / cell), ck = Math.floor(z / cell);
+    for (let a = -2; a <= 2; a++) for (let b = -2; b <= 2; b++) for (let c = -2; c <= 2; c++) {
+      const l = grid.get(kf(ci + a, cj + b, ck + c)); if (!l) continue;
+      for (const i of l) { const d = (s!.x[i] - x) ** 2 + (s!.y[i] - y) ** 2 + (s!.z[i] - z) ** 2; if (d < bd) { bd = d; best = i } }
+    }
+    return [best, Math.sqrt(bd)];
+  };
 }
