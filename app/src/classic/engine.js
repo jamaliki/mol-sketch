@@ -849,13 +849,22 @@ function surfaceColour(){
 }
 /** the surface's discs (an atom's van der Waals radius plus half the probe) and its residue patches, in model order;
    a patch keeps its first atom, and each painter asks for its colour when it always has */
+const DISC10C=[],DISC10S=[];for(let i=0;i<10;i++){const an=i/10*Math.PI*2;DISC10C.push(Math.cos(an));DISC10S.push(Math.sin(an))}
+/* the points that can be on a set's convex hull: those not strictly inside the octagon of its extreme points (the
+   hull is the same, found from far fewer points) */
+function hullCandidates(pts){const ex=[pts[0],pts[0],pts[0],pts[0],pts[0],pts[0],pts[0],pts[0]];
+  for(const p of pts){const x=p[0],y=p[1];if(x<ex[0][0])ex[0]=p;if(x+y<ex[1][0]+ex[1][1])ex[1]=p;if(y<ex[2][1])ex[2]=p;if(x-y>ex[3][0]-ex[3][1])ex[3]=p;if(x>ex[4][0])ex[4]=p;if(x+y>ex[5][0]+ex[5][1])ex[5]=p;if(y>ex[6][1])ex[6]=p;if(y-x>ex[7][1]-ex[7][0])ex[7]=p}
+  const oct=[];for(const p of ex)if(!oct.length||oct[oct.length-1]!==p)oct.push(p);if(oct.length>1&&oct[0]===oct[oct.length-1])oct.pop();if(oct.length<3)return pts;
+  let area=0;for(let i=0;i<oct.length;i++){const a=oct[i],b=oct[(i+1)%oct.length];area+=a[0]*b[1]-b[0]*a[1]}if(Math.abs(area)<1e-6)return pts;const sg=area>0?1:-1,eps=1e-6*Math.abs(area);
+  const out=[];for(const p of pts){let inside=true;for(let i=0;i<oct.length&&inside;i++){const a=oct[i],b=oct[(i+1)%oct.length];if(sg*((b[0]-a[0])*(p[1]-a[1])-(b[1]-a[1])*(p[0]-a[0]))<=eps)inside=false}if(!inside)out.push(p)}
+  return out}
 function surfaceModel(atoms,pos,proj){
   const probe=cfg.rep.probe;
   const discs=atoms.map(a=>{const p=pos[a.id];return{x:p.x,y:p.y,r:((VDW[a.el]||1.7)+probe*0.55)*proj.pxPerA*p.d*cfg.rep.surfaceScale,z:p.z,d:p.d,fog:p.fog,alpha:a.alpha,a}});
   const groups={};for(const d of discs){const k=(d.a.chain||'')+'/'+(d.a.resi??d.a.id);(groups[k]=groups[k]||[]).push(d)}
   const patches=[];
-  for(const k in groups){const g=groups[k];const pts=[];let z=0,px=0,py=0,dd=0;for(const d of g){for(let i=0;i<10;i++){const an=i/10*Math.PI*2;pts.push([d.x+Math.cos(an)*d.r,d.y+Math.sin(an)*d.r])}z+=d.z;px+=d.x;py+=d.y;dd+=d.d}
-    const h=hull(pts);if(h.length<3)continue;
+  for(const k in groups){const g=groups[k];const pts=[];let z=0,px=0,py=0,dd=0;for(const d of g){for(let i=0;i<10;i++){pts.push([d.x+DISC10C[i]*d.r,d.y+DISC10S[i]*d.r])}z+=d.z;px+=d.x;py+=d.y;dd+=d.d}
+    const h=hull(pts.length>40?hullCandidates(pts):pts);if(h.length<3)continue;
     patches.push({h,k,z:z/g.length,x:px/g.length,y:py/g.length,d:dd/g.length,fog:g.reduce((s,d)=>s+d.fog,0)/g.length,alpha:Math.max(...g.map(d=>d.alpha)),a:g[0].a})}
   return {discs,patches,proj};
 }
@@ -1264,15 +1273,17 @@ function grains(ctx,pts,col){if(!pts.length)return;let lo=1,hi=0;for(const p of 
    pixel counts as covered). Most of a large assembly's patches are hidden; painting them was most of its time */
 function hiddenPatches(patches,W,H,wobble=0){   // wobble: how far (a fraction of its size) a patch's drawn shape strays from its hull
   const w=Math.max(1,Math.ceil(W)),h=Math.max(1,Math.ceil(H)),cov=new Uint8Array(w*h),out=new Uint8Array(patches.length);
-  const inside=(q,x,y,cx,cy,k)=>{let sg=0;for(let i=0,n=q.length;i<n;i++){const a=q[i],b=q[(i+1)%n];const ax=cx+(a[0]-cx)*k,ay=cy+(a[1]-cy)*k,bx=cx+(b[0]-cx)*k,by=cy+(b[1]-cy)*k;
-    const c=(bx-ax)*(y-ay)-(by-ay)*(x-ax);if(c!==0){const t=c>0?1:-1;if(sg===0)sg=t;else if(t!==sg)return false}}return true};
+  // the pixel centres (x+0.5) of row y inside a convex polygon scaled by k about (cx,cy): [x0,x1], or null
+  const span=(q,cx,cy,k,y)=>{const yc=y+0.5;let lo=Infinity,hi=-Infinity;for(let i=0,n=q.length;i<n;i++){const a=q[i],b=q[(i+1)%n];
+      const ay=cy+(a[1]-cy)*k,by=cy+(b[1]-cy)*k;if((ay<=yc&&by>=yc)||(by<=yc&&ay>=yc)){const ax=cx+(a[0]-cx)*k,bx=cx+(b[0]-cx)*k;const x=ay===by?Math.min(ax,bx):ax+(bx-ax)*(yc-ay)/(by-ay),x2=ay===by?Math.max(ax,bx):x;if(x<lo)lo=x;if(x2>hi)hi=x2}}
+    if(!(hi>=lo))return null;const x0=Math.max(0,Math.ceil(lo-0.5)),x1=Math.min(w-1,Math.floor(hi-0.5));return x1>=x0?[x0,x1]:null};
   for(let pi=patches.length-1;pi>=0;pi--){const p=patches[pi],q=p.h;if(!q||q.length<3)continue;
     let cx=0,cy=0;for(const a of q){cx+=a[0];cy+=a[1]}cx/=q.length;cy/=q.length;let r=0;for(const a of q)r=Math.max(r,Math.hypot(a[0]-cx,a[1]-cy));if(r<1)continue;
     const kOut=1+(2+(0.15+wobble)*r)/r,kIn=Math.max(0,1-(1.5+wobble*r)/r),R=r*kOut;
-    const x0=Math.max(0,Math.floor(cx-R)),x1=Math.min(w-1,Math.ceil(cx+R)),y0=Math.max(0,Math.floor(cy-R)),y1=Math.min(h-1,Math.ceil(cy+R));
-    let seen=false;for(let y=y0;y<=y1&&!seen;y++)for(let x=x0;x<=x1;x++){if(!cov[y*w+x]&&inside(q,x+0.5,y+0.5,cx,cy,kOut)){seen=true;break}}
-    if(!seen&&x1>=x0&&y1>=y0){out[pi]=1;continue}
-    if((p.alpha??1)>=0.999&&kIn>0)for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const i=y*w+x;if(!cov[i]&&inside(q,x+0.5,y+0.5,cx,cy,kIn))cov[i]=1}}
+    const y0=Math.max(0,Math.floor(cy-R)),y1=Math.min(h-1,Math.ceil(cy+R));
+    let seen=false;for(let y=y0;y<=y1&&!seen;y++){const sp=span(q,cx,cy,kOut,y);if(!sp)continue;const o=y*w;for(let x=sp[0];x<=sp[1];x++)if(!cov[o+x]){seen=true;break}}
+    if(!seen){if(y1>=y0)out[pi]=1;continue}
+    if((p.alpha??1)>=0.999&&kIn>0)for(let y=y0;y<=y1;y++){const sp=span(q,cx,cy,kIn,y);if(!sp)continue;cov.fill(1,y*w+sp[0],y*w+sp[1]+1)}}
   return out}
 function softenCovered(v,tb,W,H,r){   // v is 0 where nothing is covered: only the covered box is walked (the same sums, in the same order)
   let X0=W,X1=-1,Y0=H,Y1=-1;for(let y=0;y<H;y++){const o=y*W;for(let x=0;x<W;x++)if(tb[o+x]>=0){if(x<X0)X0=x;if(x>X1)X1=x;if(y<Y0)Y0=y;Y1=y}}
