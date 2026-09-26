@@ -3125,7 +3125,26 @@
     function subunitColor(a) {
       const k = a.subunit || "X";
       if (scene.groupColors && scene.groupColors["subunit:" + k]) return scene.groupColors["subunit:" + k];
+      if (k === "X" && !hasSubunits()) return chainColor(a);
       return SUBUNIT_COLS[k] || SUBUNIT_COLS.X;
+    }
+    const SUBUNITS_OF = /* @__PURE__ */ new WeakMap();
+    function hasSubunits() {
+      const K = scene && scene.keyframes && scene.keyframes[0];
+      if (!K) return false;
+      let f2 = SUBUNITS_OF.get(K);
+      if (f2 === void 0) {
+        f2 = false;
+        for (const id in K.atoms) {
+          const u = K.atoms[id].subunit;
+          if (u && u !== "X") {
+            f2 = true;
+            break;
+          }
+        }
+        SUBUNITS_OF.set(K, f2);
+      }
+      return f2;
     }
     function entityColor(a) {
       const e = a.entity || "chain:" + (a.chain || "");
@@ -3138,8 +3157,9 @@
       const c = a.chain || "";
       if (scene.groupColors && scene.groupColors[c]) return scene.groupColors[c];
       const GP = cfg.groupPalette && cfg.groupPalette.length ? cfg.groupPalette : GROUP_PALETTE;
-      const k = scene.keyframes.length + "|" + (scene.name || "") + "|" + (scene.keyframes[0] ? Object.keys(scene.keyframes[0].atoms).length : 0);
-      if (chainOrdKey !== k) {
+      const K0 = scene.keyframes[0], n0 = scene.keyframes.length, rv = scene._rev;
+      if (!chainOrdKey || chainOrdKey.K0 !== K0 || chainOrdKey.n0 !== n0 || chainOrdKey.rv !== rv || chainOrdKey.name !== scene.name) {
+        const k = { K0, n0, rv, name: scene.name };
         chainOrd = {};
         chainOrdKey = k;
         let n = 0;

@@ -13,7 +13,10 @@ export function elementClass(el: string): number {
 export class ColorScheme {
   private chainIdx = new Map<string, number>();
   private entityIdx = new Map<string, number>();
+  /** a structure without ribosomal subunits is coloured by chain where the style asks for subunits */
+  private noSubunits: boolean;
   constructor(private s: Structure, private style: Style, private overrides: Record<string, string> = {}) {
+    this.noSubunits = !s.residues.some(r => r.subunit && r.subunit !== 'X');
     for (const ch of s.chains) { if (!this.chainIdx.has(ch.id)) this.chainIdx.set(ch.id, this.chainIdx.size); const e = ch.entity || 'chain:' + ch.id; if (!this.entityIdx.has(e)) this.entityIdx.set(e, this.entityIdx.size) }
   }
   private auto(i: number) { const gp = this.style.groupPalette && this.style.groupPalette.length ? this.style.groupPalette : GROUP_PALETTE; return gp[i % gp.length] }
@@ -25,7 +28,7 @@ export class ColorScheme {
     switch (this.style.colorBy) {
       case 'element': return P.C;
       case 'chain': return o[r.chain] ?? this.auto(this.chainIdx.get(r.chain) ?? 0);
-      case 'subunit': return o['subunit:' + r.subunit] ?? SUBUNIT_COLS[r.subunit] ?? SUBUNIT_COLS.X;
+      case 'subunit': return o['subunit:' + r.subunit] ?? (this.noSubunits ? o[r.chain] ?? this.auto(this.chainIdx.get(r.chain) ?? 0) : SUBUNIT_COLS[r.subunit] ?? SUBUNIT_COLS.X);
       case 'entity': { const e = r.entity || 'chain:' + r.chain; return o['entity:' + e] ?? this.auto(this.entityIdx.get(e) ?? 0) }
       default: return this.auto(r.index);
     }
@@ -46,7 +49,7 @@ export class ColorScheme {
     switch (this.style.surfaceColor) {
       case 'single': return P.surface;
       case 'chain': return o[r.chain] ?? this.auto(this.chainIdx.get(r.chain) ?? 0);
-      case 'subunit': return o['subunit:' + r.subunit] ?? SUBUNIT_COLS[r.subunit] ?? SUBUNIT_COLS.X;
+      case 'subunit': return o['subunit:' + r.subunit] ?? (this.noSubunits ? o[r.chain] ?? this.auto(this.chainIdx.get(r.chain) ?? 0) : SUBUNIT_COLS[r.subunit] ?? SUBUNIT_COLS.X);
       case 'entity': { const e = r.entity || 'chain:' + r.chain; return o['entity:' + e] ?? this.auto(this.entityIdx.get(e) ?? 0) }
       default: return this.residueCarbon(r);
     }

@@ -518,13 +518,18 @@ function carbonColor(a){const P=cfg.palette,mode=cfg.rep.colorBy;
   const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[groupIndex(key)%GP.length];
 }
 const SUBUNIT_COLS={S:'#9cc27a',L:'#e6a45a',T:'#c96d8a',X:'#b8b4a8'};
-function subunitColor(a){const k=a.subunit||'X';if(scene.groupColors&&scene.groupColors['subunit:'+k])return scene.groupColors['subunit:'+k];return SUBUNIT_COLS[k]||SUBUNIT_COLS.X}
+function subunitColor(a){const k=a.subunit||'X';if(scene.groupColors&&scene.groupColors['subunit:'+k])return scene.groupColors['subunit:'+k];
+  if(k==='X'&&!hasSubunits())return chainColor(a);   // no ribosomal subunits (a haemoglobin, a chaperonin): by chain, not one colour
+  return SUBUNIT_COLS[k]||SUBUNIT_COLS.X}
+const SUBUNITS_OF=new WeakMap();   // keyframe → whether any of its atoms is in a subunit
+function hasSubunits(){const K=scene&&scene.keyframes&&scene.keyframes[0];if(!K)return false;let f=SUBUNITS_OF.get(K);if(f===undefined){f=false;for(const id in K.atoms){const u=K.atoms[id].subunit;if(u&&u!=='X'){f=true;break}}SUBUNITS_OF.set(K,f)}return f}
 function entityColor(a){const e=a.entity||('chain:'+(a.chain||''));if(scene.groupColors&&scene.groupColors['entity:'+e])return scene.groupColors['entity:'+e];const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[groupIndex('entity:'+e)%GP.length]}
 /** a chain's colour: its own if given, else the palette's in the order the chains come (counted on their own, so
     neighbouring chains never share a colour the way they could when residues and chains were counted together) */
 let chainOrd=null,chainOrdKey='';
 function chainColor(a){const c=a.chain||'';if(scene.groupColors&&scene.groupColors[c])return scene.groupColors[c];const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;
-  const k=scene.keyframes.length+'|'+(scene.name||'')+'|'+(scene.keyframes[0]?Object.keys(scene.keyframes[0].atoms).length:0);if(chainOrdKey!==k){chainOrd={};chainOrdKey=k;let n=0;for(const f of scene.keyframes)for(const id in f.atoms){const ch=f.atoms[id].chain||'';if(!(ch in chainOrd))chainOrd[ch]=n++}}
+  const K0=scene.keyframes[0],n0=scene.keyframes.length,rv=scene._rev;   // the chains' order, found once per scene (its keys were rebuilt for every atom: 58 000 atoms coloured by chain took minutes)
+  if(!chainOrdKey||chainOrdKey.K0!==K0||chainOrdKey.n0!==n0||chainOrdKey.rv!==rv||chainOrdKey.name!==scene.name){const k={K0,n0,rv,name:scene.name};chainOrd={};chainOrdKey=k;let n=0;for(const f of scene.keyframes)for(const id in f.atoms){const ch=f.atoms[id].chain||'';if(!(ch in chainOrd))chainOrd[ch]=n++}}
   return GP[(chainOrd[c]??0)%GP.length]}
 /** the cartoon's colouring: the style's, or by chain when a map is drawn with its model by chain (the density and its chain share a colour) */
 function cartoonMode(){const M=scene.map;return M&&M.hasModel&&M.opts.color==='chain'?'chain':cfg.rep.cartoonColor||'ss'}
