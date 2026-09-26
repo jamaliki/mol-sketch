@@ -9,7 +9,7 @@ import type { Structure } from '../model/structure';
 import { DEFAULT_STYLE, cloneStyle, mergeStyle, PALETTES, type Style } from '../style';
 import { LOOKS } from '../looks';
 import { GROUP_PALETTES, ribbonColours } from '../palettes';
-import { classic, cfgFromStyle, sceneFromStructure, renderClassic, renderScene, mapBasis, mapLevel } from '../classic/adapter';
+import { classic, cfgFromStyle, sceneFromStructure, freshKeyframe, renderClassic, renderScene, mapBasis, mapLevel } from '../classic/adapter';
 import { mapStats, sampleMap, type DensityMap } from '../model/map';
 import { sceneFitPoints, type SceneDoc } from '../classic/scene';
 import { selectAtoms } from '../model/selection';
@@ -97,7 +97,7 @@ function fitPointsOf(s: Structure, style: Style): Float32Array {
 function stackScene(files: { text: string; name: string }[], style: Style): SceneDoc {
   files = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   const structs = files.map(f => structureOf(f.text, f.name)); const base = pcaBasis(structs[0]); const one = structs.length === 1;
-  const keyframes = structs.map(st => { const sc = sceneFromStructure(st, style, {}, base, new Float32Array(0)); const k = sc.keyframes[0]; return { name: st.name, hold: one ? 24 : 0, transition: one ? 0 : 2, atoms: k.atoms, bonds: k.bonds, arrows: [] } });
+  const keyframes = structs.map(st => { const k = freshKeyframe(st, base); return { name: st.name, hold: one ? 24 : 0, transition: one ? 0 : 2, atoms: k.atoms, bonds: k.bonds, arrows: [] } });
   const hasPoly = structs[0].residues.some(r => !r.het);
   const doc: any = { name: files.length > 1 ? 'PDB stack' : structs[0].name, reps: { sticks: hasPoly ? 'hetatm and not water' : 'all', cartoon: hasPoly ? 'polymer' : '', surface: '' }, groupColors: {}, view: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 }, keyframes };
   doc.fromPdb = true; return doc;
@@ -164,8 +164,9 @@ function sceneFrame(f: Settled) {
 }
 
 /** draw a figure; returns the recorded canvases (only what is new since the last call) and the frame's canvas id */
-export function render(spec: FigureSpec, measure?: (font: string, text: string) => number) {
+export function render(spec: FigureSpec, measure?: (font: string, text: string) => number, gate?: () => boolean) {
   if (measure) setMeasure(measure);
+  (classic() as any).setTextGate(gate || null);   // gate: true when a text the frame measures has words the host must learn (then nothing is drawn)
   const f = settle(spec); const c = new RecCanvas(); c.width = Math.round(f.W * f.dpr); c.height = Math.round(f.H * f.dpr);
   const ctx = c.getContext('2d') as any; const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: c.width, h: c.height, map: f.map, localRes: f.localRes };
   const t0 = Date.now();

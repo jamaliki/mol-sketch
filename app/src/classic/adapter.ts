@@ -31,8 +31,20 @@ export function cfgFromStyle(style: Style, cam: { yaw: number; pitch: number; ro
 
 /** A one-keyframe scene from a Structure, with the atom ids the old loader used (so seeds, and thus the drawing, match the page).
     Positions are rotated by `base` (the PCA orientation) so the engine's yaw/pitch act on the same frame as the app's camera. */
+const keyframes = new WeakMap<Structure, { base: string; kf: any; ids: string[] }>();   // a structure's keyframe, per base rotation: built once, shared by every drawing of it
 export function sceneFromStructure(s: Structure, style: Style, overrides: Record<string, string>, base: Float32Array, fitPoints: Float32Array, labels: any[] = []) {
   const rot = (x: number, y: number, z: number) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
+  const bk = Array.from(base).join(','); let hit = keyframes.get(s);
+  if (!hit || hit.base !== bk) { hit = { base: bk, ...keyframeOf(s, rot) }; keyframes.set(s, hit) }
+  (sceneFromStructure as any).lastIds = hit.ids;
+  const fp = new Float32Array(fitPoints.length); for (let i = 0; i < fitPoints.length; i += 3) { const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]); fp[i] = r[0]; fp[i + 1] = r[1]; fp[i + 2] = r[2] }
+  return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: fp, keyframes: [hit.kf] };
+}
+/** a structure's keyframe of its own (not the shared one): for stacks, whose keyframes are edited (lone pairs, charges) */
+export function freshKeyframe(s: Structure, base: Float32Array) {
+  return keyframeOf(s, (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z]).kf;
+}
+function keyframeOf(s: Structure, rot: (x: number, y: number, z: number) => number[]) {
   const atoms: Record<string, any> = {}; const ids: string[] = [];
   for (const res of s.residues) {
     const chain = res.chain ? '.' + res.chain : '';
@@ -45,9 +57,7 @@ export function sceneFromStructure(s: Structure, style: Style, overrides: Record
     }
   }
   const bonds: [string, string, number][] = []; for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], 1]);
-  (sceneFromStructure as any).lastIds = ids;
-  const fp = new Float32Array(fitPoints.length); for (let i = 0; i < fitPoints.length; i += 3) { const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]); fp[i] = r[0]; fp[i + 1] = r[1]; fp[i + 2] = r[2] }
-  return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: fp, keyframes: [{ name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }] };
+  return { kf: { name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }, ids };
 }
 
 /** Draw the current structure with the classic engine onto a 2D context of the renderer's pixel size. Returns ms. */

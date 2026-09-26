@@ -15,7 +15,8 @@ class Noise1{constructor(rng,n=48){this.v=[];for(let i=0;i<n;i++)this.v.push(rng
 const RGBC=new Map(),MIXC=new Map();   // parsed and mixed colours: a drawing asks for the same few thousands of times
 function hexToRgb(h){let v=RGBC.get(h);if(v)return v;let x=h.replace('#','');if(x.length===3)x=x.split('').map(c=>c+c).join('');const n=parseInt(x,16);v=[(n>>16)&255,(n>>8)&255,n&255];if(RGBC.size>4096)RGBC.clear();RGBC.set(h,v);return v}
 function rgba(h,a){const[r,g,b]=hexToRgb(h);return`rgba(${r},${g},${b},${a})`}
-function mix(h1,h2,t){const k=h1+h2+t;let r=MIXC.get(k);if(r!==undefined)return r;const a=hexToRgb(h1),b=hexToRgb(h2);const c=a.map((v,i)=>Math.round(lerp(v,b[i],t)));r='#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');if(MIXC.size>8192)MIXC.clear();MIXC.set(k,r);return r}
+function mix(h1,h2,t){let m1=MIXC.get(h1);if(!m1)MIXC.set(h1,m1=new Map());let m2=m1.get(h2);if(!m2)m1.set(h2,m2=new Map());let r=m2.get(t);if(r!==undefined)return r;   // keyed by value: no strings built to look one up
+  const a=hexToRgb(h1),b=hexToRgb(h2);const c=a.map((v,i)=>Math.round(lerp(v,b[i],t)));r='#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');if(m2.size>4096)m2.clear();m2.set(t,r);return r}
 function luminance(h){const[r,g,b]=hexToRgb(h);return(0.2126*r+0.7152*g+0.0722*b)/255}
 
 /* ============================ config ============================ */
@@ -130,7 +131,13 @@ function pathPos(K,id,p0,p1,t){const P=K.path;if(!P||!P.length||t<=0||t>=1)retur
   const n=P.length+1;const s=t*n;const i=Math.floor(s);const f=s-i;
   const at=k=>k<=0?p0:k>=n?p1:(P[k-1][id]||null);
   const q0=at(i),q1=at(i+1);if(!q0||!q1)return lerp3(p0,p1,t);return lerp3(q0,q1,f)}
+// a structure (one keyframe, held, without arrows or a path) is in the same state at every frame: sampled once
+let SAMPLED={k:null,rev:null,st:null};   // (the app counts a scene's edits in _rev: an edited keyframe is sampled again)
 function sampleState(frame){
+  const K=scene.keyframes.length===1?scene.keyframes[0]:null;
+  if(K&&!(K.arrows&&K.arrows.length)&&!(K.path&&K.path.length)&&locate(frame).seg.type==='hold'){if(SAMPLED.k!==K||SAMPLED.rev!==scene._rev)SAMPLED={k:K,rev:scene._rev,st:sampleStateAt(frame)};return SAMPLED.st}
+  return sampleStateAt(frame)}
+function sampleStateAt(frame){
   const n=scene.keyframes.length;const {seg,t}=locate(frame);
   const Ki=scene.keyframes[seg.kf];
   const nextIdx=(seg.kf+1)%n;
@@ -1586,6 +1593,10 @@ function renderFrame(ctx,W,H,frame,dpr){
   TEX=1;frameView(frame);
   const drawn=Math.floor(frame/Math.max(1,cfg.stepEvery))*Math.max(1,cfg.stepEvery);
   const st=sampleState(drawn);
+  // a host that measures text itself (the Python package) cannot answer at once: it hears of the words it has not
+  // measured when the frame is done, and draws the frame again. Every text a frame measures is looked at here first, and
+  // if the host would have to learn a word the frame stops before drawing anything (a large figure is not drawn twice)
+  if(textGate){probeTexts(ctx,st);if(textGate())return st}
   const boil=Math.floor(drawn/Math.max(1,cfg.boilEvery));
   const seedBase=boil*7919;
   computeFit();const proj=makeProjector(W,H);TEX=cfg.rep.textureScale==='object'?clamp(proj.pxPerA/48,0.35,6):1;
@@ -1675,6 +1686,15 @@ function grainOverlay(W,H,dpr,light){
   x.lineWidth=0.7;for(let i=0;i<260;i++){const px=rng()*W,py=rng()*H,an=rng()*Math.PI,l=8+rng()*30;x.strokeStyle=light?`rgba(70,55,35,${0.05+rng()*0.08})`:`rgba(255,245,225,${0.04+rng()*0.07})`;x.beginPath();x.moveTo(px,py);x.lineTo(px+Math.cos(an)*l,py+Math.sin(an)*l);x.stroke()}
   grainCache.key=key;grainCache.canvas=c;return c;
 }
+let textGate=null;   // () => true when the host has words to learn (see renderFrame)
+/* the texts a frame measures (the map's caption, figure labels, the scene's captions), in their fonts, whole: the host
+   measures words, so a whole text asks for every word its wrapping will */
+function probeTexts(ctx,st){const S=cfg.style,SH=cfg.show;const fontFam=S.font==='Plain sans'?'"IBM Plex Sans", system-ui, sans-serif':`"${S.font}", "Caveat", cursive`;
+  ctx.save();const M=scene.map;
+  if(M&&M.opts.caption&&M.caption){ctx.font=`${Math.max(9,Math.round(S.labelSize*0.6))}px "IBM Plex Sans", system-ui, sans-serif`;ctx.measureText(M.caption+' · the rest of the assembly (not in the model) left out')}
+  if(!SH.noLabels&&SH.figLabels!==false)for(const l of (scene.labels||[])){ctx.font=labelFont(Math.max(6,Math.round(S.labelSize*(l.size||1))));ctx.measureText(String(l.text||''))}
+  if(SH.caption){ctx.font=`500 ${S.captionSize}px ${fontFam}`;for(const c of st.captions||[])if(c.text)ctx.measureText(c.text)}
+  ctx.restore()}
 function wrapText(ctx,text,x,yBottom,maxW,lh){
   const words=text.split(' ');const lines=[];let cur='';
   for(const w of words){const t=cur?cur+' '+w:w;if(ctx.measureText(t).width>maxW&&cur){lines.push(cur);cur=w}else cur=t}
@@ -1689,5 +1709,6 @@ return {
   renderFrame, sampleState, locate, buildTimeline, demoScene, compileSel, projectFrame, figLabelBoxes, viewAt,
   DEFAULT_CFG, PRESETS, GROUP_PALETTE, SUBUNIT_COLS,
   invalidatePaper(){paperCache.key='';baseCache.key='';grainCache.key=''},
+  setTextGate(f){textGate=f||null},
 };
 }

@@ -8,7 +8,7 @@ import { GROUP_PALETTE } from './model/color';
 import { buildPanel } from './app/panel';
 import { OrbitControls } from './app/controls';
 import { drawSketch } from './ink/sketch';
-import { renderClassic, renderScene, classic, sceneFromStructure, cfgFromStyle, mapBasis, mapLevel } from './classic/adapter';
+import { renderClassic, renderScene, classic, sceneFromStructure, freshKeyframe, cfgFromStyle, mapBasis, mapLevel } from './classic/adapter';
 import { parseMRC, downsample, sampleMap, type DensityMap } from './model/map';
 import { pcaBasis } from './render/renderer';
 import { sceneFitPoints, structureFromState, type SceneDoc } from './classic/scene';
@@ -76,7 +76,7 @@ function loadStack(files: { name: string; text: string }[]) {
   files.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   const structs = files.map(f => parseStructure(f.text, f.name.replace(/\.(pdb|ent|cif|mmcif)$/i, '')));
   const base = pcaBasis(structs[0]); const one = structs.length === 1;
-  const keyframes = structs.map(st => { const sc = sceneFromStructure(st, style, {}, base, new Float32Array(0)); const k = sc.keyframes[0]; return { name: st.name, hold: one ? 24 : 0, transition: one ? 0 : 2, atoms: k.atoms, bonds: k.bonds, arrows: [] } });
+  const keyframes = structs.map(st => { const k = freshKeyframe(st, base); return { name: st.name, hold: one ? 24 : 0, transition: one ? 0 : 2, atoms: k.atoms, bonds: k.bonds, arrows: [] } });
   const hasPoly = structs[0].residues.some(r => !r.het);
   const doc: SceneDoc = { name: files.length > 1 ? 'PDB stack' : structs[0].name, reps: { sticks: hasPoly ? 'hetatm and not water' : 'all', cartoon: hasPoly ? 'polymer' : '', surface: '' }, groupColors: {}, view: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 }, keyframes };
   (doc as any).fromPdb = true;

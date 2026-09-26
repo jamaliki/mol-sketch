@@ -70,7 +70,7 @@ globalThis.__mapBuf = (n) => { __MB = new Float32Array(n); return __MB.buffer };
 globalThis.__putMap = (ref, header) => { const r = MolSketchCore.putMap(ref, JSON.parse(header), __MB); __MB = null; return r };
 globalThis.__abort = null;
 globalThis.__render = (spec) => { __miss = []; __abort = null; let r;
-  try { r = MolSketchCore.render(JSON.parse(spec), __measure) } catch (e) { __last = (e && e.chunks) || []; __abort = e && e.canvas; throw e }
+  try { r = MolSketchCore.render(JSON.parse(spec), __measure, () => __miss.length > 0) /* words to learn: the frame stops before drawing */ } catch (e) { __last = (e && e.chunks) || []; __abort = e && e.canvas; throw e }
   __last = r.chunks;
   return JSON.stringify({ canvas: r.canvas, width: r.width, height: r.height, ms: r.ms, miss: __miss, held: r.chunks.length }) };
 globalThis.__heldJson = (k) => { const c = __last[k]; return JSON.stringify({ canvases: c.canvases, paints: c.paints, dead: c.dead }) };

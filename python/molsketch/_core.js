@@ -1865,14 +1865,17 @@
       return `rgba(${r},${g2},${b},${a})`;
     }
     function mix(h1, h2, t) {
-      const k = h1 + h2 + t;
-      let r = MIXC.get(k);
+      let m1 = MIXC.get(h1);
+      if (!m1) MIXC.set(h1, m1 = /* @__PURE__ */ new Map());
+      let m2 = m1.get(h2);
+      if (!m2) m1.set(h2, m2 = /* @__PURE__ */ new Map());
+      let r = m2.get(t);
       if (r !== void 0) return r;
       const a = hexToRgb(h1), b = hexToRgb(h2);
       const c = a.map((v, i) => Math.round(lerp(v, b[i], t)));
       r = "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
-      if (MIXC.size > 8192) MIXC.clear();
-      MIXC.set(k, r);
+      if (m2.size > 4096) m2.clear();
+      m2.set(t, r);
       return r;
     }
     function luminance(h) {
@@ -2154,7 +2157,16 @@
       if (!q0 || !q1) return lerp3(p0, p1, t);
       return lerp3(q0, q1, f2);
     }
+    let SAMPLED = { k: null, rev: null, st: null };
     function sampleState(frame) {
+      const K = scene.keyframes.length === 1 ? scene.keyframes[0] : null;
+      if (K && !(K.arrows && K.arrows.length) && !(K.path && K.path.length) && locate(frame).seg.type === "hold") {
+        if (SAMPLED.k !== K || SAMPLED.rev !== scene._rev) SAMPLED = { k: K, rev: scene._rev, st: sampleStateAt(frame) };
+        return SAMPLED.st;
+      }
+      return sampleStateAt(frame);
+    }
+    function sampleStateAt(frame) {
       const n = scene.keyframes.length;
       const { seg, t } = locate(frame);
       const Ki = scene.keyframes[seg.kf];
@@ -6031,6 +6043,10 @@
       frameView(frame);
       const drawn = Math.floor(frame / Math.max(1, cfg.stepEvery)) * Math.max(1, cfg.stepEvery);
       const st = sampleState(drawn);
+      if (textGate) {
+        probeTexts(ctx, st);
+        if (textGate()) return st;
+      }
       const boil = Math.floor(drawn / Math.max(1, cfg.boilEvery));
       const seedBase = boil * 7919;
       computeFit();
@@ -6263,6 +6279,26 @@
       grainCache.canvas = c;
       return c;
     }
+    let textGate = null;
+    function probeTexts(ctx, st) {
+      const S = cfg.style, SH = cfg.show;
+      const fontFam = S.font === "Plain sans" ? '"IBM Plex Sans", system-ui, sans-serif' : `"${S.font}", "Caveat", cursive`;
+      ctx.save();
+      const M = scene.map;
+      if (M && M.opts.caption && M.caption) {
+        ctx.font = `${Math.max(9, Math.round(S.labelSize * 0.6))}px "IBM Plex Sans", system-ui, sans-serif`;
+        ctx.measureText(M.caption + " \xB7 the rest of the assembly (not in the model) left out");
+      }
+      if (!SH.noLabels && SH.figLabels !== false) for (const l of scene.labels || []) {
+        ctx.font = labelFont(Math.max(6, Math.round(S.labelSize * (l.size || 1))));
+        ctx.measureText(String(l.text || ""));
+      }
+      if (SH.caption) {
+        ctx.font = `500 ${S.captionSize}px ${fontFam}`;
+        for (const c of st.captions || []) if (c.text) ctx.measureText(c.text);
+      }
+      ctx.restore();
+    }
     function wrapText(ctx, text, x, yBottom, maxW, lh) {
       const words = text.split(" ");
       const lines2 = [];
@@ -6314,6 +6350,9 @@
         paperCache.key = "";
         baseCache.key = "";
         grainCache.key = "";
+      },
+      setTextGate(f2) {
+        textGate = f2 || null;
       }
     };
   }
@@ -7201,8 +7240,29 @@
       }
     };
   }
+  var keyframes = /* @__PURE__ */ new WeakMap();
   function sceneFromStructure(s, style, overrides, base, fitPoints, labels = []) {
     const rot = (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
+    const bk = Array.from(base).join(",");
+    let hit = keyframes.get(s);
+    if (!hit || hit.base !== bk) {
+      hit = { base: bk, ...keyframeOf(s, rot) };
+      keyframes.set(s, hit);
+    }
+    sceneFromStructure.lastIds = hit.ids;
+    const fp = new Float32Array(fitPoints.length);
+    for (let i = 0; i < fitPoints.length; i += 3) {
+      const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]);
+      fp[i] = r[0];
+      fp[i + 1] = r[1];
+      fp[i + 2] = r[2];
+    }
+    return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: fp, keyframes: [hit.kf] };
+  }
+  function freshKeyframe(s, base) {
+    return keyframeOf(s, (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z]).kf;
+  }
+  function keyframeOf(s, rot) {
     const atoms = {};
     const ids = [];
     for (const res of s.residues) {
@@ -7231,15 +7291,7 @@
     }
     const bonds = [];
     for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], 1]);
-    sceneFromStructure.lastIds = ids;
-    const fp = new Float32Array(fitPoints.length);
-    for (let i = 0; i < fitPoints.length; i += 3) {
-      const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]);
-      fp[i] = r[0];
-      fp[i + 1] = r[1];
-      fp[i + 2] = r[2];
-    }
-    return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: fp, keyframes: [{ name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }] };
+    return { kf: { name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }, ids };
   }
   function renderClassic(ctx, R, style, boil, dpr = 1) {
     const t0 = performance.now();
@@ -7720,13 +7772,12 @@
     const structs = files.map((f2) => structureOf(f2.text, f2.name));
     const base = pcaBasis(structs[0]);
     const one = structs.length === 1;
-    const keyframes = structs.map((st) => {
-      const sc = sceneFromStructure(st, style, {}, base, new Float32Array(0));
-      const k = sc.keyframes[0];
+    const keyframes2 = structs.map((st) => {
+      const k = freshKeyframe(st, base);
       return { name: st.name, hold: one ? 24 : 0, transition: one ? 0 : 2, atoms: k.atoms, bonds: k.bonds, arrows: [] };
     });
     const hasPoly = structs[0].residues.some((r) => !r.het);
-    const doc = { name: files.length > 1 ? "PDB stack" : structs[0].name, reps: { sticks: hasPoly ? "hetatm and not water" : "all", cartoon: hasPoly ? "polymer" : "", surface: "" }, groupColors: {}, view: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 }, keyframes };
+    const doc = { name: files.length > 1 ? "PDB stack" : structs[0].name, reps: { sticks: hasPoly ? "hetatm and not water" : "all", cartoon: hasPoly ? "polymer" : "", surface: "" }, groupColors: {}, view: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 }, keyframes: keyframes2 };
     doc.fromPdb = true;
     return doc;
   }
@@ -7851,8 +7902,9 @@
       if (v) Object.assign(f2.camera, { yaw: v.yaw, pitch: v.pitch, roll: v.roll, zoom: v.zoom, panX: v.panX, panY: v.panY });
     }
   }
-  function render(spec, measure) {
+  function render(spec, measure, gate) {
     if (measure) setMeasure(measure);
+    classic().setTextGate(gate || null);
     const f2 = settle(spec);
     const c = new RecCanvas();
     c.width = Math.round(f2.W * f2.dpr);
