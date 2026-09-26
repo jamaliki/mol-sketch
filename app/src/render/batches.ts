@@ -1,10 +1,10 @@
 /* GPU batches: instanced spheres and cylinders, and indexed triangle meshes. Each knows how to bind and draw itself. */
 import { Program, buffer } from './gl';
-import { SPHERE_VS, SPHERE_FS, CYL_VS, CYL_FS, MESH_VS, MESH_FS } from './shaders/gbuffer';
+import { SPHERE_VS, SPHERE_FS, CYL_VS, CYL_FS, MESH_VS, MESH_FS, MAP_VS, MAP_FS } from './shaders/gbuffer';
 
 export class Programs {
-  sphere: Program; cyl: Program; mesh: Program;
-  constructor(gl: WebGL2RenderingContext) { this.sphere = new Program(gl, SPHERE_VS, SPHERE_FS); this.cyl = new Program(gl, CYL_VS, CYL_FS); this.mesh = new Program(gl, MESH_VS, MESH_FS) }
+  sphere: Program; cyl: Program; mesh: Program; map: Program;
+  constructor(gl: WebGL2RenderingContext) { this.sphere = new Program(gl, SPHERE_VS, SPHERE_FS); this.cyl = new Program(gl, CYL_VS, CYL_FS); this.mesh = new Program(gl, MESH_VS, MESH_FS); this.map = new Program(gl, MAP_VS, MAP_FS) }
 }
 
 /** Instance layout (floats): center 3, radius 1, color 3, id 1, cls 1 = 9 */

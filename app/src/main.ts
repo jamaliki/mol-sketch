@@ -197,7 +197,7 @@ async function loadMapBytes(bytes: ArrayBuffer, name: string, meta: { level?: nu
   let m = parseMRC(await gunzip(bytes), name.replace(/\.(map|mrc|ccp4)(\.gz)?$/i, ''));
   const big = Math.max(m.nx, m.ny, m.nz); if (big > 320) m = downsample(m, 320);   // as molsketch.read_map does
   if (meta.level != null) m.level = meta.level; if (meta.mass) m.mass = meta.mass; if (meta.resolution) m.resolution = meta.resolution;
-  mark('load map'); mapObj = m; mapRaw = { bytes, name, ...meta }; mapRef = null; (R as any).map = m;
+  mark('load map'); mapObj = m; mapRaw = { bytes, name, ...meta }; mapRef = null; R.map = m;
   if (!R.structure && !sceneDoc) { R.camera.base = mapBasis(m, mapLevel(m, style)); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.roll = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0 }
   rebuild(); panel.refresh(); status(`${m.name}: ${m.nx}×${m.ny}×${m.nz} at ${m.step[0].toFixed(2)} Å${m.binned && m.binned > 1 ? ` (averaged ${m.binned}×)` : ''}${m.level != null ? `, recommended level ${m.level}` : ''} · read in ${(performance.now() - t0).toFixed(0)} ms`);
 }
@@ -206,7 +206,7 @@ function unloadStructure(why: string) {
   sceneDoc = null; structureText = null; R.fitOverride = null; R.labels = []; selLabel = -1; R.setStructure(null); inputs = sdk ? new InputSync(sdk) : null;
   status(why ? `showing the map on its own (${why}; open that entry to see the model in it)` : 'showing the map on its own');
 }
-function clearMap() { mark('remove map'); mapObj = null; mapRaw = null; mapRef = null; (R as any).map = null; rebuild(); panel.refresh(); status('map removed') }
+function clearMap() { mark('remove map'); mapObj = null; mapRaw = null; mapRef = null; R.map = null; rebuild(); panel.refresh(); status('map removed') }
 /** an EMDB entry's primary map, with the depositors' recommended contour level and the sample's mass */
 async function fetchEmdb(key: string) {
   const m = key.trim().match(/^(?:emd[-_]?)?(\d{4,6})$/i); if (!m) throw new Error(`"${key}" is not an EMDB ID, e.g. EMD-11638`);

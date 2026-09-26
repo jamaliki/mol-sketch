@@ -9,6 +9,10 @@ import { ColorScheme } from '../model/color';
 import { pcaBasis } from './pca';
 import { buildSticks, buildSurface, buildCartoon, REP_STICKS, REP_CARTOON, REP_SURFACE, type CartoonRun } from './geometry';
 import { type Style, hexToRgb } from '../style';
+import type { DensityMap } from '../model/map';
+import { prepareMap, preparedMap, type EngineMap } from '../classic/mapprep';
+
+const MAP_CLS = 10, MAP_REP = 4, MAP_ID = 0xfffff0;
 
 export class Renderer {
   gl: WebGL2RenderingContext;
@@ -31,6 +35,9 @@ export class Renderer {
   /** when set (scenes), the camera fits these points instead of the drawn atoms */
   fitOverride: Float32Array | null = null;
   frame = 0;
+  /** a density map drawn with the structure (or on its own), and a local-resolution map for its lines */
+  map: DensityMap | null = null; localRes: DensityMap | null = null;
+  mapBatch: MeshBatch | null = null; private mapDrawn: EngineMap['levels'][number] | null = null; private mapCol = '';
   stats = { atoms: 0, instances: 0, triangles: 0, buildMs: 0, frameMs: 0 };
 
   constructor(public canvas: HTMLCanvasElement) {
@@ -60,7 +67,7 @@ export class Renderer {
     const gl = this.gl; const t0 = performance.now();
     for (const b of this.batches.spheres) b.dispose(gl); for (const b of this.batches.cyls) b.dispose(gl); for (const b of this.batches.meshes) b.dispose(gl);
     this.batches = { spheres: [], cyls: [], meshes: [] };
-    const s = this.structure; if (!s) return;
+    const s = this.structure; if (!s) { this.rebuildMap(style, null); return }
     const scheme = new ColorScheme(s, style, this.overrides);
     let inst = 0, tris = 0;
     const shown = new Uint8Array(s.count);
@@ -84,10 +91,43 @@ export class Renderer {
     const pts = new Float32Array((n || s.count) * 3); let k = 0;
     for (let i = 0; i < s.count; i++) if (!n || shown[i]) { pts[k++] = s.x[i]; pts[k++] = s.y[i]; pts[k++] = s.z[i] }
     this.fitPoints = (this.fitOverride ?? pts) as Float32Array; this.camera.setFitPoints(this.fitPoints);
+    this.rebuildMap(style, s);
     this.stats.atoms = s.count; this.stats.instances = inst; this.stats.triangles = tris; this.stats.buildMs = performance.now() - t0;
   }
 
+  /** the map's isosurface as the drawing prepares it (the same surface, from the same cache), back in the structure's
+      frame; with a model it is drawn behind it, as the drawing does by default; on its own the camera fits it */
+  private rebuildMap(style: Style, s: Structure | null, wait = true) {
+    this.mapBatch?.dispose(this.gl); this.mapBatch = null; this.mapDrawn = null; this.camera.pushBehind = false;
+    const m = this.map; if (!m || style.map.visible === false) return;
+    const em = wait ? prepareMap(m, style, s, this.camera.base, this.localRes) : preparedMap(m, style, s, this.camera.base, this.localRes); if (!em) return;
+    const L = em.levels[em.primary] || em.levels[0]; if (!L || !L.tri.length) return;
+    this.mapDrawn = L; this.mapCol = style.palette.surface + style.palette.paper;
+    const b = this.camera.base, nv = L.pos.length / 3, verts = new Float32Array(nv * 11);
+    const paper = hexToRgb(style.palette.paper), col = hexToRgb(style.palette.surface).map((c, k) => c + (paper[k] - c) * 0.75);   // paper with a tint, as the drawing lays it
+    const un = (a: Float32Array, v: number, o: number) => { const x = a[v * 3], y = a[v * 3 + 1], z = a[v * 3 + 2];
+      verts[o] = b[0] * x + b[1] * y + b[2] * z; verts[o + 1] = b[4] * x + b[5] * y + b[6] * z; verts[o + 2] = b[8] * x + b[9] * y + b[10] * z };
+    for (let v = 0; v < nv; v++) { const o = v * 11; un(L.pos, v, o); un(L.nor, v, o + 3); verts[o + 6] = col[0]; verts[o + 7] = col[1]; verts[o + 8] = col[2]; verts[o + 9] = MAP_ID; verts[o + 10] = MAP_CLS }
+    this.mapBatch = new MeshBatch(this.gl, this.progs.map, verts, L.tri, MAP_REP);
+    this.camera.pushBehind = !!s && s.count > 0;
+    if (!s) { // on its own: fitted to its surface (every few vertices are enough)
+      const k = Math.max(1, Math.floor(nv / 20000)), pts = new Float32Array(Math.ceil(nv / k) * 3); let n = 0, cx = 0, cy = 0, cz = 0;
+      for (let v = 0; v < nv; v += k) { pts[n++] = verts[v * 11]; pts[n++] = verts[v * 11 + 1]; pts[n++] = verts[v * 11 + 2]; cx += verts[v * 11]; cy += verts[v * 11 + 1]; cz += verts[v * 11 + 2] }
+      const c = n / 3 || 1; this.focus = [cx / c, cy / c, cz / c];
+      this.fitPoints = (this.fitOverride ?? pts.subarray(0, n)) as Float32Array; this.camera.setFitPoints(this.fitPoints);
+    }
+  }
+
+  /** a map setting changed since the last rebuild (the level, say, which only redraws): take up the surface the
+      drawing prepared, once it has (the preview never waits for a map to be prepared) */
+  private refreshMap(style: Style) {
+    if (!this.map || style.map.visible === false) { if (this.mapBatch) this.rebuildMap(style, this.structure, false); return }
+    const em = preparedMap(this.map, style, this.structure, this.camera.base, this.localRes), L = em ? em.levels[em.primary] || em.levels[0] : null;
+    if (L ? L !== this.mapDrawn || this.mapCol !== style.palette.surface + style.palette.paper : this.mapBatch && !this.map) this.rebuildMap(style, this.structure, false);
+  }
+
   render(style: Style) {
+    this.refreshMap(style);
     const gl = this.gl; const t0 = performance.now(); const cam = this.camera;
     const F = cam.compute(this.w, this.h); this.frameInfo = F; this.focus = [F.cx, F.cy, F.cz];
     const view = F.view, proj = F.proj; const ortho = F.ortho ? 1 : 0; this.lastView = view; this.lastProj = proj;
@@ -101,6 +141,7 @@ export class Renderer {
     for (const b of this.batches.cyls) { P.cyl.f('u_rep', b.rep); b.draw(gl) }
     P.mesh.use().m4('u_view', view).m4('u_proj', proj).f('u_near', F.near).f('u_far', F.far);
     for (const b of this.batches.meshes) { P.mesh.f('u_rep', b.rep); b.draw(gl) }
+    if (this.mapBatch) { P.map.use().m4('u_view', view).m4('u_proj', proj).f('u_near', F.near).f('u_far', F.far).f('u_rep', MAP_REP).f('u_push', F.push); this.mapBatch.draw(gl) }
     gl.disable(gl.DEPTH_TEST);
     // ---- edges ----
     this.edge.bind();

@@ -56,7 +56,7 @@ export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style:
   E.cfg = cfgFromStyle(style, R.camera, false);
   if (s) { E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels); (E.scene as any)._src = s; (E.scene as any).atomIds = (sceneFromStructure as any).lastIds }   // which structure it was built from
   else E.scene = mapScene(map!, style, R.camera.base, R.labels);
-  (E.scene as any).map = map ? prepareMap(map, style, s, R.camera.base, (R as any).localRes || null) : null;
+  (E.scene as any).map = map ? prepareMap(map, style, s, R.camera.base, R.localRes || null) : null;
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, R.w, R.h); ctx.restore();
   E.renderFrame(ctx, R.w / dpr, R.h / dpr, boil, dpr);
   return performance.now() - t0;

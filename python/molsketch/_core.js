@@ -6761,10 +6761,14 @@
     const o = style.map;
     return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? m.level ?? m.mean + 3 * m.rms;
   }
+  function keyOf(whole, style, s, base, localRes) {
+    const o = style.map;
+    return JSON.stringify([mapLevel(whole, style), o.speck, o.smooth, o.crop, o.zone, o.finish, o.smoothing, o.style === "layers" ? o.levels : [1], o.carve, o.maxVoxels, o.localResolution, o.style === "mesh" ? o.meshSpacing : 0, o.context, s ? s.count : 0, Array.from(base), !!localRes]);
+  }
   function prepareMap(whole, style, s, base, localRes = null) {
     const o = style.map, level = mapLevel(whole, style);
     const factors = o.style === "layers" ? o.levels : [1];
-    const key = JSON.stringify([level, o.speck, o.smooth, o.crop, o.zone, o.finish, o.smoothing, factors, o.carve, o.maxVoxels, o.localResolution, o.style === "mesh" ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
+    const key = keyOf(whole, style, s, base, localRes);
     let per = cache2.get(whole);
     if (!per) cache2.set(whole, per = /* @__PURE__ */ new Map());
     const hit = per.get(key);
@@ -7283,6 +7287,8 @@
       // degrees; < 0.1 → orthographic
       /** rotation applied before yaw/pitch (PCA orientation of a loaded structure) */
       __publicField(this, "base", mat4Identity());
+      /** a density map is drawn behind what is fitted: the far plane leaves room for it (Frame.push) */
+      __publicField(this, "pushBehind", false);
       /** fractions of the height reserved for a caption at the bottom and a step label at the top (page: 0.13 / 0.05) */
       __publicField(this, "capFrac", 0);
       __publicField(this, "topFrac", 0);
@@ -7347,8 +7353,8 @@
       const offY = (capH - topH) / H - 2 * this.panY;
       const Dv = ortho ? F.zspan + 10 : D;
       const view = mat4Mul(mat4Translate(-F.rx, -F.ry, -Dv), mat4Mul(this.rotation, mat4Translate(-F.cx, -F.cy, -F.cz)));
-      const margin = F.zspan * 0.25 + 6;
-      const near = Math.max(0.05, Dv - F.zspan / 2 - margin), far = Dv + F.zspan / 2 + margin;
+      const margin = F.zspan * 0.25 + 6, push = this.pushBehind ? F.zspan + 16 : 0;
+      const near = Math.max(0.05, Dv - F.zspan / 2 - margin), far = Dv + F.zspan / 2 + margin + (push ? push + 12 : 0);
       const proj = new Float32Array(16);
       if (ortho) {
         proj[0] = 2 * base / W;
@@ -7367,7 +7373,7 @@
         proj[11] = -1;
         proj[14] = 2 * far * near / (near - far);
       }
-      return { view, proj, near, far, ortho, D: Dv, base, rx: F.rx, ry: F.ry, spanX: F.spanX, spanY: F.spanY, zspan: F.zspan, cx: F.cx, cy: F.cy, cz: F.cz, sceneNear: Dv - F.zspan / 2, sceneFar: Dv + F.zspan / 2 };
+      return { view, proj, near, far, ortho, D: Dv, base, rx: F.rx, ry: F.ry, spanX: F.spanX, spanY: F.spanY, zspan: F.zspan, cx: F.cx, cy: F.cy, cz: F.cz, sceneNear: Dv - F.zspan / 2, sceneFar: Dv + F.zspan / 2, push };
     }
     /** Where points land on a W×H canvas with the current view, as fractions of the canvas (x right, y down): the bounding box
         of `pts` (xyz triples; default: the fit points). */

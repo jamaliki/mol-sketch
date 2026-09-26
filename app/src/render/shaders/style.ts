@@ -139,7 +139,7 @@ void main(){
   vec4 alb = texture(u_albedo, v_uv); vec3 n = texture(u_normal, v_uv).xyz*2.0-1.0; int cls = int(alb.a*16.0 + 0.5);
   float dep = linDepth(texture(u_depth, v_uv).r);
   float fogK = 0.0;
-  if (cov > 0.5) { float dn = clamp((dep - u_sceneNear)/max(u_sceneFar - u_sceneNear, 1e-3), 0.0, 1.0); fogK = u_fog * smoothstep(u_fogStart, 1.0, dn); }
+  if (cov > 0.5 && cls != 10) { float dn = clamp((dep - u_sceneNear)/max(u_sceneFar - u_sceneNear, 1e-3), 0.0, 1.0); fogK = u_fog * smoothstep(u_fogStart, 1.0, dn); }   // a map behind the model is pushed back: not fogged
   float s = shade(n);
   float sq = smoothstep(0.35, 0.75, s);   // quantised-ish shadow
 
@@ -155,7 +155,7 @@ void main(){
       float sh = smoothstep(0.35, 0.75, shade(nn));
       float tone = 1.0 - u_tone*0.32*sh + u_tone*0.06*(1.0-sh);
       float dd = linDepth(texture(u_depth, uv).r); float dn = clamp((dd - u_sceneNear)/max(u_sceneFar - u_sceneNear, 1e-3), 0.0, 1.0);
-      float fk = u_fog * smoothstep(u_fogStart, 1.0, dn);
+      float fk = int(texture(u_albedo, uv).a*16.0 + 0.5) == 10 ? 0.0 : u_fog * smoothstep(u_fogStart, 1.0, dn);
       vec3 lc = mix(vec3(1.0), clamp(a*tone, 0.0, 1.0), 0.72);   // pigment is translucent: paper shows through
       lc = mix(lc, vec3(1.0), fk*0.85);
       float wgt = (1.0/float(u_layers)) * (0.85 + 0.3*vnoise(p*0.05 + sk));
@@ -179,7 +179,7 @@ void main(){
       else if (cls == 2) base = 0.35; else if (cls == 3) base = 0.35; else if (cls == 4) base = 0.6; else if (cls == 5) base = 0.4;
       else if (cls == 6) { draw = false; } else if (cls == 7) base = 0.35;
       else if (cls == 8) base = u_fill==1 ? 0.15 : 0.0;   // cartoon: shadow-side hatching only
-      else if (cls == 9) base = 0.0;
+      else if (cls == 9 || cls == 10) base = 0.0;
       if (cls == 1 && u_fill == 0) { base = 0.0; draw = true; }      // plain ink: carbon hatched only on the shadow side (base 0)
       float h = draw ? hatch(p, sq, cls, base, u_seed*0.37) : 0.0;
       vec3 hc = u_fill == 1 ? mix(alb.rgb, u_ink, 0.25) : u_ink;

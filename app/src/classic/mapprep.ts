@@ -39,10 +39,19 @@ export function mapBasis(m: DensityMap, level: number): Float32Array {
 /** the contour level a figure uses: the style's, else the map's recommended one, else mean + 3 σ */
 export function mapLevel(m: DensityMap, style: Style) { const o = style.map; return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? m.level ?? m.mean + 3 * m.rms }
 
+function keyOf(whole: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null) {
+  const o = style.map;
+  return JSON.stringify([mapLevel(whole, style), o.speck, o.smooth, o.crop, o.zone, o.finish, o.smoothing, o.style === 'layers' ? o.levels : [1], o.carve, o.maxVoxels, o.localResolution, o.style === 'mesh' ? o.meshSpacing : 0, o.context, s ? s.count : 0, Array.from(base), !!localRes]);
+}
+/** the prepared map if it is ready (cached), else null: for the preview, which does not wait for it */
+export function preparedMap(whole: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null = null): EngineMap | null {
+  const hit = cache.get(whole)?.get(keyOf(whole, style, s, base, localRes)); return hit ? { ...hit, opts: style.map } : null;
+}
+
 export function prepareMap(whole: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null = null): EngineMap {
   const o = style.map, level = mapLevel(whole, style);
   const factors = o.style === 'layers' ? o.levels : [1];
-  const key = JSON.stringify([level, o.speck, o.smooth, o.crop, o.zone, o.finish, o.smoothing, factors, o.carve, o.maxVoxels, o.localResolution, o.style === 'mesh' ? o.meshSpacing : 0, s ? s.count : 0, Array.from(base), !!localRes]);
+  const key = keyOf(whole, style, s, base, localRes);
   let per = cache.get(whole); if (!per) cache.set(whole, per = new Map());
   const hit = per.get(key); if (hit) return { ...hit, opts: o };
   // with a model: the map inside the model's box and a margin (a box, not a mask: density near the model that it does

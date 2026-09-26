@@ -1,7 +1,7 @@
 /* Shaders that write the G-buffer:
-   0: albedo rgb, a = material class / 16   (1 C, 2 N, 3 O, 4 S, 5 P, 6 H, 7 other element, 8 cartoon, 9 surface)
+   0: albedo rgb, a = material class / 16   (1 C, 2 N, 3 O, 4 S, 5 P, 6 H, 7 other element, 8 cartoon, 9 surface, 10 density map)
    1: view-space normal * 0.5 + 0.5, a = 1
-   2: object id (24 bit), a = representation / 4  (1 sticks, 2 cartoon, 3 surface)
+   2: object id (24 bit), a = representation / 4  (1 sticks, 2 cartoon, 3 surface, 4 density map)
    Depth: the hardware buffer; impostors write gl_FragDepth from the analytic hit. */
 
 export const GBUF_OUT = `
@@ -120,4 +120,29 @@ ${GBUF_OUT}
 void main(){
   vec3 n = normalize(v_n); if (!gl_FrontFacing) n = -n;
   writeG(v_color, v_cls, n, v_id, u_rep, v_z);
+}`;
+
+/* ---------- a density map's isosurface: a mesh whose depth can be pushed back by u_push Å, so a map drawn behind
+   its model stays behind it (the model is painted over it, as in the drawing) while its own folds still hide each other */
+export const MAP_VS = `#version 300 es
+precision highp float;
+uniform mat4 u_view, u_proj;
+in vec3 a_pos; in vec3 a_nrm; in vec3 a_color; in float a_id; in float a_cls;
+out vec3 v_n; out vec3 v_color; flat out float v_id; out float v_cls; out vec3 v_p;
+void main(){
+  v_n = mat3(u_view)*a_nrm; v_color = a_color; v_id = a_id; v_cls = a_cls;
+  vec4 pv = u_view*vec4(a_pos,1.0); v_p = pv.xyz;
+  gl_Position = u_proj*pv;
+}`;
+
+export const MAP_FS = `#version 300 es
+precision highp float;
+${DEPTH_FN}
+uniform float u_rep, u_push;
+in vec3 v_n; in vec3 v_color; flat in float v_id; in float v_cls; in vec3 v_p;
+${GBUF_OUT}
+void main(){
+  vec3 n = normalize(v_n); if (!gl_FrontFacing) n = -n;
+  gl_FragDepth = u_push > 0.0 ? fragDepth(vec3(v_p.xy, v_p.z - u_push)) : gl_FragCoord.z;
+  writeG(v_color, v_cls, n, v_id, u_rep, v_p.z);
 }`;

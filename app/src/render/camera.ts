@@ -25,6 +25,7 @@ export interface Frame {
   D: number; base: number; rx: number; ry: number; spanX: number; spanY: number; zspan: number;
   cx: number; cy: number; cz: number;           // fit centre, model units
   sceneNear: number; sceneFar: number;          // depth range of the fit box (for fog)
+  push: number;                                 // how far a map drawn behind the scene is pushed back, Å (0: none)
 }
 
 export class Camera {
@@ -32,6 +33,8 @@ export class Camera {
   fov = 20;                       // degrees; < 0.1 → orthographic
   /** rotation applied before yaw/pitch (PCA orientation of a loaded structure) */
   base: Mat4 = mat4Identity();
+  /** a density map is drawn behind what is fitted: the far plane leaves room for it (Frame.push) */
+  pushBehind = false;
   /** fractions of the height reserved for a caption at the bottom and a step label at the top (page: 0.13 / 0.05) */
   capFrac = 0; topFrac = 0;
   private pts: Float32Array = new Float32Array(0);
@@ -69,12 +72,12 @@ export class Camera {
     const offX = 2 * this.panX; const offY = (capH - topH) / H - 2 * this.panY;
     const Dv = ortho ? F.zspan + 10 : D;   // eye distance used for the view matrix (any value works for ortho)
     const view = mat4Mul(mat4Translate(-F.rx, -F.ry, -Dv), mat4Mul(this.rotation, mat4Translate(-F.cx, -F.cy, -F.cz)));
-    const margin = F.zspan * 0.25 + 6;
-    const near = Math.max(0.05, Dv - F.zspan / 2 - margin), far = Dv + F.zspan / 2 + margin;
+    const margin = F.zspan * 0.25 + 6, push = this.pushBehind ? F.zspan + 16 : 0;   // room behind the scene for a map drawn behind it
+    const near = Math.max(0.05, Dv - F.zspan / 2 - margin), far = Dv + F.zspan / 2 + margin + (push ? push + 12 : 0);
     const proj = new Float32Array(16);
     if (ortho) { proj[0] = 2 * base / W; proj[5] = 2 * base / H; proj[10] = -2 / (far - near); proj[14] = -(far + near) / (far - near); proj[15] = 1; proj[12] = offX; proj[13] = offY }
     else { proj[0] = 2 * base * D / W; proj[5] = 2 * base * D / H; proj[8] = -offX; proj[9] = -offY; proj[10] = (far + near) / (near - far); proj[11] = -1; proj[14] = 2 * far * near / (near - far) }
-    return { view, proj, near, far, ortho, D: Dv, base, rx: F.rx, ry: F.ry, spanX: F.spanX, spanY: F.spanY, zspan: F.zspan, cx: F.cx, cy: F.cy, cz: F.cz, sceneNear: Dv - F.zspan / 2, sceneFar: Dv + F.zspan / 2 };
+    return { view, proj, near, far, ortho, D: Dv, base, rx: F.rx, ry: F.ry, spanX: F.spanX, spanY: F.spanY, zspan: F.zspan, cx: F.cx, cy: F.cy, cz: F.cz, sceneNear: Dv - F.zspan / 2, sceneFar: Dv + F.zspan / 2, push };
   }
 
   /** Where points land on a W×H canvas with the current view, as fractions of the canvas (x right, y down): the bounding box
