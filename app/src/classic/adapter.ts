@@ -5,7 +5,7 @@ import type { Renderer } from '../render/renderer';
 import type { Structure } from '../model/structure';
 import type { Style } from '../style';
 import type { DensityMap } from '../model/map';
-import { prepareMap, mapBasis, mapLevel, type EngineMap } from './mapprep';
+import { prepareMap, mapBasis, mapLevel, closeUpFit, type EngineMap } from './mapprep';
 
 /** where the drawing gets its prepared map: prepared in line (the headless core), or from the app's worker, which
     answers null while it prepares it (the drawing then waits) */
@@ -71,7 +71,7 @@ export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style:
   const t0 = performance.now(); const E = classic(); const s = R.structure; const map: DensityMap | null = style.map.visible === false ? null : (R as any).map || null;   // hidden: kept, not drawn if (!s && !map) return 0;
   const em = map ? mapSource(map, style, s, R.camera.base, R.localRes || null) : null; if (map && !em) return -1;   // the map is being prepared: nothing drawn yet
   E.cfg = cfgFromStyle(style, R.camera, false);
-  if (s) { E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels); (E.scene as any)._src = s; (E.scene as any).atomIds = (sceneFromStructure as any).lastIds }   // which structure it was built from
+  if (s) { E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints) : R.fitPoints, R.labels); (E.scene as any)._src = s; (E.scene as any).atomIds = (sceneFromStructure as any).lastIds }   // which structure it was built from
   else E.scene = mapScene(map!, style, R.camera.base, R.labels, em!);
   (E.scene as any).map = em;
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, R.w, R.h); ctx.restore();

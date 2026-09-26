@@ -229,3 +229,15 @@ function nearestAtom(s: Structure | null, atoms: number[]) {
     return [best, Math.sqrt(bd)];
   };
 }
+
+/** a close-up's density surface, back in the structure's frame (a few thousand of its vertices): with the atoms, what a
+    close-up is framed on, so its density is not cut by the frame */
+export function closeUpFit(em: EngineMap, base: Float32Array, atoms: Float32Array): Float32Array {
+  const L = em.levels[em.primary] || em.levels[0]; if (!em.closeUp || !L) return atoms;
+  const used = new Uint8Array(L.pos.length / 3); for (let t = 0; t < L.tri.length; t++) used[L.tri[t]] = 1;   // what is drawn (carving leaves vertices unused)
+  const vs: number[] = []; for (let v = 0; v < used.length; v++) if (used[v]) vs.push(v);
+  const k = Math.max(1, Math.floor(vs.length / 4000)), out = new Float32Array(atoms.length + Math.ceil(vs.length / k) * 3); out.set(atoms); let o = atoms.length;
+  for (let q = 0; q < vs.length; q += k) { const v = vs[q], x = L.pos[v * 3], y = L.pos[v * 3 + 1], z = L.pos[v * 3 + 2];
+    out[o++] = base[0] * x + base[1] * y + base[2] * z; out[o++] = base[4] * x + base[5] * y + base[6] * z; out[o++] = base[8] * x + base[9] * y + base[10] * z }
+  return out.subarray(0, o);
+}

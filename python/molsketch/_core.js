@@ -7194,6 +7194,24 @@
       return [best, Math.sqrt(bd)];
     };
   }
+  function closeUpFit(em, base, atoms) {
+    const L = em.levels[em.primary] || em.levels[0];
+    if (!em.closeUp || !L) return atoms;
+    const used = new Uint8Array(L.pos.length / 3);
+    for (let t = 0; t < L.tri.length; t++) used[L.tri[t]] = 1;
+    const vs = [];
+    for (let v = 0; v < used.length; v++) if (used[v]) vs.push(v);
+    const k = Math.max(1, Math.floor(vs.length / 4e3)), out = new Float32Array(atoms.length + Math.ceil(vs.length / k) * 3);
+    out.set(atoms);
+    let o = atoms.length;
+    for (let q = 0; q < vs.length; q += k) {
+      const v = vs[q], x = L.pos[v * 3], y = L.pos[v * 3 + 1], z = L.pos[v * 3 + 2];
+      out[o++] = base[0] * x + base[1] * y + base[2] * z;
+      out[o++] = base[4] * x + base[5] * y + base[6] * z;
+      out[o++] = base[8] * x + base[9] * y + base[10] * z;
+    }
+    return out.subarray(0, o);
+  }
 
   // src/classic/adapter.ts
   var mapSource = prepareMap;
@@ -7333,7 +7351,7 @@
     if (map && !em) return -1;
     E.cfg = cfgFromStyle(style, R.camera, false);
     if (s) {
-      E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels);
+      E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints) : R.fitPoints, R.labels);
       E.scene._src = s;
       E.scene.atomIds = sceneFromStructure.lastIds;
     } else E.scene = mapScene(map, style, R.camera.base, R.labels, em);
