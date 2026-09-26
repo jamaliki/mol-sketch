@@ -42,7 +42,9 @@ fig.map(sigma=3)         # mean + 3 σ
 fig.map_info             # the level in use, the recommended one, the map's mean and σ, and more
 ```
 
-Setting one clears the other. In the app, use the *σ above mean* slider or type a level; *Recommended* goes back to
+Setting one clears the other. A map without a recommended level (a file of your own) starts at the level enclosing
+0.7% of its box, which is what EMDB's recommended levels typically enclose; a recommended level that encloses more
+than 40% of the box (it happens with tomographic averages) is set aside the same way, and the caption says so. In the app, use the *σ above mean* slider or type a level; *Recommended* goes back to
 the depositors' level.
 
 The level matters most in close-ups. The two images of Trp93 above differ only in their level: at the recommended

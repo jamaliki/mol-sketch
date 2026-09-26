@@ -201,7 +201,7 @@ Usually set through [`fig.map`](api.md#figmapsourceauto--levelnone-sigmanone-loc
 | field | default | meaning |
 |---|---|---|
 | `map.style` | `"surface"` | `"surface"`, `"layers"` (nested contours), `"mesh"` (chicken wire) or `"slice"` (a stippled section) |
-| `map.level` | `null` | the contour level, in the map's units (`null`: `map.sigma`, else the recommended level, else mean + 3σ) |
+| `map.level` | `null` | the contour level, in the map's units (`null`: `map.sigma`, else the recommended level, else the level enclosing 0.7% of the box, as recommended levels typically do, between 2 and 8 σ; a recommended level enclosing more than 40% of the box is set aside) |
 | `map.sigma` | `null` | the contour level in σ above the mean |
 | `map.levels` | `[0.7, 1, 1.5]` | the contours of `"layers"`, as multiples of the level |
 | `map.smooth` | `"auto"` | low-pass to this many Å (`0`: none). `"auto"`: to a 20th of what is drawn, at least 4 Å, for whole particles; the density above the level is smoothed and contoured to enclose the molecule's mass |

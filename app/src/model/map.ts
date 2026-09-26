@@ -142,10 +142,10 @@ export function levelEnclosing(m: DensityMap, volume: number, zone?: Uint8Array)
   const n = Math.round(volume / (m.step[0] * m.step[1] * m.step[2])), d = m.data;
   let len = d.length; if (zone) { len = 0; for (let i = 0; i < d.length; i++) if (zone[i]) len++ }
   const a = new Float32Array(len); if (zone) { for (let i = 0, k = 0; i < d.length; i++) if (zone[i]) a[k++] = d[i] } else a.set(d);
-  return len ? kth(a, Math.max(0, Math.min(len - 1, len - n))) : (undefined as any);   // the value a sort would put there, without sorting
+  return len ? kthOf(a, Math.max(0, Math.min(len - 1, len - n))) : (undefined as any);   // the value a sort would put there, without sorting
 }
 /** the k-th smallest value (0-based) of an array, as sorting it would place it (quickselect: the array is reordered) */
-function kth(a: Float32Array, k: number): number {
+export function kthOf(a: Float32Array, k: number): number {
   let lo = 0, hi = a.length - 1;
   while (hi > lo) {
     const mid = (lo + hi) >> 1; const x = a[lo], y = a[mid], z = a[hi];

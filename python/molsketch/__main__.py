@@ -4,7 +4,9 @@
     molsketch render INPUT [options] -o fig.png             one figure (or a scene's frames) from the terminal
     molsketch looks | palettes                              what there is
 
-INPUT is a file (.pdb, .cif, a scene .json) or a PDB ID (fetched from RCSB)."""
+INPUT is a file (.pdb, .cif, a scene .json, a density map .map/.mrc/.ccp4), a PDB ID (fetched from RCSB) or an EMDB ID
+(EMD-5778: the map on its own). --map adds a density map to a structure: auto (the map the PDB entry was built into),
+an EMDB ID or a map file."""
 from __future__ import annotations
 
 import argparse
@@ -14,9 +16,15 @@ import re
 import sys
 
 
+MAP_FILE = re.compile(r"\.(map|mrc|ccp4)(\.gz)?$", re.I)
+
+
 def _figure(src: str):
     import molsketch as ms
-    if re.fullmatch(r"[0-9][A-Za-z0-9]{3}", src) and not pathlib.Path(src).exists(): return ms.fetch(src)
+    exists = pathlib.Path(src).exists()
+    if re.fullmatch(r"[0-9][A-Za-z0-9]{3}", src) and not exists: return ms.fetch(src)
+    if re.fullmatch(r"(?i)(emd[-_]?)?\d{4,6}", src) and not exists: return ms.fetch_map(src)
+    if MAP_FILE.search(src): return ms.load_map(src)
     return ms.load(src)
 
 
@@ -27,7 +35,10 @@ def main(argv=None):
     s.add_argument("--port", type=int, default=8471); s.add_argument("--host", default="127.0.0.1")
     s.add_argument("--no-browser", action="store_true"); s.add_argument("--verbose", action="store_true")
     r = sub.add_parser("render", help="draw a figure")
-    r.add_argument("input", help="a .pdb / .cif / scene .json, or a PDB ID")
+    r.add_argument("input", help="a .pdb / .cif / scene .json / density map, a PDB ID, or an EMDB ID (a map on its own)")
+    r.add_argument("--map", help="a density map with the structure: auto (the PDB entry's), an EMDB ID, or a map file")
+    r.add_argument("--level", type=float, help="the map's contour level, in its units"); r.add_argument("--sigma", type=float, help="the contour level in σ above the mean")
+    r.add_argument("--zone", help="a close-up: the map around these residues (a selection), at full resolution"); r.add_argument("--carve", type=float, help="keep only the density this close to the model (or zone), Å")
     r.add_argument("-o", "--out", default="figure.png", help="an image (.png .jpg .webp), a vector drawing (.svg), a video (.mp4 .webm .gif), .json, or a directory for frames")
     r.add_argument("--look"); r.add_argument("--style", help="a style JSON saved from the app")
     r.add_argument("--set", action="append", default=[], metavar="PATH=VALUE", help="change one style field (repeatable): line.width=2")
@@ -55,6 +66,9 @@ def main(argv=None):
         return
 
     fig = _figure(a.input)
+    if a.map or a.level is not None or a.sigma is not None or a.zone or a.carve is not None:
+        extra = {k: v for k, v in (("zone", a.zone), ("carve", a.carve)) if v is not None}
+        fig.map(a.map or "auto", level=a.level, sigma=a.sigma, **extra)
     if a.look: fig.look(a.look)
     if a.style: fig.apply_style(a.style)
     for kv in a.set:

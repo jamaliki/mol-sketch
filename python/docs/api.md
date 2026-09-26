@@ -472,7 +472,8 @@ molsketch looks                              # list the looks
 molsketch palettes                           # list the group palettes
 ```
 
-`INPUT` is a `.pdb`, `.cif` or scene `.json` file, or a PDB ID (downloaded like `fetch`). `-o` decides the output:
+`INPUT` is a `.pdb`, `.cif` or scene `.json` file, a PDB ID (downloaded like `fetch`), or a density map on its own: an
+EMDB ID (`EMD-5778`, as `fetch_map`) or a map file (`.map`, `.mrc`, `.ccp4`, gzipped or not, as `load_map`). `-o` decides the output:
 an image (`.png` `.jpg` `.webp`), a vector drawing (`.svg`), a video (`.mp4` `.webm` `.gif`), a scene (`.json`), or a
 folder of frames (a path with no extension). Options for `render`:
 
@@ -485,6 +486,9 @@ folder of frames (a path with no extension). Options for `render`:
 | `--yaw --pitch --roll --zoom --fov` | `fig.view(...)` |
 | `--pan X,Y` | `fig.view(pan=(X, Y))` |
 | `--fit L,T,R,B`, `--fit-what all\|frame` | `fig.fit((L, T, R, B), what=…)`; fractions or percent |
+| `--map auto\|EMD-ID\|FILE` | `fig.map(...)`: a density map with the structure (`auto`: the map the PDB entry was built into) |
+| `--level L`, `--sigma S` | `fig.map(level=L)`, `fig.map(sigma=S)` |
+| `--zone SELECTION`, `--carve Å` | `fig.map(zone=…, carve=…)`: a close-up on residues in their density |
 | `--site SELECTION` or `--site ligand` | `fig.site(SELECTION)` or `fig.site(ligand=True)` |
 | `--frame-site`, `--label-site` | `fig.frame_site()`, `fig.label_site()` |
 | `--size WxH` (default `1920x1440`), `--scale N` | the `size` and `scale` arguments |
@@ -498,6 +502,9 @@ molsketch render 5P21 --look engraved-colour --yaw 60 --pitch 20 --site ligand -
 molsketch render 2PTN --look engraved --site "resi 57+102+195" --frame-site --label-site -o trypsin.png
 molsketch render mechanism.json --look chalkboard -o loop.mp4
 molsketch render 6GZQ --look assembly-cartoon --turntable 72 -o spin.mp4
+molsketch render 3J5P --map auto --look ink -o trpv1.png                 # a model in its cryo-EM map
+molsketch render 7A4M --map auto --zone "resi 93" --sigma 3 -o trp93.png   # a residue in its density
+molsketch render EMD-5778 -o map.png                                      # a map on its own
 ```
 
 ---

@@ -6666,9 +6666,9 @@
     if (zone) {
       for (let i = 0, k = 0; i < d.length; i++) if (zone[i]) a[k++] = d[i];
     } else a.set(d);
-    return len ? kth(a, Math.max(0, Math.min(len - 1, len - n))) : void 0;
+    return len ? kthOf(a, Math.max(0, Math.min(len - 1, len - n))) : void 0;
   }
-  function kth(a, k) {
+  function kthOf(a, k) {
     let lo = 0, hi = a.length - 1;
     while (hi > lo) {
       const mid2 = lo + hi >> 1;
@@ -7055,7 +7055,19 @@
   }
   function mapLevel(m, style) {
     const o = style.map;
-    return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? (recommendedUsable(m) ? m.level : null) ?? m.mean + 3 * m.rms;
+    return o.level ?? (o.sigma != null ? m.mean + o.sigma * m.rms : null) ?? (recommendedUsable(m) ? m.level : null) ?? defaultLevel(m);
+  }
+  var defaults = /* @__PURE__ */ new WeakMap();
+  function defaultLevel(m) {
+    let v = defaults.get(m);
+    if (v !== void 0) return v;
+    const d = m.data, step = Math.max(1, Math.floor(d.length / 2e6)), a = new Float32Array(Math.ceil(d.length / step));
+    let n = 0;
+    for (let i = 0; i < d.length; i += step) a[n++] = d[i];
+    const q = kthOf(a.subarray(0, n), Math.floor(n * 0.993));
+    v = Math.min(m.mean + 8 * m.rms, Math.max(m.mean + 2 * m.rms, q));
+    defaults.set(m, v);
+    return v;
   }
   var above = /* @__PURE__ */ new WeakMap();
   function fractionAboveRecommended(m) {
@@ -7108,16 +7120,7 @@
       const pad = zoneSel ? zonePad : o.crop;
       m = cropMap(whole, lo.map((v) => v - pad), hi.map((v) => v + pad));
     }
-    let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity, bz0 = Infinity, bz1 = -Infinity;
-    for (let k = 0, q = 0; k < m.nz; k++) for (let j = 0; j < m.ny; j++) for (let i = 0; i < m.nx; i++, q++) if (m.data[q] >= level) {
-      if (i < bx0) bx0 = i;
-      if (i > bx1) bx1 = i;
-      if (j < by0) by0 = j;
-      if (j > by1) by1 = j;
-      if (k < bz0) bz0 = k;
-      if (k > bz1) bz1 = k;
-    }
-    let extent = bx1 < 0 ? m.nx * m.step[0] : Math.max((bx1 - bx0 + 1) * m.step[0], (by1 - by0 + 1) * m.step[1], (bz1 - bz0 + 1) * m.step[2]);
+    let extent = s && s.count ? 0 : particleExtent(m, level);
     if (s && s.count) {
       const lo = [Infinity, Infinity, Infinity], hi = [-Infinity, -Infinity, -Infinity];
       for (let i = 0; i < s.count; i++) {
@@ -7154,7 +7157,20 @@
     if (!mass) mass = m.mass || 0;
     let zone;
     if (R > 0 && massFrom === "the model") zone = stampAtoms(g2, s, 6);
-    const byVolume = R > 0, vLevel = !byVolume ? 0 : mass > 0 ? levelEnclosing(g2, mass * 1.21, zone) : g2.mean + 2 * g2.rms;
+    let massTooBig = false;
+    if (R > 0 && mass > 0) {
+      const n = mass * 1.21 / (g2.step[0] * g2.step[1] * g2.step[2]);
+      let support = 0;
+      for (let i = 0; i < g2.data.length; i++) if (g2.data[i] > 0 && (!zone || zone[i])) support++;
+      massTooBig = n > 0.6 * support;
+    }
+    let vAtLevel = 0;
+    if (R > 0 && !(mass > 0 && !massTooBig)) {
+      let c = 0;
+      for (let i = 0; i < m.data.length; i++) if (m.data[i] >= level) c++;
+      vAtLevel = c * m.step[0] * m.step[1] * m.step[2];
+    }
+    const byVolume = R > 0, vLevel = !byVolume ? 0 : mass > 0 && !massTooBig ? levelEnclosing(g2, mass * 1.21, zone) : vAtLevel > 0 ? levelEnclosing(g2, 2 * vAtLevel, zone) : g2.mean + 2 * g2.rms;
     let sorted = null;
     const same = (lv) => {
       if (byVolume) return vLevel * lv / level;
@@ -7301,12 +7317,13 @@
       if (n && low / n > 0.5) unsupported.push(r.trace);
     }
     const sigma = (level - m.mean) / (m.rms || 1);
-    const unusable = style.map.level == null && style.map.sigma == null && whole.level != null && !recommendedUsable(whole) ? `the recommended level (${+whole.level.toPrecision(3)}) encloses ${Math.round(100 * fractionAboveRecommended(whole))}% of the box: 3 \u03C3 instead` : "";
+    const auto = style.map.level == null && style.map.sigma == null && !recommendedUsable(whole);
+    const unusable = !auto ? "" : whole.level != null ? `the recommended level (${+whole.level.toPrecision(3)}) encloses ${Math.round(100 * fractionAboveRecommended(whole))}% of the box: the level enclosing 0.7% instead` : "no recommended level: the level enclosing 0.7% of the box";
     const caption = [
       m.name,
       unusable,
       R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && recommendedUsable(whole) ? " (recommended)" : ""} low-passed to ${R} \xC5` : "",
-      byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && recommendedUsable(whole) ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
+      byVolume ? mass <= 0 ? "contoured to enclose twice the volume the level encloses" : massTooBig ? `contoured to enclose twice the volume the level encloses (${massFrom}'s mass, ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"}, is more than the map holds)` : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && recommendedUsable(whole) ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
       o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
       zoned ? `the density within ${keepR} \xC5 of the model` : o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} \xC5` : m !== whole ? o.context === "show" ? `the density within ${Math.min(o.crop, 8)} \xC5 of the model` : `cropped to the model's box and ${o.crop} \xC5` : "",
       dust ? zoneSel ? "specks hidden" : "specks under 2% of the largest piece hidden" : "",
@@ -7428,6 +7445,62 @@
       }
     }
     return out;
+  }
+  function particleExtent(m, level) {
+    const b = Math.max(1, Math.ceil(Math.max(m.nx, m.ny, m.nz) / 64)), cx = Math.ceil(m.nx / b), cy = Math.ceil(m.ny / b), cz = Math.ceil(m.nz / b);
+    const occ = new Uint8Array(cx * cy * cz), d = m.data;
+    for (let k = 0, q = 0; k < m.nz; k++) {
+      const kk = (k / b | 0) * cy;
+      for (let j = 0; j < m.ny; j++) {
+        const jj = (kk + (j / b | 0)) * cx;
+        for (let i = 0; i < m.nx; i++, q++) if (d[q] >= level) occ[jj + (i / b | 0)] = 1;
+      }
+    }
+    const lab2 = new Int32Array(occ.length).fill(-1), size = [], box = [], stack = [];
+    for (let s0 = 0; s0 < occ.length; s0++) {
+      if (!occ[s0] || lab2[s0] >= 0) continue;
+      const id = size.length;
+      let n = 0;
+      const bb = [1e9, -1, 1e9, -1, 1e9, -1];
+      lab2[s0] = id;
+      stack.push(s0);
+      while (stack.length) {
+        const v = stack.pop();
+        n++;
+        const x = v % cx, y = (v / cx | 0) % cy, z = v / (cx * cy) | 0;
+        if (x < bb[0]) bb[0] = x;
+        if (x > bb[1]) bb[1] = x;
+        if (y < bb[2]) bb[2] = y;
+        if (y > bb[3]) bb[3] = y;
+        if (z < bb[4]) bb[4] = z;
+        if (z > bb[5]) bb[5] = z;
+        for (let dz = -1; dz <= 1; dz++) for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+          const X = x + dx, Y = y + dy, Z = z + dz;
+          if (X < 0 || Y < 0 || Z < 0 || X >= cx || Y >= cy || Z >= cz) continue;
+          const w = (Z * cy + Y) * cx + X;
+          if (occ[w] && lab2[w] < 0) {
+            lab2[w] = id;
+            stack.push(w);
+          }
+        }
+      }
+      size.push(n);
+      box.push(bb);
+    }
+    if (!size.length) return m.nx * m.step[0];
+    const big = Math.max(...size) * 0.05;
+    let x0 = 1e9, x1 = -1, y0 = 1e9, y1 = -1, z0 = 1e9, z1 = -1;
+    size.forEach((n, id) => {
+      if (n < big) return;
+      const bb = box[id];
+      x0 = Math.min(x0, bb[0]);
+      x1 = Math.max(x1, bb[1]);
+      y0 = Math.min(y0, bb[2]);
+      y1 = Math.max(y1, bb[3]);
+      z0 = Math.min(z0, bb[4]);
+      z1 = Math.max(z1, bb[5]);
+    });
+    return Math.max((x1 - x0 + 0.5) * b * m.step[0], (y1 - y0 + 0.5) * b * m.step[1], (z1 - z0 + 0.5) * b * m.step[2]);
   }
 
   // src/classic/adapter.ts
