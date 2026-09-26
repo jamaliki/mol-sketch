@@ -136,6 +136,10 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
       const big = zoneSel ? 12 : Math.max(0, ...size.values()) * 0.02, keep: number[] = [];
       for (let t = 0; t < tri.length; t += 3) if (size.get(find(tri[t]))! >= big) keep.push(tri[t], tri[t + 1], tri[t + 2]); else dust++;
       tri = new Uint32Array(keep) }
+    // the rest of an assembly, shown: cut at the crop margin from the model's atoms (the box's straight edges were a
+    // box drawn on the picture), not at the box
+    if (!zoneSel && carve <= 0 && atoms.length && o.context === 'show' && o.crop > 0) { const r = Math.min(o.crop, 7.99), k2: number[] = [];
+      for (let t = 0; t < tri.length; t += 3) if (dist[tri[t]] < r || dist[tri[t + 1]] < r || dist[tri[t + 2]] < r) k2.push(tri[t], tri[t + 1], tri[t + 2]); tri = new Uint32Array(k2) }
     if (carve > 0 && atoms.length) { const cd = zoneSel ? Float32Array.from({ length: nv }, (_, v) => carveDist(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2])) : dist;
       const keep: number[] = []; for (let t = 0; t < tri.length; t += 3) if (cd[tri[t]] <= carve || cd[tri[t + 1]] <= carve || cd[tri[t + 2]] <= carve) keep.push(tri[t], tri[t + 1], tri[t + 2]); tri = new Uint32Array(keep)
       // a zone without carving: only the pieces of surface that touch its atoms (the density joined to them, explained
@@ -185,7 +189,7 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   const sigma = (level - m.mean) / (m.rms || 1);
   const caption = [m.name, R > 0 ? `the density above ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''} low-passed to ${R} Å` : '', byVolume ? mass <= 0 ? 'contoured at 2 σ' : `contoured to enclose ${(mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + ' MDa' : Math.round(mass / 1e3) + ' kDa')} (${massFrom}'s mass, 1.21 Å³/Da)`
       : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? ' (recommended)' : ''}, ${sigma.toFixed(1)} σ`,
-    o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', zoned ? 'the density within 5 Å of the model' : o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} Å` : m !== whole ? `cropped to the model's box and ${o.crop} Å` : '',
+    o.style === 'layers' ? `levels ×${factors.join(', ×')}` : '', zoned ? 'the density within 5 Å of the model' : o.carve > 0 && atoms.length ? `carved at ${o.carve} Å of ${zoneSel ? o.zone : 'the model'}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} Å` : m !== whole ? o.context === 'show' ? `the density within ${Math.min(o.crop, 8)} Å of the model` : `cropped to the model's box and ${o.crop} Å` : '',
     dust ? zoneSel ? 'specks hidden' : 'specks under 2% of the largest piece hidden' : '', g0 !== m && !byVolume ? `drawn at ${g.step[0].toFixed(1)} Å per voxel${R > 0 ? '' : ', at the level enclosing the same volume'}` : '',
     o.localResolution === 'bfactor' && s ? 'line looseness from B-factors' : o.localResolution === 'map' && localRes ? 'line looseness from local resolution' : ''].filter(Boolean).join(' · ');
   const corners: number[][] = []; for (const a of [0, 1]) for (const b of [0, 1]) for (const c of [0, 1]) corners.push(turn(g.origin[0] + a * (g.nx - 1) * g.step[0], g.origin[1] + b * (g.ny - 1) * g.step[1], g.origin[2] + c * (g.nz - 1) * g.step[2]));
