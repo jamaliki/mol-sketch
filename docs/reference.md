@@ -111,8 +111,8 @@ Warm render times at 900 × 900 on a laptop, with the Python package:
 | a mechanism scene frame, watercolour | about 0.2 s |
 | a protein with its cryo-EM map (TRPV1, EMD-5778), watercolour | about 0.7 s (the first, with the map prepared, about 2 s) |
 | the 70S ribosome (144 000 atoms), cartoon | about 1 s |
-| the 70S ribosome, watercolour surface | about 2.5 s |
-| the 70S ribosome, ink or pencil surface | 1 to 1.8 s |
+| the 70S ribosome, watercolour surface | about 1.2 s |
+| the 70S ribosome, ink or pencil surface | 0.8 to 1.2 s |
 
 The first render in a process also starts the engine and reads the structure (about a second for the ribosome). The
 engine draws while Python rasterises what it has already recorded, so a figure takes about as long as the slower of
