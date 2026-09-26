@@ -545,7 +545,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   }
   {
     const g = sec(PM, 'Close-up on residues', { open: false, keys: 'zone carve side chain residues close up' }); showWhen(g, () => hasMap() && H.hasStructure());
-    g.append(note('Only the map around a selection, at full resolution; draw the same residues as sticks to see them in their density.'));
+    g.append(note('Only the map around a selection, at full resolution, over its residues: they are drawn as sticks and framed, and the ribbons in front of them fade.'));
     selControl(g, 'zone', 'map.zone', [['none', ''], ['active site', '__site__']], 'only the map around these atoms', 'e.g. resi 93 and not hydro');
     control(g, { t: 'range', label: 'carve (Å)', path: 'map.carve', min: 0, max: 8, step: 0.5, tip: 'only the density this close to the model (or the zone); the caption says when it is on' });
   }

@@ -11,6 +11,7 @@ import { buildSticks, buildSurface, buildCartoon, REP_STICKS, REP_CARTOON, REP_S
 import { type Style, hexToRgb } from '../style';
 import type { DensityMap } from '../model/map';
 import { preparedMap, closeUpFit, type EngineMap } from '../classic/mapprep';
+import { withZone } from '../classic/adapter';
 
 const MAP_CLS = 10, MAP_REP = 4, MAP_ID = 0xfffff0;
 
@@ -74,7 +75,8 @@ export class Renderer {
     let inst = 0, tris = 0;
     const shown = new Uint8Array(s.count);
     this.geom = { stickMask: null, surfaceMask: null, runs: [], scheme };
-    const siteSel = style.site?.sel?.trim(); const stickSel = siteSel ? (style.reps.sticks.trim() ? `(${style.reps.sticks}) or (${siteSel})` : siteSel) : style.reps.sticks;   // the site is always sticks
+    const siteSel = style.site?.sel?.trim(); let stickSel = siteSel ? (style.reps.sticks.trim() ? `(${style.reps.sticks}) or (${siteSel})` : siteSel) : style.reps.sticks;   // the site is always sticks
+    if (this.map && style.map.visible !== false && style.map.zone.trim()) stickSel = withZone(stickSel, style.map.zone);   // and a map's close-up
     if (stickSel.trim()) {
       const m = selectAtoms(s, stickSel); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildSticks(s, m, scheme, style); this.geom.stickMask = m;
       this.batches.spheres.push(new SphereBatch(gl, this.progs.sphere, g.spheres, REP_STICKS)); this.batches.cyls.push(new CylinderBatch(gl, this.progs.cyl, g.cylinders, REP_STICKS));
@@ -114,7 +116,7 @@ export class Renderer {
       verts[o] = b[0] * x + b[1] * y + b[2] * z; verts[o + 1] = b[4] * x + b[5] * y + b[6] * z; verts[o + 2] = b[8] * x + b[9] * y + b[10] * z };
     for (let v = 0; v < nv; v++) { const o = v * 11; un(L.pos, v, o); un(L.nor, v, o + 3); verts[o + 6] = col[0]; verts[o + 7] = col[1]; verts[o + 8] = col[2]; verts[o + 9] = MAP_ID; verts[o + 10] = MAP_CLS }
     this.mapBatch = new MeshBatch(this.gl, this.progs.map, verts, L.tri, MAP_REP);
-    if (s) { const fit = closeUpFit(em, this.camera.base, this.atomFit); if (fit !== this.fitPoints) { this.fitPoints = fit; this.camera.setFitPoints(fit) } }   // a close-up is framed on its density too
+    if (s) { const fit = closeUpFit(em, this.camera.base, this.atomFit, s); if (fit !== this.fitPoints) { this.fitPoints = fit; this.camera.setFitPoints(fit) } }   // a close-up is framed on its density too
     this.camera.pushBehind = !!s && s.count > 0;
     if (!s) { // on its own: fitted to its surface (every few vertices are enough)
       const k = Math.max(1, Math.floor(nv / 20000)), pts = new Float32Array(Math.ceil(nv / k) * 3); let n = 0, cx = 0, cy = 0, cz = 0;

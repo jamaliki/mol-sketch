@@ -214,7 +214,7 @@ Usually set through [`fig.map`](api.md#figmapsourceauto--levelnone-sigmanone-loc
 | `map.opacity` | `0.55` | how opaque the map is over a model (`map.layer="over"`) |
 | `map.speck` | `8` | islands and holes smaller than this, in pixels, are left out |
 | `map.crop` | `8` | with a model: the map is cropped to the model's box and this margin, Å |
-| `map.zone` | `""` | a selection: the map closely around it only, at full resolution, for close-ups |
+| `map.zone` | `""` | a selection: the map closely around it only, at full resolution, for close-ups; its residues are drawn as sticks, framed, and (without an active site) the ribbons in front of them fade |
 | `map.carve` | `0` | keep only the density this close to the model (or the zone), Å; `0` off |
 | `map.context` | `"hide"` | with a model: the rest of an assembly beyond it `"hide"` (only the density within 5 Å of the model is kept) or `"show"` (drawn faintly) |
 | `map.unsupported` | `true` | a small accent circle on residues mostly outside the density |

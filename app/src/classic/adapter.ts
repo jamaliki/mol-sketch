@@ -71,7 +71,11 @@ export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style:
   const t0 = performance.now(); const E = classic(); const s = R.structure; const map: DensityMap | null = style.map.visible === false ? null : (R as any).map || null;   // hidden: kept, not drawn if (!s && !map) return 0;
   const em = map ? mapSource(map, style, s, R.camera.base, R.localRes || null) : null; if (map && !em) return -1;   // the map is being prepared: nothing drawn yet
   E.cfg = cfgFromStyle(style, R.camera, false);
-  if (s) { E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints) : R.fitPoints, R.labels); (E.scene as any)._src = s; (E.scene as any).atomIds = (sceneFromStructure as any).lastIds }   // which structure it was built from
+  // a close-up with no active site: its residues are the site, so the ribbons in front of them fade and the rest is
+  // quieter (at their own size: larger sticks would cover their density)
+  if (em?.closeUp && s && !E.cfg.rep.siteSel.trim()) E.cfg.rep = { ...E.cfg.rep, siteSel: style.map.zone, siteCutaway: true, siteScale: 1 };
+  if (s) { E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints, s) : R.fitPoints, R.labels);
+    if (em?.closeUp && style.map.zone.trim()) (E.scene as any).reps.sticks = withZone((E.scene as any).reps.sticks, style.map.zone); /* a close-up's residues are drawn as sticks */ (E.scene as any)._src = s; (E.scene as any).atomIds = (sceneFromStructure as any).lastIds }   // which structure it was built from
   else E.scene = mapScene(map!, style, R.camera.base, R.labels, em!);
   (E.scene as any).map = em;
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, R.w, R.h); ctx.restore();
@@ -97,3 +101,6 @@ export function renderScene(ctx: CanvasRenderingContext2D, R: Renderer, style: S
   E.renderFrame(ctx, R.w / dpr, R.h / dpr, frame, dpr);
   return performance.now() - t0;
 }
+
+/** a stick selection that also takes in a close-up's zone */
+export function withZone(sticks: string, zone: string) { const a = (sticks || '').trim(), z = zone.trim(); return !z ? a : !a ? z : `(${a}) or (${z})` }

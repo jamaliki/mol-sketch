@@ -7313,9 +7313,14 @@
       return [best, Math.sqrt(bd)];
     };
   }
-  function closeUpFit(em, base, atoms) {
+  function closeUpFit(em, base, atoms, s = null) {
     const L = em.levels[em.primary] || em.levels[0];
     if (!em.closeUp || !L) return atoms;
+    if (s && em.opts.zone) {
+      const sel = selectAtoms(s, em.opts.zone), z = [];
+      for (let i = 0; i < s.count; i++) if (sel[i]) z.push(s.x[i], s.y[i], s.z[i]);
+      if (z.length) atoms = Float32Array.from(z);
+    }
     const used = new Uint8Array(L.pos.length / 3);
     for (let t = 0; t < L.tri.length; t++) used[L.tri[t]] = 1;
     const vs = [];
@@ -7469,8 +7474,10 @@
     const em = map ? mapSource(map, style, s, R.camera.base, R.localRes || null) : null;
     if (map && !em) return -1;
     E.cfg = cfgFromStyle(style, R.camera, false);
+    if (em?.closeUp && s && !E.cfg.rep.siteSel.trim()) E.cfg.rep = { ...E.cfg.rep, siteSel: style.map.zone, siteCutaway: true, siteScale: 1 };
     if (s) {
-      E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints) : R.fitPoints, R.labels);
+      E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints, s) : R.fitPoints, R.labels);
+      if (em?.closeUp && style.map.zone.trim()) E.scene.reps.sticks = withZone(E.scene.reps.sticks, style.map.zone);
       E.scene._src = s;
       E.scene.atomIds = sceneFromStructure.lastIds;
     } else E.scene = mapScene(map, style, R.camera.base, R.labels, em);
@@ -7509,6 +7516,10 @@
     ctx.restore();
     E.renderFrame(ctx, R.w / dpr, R.h / dpr, frame, dpr);
     return performance.now() - t0;
+  }
+  function withZone(sticks, zone) {
+    const a = (sticks || "").trim(), z = zone.trim();
+    return !z ? a : !a ? z : `(${a}) or (${z})`;
   }
 
   // src/classic/scene.ts

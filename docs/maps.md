@@ -97,7 +97,15 @@ Two marks tell you how well the model and map agree:
 
 ## A close look at residues
 
-To see how residues sit in their density, give the map a **zone** (a selection) and draw those residues as sticks:
+To see how residues sit in their density, give the map a **zone** (a selection):
+
+```python
+fig = ms.fetch("7A4M", map=True).map(zone="resi 93", sigma=3)
+```
+
+The zone's residues are drawn as sticks, the drawing is framed on them and their density, and, unless an active site
+is set, they are treated as one: the ribbons in front of them fade and the rest of the model is quieter. To leave the
+rest of the model out, show only the residues:
 
 ```python
 sel = "resi 93 and not hydro"

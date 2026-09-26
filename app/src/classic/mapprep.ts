@@ -239,8 +239,10 @@ function nearestAtom(s: Structure | null, atoms: number[]) {
 
 /** a close-up's density surface, back in the structure's frame (a few thousand of its vertices): with the atoms, what a
     close-up is framed on, so its density is not cut by the frame */
-export function closeUpFit(em: EngineMap, base: Float32Array, atoms: Float32Array): Float32Array {
+export function closeUpFit(em: EngineMap, base: Float32Array, atoms: Float32Array, s: Structure | null = null): Float32Array {
   const L = em.levels[em.primary] || em.levels[0]; if (!em.closeUp || !L) return atoms;
+  // framed on the zone's own atoms (the rest of the model stays in the picture as context, beyond the frame)
+  if (s && em.opts.zone) { const sel = selectAtoms(s, em.opts.zone), z: number[] = []; for (let i = 0; i < s.count; i++) if (sel[i]) z.push(s.x[i], s.y[i], s.z[i]); if (z.length) atoms = Float32Array.from(z) }
   const used = new Uint8Array(L.pos.length / 3); for (let t = 0; t < L.tri.length; t++) used[L.tri[t]] = 1;   // what is drawn (carving leaves vertices unused)
   const vs: number[] = []; for (let v = 0; v < used.length; v++) if (used[v]) vs.push(v);
   const k = Math.max(1, Math.floor(vs.length / 4000)), out = new Float32Array(atoms.length + Math.ceil(vs.length / k) * 3); out.set(atoms); let o = atoms.length;
