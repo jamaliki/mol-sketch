@@ -5247,6 +5247,7 @@
       return out;
     }
     function buildCartoonEngraved(items, atoms, sel, proj, seedBase) {
+      var _a;
       const P = cfg.palette, S = cfg.style, R = cfg.rep;
       const K = R.cartoonScale;
       const SEG = 6, N = Math.max(0, Math.round(R.engraveLines ?? 8)), lw0 = R.engraveWidth ?? 0.45;
@@ -5376,6 +5377,15 @@
       const labels = [];
       let nH = 0, nE = 0;
       const traces = backboneTraces(atoms, sel);
+      const bases2 = {}, rungDone = /* @__PURE__ */ new Set();
+      for (const a of atoms) if (a.nucleic && (a.name === "N1" || a.name === "N3" || a.name === "N9")) {
+        const b = bases2[_a = a.group] ?? (bases2[_a] = {});
+        b[a.name] = a;
+      }
+      const baseEnd = (g2) => {
+        const b = bases2[g2];
+        return b ? (b.N9 ? b.N1 : b.N3) || null : null;
+      };
       for (const tr of traces) {
         const A = tr.atoms, n = A.length;
         const pts = A.map((a) => a.pos.slice());
@@ -5553,6 +5563,19 @@
             }
             const atEnd = (j, end) => end === 0 ? j === 0 && !first : j === pr.length - 2 && !last;
             for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], ct));
+            if (ct === "N") for (let k = 0; k < m; k++) {
+              const a = A[idx[k]], e2 = baseEnd(a.group);
+              if (!e2 || rungDone.has(a.group)) continue;
+              rungDone.add(a.group);
+              const q0 = P2(p[k]), q1 = P2(e2.pos);
+              let tx = q1[0] - q0[0], ty = q1[1] - q0[1];
+              const l = Math.hypot(tx, ty);
+              if (l < 1) continue;
+              tx /= l;
+              ty /= l;
+              const w0 = Math.max(cw * 0.8 * proj.pxPerA * q0[3], hwMin * 0.9), w1 = Math.max(cw * 0.8 * proj.pxPerA * q1[3], hwMin * 0.9), nx = -ty, ny = tx;
+              face([[q0[0] + nx * w0, q0[1] + ny * w0, q0[2], q0[3], q0[4]], [q1[0] + nx * w1, q1[1] + ny * w1, q1[2], q1[3], q1[4]], [q1[0] - nx * w1, q1[1] - ny * w1, q1[2], q1[3], q1[4]], [q0[0] - nx * w0, q0[1] - ny * w0, q0[2], q0[3], q0[4]]], "plain", 1, false, [1, 1, 1, 0], a.alpha ?? alpha, rc(idx[k], ct));
+            }
           }
         }
       }

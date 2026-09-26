@@ -1338,6 +1338,10 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
   };
   const labels=[];let nH=0,nE=0;
   const traces=backboneTraces(atoms,sel);
+  // nucleic acids: a rung from the backbone to each base's Watson-Crick edge (N1 of a purine, N3 of a pyrimidine), as
+  // PyMOL's ladder, so a strand reads as a nucleic acid and a duplex as paired (a tube alone was a bare rope)
+  const bases={},rungDone=new Set();for(const a of atoms)if(a.nucleic&&(a.name==='N1'||a.name==='N3'||a.name==='N9')){const b=bases[a.group]??={};b[a.name]=a}
+  const baseEnd=g=>{const b=bases[g];return b?(b.N9?b.N1:b.N3)||null:null};
   for(const tr of traces){
     const A=tr.atoms,n=A.length;const pts=A.map(a=>a.pos.slice());
     const rc=(i,t)=>colourMode==='rainbow'?(mode==='ink colour'?hsv(0.6667*(1-i/Math.max(1,n-1)),0.9,0.8):hsv(0.6667*(1-i/Math.max(1,n-1)),0.75,0.95)):colourMode==='carbon'?carbonColor(A[i]):colourMode==='chain'?chainColor(A[i]):ssCol(t);
@@ -1408,6 +1412,10 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
           L.push([pr[j][0]-ty/l*hw,pr[j][1]+tx/l*hw,pr[j][2],pr[j][3],pr[j][4]]);Rr.push([pr[j][0]+ty/l*hw,pr[j][1]-tx/l*hw,pr[j][2],pr[j][3],pr[j][4]])}
         const atEnd=(j,end)=>end===0?(j===0&&!first):(j===pr.length-2&&!last);
         for(let j=0;j<pr.length-1;j++)face([L[j],L[j+1],Rr[j+1],Rr[j]],'plain',1,false,[1,atEnd(j,1),1,atEnd(j,0)],alpha,rc(pr_i[j],ct));
+        if(ct==='N')for(let k=0;k<m;k++){const a=A[idx[k]],e=baseEnd(a.group);if(!e||rungDone.has(a.group))continue;rungDone.add(a.group);
+          const q0=P2(p[k]),q1=P2(e.pos);let tx=q1[0]-q0[0],ty=q1[1]-q0[1];const l=Math.hypot(tx,ty);if(l<1)continue;tx/=l;ty/=l;
+          const w0=Math.max(cw*0.8*proj.pxPerA*q0[3],hwMin*0.9),w1=Math.max(cw*0.8*proj.pxPerA*q1[3],hwMin*0.9),nx=-ty,ny=tx;
+          face([[q0[0]+nx*w0,q0[1]+ny*w0,q0[2],q0[3],q0[4]],[q1[0]+nx*w1,q1[1]+ny*w1,q1[2],q1[3],q1[4]],[q1[0]-nx*w1,q1[1]-ny*w1,q1[2],q1[3],q1[4]],[q0[0]-nx*w0,q0[1]-ny*w0,q0[2],q0[3],q0[4]]],'plain',1,false,[1,1,1,0],a.alpha??alpha,rc(idx[k],ct))}
       }
     }
   }
