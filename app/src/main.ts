@@ -334,7 +334,9 @@ function showGuides(box: FrameBox | null) {
 function docName() { return (sceneDoc?.name || R.structure?.name || 'scene').replace(/[^\w.-]+/g, '_') }
 function renderCommand(): string {
   const name = docName(); const asScene = !!sceneDoc || R.labels.length > 0;   // placed labels travel in the scene JSON
-  const input = asScene ? name + '.json' : (R.structure?.name || 'structure') + '.pdb';
+  const mapArg = mapRaw ? (/\s/.test(mapRaw.name) ? JSON.stringify(mapRaw.name) : mapRaw.name) : '';   // an EMDB ID, or the map's file
+  const alone = !!mapRaw && !R.structure && !sceneDoc;   // a map on its own is the input itself
+  const input = alone ? mapArg : (asScene ? name + '.json' : (R.structure?.name || 'structure') + '.pdb') + (mapRaw ? ` --map ${mapArg}` : '');
   const cam = sceneDoc ? '' : ` --yaw ${R.camera.yaw.toFixed(1)} --pitch ${R.camera.pitch.toFixed(1)} --roll ${R.camera.roll.toFixed(1)} --zoom ${R.camera.zoom.toFixed(3)} --pan ${R.camera.panX.toFixed(3)},${R.camera.panY.toFixed(3)} --fov ${R.camera.fov}`;
   const size = renderSize ? `${renderSize[0]}x${renderSize[1]}` : `${R.w}x${R.h}`;
   return `molsketch render ${input} --style ${name}-style.json${cam} --size ${size}${sceneDoc ? ` --frames drawn -o out_${name}` : ` -o ${name}.png`}`;
