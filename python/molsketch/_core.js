@@ -1873,12 +1873,14 @@
       let r = m2.get(t);
       if (r !== void 0) return r;
       const a = hexToRgb(h1), b = hexToRgb(h2);
-      const c = a.map((v, i) => Math.round(lerp(v, b[i], t)));
-      r = "#" + c.map((v) => v.toString(16).padStart(2, "0")).join("");
+      r = "#" + hx2(Math.round(lerp(a[0], b[0], t))) + hx2(Math.round(lerp(a[1], b[1], t))) + hx2(Math.round(lerp(a[2], b[2], t)));
       if (m2.size > 4096) m2.clear();
       m2.set(t, r);
       return r;
     }
+    const HEX2 = [];
+    for (let i = 0; i < 256; i++) HEX2.push(i.toString(16).padStart(2, "0"));
+    const hx2 = (v) => v >= 0 && v < 256 ? HEX2[v] : v.toString(16).padStart(2, "0");
     function luminance(h) {
       const [r, g2, b] = hexToRgb(h);
       return (0.2126 * r + 0.7152 * g2 + 0.0722 * b) / 255;

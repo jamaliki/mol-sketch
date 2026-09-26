@@ -16,7 +16,9 @@ const RGBC=new Map(),MIXC=new Map();   // parsed and mixed colours: a drawing as
 function hexToRgb(h){let v=RGBC.get(h);if(v)return v;let x=h.replace('#','');if(x.length===3)x=x.split('').map(c=>c+c).join('');const n=parseInt(x,16);v=[(n>>16)&255,(n>>8)&255,n&255];if(RGBC.size>4096)RGBC.clear();RGBC.set(h,v);return v}
 function rgba(h,a){const[r,g,b]=hexToRgb(h);return`rgba(${r},${g},${b},${a})`}
 function mix(h1,h2,t){let m1=MIXC.get(h1);if(!m1)MIXC.set(h1,m1=new Map());let m2=m1.get(h2);if(!m2)m1.set(h2,m2=new Map());let r=m2.get(t);if(r!==undefined)return r;   // keyed by value: no strings built to look one up
-  const a=hexToRgb(h1),b=hexToRgb(h2);const c=a.map((v,i)=>Math.round(lerp(v,b[i],t)));r='#'+c.map(v=>v.toString(16).padStart(2,'0')).join('');if(m2.size>4096)m2.clear();m2.set(t,r);return r}
+  const a=hexToRgb(h1),b=hexToRgb(h2);r='#'+hx2(Math.round(lerp(a[0],b[0],t)))+hx2(Math.round(lerp(a[1],b[1],t)))+hx2(Math.round(lerp(a[2],b[2],t)));if(m2.size>4096)m2.clear();m2.set(t,r);return r}
+const HEX2=[];for(let i=0;i<256;i++)HEX2.push(i.toString(16).padStart(2,'0'));
+const hx2=v=>v>=0&&v<256?HEX2[v]:v.toString(16).padStart(2,'0');   // (a mix beyond its colours, t outside 0..1, as it always was)
 function luminance(h){const[r,g,b]=hexToRgb(h);return(0.2126*r+0.7152*g+0.0722*b)/255}
 
 /* ============================ config ============================ */
