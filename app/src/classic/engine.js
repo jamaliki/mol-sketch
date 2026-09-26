@@ -1201,13 +1201,13 @@ function buildMap(items,st,pos,proj,seedBase){
   if(style==='surface'||style==='layers'){
     const list=style==='layers'?[...levels].sort((a,b)=>a.level-b.level):[main];
     list.forEach((L,li)=>{const buf=mapRaster(L,L.px,L.py,L.pz,W,H),sh=shadeOf(L,buf);const primary=L===main;
-      const strength=style==='layers'?(primary?0.8:li===0?0.35:1):1;
+      const strength=style==='layers'?(primary?0.8:li===0?0.35:0.5):1;   // inner levels a lighter wash: the surface's marks show through them
       items.push({z:zItem+li,map:true,draw:style==='layers'&&!primary&&!(ink||pencil||chalk)?ctx=>{ // an outer or inner level: a translucent wash and a thin line
           const covered=i=>buf.tb[i]>=0,rings=regions(covered);if(!rings.length)return;ctx.save();
           if(wc)washRings(ctx,rings,mapCol,seedBase+333+li,{strength:0.45*strength,layers:3});else{ringsPath(ctx,rings);ctx.fillStyle=rgba(fillFor(mapCol),0.22*strength);ctx.fill('evenodd')}
           drawLines(ctx,silhouettes(L,buf),{width:S.inkWidth*(li===0?0.5:0.8),color:mix(mapCol,shadeInk(),0.55),alpha:li===0?0.45:0.7});ctx.restore()}
         :style==='layers'&&!primary?ctx=>{drawLines(ctx,silhouettes(L,buf),{width:S.inkWidth*(li===0?0.45:0.8),color:inkCol,alpha:li===0?0.45:0.8})}   // ink: nested contour lines
-        :style==='surface'&&(o.finish==='smooth'||o.finish==='drawn')?smoothItem(L,buf,sh,o.finish==='drawn'):style==='surface'&&layer==='over'&&(M.hasModel||o.glass)?glassItem(L,buf,sh):surfaceItem(L,buf,sh,strength,true)})})}
+        :(style==='surface'||primary)&&(o.finish==='smooth'||o.finish==='drawn')?smoothItem(L,buf,sh,o.finish==='drawn'):style==='surface'&&layer==='over'&&(M.hasModel||o.glass)?glassItem(L,buf,sh):surfaceItem(L,buf,sh,strength,true)})})}
   else if(style==='mesh'){ // chicken wire: the map's contours on the grid planes, hidden where the surface is in front
     const buf=o.carve>0?null:mapRaster(main,main.px,main.py,main.pz,W,H);
     const lines=[];for(const w of M.wire){let run=[];for(const q of w){const p=proj.proj(q);const x=Math.floor(p.x),y=Math.floor(p.y);const vis=!buf||(x>=0&&y>=0&&x<W&&y<H&&buf.zb[y*W+x]<=p.z+1.5);if(vis)run.push({x:p.x,y:p.y,fog:p.fog,h:0,gap:1});else{if(run.length>1)lines.push(run);run=[]}}if(run.length>1)lines.push(run)}

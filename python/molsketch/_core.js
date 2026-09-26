@@ -4986,7 +4986,7 @@
         list.forEach((L, li) => {
           const buf = mapRaster(L, L.px, L.py, L.pz, W, H), sh = shadeOf(L, buf);
           const primary = L === main;
-          const strength = style === "layers" ? primary ? 0.8 : li === 0 ? 0.35 : 1 : 1;
+          const strength = style === "layers" ? primary ? 0.8 : li === 0 ? 0.35 : 0.5 : 1;
           items.push({ z: zItem + li, map: true, draw: style === "layers" && !primary && !(ink || pencil || chalk) ? (ctx) => {
             const covered = (i) => buf.tb[i] >= 0, rings = regions(covered);
             if (!rings.length) return;
@@ -5001,7 +5001,7 @@
             ctx.restore();
           } : style === "layers" && !primary ? (ctx) => {
             drawLines(ctx, silhouettes(L, buf), { width: S.inkWidth * (li === 0 ? 0.45 : 0.8), color: inkCol, alpha: li === 0 ? 0.45 : 0.8 });
-          } : style === "surface" && (o.finish === "smooth" || o.finish === "drawn") ? smoothItem(L, buf, sh, o.finish === "drawn") : style === "surface" && layer === "over" && (M.hasModel || o.glass) ? glassItem(L, buf, sh) : surfaceItem(L, buf, sh, strength, true) });
+          } : (style === "surface" || primary) && (o.finish === "smooth" || o.finish === "drawn") ? smoothItem(L, buf, sh, o.finish === "drawn") : style === "surface" && layer === "over" && (M.hasModel || o.glass) ? glassItem(L, buf, sh) : surfaceItem(L, buf, sh, strength, true) });
         });
       } else if (style === "mesh") {
         const buf = o.carve > 0 ? null : mapRaster(main, main.px, main.py, main.pz, W, H);
