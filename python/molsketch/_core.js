@@ -7018,7 +7018,7 @@
           const r = find(v);
           size.set(r, (size.get(r) || 0) + 1);
         }
-        const big = Math.max(0, ...size.values()) * 0.02, keep2 = [];
+        const big = zoneSel ? 12 : Math.max(0, ...size.values()) * 0.02, keep2 = [];
         for (let t = 0; t < tri.length; t += 3) if (size.get(find(tri[t])) >= big) keep2.push(tri[t], tri[t + 1], tri[t + 2]);
         else dust++;
         tri = new Uint32Array(keep2);
@@ -7115,7 +7115,7 @@
       byVolume ? mass <= 0 ? "contoured at 2 \u03C3" : `contoured to enclose ${mass / 1e6 >= 0.1 ? (mass / 1e6).toFixed(2) + " MDa" : Math.round(mass / 1e3) + " kDa"} (${massFrom}'s mass, 1.21 \xC5\xB3/Da)` : `contoured at ${+level.toPrecision(3)}${style.map.level == null && style.map.sigma == null && m.level != null ? " (recommended)" : ""}, ${sigma.toFixed(1)} \u03C3`,
       o.style === "layers" ? `levels \xD7${factors.join(", \xD7")}` : "",
       zoned ? "the density within 5 \xC5 of the model" : o.carve > 0 && atoms.length ? `carved at ${o.carve} \xC5 of ${zoneSel ? o.zone : "the model"}` : zoneSel ? `the density joined to ${o.zone}, within ${zonePad} \xC5` : m !== whole ? `cropped to the model's box and ${o.crop} \xC5` : "",
-      dust ? "specks under 2% of the largest piece hidden" : "",
+      dust ? zoneSel ? "specks hidden" : "specks under 2% of the largest piece hidden" : "",
       g0 !== m && !byVolume ? `drawn at ${g2.step[0].toFixed(1)} \xC5 per voxel${R > 0 ? "" : ", at the level enclosing the same volume"}` : "",
       o.localResolution === "bfactor" && s ? "line looseness from B-factors" : o.localResolution === "map" && localRes ? "line looseness from local resolution" : ""
     ].filter(Boolean).join(" \xB7 ");

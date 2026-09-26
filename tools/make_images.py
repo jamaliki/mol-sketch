@@ -76,7 +76,7 @@ def turntable():
 
 def maps():
     """cryo-EM maps: TRPV1 (EMD-5778) on its own and with its model (3J5P); Trp93 of apoferritin (7A4M, EMD-11638) in
-    its density at the recommended level and at 3 σ; Asp89, whose side chain has lost its density"""
+    its density at the recommended level and at 3 σ; Asp89 at 3 σ, whose side chain has lost its density"""
     say(ms.fetch_map("EMD-5778").save(IMG / "map_alone.png", (900, 900)))
     say(ms.fetch_map("EMD-5778").look("ink").save(IMG / "map_alone_ink.png", (900, 900)))
     say(ms.fetch("3J5P", map=True).save(IMG / "map_with_model.png", (900, 900)))
@@ -85,7 +85,7 @@ def maps():
     for name, extra in (("map_side_chain", {}), ("map_side_chain_3sigma", {"sigma": 3})):
         say(ms.fetch("7A4M", map=True).map(zone=trp, carve=2, **extra).show(sticks=trp, cartoon=None).save(IMG / f"{name}.png", (900, 900)))
     asp = "resi 89 and not hydro"
-    say(ms.fetch("7A4M", map=True).map(zone=asp, carve=2).show(sticks=asp, cartoon=None).save(IMG / "map_damaged_side_chain.png", (900, 900)))
+    say(ms.fetch("7A4M", map=True).map(zone=asp, carve=2, sigma=3).show(sticks=asp, cartoon=None).save(IMG / "map_damaged_side_chain.png", (900, 900)))
 
 
 def styles():

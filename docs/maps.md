@@ -9,7 +9,7 @@ map appears to show is written in the caption under the drawing.
 | ![TRPV1 map on its own](img/map_alone_ink.png) | ![TRPV1 with its model](img/map_with_model.png) |
 | TRPV1 (EMD-5778) on its own | with its model (PDB 3J5P) |
 | ![Trp93 in its density](img/map_side_chain_3sigma.png) | ![Asp89, side chain without density](img/map_damaged_side_chain.png) |
-| Trp93 of apoferritin in its density, 3 σ | Asp89 at the recommended level: the backbone is in density, the carboxylate is not |
+| Trp93 of apoferritin in its density, 3 σ | Asp89 at 3 σ: the backbone is in density, the carboxylate is not |
 
 ## Getting a map
 
