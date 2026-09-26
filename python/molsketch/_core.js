@@ -4648,6 +4648,7 @@
       const shadeOf = (L, buf) => {
         const n = W * H, dark = new Float32Array(n), fogp = new Float32Array(n), cls = new Int32Array(n).fill(-1), hand2 = new Float32Array(n), face = new Float32Array(n);
         const la = S.lightAngle * Math.PI / 180, l0 = Math.cos(la) * 0.75, l1 = -Math.sin(la) * 0.75, l2 = 0.66, occR = 6 * proj.pxPerA;
+        const MSH = Math.max(S.shading, 0.45);
         const OX = new Int32Array(8), OY = new Int32Array(8);
         for (let k = 0; k < 8; k++) {
           const an = k * Math.PI / 4;
@@ -4677,7 +4678,7 @@
             }
             occ = s / 8;
           }
-          dark[i] = clamp(0.62 * (1 - lam) * S.shading / 0.65 + 0.9 * POOL * occ, 0, 1);
+          dark[i] = clamp(0.62 * (1 - lam) * MSH / 0.65 + 0.9 * POOL * occ, 0, 1);
           fogp[i] = (L.fog[a] + L.fog[b] + L.fog[c]) / 3;
           cls[i] = L.cls[a];
           hand2[i] = L.hand ? (L.hand[a] + L.hand[b] + L.hand[c]) / 3 : 0;

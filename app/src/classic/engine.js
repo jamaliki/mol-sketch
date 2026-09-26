@@ -1100,12 +1100,13 @@ function buildMap(items,st,pos,proj,seedBase){
   const shadeOf=(L,buf)=>{
     const n=W*H,dark=new Float32Array(n),fogp=new Float32Array(n),cls=new Int32Array(n).fill(-1),hand=new Float32Array(n),face=new Float32Array(n);
     const la=S.lightAngle*Math.PI/180,l0=Math.cos(la)*0.75,l1=-Math.sin(la)*0.75,l2=0.66,occR=6*proj.pxPerA;
+    const MSH=Math.max(S.shading,0.45);   // a map's form is its shading: at least this much, in looks that shade their ribbons with lines instead (engraved: 0)
     const OX=new Int32Array(8),OY=new Int32Array(8);for(let k=0;k<8;k++){const an=k*Math.PI/4;OX[k]=Math.round(Math.cos(an)*occR);OY[k]=Math.round(Math.sin(an)*occR)}   // the 8 probes of the grooves, in whole pixels
     for(let i=0;i<n;i++){const t=buf.tb[i];if(t<0)continue;const a=L.tri[t*3],b=L.tri[t*3+1],c=L.tri[t*3+2];
       const nx=L.rn[a*3]+L.rn[b*3]+L.rn[c*3],ny=L.rn[a*3+1]+L.rn[b*3+1]+L.rn[c*3+1],nz=L.rn[a*3+2]+L.rn[b*3+2]+L.rn[c*3+2],ln=Math.hypot(nx,ny,nz)||1;
       const lam=Math.max(0,(nx*l0+ny*l1*-1+nz*l2)/ln);face[i]=Math.abs(nz)/ln;   // the light, from the style's angle (screen y down)
       let occ=0;if(POOL>0){const x=i%W,y=(i/W)|0,z=buf.zb[i];let s=0;for(let k=0;k<8;k++){const qx=x+OX[k],qy=y+OY[k];if(qx>=0&&qy>=0&&qx<W&&qy<H){const zq=buf.zb[qy*W+qx];if(zq>-1e8){const u=(zq-z-1)/6;s+=u<0?0:u>1?1:u}}}occ=s/8}
-      dark[i]=clamp(0.62*(1-lam)*S.shading/0.65+0.9*POOL*occ,0,1);fogp[i]=(L.fog[a]+L.fog[b]+L.fog[c])/3;cls[i]=L.cls[a];hand[i]=L.hand?(L.hand[a]+L.hand[b]+L.hand[c])/3:0}
+      dark[i]=clamp(0.62*(1-lam)*MSH/0.65+0.9*POOL*occ,0,1);fogp[i]=(L.fog[a]+L.fog[b]+L.fog[c])/3;cls[i]=L.cls[a];hand[i]=L.hand?(L.hand[a]+L.hand[b]+L.hand[c])/3:0}
     softenCovered(dark,buf.tb,W,H,Math.max(1,Math.round(2.5*TEX),Math.min(Math.round(8*TEX),Math.round(1.2*proj.pxPerA))));   // over about an ångström: shadows follow the surface's form, not every bump of it   // the facets of the mesh smoothed away: shadows as broad shapes, not specks
     softenCovered(face,buf.tb,W,H,Math.max(1,Math.round(2*TEX)));
     return {dark,fogp,cls,hand,face}};
