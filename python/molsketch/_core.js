@@ -3825,7 +3825,7 @@
             ctx.save();
             ctx.globalAlpha = a.alpha;
             ctx.beginPath();
-            ctx.arc(p.x, p.y, R - 0.6, 0, Math.PI * 2);
+            ctx.arc(p.x, p.y, Math.max(0, R - 0.6), 0, Math.PI * 2);
             ctx.fillStyle = paperFill();
             ctx.fill();
             if (!isInk()) {
@@ -4072,7 +4072,11 @@
         const cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2;
         const many = cfg.rep.detail !== "full" && patches.length > 600;
         const { edges: EDG, pooling: POOL, fade: FADE, any } = model.cues, zAt = model.zAt, paperW = luminance(P.paper) > 0.5 ? "#ffffff" : "#000000";
+        const hid = hiddenPatches(patches, RF.W, RF.H);
+        let pi = -1;
         for (const p of patches) {
+          pi++;
+          if (hid[pi]) continue;
           const depth = (zmax - p.z) / zs;
           const lit = ((p.x - cx) * lx + (p.y - cy) * ly) / R;
           let tone = clamp(0.3 + 0.6 * depth - 0.2 * lit, 0.15, 1), col = p.col, layers = many ? 3 : 5;
@@ -4105,12 +4109,13 @@
               by1 = Math.max(by1, q[1]);
             }
             const n = Math.round((bx1 - bx0) * (by1 - by0) * 0.012 * POOL * (occ - 0.3));
+            const pts = [];
             for (let i = 0; i < n; i++) {
               const gx = bx0 + rng2() * (bx1 - bx0), gy = by0 + rng2() * (by1 - by0), ga = 0.12 + rng2() * 0.2;
               if (!inHull(p.h, gx, gy)) continue;
-              x.fillStyle = rgba(mix(col, "#000000", 0.4), ga);
-              x.fillRect(gx, gy, 1, 1);
+              pts.push([gx, gy, ga]);
             }
+            grains(x, pts, mix(col, "#000000", 0.4));
           }
           x.restore();
         }
@@ -4120,17 +4125,21 @@
         const mx = mask.getContext("2d", { willReadFrequently: true });
         mx.scale(dpr, dpr);
         mx.fillStyle = mix(P.surface, shadeInk(), 0.35);
+        mx.beginPath();
         for (const d of discs) {
-          mx.beginPath();
+          mx.moveTo(d.x + d.r, d.y);
           mx.arc(d.x, d.y, d.r, 0, Math.PI * 2);
-          mx.fill();
         }
+        mx.fill();
         mx.globalCompositeOperation = "destination-out";
+        mx.beginPath();
         for (const d of discs) {
-          mx.beginPath();
-          mx.arc(d.x, d.y, Math.max(0, d.r - 2.2), 0, Math.PI * 2);
-          mx.fill();
+          const r = d.r - 2.2;
+          if (r <= 0) continue;
+          mx.moveTo(d.x + r, d.y);
+          mx.arc(d.x, d.y, r, 0, Math.PI * 2);
         }
+        mx.fill();
         x.save();
         x.globalAlpha = 0.55;
         x.drawImage(mask, 0, 0, W, H);
@@ -4150,11 +4159,12 @@
           x1 = Math.max(x1, d.x + d.r);
           y1 = Math.max(y1, d.y + d.r);
         }
-        const g2 = Math.round((x1 - x0) * (y1 - y0) * 25e-4);
+        const g2 = Math.round((x1 - x0) * (y1 - y0) * 25e-4), gp = [];
         for (let i = 0; i < g2; i++) {
-          x.fillStyle = rgba(mix(P.surface, shadeInk(), 0.4), 0.1 + rng() * 0.2);
-          x.fillRect(x0 + rng() * (x1 - x0), y0 + rng() * (y1 - y0), 1, 1);
+          const a = 0.1 + rng() * 0.2;
+          gp.push([x0 + rng() * (x1 - x0), y0 + rng() * (y1 - y0), a]);
         }
+        grains(x, gp, mix(P.surface, shadeInk(), 0.4));
         x.restore();
         ctx.save();
         ctx.globalAlpha = cfg.rep.surfaceOpacity;
@@ -4188,7 +4198,9 @@
         ymax = Math.max(ymax, p.y);
       }
       const R = Math.max(xmax - xmin, ymax - ymin) / 2 || 1, cx = (xmin + xmax) / 2, cy = (ymin + ymax) / 2;
+      const order = [...patches].sort((a, b) => a.z - b.z), hid = hiddenPatches(order, RF.W, RF.H, 0.04), hidden = new Set(order.filter((p, k) => hid[k]));
       for (const p of patches) {
+        if (hidden.has(p)) continue;
         const seed = seedBase + strHash("sp" + p.k), occ = p.groove * POOL, fade = p.fade, fk = 1 - fade;
         const lit = ((p.x - cx) * lx + (p.y - cy) * ly) / R;
         const dark = clamp(0.7 * occ + S.shading * 0.25 * clamp(-lit, 0, 1), 0, 1);
@@ -5139,6 +5151,72 @@
         }
         ctx.restore();
       } });
+    }
+    function grains(ctx, pts, col) {
+      if (!pts.length) return;
+      let lo = 1, hi = 0;
+      for (const p of pts) {
+        if (p[2] < lo) lo = p[2];
+        if (p[2] > hi) hi = p[2];
+      }
+      const B = 4, span = Math.max(1e-6, hi - lo), bins = [[], [], [], []];
+      for (const p of pts) bins[Math.min(B - 1, Math.floor((p[2] - lo) / span * B))].push(p);
+      bins.forEach((b, k) => {
+        if (!b.length) return;
+        ctx.beginPath();
+        for (const p of b) ctx.rect(p[0], p[1], 1, 1);
+        ctx.fillStyle = rgba(col, lo + (k + 0.5) / B * span);
+        ctx.fill();
+      });
+    }
+    function hiddenPatches(patches, W, H, wobble = 0) {
+      const w = Math.max(1, Math.ceil(W)), h = Math.max(1, Math.ceil(H)), cov = new Uint8Array(w * h), out = new Uint8Array(patches.length);
+      const inside = (q, x, y, cx, cy, k) => {
+        let sg = 0;
+        for (let i = 0, n = q.length; i < n; i++) {
+          const a = q[i], b = q[(i + 1) % n];
+          const ax = cx + (a[0] - cx) * k, ay = cy + (a[1] - cy) * k, bx = cx + (b[0] - cx) * k, by = cy + (b[1] - cy) * k;
+          const c = (bx - ax) * (y - ay) - (by - ay) * (x - ax);
+          if (c !== 0) {
+            const t = c > 0 ? 1 : -1;
+            if (sg === 0) sg = t;
+            else if (t !== sg) return false;
+          }
+        }
+        return true;
+      };
+      for (let pi = patches.length - 1; pi >= 0; pi--) {
+        const p = patches[pi], q = p.h;
+        if (!q || q.length < 3) continue;
+        let cx = 0, cy = 0;
+        for (const a of q) {
+          cx += a[0];
+          cy += a[1];
+        }
+        cx /= q.length;
+        cy /= q.length;
+        let r = 0;
+        for (const a of q) r = Math.max(r, Math.hypot(a[0] - cx, a[1] - cy));
+        if (r < 1) continue;
+        const kOut = 1 + (2 + (0.15 + wobble) * r) / r, kIn = Math.max(0, 1 - (1.5 + wobble * r) / r), R = r * kOut;
+        const x0 = Math.max(0, Math.floor(cx - R)), x1 = Math.min(w - 1, Math.ceil(cx + R)), y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(h - 1, Math.ceil(cy + R));
+        let seen = false;
+        for (let y = y0; y <= y1 && !seen; y++) for (let x = x0; x <= x1; x++) {
+          if (!cov[y * w + x] && inside(q, x + 0.5, y + 0.5, cx, cy, kOut)) {
+            seen = true;
+            break;
+          }
+        }
+        if (!seen && x1 >= x0 && y1 >= y0) {
+          out[pi] = 1;
+          continue;
+        }
+        if ((p.alpha ?? 1) >= 0.999 && kIn > 0) for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) {
+          const i = y * w + x;
+          if (!cov[i] && inside(q, x + 0.5, y + 0.5, cx, cy, kIn)) cov[i] = 1;
+        }
+      }
+      return out;
     }
     function softenCovered(v, tb, W, H, r) {
       let X0 = W, X1 = -1, Y0 = H, Y1 = -1;

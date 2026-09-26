@@ -779,7 +779,7 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
         const T=engraveTone(col);ctx.beginPath();ctx.arc(p.x,p.y,R,0,Math.PI*2);ctx.fillStyle=T.fill?fogged(site?mix(T.fill,col,0.35):T.fill,p.fog):site?fogged(mix(P2.paper,col,cfg.rep.fill==='ink'?0.12:0.2),p.fog):paperFill();ctx.fill();
         ctx.lineWidth=cfg.style.inkWidth*LW.outer*(site?1.2:0.85)*(0.8+0.2*fk);ctx.strokeStyle=fogged(P2.ink,p.fog);ctx.stroke();ctx.restore()}});continue}
       items.push({z:p.z-0.004,draw:(ctx)=>{ctx.save();ctx.globalAlpha=a.alpha;sketchCircle(ctx,p.x,p.y,R,{seed:seed+4,width:cfg.style.inkWidth*p.d*(0.75+0.25*(1-p.fog*cfg.view.fog))*LW.outer,color:fogged(P.ink,p.fog),alpha:0.55+0.4*(1-p.fog*cfg.view.fog),passes:lowDetail?1:undefined});ctx.restore()}});
-      items.push({z:p.z+0.001,draw:(ctx)=>{ctx.save();ctx.globalAlpha=a.alpha;ctx.beginPath();ctx.arc(p.x,p.y,R-0.6,0,Math.PI*2);ctx.fillStyle=paperFill();ctx.fill();if(!isInk()){ctx.fillStyle=fogged(fillFor(col),p.fog);ctx.fill()}if(isWC()){const q=[];for(let i=0;i<10;i++){const an=i/10*Math.PI*2;q.push([p.x+Math.cos(an)*(R-0.8),p.y+Math.sin(an)*(R-0.8)])}watercolourShape(ctx,q,col,seed,{fog:p.fog,layers:5,strength:0.7,granulate:false})}
+      items.push({z:p.z+0.001,draw:(ctx)=>{ctx.save();ctx.globalAlpha=a.alpha;ctx.beginPath();ctx.arc(p.x,p.y,Math.max(0,R-0.6),0,Math.PI*2);ctx.fillStyle=paperFill();ctx.fill();if(!isInk()){ctx.fillStyle=fogged(fillFor(col),p.fog);ctx.fill()}if(isWC()){const q=[];for(let i=0;i<10;i++){const an=i/10*Math.PI*2;q.push([p.x+Math.cos(an)*(R-0.8),p.y+Math.sin(an)*(R-0.8)])}watercolourShape(ctx,q,col,seed,{fog:p.fog,layers:5,strength:0.7,granulate:false})}
       if(isInk()){ctx.save();ctx.clip();if(isPencil())scribbleFill(ctx,p.x-R,p.y-R,p.x+R,p.y+R,col,seed,{fog:p.fog,d:p.d});penSphere(ctx,p.x,p.y,R,col,a.el,seed,{fog:p.fog,d:p.d});ctx.restore()}ctx.restore()}});
     }
   }
@@ -892,7 +892,8 @@ function paintWatercolourSurface(items,model,seedBase){
     const zs=Math.max(1e-6,zmax-zmin);const la=cfg.style.lightAngle*Math.PI/180;const lx=Math.cos(la),ly=Math.sin(la);const R=Math.max(xmax-xmin,ymax-ymin)/2||1;const cx=(xmin+xmax)/2,cy=(ymin+ymax)/2;
     const many=cfg.rep.detail!=='full'&&patches.length>600;
     const {edges:EDG,pooling:POOL,fade:FADE,any}=model.cues,zAt=model.zAt,paperW=luminance(P.paper)>0.5?'#ffffff':'#000000';
-    for(const p of patches){const depth=(zmax-p.z)/zs;const lit=((p.x-cx)*lx+(p.y-cy)*ly)/R; // lit>0 faces the light
+    const hid=hiddenPatches(patches,RF.W,RF.H);let pi=-1;
+    for(const p of patches){pi++;if(hid[pi])continue;const depth=(zmax-p.z)/zs;const lit=((p.x-cx)*lx+(p.y-cy)*ly)/R; // lit>0 faces the light
       let tone=clamp(0.3+0.6*depth-0.2*lit,0.15,1),col=p.col,layers=many?3:5;const occ=p.groove,fade=p.fade;
       if(any){
         // tone: the light and the grooves decide it (not raw depth, which the fade now carries)
@@ -907,17 +908,18 @@ function paintWatercolourSurface(items,model,seedBase){
       if(POOL>0&&occ>0.3){ // pigment settles in the grooves: granulation inside the patch
         const rng=mulberry32(seed+31);let bx0=1e9,by0=1e9,bx1=-1e9,by1=-1e9;for(const q of p.h){bx0=Math.min(bx0,q[0]);by0=Math.min(by0,q[1]);bx1=Math.max(bx1,q[0]);by1=Math.max(by1,q[1])}
         const n=Math.round((bx1-bx0)*(by1-by0)*0.012*POOL*(occ-0.3));
-        for(let i=0;i<n;i++){const gx=bx0+rng()*(bx1-bx0),gy=by0+rng()*(by1-by0),ga=0.12+rng()*0.2;if(!inHull(p.h,gx,gy))continue;x.fillStyle=rgba(mix(col,'#000000',0.4),ga);x.fillRect(gx,gy,1,1)}}
+        const pts=[];for(let i=0;i<n;i++){const gx=bx0+rng()*(bx1-bx0),gy=by0+rng()*(by1-by0),ga=0.12+rng()*0.2;if(!inHull(p.h,gx,gy))continue;pts.push([gx,gy,ga])}grains(x,pts,mix(col,'#000000',0.4))}
       x.restore()}
     // silhouette: union of discs minus the same union eroded → a band along the outer edge
     const mask=document.createElement('canvas');mask.width=off.width;mask.height=off.height;const mx=mask.getContext('2d',{willReadFrequently:true});mx.scale(dpr,dpr);
-    mx.fillStyle=mix(P.surface,shadeInk(),0.35);for(const d of discs){mx.beginPath();mx.arc(d.x,d.y,d.r,0,Math.PI*2);mx.fill()}
-    mx.globalCompositeOperation='destination-out';for(const d of discs){mx.beginPath();mx.arc(d.x,d.y,Math.max(0,d.r-2.2),0,Math.PI*2);mx.fill()}
+    // (each union one path, filled once: a disc at a time was two draws per atom, 440 000 for a ribosome)
+    mx.fillStyle=mix(P.surface,shadeInk(),0.35);mx.beginPath();for(const d of discs){mx.moveTo(d.x+d.r,d.y);mx.arc(d.x,d.y,d.r,0,Math.PI*2)}mx.fill();
+    mx.globalCompositeOperation='destination-out';mx.beginPath();for(const d of discs){const r=d.r-2.2;if(r<=0)continue;mx.moveTo(d.x+r,d.y);mx.arc(d.x,d.y,r,0,Math.PI*2)}mx.fill();
     x.save();x.globalAlpha=0.55;x.drawImage(mask,0,0,W,H);x.restore();
     // granulation over the whole surface
     const rng=mulberry32(seedBase+7);x.save();x.beginPath();for(const d of discs){x.moveTo(d.x+d.r,d.y);x.arc(d.x,d.y,d.r,0,Math.PI*2)}x.clip();
     let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const d of discs){x0=Math.min(x0,d.x-d.r);y0=Math.min(y0,d.y-d.r);x1=Math.max(x1,d.x+d.r);y1=Math.max(y1,d.y+d.r)}
-    const g=Math.round((x1-x0)*(y1-y0)*0.0025);for(let i=0;i<g;i++){x.fillStyle=rgba(mix(P.surface,shadeInk(),0.4),0.1+rng()*0.2);x.fillRect(x0+rng()*(x1-x0),y0+rng()*(y1-y0),1,1)}x.restore();
+    const g=Math.round((x1-x0)*(y1-y0)*0.0025),gp=[];for(let i=0;i<g;i++){const a=0.1+rng()*0.2;gp.push([x0+rng()*(x1-x0),y0+rng()*(y1-y0),a])}grains(x,gp,mix(P.surface,shadeInk(),0.4));x.restore();
     // paper under the surface, then the wash multiplied once, then a sketched silhouette line
     ctx.save();ctx.globalAlpha=cfg.rep.surfaceOpacity;ctx.beginPath();for(const d of discs){ctx.moveTo(d.x+d.r,d.y);ctx.arc(d.x,d.y,d.r,0,Math.PI*2)}ctx.fillStyle=paperFill();ctx.fill();
     ctx.globalCompositeOperation=luminance(P.paper)>0.5?'multiply':'screen';ctx.drawImage(off,0,0,W,H);ctx.restore();
@@ -935,7 +937,9 @@ function paintPatchSurface(items,model,seedBase){
   let xmin=1e9,xmax=-1e9,ymin=1e9,ymax=-1e9;
   for(const p of patches){p.col=colFor(p.a);xmin=Math.min(xmin,p.x);xmax=Math.max(xmax,p.x);ymin=Math.min(ymin,p.y);ymax=Math.max(ymax,p.y)}
   const R=Math.max(xmax-xmin,ymax-ymin)/2||1,cx=(xmin+xmax)/2,cy=(ymin+ymax)/2;
-  for(const p of patches){
+  // each patch lays paper over its shape: those wholly under nearer patches need not be drawn
+  const order=[...patches].sort((a,b)=>a.z-b.z),hid=hiddenPatches(order,RF.W,RF.H,0.04),hidden=new Set(order.filter((p,k)=>hid[k]));
+  for(const p of patches){if(hidden.has(p))continue;
     const seed=seedBase+strHash('sp'+p.k),occ=p.groove*POOL,fade=p.fade,fk=1-fade;
     const lit=((p.x-cx)*lx+(p.y-cy)*ly)/R;   // >0 faces the light
     const dark=clamp(0.7*occ+S.shading*0.25*clamp(-lit,0,1),0,1);   // how much shadow the patch holds: grooves, and the side away from the light
@@ -1244,6 +1248,26 @@ function buildMap(items,st,pos,proj,seedBase){
     for(const ti of M.unsupported){const a=atomsById[byIndex[ti]];if(!a||!pos[a.id])continue;const p=pos[a.id];sketchCircle(ctx,p.x,p.y,2.6*Math.max(0.7,TEX),{seed:seedBase+8001+k++,width:0.8,color:accent,alpha:0.75,passes:1})}ctx.restore()}});
 }
 /* a box blur (twice, near a Gaussian) of a per-pixel field over the covered pixels only, in place */
+/* grains of pigment: one-pixel dots of a colour at various strengths, laid as four strengths, each one path (a dot at a
+   time was a draw each: 70 000 for a ribosome's surface) */
+function grains(ctx,pts,col){if(!pts.length)return;let lo=1,hi=0;for(const p of pts){if(p[2]<lo)lo=p[2];if(p[2]>hi)hi=p[2]}const B=4,span=Math.max(1e-6,hi-lo),bins=[[],[],[],[]];
+  for(const p of pts)bins[Math.min(B-1,Math.floor((p[2]-lo)/span*B))].push(p);
+  bins.forEach((b,k)=>{if(!b.length)return;ctx.beginPath();for(const p of b)ctx.rect(p[0],p[1],1,1);ctx.fillStyle=rgba(col,lo+(k+0.5)/B*span);ctx.fill()})}
+/* which of a surface's patches (painted far to near, each clearing its hull first) no pixel of will be left: every pixel
+   of its hull, grown to take in its pigment's spill, lies inside nearer opaque patches' hulls (shrunk, so no edge
+   pixel counts as covered). Most of a large assembly's patches are hidden; painting them was most of its time */
+function hiddenPatches(patches,W,H,wobble=0){   // wobble: how far (a fraction of its size) a patch's drawn shape strays from its hull
+  const w=Math.max(1,Math.ceil(W)),h=Math.max(1,Math.ceil(H)),cov=new Uint8Array(w*h),out=new Uint8Array(patches.length);
+  const inside=(q,x,y,cx,cy,k)=>{let sg=0;for(let i=0,n=q.length;i<n;i++){const a=q[i],b=q[(i+1)%n];const ax=cx+(a[0]-cx)*k,ay=cy+(a[1]-cy)*k,bx=cx+(b[0]-cx)*k,by=cy+(b[1]-cy)*k;
+    const c=(bx-ax)*(y-ay)-(by-ay)*(x-ax);if(c!==0){const t=c>0?1:-1;if(sg===0)sg=t;else if(t!==sg)return false}}return true};
+  for(let pi=patches.length-1;pi>=0;pi--){const p=patches[pi],q=p.h;if(!q||q.length<3)continue;
+    let cx=0,cy=0;for(const a of q){cx+=a[0];cy+=a[1]}cx/=q.length;cy/=q.length;let r=0;for(const a of q)r=Math.max(r,Math.hypot(a[0]-cx,a[1]-cy));if(r<1)continue;
+    const kOut=1+(2+(0.15+wobble)*r)/r,kIn=Math.max(0,1-(1.5+wobble*r)/r),R=r*kOut;
+    const x0=Math.max(0,Math.floor(cx-R)),x1=Math.min(w-1,Math.ceil(cx+R)),y0=Math.max(0,Math.floor(cy-R)),y1=Math.min(h-1,Math.ceil(cy+R));
+    let seen=false;for(let y=y0;y<=y1&&!seen;y++)for(let x=x0;x<=x1;x++){if(!cov[y*w+x]&&inside(q,x+0.5,y+0.5,cx,cy,kOut)){seen=true;break}}
+    if(!seen&&x1>=x0&&y1>=y0){out[pi]=1;continue}
+    if((p.alpha??1)>=0.999&&kIn>0)for(let y=y0;y<=y1;y++)for(let x=x0;x<=x1;x++){const i=y*w+x;if(!cov[i]&&inside(q,x+0.5,y+0.5,cx,cy,kIn))cov[i]=1}}
+  return out}
 function softenCovered(v,tb,W,H,r){   // v is 0 where nothing is covered: only the covered box is walked (the same sums, in the same order)
   let X0=W,X1=-1,Y0=H,Y1=-1;for(let y=0;y<H;y++){const o=y*W;for(let x=0;x<W;x++)if(tb[o+x]>=0){if(x<X0)X0=x;if(x>X1)X1=x;if(y<Y0)Y0=y;Y1=y}}
   if(X1<0)return;
