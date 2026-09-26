@@ -156,6 +156,12 @@ carving). In the app, use the Map tab; in Python:
 ```python
 ms.fetch("3J5P", map=True)           # an entry with the map it was built into
 ms.fetch_map("EMD-5778")             # a map on its own
+ms.fetch("7A4M", map=True).map(zone="resi 93", sigma=3)   # a residue in its density
+```
+
+```bash
+molsketch render 3J5P --map auto -o trpv1.png
+molsketch render EMD-5778 --look ink -o map.png
 ```
 
 | | | |
