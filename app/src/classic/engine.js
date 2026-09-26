@@ -1069,6 +1069,7 @@ function buildMap(items,st,pos,proj,seedBase){
   const levels=M.levels.map(prep),main=levels[M.primary]||levels[0];
   const style=o.style,layer=o.layer==='auto'?(style==='slice'?'plane':M.hasModel&&(style==='surface'||style==='layers')&&!M.closeUp?'under':'over'):o.layer==='behind'?'under':o.layer;   // with a model: behind it, so the model keeps its colour; a close-up over it, so its atoms are seen in their density
   const zItem=layer==='under'?-1e9:layer==='over'||layer==='lines'?1e9:0;
+  let sliceZ=null;   // a section's depth (style slice)
   // the surface's silhouette on the mesh: where n·(eye − p) changes sign, kept where the buffer sees it
   const silhouettes=(L,buf)=>{
     const n=L.pos.length/3,f=new Float32Array(n);
@@ -1224,7 +1225,7 @@ function buildMap(items,st,pos,proj,seedBase){
     const col=o.color==='single'||!M.hasModel?mix(mapCol,shadeInk(),light?0.45:0.1):mix(P.N,shadeInk(),0.2);
     items.push({z:zItem,map:true,draw:ctx=>{ctx.save();if(o.finish==='smooth'){ctx.lineJoin='round';ctx.lineCap='round';ctx.strokeStyle=o.line||mix(mapCol,shadeInk(),light?0.55:0.1);ctx.globalAlpha=0.9;ctx.lineWidth=S.inkWidth*0.6;ctx.beginPath();for(const l of lines)l.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.stroke()}else drawLines(ctx,lines,{width:S.inkWidth*(M.closeUp?0.6:0.45),color:col,alpha:0.85});ctx.restore()}})}
   else if(style==='slice'){ // a section through the map at the view's depth: stipple for density, the contour in ink
-    const rz=M.box.map(c=>proj.rot(c)[2]),zc=(Math.min(...rz)+Math.max(...rz))/2+(o.slice?.offset||0)*(Math.max(...rz)-Math.min(...rz));
+    const rz=M.box.map(c=>proj.rot(c)[2]),zc=sliceZ=(Math.min(...rz)+Math.max(...rz))/2+(o.slice?.offset||0)*(Math.max(...rz)-Math.min(...rz));
     // the plane's outline: where it cuts the box's edges
     const R=M.box.map(c=>proj.rot(c)),E=[[0,1],[2,3],[4,5],[6,7],[0,2],[1,3],[4,6],[5,7],[0,4],[1,5],[2,6],[3,7]],cut=[];
     for(const [a,b] of E){const za=R[a][2],zb=R[b][2];if((za-zc)*(zb-zc)<0){const u=(zc-za)/(zb-za);const q=M.box[a].map((v,k)=>v+(M.box[b][k]-v)*u);const p=proj.proj(q);cut.push([p.x,p.y])}}
@@ -1235,9 +1236,12 @@ function buildMap(items,st,pos,proj,seedBase){
     if(o.slice?.cut!==false)for(let i=items.length-1;i>=0;i--)if(!items[i].map&&items[i].z>zc+0.5)items.splice(i,1);   // what lies in front of the plane is cut away
     items.push({z:zc,map:true,draw:ctx=>{const rng=mulberry32(seedBase+4401);ctx.save();
       ctx.beginPath();poly.forEach((q,i)=>i?ctx.lineTo(q[0],q[1]):ctx.moveTo(q[0],q[1]));ctx.closePath();ctx.fillStyle=paperFill();ctx.fill();
-      ctx.fillStyle=rgba(light?inkCol:mix(inkCol,P.paper,0.2),0.85);   // stipple: dots as dense as the density (from a third of the contour level up)
-      for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){const v=val[j*gw+i];if(v<0.3)continue;const pr=Math.pow(clamp((v-0.3)/1.4,0,1),1.2)*0.85;if(rng()>pr)continue;
-        const x=x0+(i+rng())*st2,y=y0+(j+rng())*st2;ctx.beginPath();ctx.arc(x,y,0.5+0.35*rng(),0,Math.PI*2);ctx.fill()}
+      ctx.fillStyle=rgba(light?inkCol:mix(inkCol,P.paper,0.2),0.85);
+      // stipple: dots as dense as the density, from a third of the contour level up to what is dense in this section (its
+      // 95th percentile: against the level alone, all of a particle's inside was the same grey), laid as one path
+      const vs=[];for(const v of val)if(v>=0.3)vs.push(v);vs.sort((a,b)=>a-b);const vhi=Math.max(1.2,vs.length?vs[Math.floor(vs.length*0.95)]:1.7);
+      ctx.beginPath();for(let j=0;j<gh;j++)for(let i=0;i<gw;i++){const v=val[j*gw+i];if(v<0.3)continue;const pr=Math.pow(clamp((v-0.3)/(vhi-0.3),0,1),1.4)*0.6;if(rng()>pr)continue;
+        const x=x0+(i+rng())*st2,y=y0+(j+rng())*st2,r=0.5+0.35*rng();ctx.moveTo(x+r,y);ctx.arc(x,y,r,0,Math.PI*2)}ctx.fill();
       const mask=new Uint8Array(gw*gh);for(let k=0;k<mask.length;k++)mask[k]=val[k]>=1?1:0;
       const rings=maskRings(mask,gw,gh).map(r=>r.map(q=>[x0+q[0]*st2,y0+q[1]*st2]));
       let k=0;for(const r of rings)sketchLine(ctx,[...r,r[0]],{seed:seedBase+4501+k++,passes:1,width:S.inkWidth*0.8,color:wc?mix(mapCol,shadeInk(),0.6):inkCol,alpha:0.85,ampScale:0.6,step:3,overshoot:false});
@@ -1245,7 +1249,8 @@ function buildMap(items,st,pos,proj,seedBase){
       ctx.restore()}})}
   // residues the density does not support: an open accent circle on their trace atom
   if(M.hasModel&&o.unsupported&&M.unsupported.length)items.push({z:2e9,map:true,draw:ctx=>{ctx.save();let k=0;
-    for(const ti of M.unsupported){const a=atomsById[byIndex[ti]];if(!a||!pos[a.id])continue;const p=pos[a.id];sketchCircle(ctx,p.x,p.y,2.6*Math.max(0.7,TEX),{seed:seedBase+8001+k++,width:0.8,color:accent,alpha:0.75,passes:1})}ctx.restore()}});
+    for(const ti of M.unsupported){const a=atomsById[byIndex[ti]];if(!a||!pos[a.id])continue;const p=pos[a.id];
+      if(sliceZ!==null&&Math.abs(proj.rot(a.pos)[2]-sliceZ)>3)continue; /* a section: only the residues it cuts */sketchCircle(ctx,p.x,p.y,2.6*Math.max(0.7,TEX),{seed:seedBase+8001+k++,width:0.8,color:accent,alpha:0.75,passes:1})}ctx.restore()}});
 }
 /* a box blur (twice, near a Gaussian) of a per-pixel field over the covered pixels only, in place */
 /* grains of pigment: one-pixel dots of a colour at various strengths, laid as four strengths, each one path (a dot at a

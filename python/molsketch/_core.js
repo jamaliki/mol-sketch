@@ -4532,6 +4532,7 @@
       const levels = M.levels.map(prep), main = levels[M.primary] || levels[0];
       const style = o.style, layer = o.layer === "auto" ? style === "slice" ? "plane" : M.hasModel && (style === "surface" || style === "layers") && !M.closeUp ? "under" : "over" : o.layer === "behind" ? "under" : o.layer;
       const zItem = layer === "under" ? -1e9 : layer === "over" || layer === "lines" ? 1e9 : 0;
+      let sliceZ = null;
       const silhouettes = (L, buf) => {
         const n = L.pos.length / 3, f2 = new Float32Array(n);
         for (let v = 0; v < n; v++) {
@@ -5082,7 +5083,7 @@
           ctx.restore();
         } });
       } else if (style === "slice") {
-        const rz = M.box.map((c) => proj.rot(c)[2]), zc = (Math.min(...rz) + Math.max(...rz)) / 2 + (o.slice?.offset || 0) * (Math.max(...rz) - Math.min(...rz));
+        const rz = M.box.map((c) => proj.rot(c)[2]), zc = sliceZ = (Math.min(...rz) + Math.max(...rz)) / 2 + (o.slice?.offset || 0) * (Math.max(...rz) - Math.min(...rz));
         const R = M.box.map((c) => proj.rot(c)), E = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]], cut = [];
         for (const [a, b] of E) {
           const za = R[a][2], zb = R[b][2];
@@ -5121,16 +5122,21 @@
           ctx.fillStyle = paperFill();
           ctx.fill();
           ctx.fillStyle = rgba(light ? inkCol : mix(inkCol, P.paper, 0.2), 0.85);
+          const vs = [];
+          for (const v of val) if (v >= 0.3) vs.push(v);
+          vs.sort((a, b) => a - b);
+          const vhi = Math.max(1.2, vs.length ? vs[Math.floor(vs.length * 0.95)] : 1.7);
+          ctx.beginPath();
           for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
             const v = val[j * gw + i];
             if (v < 0.3) continue;
-            const pr = Math.pow(clamp((v - 0.3) / 1.4, 0, 1), 1.2) * 0.85;
+            const pr = Math.pow(clamp((v - 0.3) / (vhi - 0.3), 0, 1), 1.4) * 0.6;
             if (rng() > pr) continue;
-            const x = x0 + (i + rng()) * st2, y = y0 + (j + rng()) * st2;
-            ctx.beginPath();
-            ctx.arc(x, y, 0.5 + 0.35 * rng(), 0, Math.PI * 2);
-            ctx.fill();
+            const x = x0 + (i + rng()) * st2, y = y0 + (j + rng()) * st2, r = 0.5 + 0.35 * rng();
+            ctx.moveTo(x + r, y);
+            ctx.arc(x, y, r, 0, Math.PI * 2);
           }
+          ctx.fill();
           const mask = new Uint8Array(gw * gh);
           for (let k2 = 0; k2 < mask.length; k2++) mask[k2] = val[k2] >= 1 ? 1 : 0;
           const rings = maskRings(mask, gw, gh).map((r) => r.map((q) => [x0 + q[0] * st2, y0 + q[1] * st2]));
@@ -5147,6 +5153,7 @@
           const a = atomsById[byIndex[ti]];
           if (!a || !pos[a.id]) continue;
           const p = pos[a.id];
+          if (sliceZ !== null && Math.abs(proj.rot(a.pos)[2] - sliceZ) > 3) continue;
           sketchCircle(ctx, p.x, p.y, 2.6 * Math.max(0.7, TEX), { seed: seedBase + 8001 + k++, width: 0.8, color: accent, alpha: 0.75, passes: 1 });
         }
         ctx.restore();
