@@ -24,6 +24,7 @@ export interface EngineMap {
   box: number[][];                    // the map's corners, drawing frame
   opts: Style['map']; hasModel: boolean; primaryLevel: number; zoned?: boolean;
   closeUp?: boolean;                  // a zone: residues in their density, drawn over the model by default
+  grid: DensityMap; gridLevel: number;   // the grid the surfaces were drawn from, and the level on it (sample reads it)
 }
 
 const cache = new WeakMap<DensityMap, Map<string, EngineMap>>();
@@ -110,7 +111,6 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   const same = (lv: number) => { if (byVolume) return vLevel * lv / level; if (g1 === m) return lv; let n = 0; for (let i = 0; i < m.data.length; i++) if (m.data[i] >= lv) n++;
     sorted ??= Float32Array.from(g1.data).sort(); return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((1 - n / m.data.length) * sorted.length)))] };
   const turn = (x: number, y: number, z: number): [number, number, number] => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
-  const unturn = (x: number, y: number, z: number): [number, number, number] => [base[0] * x + base[1] * y + base[2] * z, base[4] * x + base[5] * y + base[6] * z, base[8] * x + base[9] * y + base[10] * z];
   // the model's atoms on a 4 Å grid, for nearest-atom lookups (waters left out: they are not what the density is judged by)
   const atoms: number[] = []; if (s) for (let i = 0; i < s.count; i++) { const r = s.residues[s.residueOf[i]]; if (r.resn !== 'HOH' && s.element[i] !== 'H') atoms.push(i) }
   const nearest = nearestAtom(s, atoms);
@@ -187,11 +187,25 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
     dust ? 'specks under 2% of the largest piece hidden' : '', g0 !== m && !byVolume ? `drawn at ${g.step[0].toFixed(1)} Å per voxel${R > 0 ? '' : ', at the level enclosing the same volume'}` : '',
     o.localResolution === 'bfactor' && s ? 'line looseness from B-factors' : o.localResolution === 'map' && localRes ? 'line looseness from local resolution' : ''].filter(Boolean).join(' · ');
   const corners: number[][] = []; for (const a of [0, 1]) for (const b of [0, 1]) for (const c of [0, 1]) corners.push(turn(g.origin[0] + a * (g.nx - 1) * g.step[0], g.origin[1] + b * (g.ny - 1) * g.step[1], g.origin[2] + c * (g.nz - 1) * g.step[2]));
-  const out: EngineMap = { name: m.name, levels, primary, wire, unsupported, caption, sample: (x, y, z) => { const p = unturn(x, y, z); return sampleMap(g, p[0], p[1], p[2]) * level / gLevel },
-    box: corners, opts: o, hasModel: atoms.length > 0, primaryLevel: level, zoned, closeUp: !!zoneSel };
-  per.set(key, out); if (per.size > 6) per.delete(per.keys().next().value!);
+  const out: EngineMap = { name: m.name, levels, primary, wire, unsupported, caption, sample: samplerOf(g, base, level, gLevel),
+    box: corners, opts: o, hasModel: atoms.length > 0, primaryLevel: level, zoned, closeUp: !!zoneSel, grid: g, gridLevel: gLevel };
+  keep(per, key, out);
   return out;
 }
+
+function keep(per: Map<string, EngineMap>, key: string, em: EngineMap) { per.set(key, em); if (per.size > 6) per.delete(per.keys().next().value!) }
+/** density at a point of the drawing's frame, on the scale of the figure's level */
+function samplerOf(g: DensityMap, base: Float32Array, level: number, gLevel: number) {
+  return (x: number, y: number, z: number) => { const p = [base[0] * x + base[1] * y + base[2] * z, base[4] * x + base[5] * y + base[6] * z, base[8] * x + base[9] * y + base[10] * z]; return sampleMap(g, p[0], p[1], p[2]) * level / gLevel };
+}
+/** a prepared map made elsewhere (a worker: without its sampler, which does not cross) taken into the cache, as if
+    prepared here */
+export function adoptPrepared(whole: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null, em: Omit<EngineMap, 'sample'>): EngineMap {
+  const out = { ...em, opts: style.map, sample: samplerOf(em.grid, base, em.primaryLevel, em.gridLevel) } as EngineMap;
+  let per = cache.get(whole); if (!per) cache.set(whole, per = new Map());
+  keep(per, keyOf(whole, style, s, base, localRes), out); return out;
+}
+export { keyOf as mapKey };
 
 /** the nearest of some atoms to a point (and its distance, Å), up to 8 Å away, from a dense 4 Å grid of them */
 function nearestAtom(s: Structure | null, atoms: number[]) {

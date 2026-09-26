@@ -4480,17 +4480,17 @@
         }
         let tri = L.tri;
         if (o.finish !== "sketch" && M.hasModel && !M.zoned && (o.context ?? "hide") === "hide") {
-          const keep = [];
+          const keep2 = [];
           let cut = 0;
           for (let t = 0; t < tri.length; t += 3) {
             if (comp[tri[t]] === 2 && comp[tri[t + 1]] === 2 && comp[tri[t + 2]] === 2) {
               cut++;
               continue;
             }
-            keep.push(tri[t], tri[t + 1], tri[t + 2]);
+            keep2.push(tri[t], tri[t + 1], tri[t + 2]);
           }
           if (cut) {
-            tri = new Uint32Array(keep);
+            tri = new Uint32Array(keep2);
             M.contextHidden = true;
           }
         }
@@ -6913,14 +6913,14 @@
     let g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
     const zoned = R > 0 && !!s && s.count > 0 && o.finish !== "sketch" && o.context !== "show";
     if (zoned) {
-      const keep = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = 5;
+      const keep2 = new Uint8Array(g0.data.length), n = [g0.nx, g0.ny, g0.nz], r = 5;
       for (let i = 0; i < s.count; i++) {
         if (s.element[i] === "H") continue;
         const c = [s.x[i], s.y[i], s.z[i]].map((v, k) => (v - g0.origin[k]) / g0.step[k]), rv = r / g0.step[0];
         for (let z = Math.max(0, Math.floor(c[2] - rv)); z <= Math.min(n[2] - 1, Math.ceil(c[2] + rv)); z++) for (let y = Math.max(0, Math.floor(c[1] - rv)); y <= Math.min(n[1] - 1, Math.ceil(c[1] + rv)); y++)
-          for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) keep[(z * n[1] + y) * n[0] + x] = 1;
+          for (let x = Math.max(0, Math.floor(c[0] - rv)); x <= Math.min(n[0] - 1, Math.ceil(c[0] + rv)); x++) if ((x - c[0]) ** 2 + (y - c[1]) ** 2 + (z - c[2]) ** 2 <= rv * rv) keep2[(z * n[1] + y) * n[0] + x] = 1;
       }
-      g0 = { ...g0, data: g0.data.map((v, q) => keep[q] ? v : 0) };
+      g0 = { ...g0, data: g0.data.map((v, q) => keep2[q] ? v : 0) };
     }
     const g1 = R > 0 ? lowpass(g0, R) : g0;
     const box = Math.max(g1.nx * g1.step[0], g1.ny * g1.step[1], g1.nz * g1.step[2]);
@@ -6955,7 +6955,6 @@
       return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((1 - n / m.data.length) * sorted.length)))];
     };
     const turn = (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
-    const unturn = (x, y, z) => [base[0] * x + base[1] * y + base[2] * z, base[4] * x + base[5] * y + base[6] * z, base[8] * x + base[9] * y + base[10] * z];
     const atoms = [];
     if (s) for (let i = 0; i < s.count; i++) {
       const r = s.residues[s.residueOf[i]];
@@ -6996,16 +6995,16 @@
           const r = find(v);
           size.set(r, (size.get(r) || 0) + 1);
         }
-        const big = Math.max(0, ...size.values()) * 0.02, keep = [];
-        for (let t = 0; t < tri.length; t += 3) if (size.get(find(tri[t])) >= big) keep.push(tri[t], tri[t + 1], tri[t + 2]);
+        const big = Math.max(0, ...size.values()) * 0.02, keep2 = [];
+        for (let t = 0; t < tri.length; t += 3) if (size.get(find(tri[t])) >= big) keep2.push(tri[t], tri[t + 1], tri[t + 2]);
         else dust++;
-        tri = new Uint32Array(keep);
+        tri = new Uint32Array(keep2);
       }
       if (carve > 0 && atoms.length) {
         const cd = zoneSel ? Float32Array.from({ length: nv }, (_, v) => carveDist(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2])) : dist;
-        const keep = [];
-        for (let t = 0; t < tri.length; t += 3) if (cd[tri[t]] <= carve || cd[tri[t + 1]] <= carve || cd[tri[t + 2]] <= carve) keep.push(tri[t], tri[t + 1], tri[t + 2]);
-        tri = new Uint32Array(keep);
+        const keep2 = [];
+        for (let t = 0; t < tri.length; t += 3) if (cd[tri[t]] <= carve || cd[tri[t + 1]] <= carve || cd[tri[t + 2]] <= carve) keep2.push(tri[t], tri[t + 1], tri[t + 2]);
+        tri = new Uint32Array(keep2);
         if (zoneSel && !(o.carve > 0)) {
           const par = new Int32Array(nv);
           for (let v = 0; v < nv; v++) par[v] = v;
@@ -7106,20 +7105,28 @@
       wire,
       unsupported,
       caption,
-      sample: (x, y, z) => {
-        const p = unturn(x, y, z);
-        return sampleMap(g2, p[0], p[1], p[2]) * level / gLevel;
-      },
+      sample: samplerOf(g2, base, level, gLevel),
       box: corners,
       opts: o,
       hasModel: atoms.length > 0,
       primaryLevel: level,
       zoned,
-      closeUp: !!zoneSel
+      closeUp: !!zoneSel,
+      grid: g2,
+      gridLevel: gLevel
     };
-    per.set(key, out);
-    if (per.size > 6) per.delete(per.keys().next().value);
+    keep(per, key, out);
     return out;
+  }
+  function keep(per, key, em) {
+    per.set(key, em);
+    if (per.size > 6) per.delete(per.keys().next().value);
+  }
+  function samplerOf(g2, base, level, gLevel) {
+    return (x, y, z) => {
+      const p = [base[0] * x + base[1] * y + base[2] * z, base[4] * x + base[5] * y + base[6] * z, base[8] * x + base[9] * y + base[10] * z];
+      return sampleMap(g2, p[0], p[1], p[2]) * level / gLevel;
+    };
   }
   function nearestAtom(s, atoms) {
     const cell = 4;
@@ -7166,6 +7173,7 @@
   }
 
   // src/classic/adapter.ts
+  var mapSource = prepareMap;
   var engine = null;
   function classic() {
     if (!engine) engine = createClassic();
@@ -7298,13 +7306,15 @@
     const E = classic();
     const s = R.structure;
     const map = style.map.visible === false ? null : R.map || null;
+    const em = map ? mapSource(map, style, s, R.camera.base, R.localRes || null) : null;
+    if (map && !em) return -1;
     E.cfg = cfgFromStyle(style, R.camera, false);
     if (s) {
       E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels);
       E.scene._src = s;
       E.scene.atomIds = sceneFromStructure.lastIds;
-    } else E.scene = mapScene(map, style, R.camera.base, R.labels);
-    E.scene.map = map ? prepareMap(map, style, s, R.camera.base, R.localRes || null) : null;
+    } else E.scene = mapScene(map, style, R.camera.base, R.labels, em);
+    E.scene.map = em;
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.clearRect(0, 0, R.w, R.h);
@@ -7312,8 +7322,7 @@
     E.renderFrame(ctx, R.w / dpr, R.h / dpr, boil, dpr);
     return performance.now() - t0;
   }
-  function mapScene(map, style, base, labels = []) {
-    const em = prepareMap(map, style, null, base);
+  function mapScene(map, style, base, labels = [], em = prepareMap(map, style, null, base)) {
     const L = em.levels[em.primary] || em.levels[0];
     return {
       name: map.name,
@@ -7743,9 +7752,9 @@
   function withLook(style, key) {
     const L = LOOKS[key];
     if (!L) throw new Error(`unknown look "${key}"; the looks are ${Object.keys(LOOKS).join(", ")}`);
-    const keep = style.reps;
+    const keep2 = style.reps;
     const s = mergeStyle(DEFAULT_STYLE, L.style);
-    if (!L.style.reps) s.reps = keep;
+    if (!L.style.reps) s.reps = keep2;
     return s;
   }
   function fitPointsOf(s, style) {

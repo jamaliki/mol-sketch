@@ -75,7 +75,13 @@ its own copy of the same arithmetic, and both frame a view identically.
 engine drawing each region clipped to what is visible. Close to the classic look, several times faster on large
 structures, but not identical, because visibility comes from pixels rather than painter's order.
 
-**Preview.** A per-pixel approximation on the GPU, for interaction only.
+**Preview.** A per-pixel approximation on the GPU, for interaction only. A density map is in it too: the
+isosurface the drawing prepared, pushed behind the model as the drawing puts it.
+
+**Density maps** are prepared (cropped, low-passed, contoured, their surfaces smoothed and tied to the model) in a
+worker (`src/classic/mapworker.ts`, through `src/classic/mapasync.ts`), which for a large map takes a second or more:
+while it works, the preview goes on and the drawing waits for it, so changing the level or a close-up never freezes the
+app. Exports prepare the map in line. The headless core prepares maps in line, with the same code.
 
 ```
 structure (typed arrays)

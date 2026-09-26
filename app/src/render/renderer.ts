@@ -10,7 +10,7 @@ import { pcaBasis } from './pca';
 import { buildSticks, buildSurface, buildCartoon, REP_STICKS, REP_CARTOON, REP_SURFACE, type CartoonRun } from './geometry';
 import { type Style, hexToRgb } from '../style';
 import type { DensityMap } from '../model/map';
-import { prepareMap, preparedMap, type EngineMap } from '../classic/mapprep';
+import { preparedMap, type EngineMap } from '../classic/mapprep';
 
 const MAP_CLS = 10, MAP_REP = 4, MAP_ID = 0xfffff0;
 
@@ -97,10 +97,12 @@ export class Renderer {
 
   /** the map's isosurface as the drawing prepares it (the same surface, from the same cache), back in the structure's
       frame; with a model it is drawn behind it, as the drawing does by default; on its own the camera fits it */
-  private rebuildMap(style: Style, s: Structure | null, wait = true) {
+  /** where a map's preparation is asked for (the app's worker); without it, only what the drawing prepared is drawn */
+  mapSource: ((map: DensityMap, style: Style, s: Structure | null, base: Float32Array, lr: DensityMap | null) => EngineMap | null) | null = null;
+  private rebuildMap(style: Style, s: Structure | null) {
     this.mapBatch?.dispose(this.gl); this.mapBatch = null; this.mapDrawn = null; this.camera.pushBehind = false;
     const m = this.map; if (!m || style.map.visible === false) return;
-    const em = wait ? prepareMap(m, style, s, this.camera.base, this.localRes) : preparedMap(m, style, s, this.camera.base, this.localRes); if (!em) return;
+    const em = this.mapSource ? this.mapSource(m, style, s, this.camera.base, this.localRes) : preparedMap(m, style, s, this.camera.base, this.localRes); if (!em) return;
     const L = em.levels[em.primary] || em.levels[0]; if (!L || !L.tri.length) return;
     this.mapDrawn = L; this.mapCol = style.palette.surface + style.palette.paper;
     const b = this.camera.base, nv = L.pos.length / 3, verts = new Float32Array(nv * 11);
@@ -121,9 +123,9 @@ export class Renderer {
   /** a map setting changed since the last rebuild (the level, say, which only redraws): take up the surface the
       drawing prepared, once it has (the preview never waits for a map to be prepared) */
   private refreshMap(style: Style) {
-    if (!this.map || style.map.visible === false) { if (this.mapBatch) this.rebuildMap(style, this.structure, false); return }
+    if (!this.map || style.map.visible === false) { if (this.mapBatch) this.rebuildMap(style, this.structure); return }
     const em = preparedMap(this.map, style, this.structure, this.camera.base, this.localRes), L = em ? em.levels[em.primary] || em.levels[0] : null;
-    if (L ? L !== this.mapDrawn || this.mapCol !== style.palette.surface + style.palette.paper : this.mapBatch && !this.map) this.rebuildMap(style, this.structure, false);
+    if (L ? L !== this.mapDrawn || this.mapCol !== style.palette.surface + style.palette.paper : this.mapBatch && !this.map) this.rebuildMap(style, this.structure);
   }
 
   render(style: Style) {

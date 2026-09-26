@@ -5,7 +5,13 @@ import type { Renderer } from '../render/renderer';
 import type { Structure } from '../model/structure';
 import type { Style } from '../style';
 import type { DensityMap } from '../model/map';
-import { prepareMap, mapBasis, mapLevel } from './mapprep';
+import { prepareMap, mapBasis, mapLevel, type EngineMap } from './mapprep';
+
+/** where the drawing gets its prepared map: prepared in line (the headless core), or from the app's worker, which
+    answers null while it prepares it (the drawing then waits) */
+type MapSource = (map: DensityMap, style: Style, s: Structure | null, base: Float32Array, localRes: DensityMap | null) => EngineMap | null;
+let mapSource: MapSource = prepareMap;
+export function setMapSource(f: MapSource | null) { mapSource = f || prepareMap }
 
 export type Classic = ReturnType<typeof createClassic>;
 let engine: Classic | null = null;
@@ -63,18 +69,19 @@ function keyframeOf(s: Structure, rot: (x: number, y: number, z: number) => numb
 /** Draw the current structure with the classic engine onto a 2D context of the renderer's pixel size. Returns ms. */
 export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style: Style, boil: number, dpr = 1): number {
   const t0 = performance.now(); const E = classic(); const s = R.structure; const map: DensityMap | null = style.map.visible === false ? null : (R as any).map || null;   // hidden: kept, not drawn if (!s && !map) return 0;
+  const em = map ? mapSource(map, style, s, R.camera.base, R.localRes || null) : null; if (map && !em) return -1;   // the map is being prepared: nothing drawn yet
   E.cfg = cfgFromStyle(style, R.camera, false);
   if (s) { E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, R.fitPoints, R.labels); (E.scene as any)._src = s; (E.scene as any).atomIds = (sceneFromStructure as any).lastIds }   // which structure it was built from
-  else E.scene = mapScene(map!, style, R.camera.base, R.labels);
-  (E.scene as any).map = map ? prepareMap(map, style, s, R.camera.base, R.localRes || null) : null;
+  else E.scene = mapScene(map!, style, R.camera.base, R.labels, em!);
+  (E.scene as any).map = em;
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, R.w, R.h); ctx.restore();
   E.renderFrame(ctx, R.w / dpr, R.h / dpr, boil, dpr);
   return performance.now() - t0;
 }
 
 /** a map on its own: a scene without atoms, fitted to the map's isosurface */
-export function mapScene(map: DensityMap, style: Style, base: Float32Array, labels: any[] = []) {
-  const em = prepareMap(map, style, null, base); const L = em.levels[em.primary] || em.levels[0];
+export function mapScene(map: DensityMap, style: Style, base: Float32Array, labels: any[] = [], em = prepareMap(map, style, null, base)) {
+  const L = em.levels[em.primary] || em.levels[0];
   return { name: map.name, fromPdb: true, reps: { sticks: '', cartoon: '', surface: '' }, groupColors: {}, labels, fitPoints: L ? L.pos : new Float32Array(0), atomIds: [],
     keyframes: [{ name: map.name, hold: 24, transition: 0, atoms: {}, bonds: [], arrows: [] }] };
 }

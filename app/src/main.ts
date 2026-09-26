@@ -1,6 +1,7 @@
 /* App entry: renderer + orbit controls + panel. Also exposes window.MolSketch for scripts and the CLI. */
 import { Renderer } from './render/renderer';
 import { parseStructure } from './model/parse';
+import type { Structure } from './model/structure';
 import { DEFAULT_STYLE, PALETTES, cloneStyle, mergeStyle, type Style } from './style';
 import { LOOKS } from './looks';
 import { GROUP_PALETTES } from './palettes';
@@ -8,7 +9,8 @@ import { GROUP_PALETTE } from './model/color';
 import { buildPanel } from './app/panel';
 import { OrbitControls } from './app/controls';
 import { drawSketch } from './ink/sketch';
-import { renderClassic, renderScene, classic, sceneFromStructure, freshKeyframe, cfgFromStyle, mapBasis, mapLevel } from './classic/adapter';
+import { renderClassic, renderScene, classic, sceneFromStructure, freshKeyframe, cfgFromStyle, mapBasis, mapLevel, setMapSource } from './classic/adapter';
+import { MapPrep } from './classic/mapasync';
 import { parseMRC, downsample, sampleMap, type DensityMap } from './model/map';
 import { pcaBasis } from './render/renderer';
 import { sceneFitPoints, structureFromState, type SceneDoc } from './classic/scene';
@@ -32,6 +34,12 @@ let style: Style = cloneStyle(DEFAULT_STYLE);
 try { const s = localStorage.getItem('triad-sketch-style'); if (s) style = mergeStyle(DEFAULT_STYLE, JSON.parse(s)) } catch { }
 
 const R = new Renderer(canvas);
+/* maps are prepared in a worker: the preview goes on while a new level or zone is prepared, and the drawing follows
+   (exports prepare in line: they must draw the map) */
+const mapPrep = new MapPrep(err => { if (err) status('the map could not be prepared: ' + err); else status(); R.render(style); invalidate() });
+const asyncMaps = mapPrep.get.bind(mapPrep);
+setMapSource(asyncMaps); R.mapSource = asyncMaps;
+function syncMaps<T>(f: () => T): T { setMapSource(null); try { return f() } finally { setMapSource(asyncMaps) } }
 let dpr = Math.min(2, window.devicePixelRatio || 1);
 let live = true; let turntable = 0; let pitchSwing = 0; let dirty = true; let lastLive = 0; let currentLook = 'watercolour';
 type RestMode = 'preview' | 'sketch' | 'classic';
@@ -108,9 +116,10 @@ async function figureSpec(W: number, H: number, scale: number, f: number, cam?: 
 function sceneJsonForSdk() { const d: any = { ...sceneDoc }; delete d.fitPoints; delete d._rev; return JSON.stringify(d) }
 function runSketch(mode: RestMode = restMode) {
   if (mode === 'classic' && sdk && (sceneDoc || structureText || mapObj)) { runSketchSdk(); return }
-  skCanvas.width = R.w; skCanvas.height = R.h;
+  if (skCanvas.width !== R.w || skCanvas.height !== R.h) { skCanvas.width = R.w; skCanvas.height = R.h }
   if (mode === 'classic' && sceneDoc) { const ms = renderScene(skCtx, R, style, sceneDoc, frame, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; sceneFast = ms < 90; classicMs = ms }
-  else if (mode === 'classic') { const ms = renderClassic(skCtx, R, style, boil, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; classicMs = ms }
+  else if (mode === 'classic') { const ms = renderClassic(skCtx, R, style, boil, dpr); if (ms < 0) { hud.textContent = 'preparing the map…'; return }   // the preview stays until the map is ready
+    sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; classicMs = ms }
   else sketchStats = drawSketch(skCtx, R, style, boil);
   sketchShown = true; skCanvas.classList.add('on'); drawOverlay();
 }
@@ -173,7 +182,11 @@ async function loadText(text: string, name: string) {
   R.setStructure(s); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.roll = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0;
   const hasPoly = s.residues.some(r => !r.het);
   if (!hasPoly) { style.reps = { sticks: 'all', cartoon: '', surface: '' } }
-  rebuild(); panel.refresh(); panel.refreshChecks?.(); status(`parsed in ${(performance.now() - t0).toFixed(0)} ms`);
+  // a close-up's residues belong to the last structure; a map stays only if this structure lies in it (a model built
+  // into it, loaded after it), not if it is another entry's, which would be drawn in the wrong place
+  style.map.zone = ''; let note = '';
+  if (mapObj && !fitsMap(s, mapObj)) { note = ` · ${mapObj.name} removed: this structure is not in it`; mapObj = null; mapRaw = null; mapRef = null; R.map = null }
+  rebuild(); panel.refresh(); panel.refreshChecks?.(); status(`parsed in ${(performance.now() - t0).toFixed(0)} ms${note}`);
 }
 /** an entry from the PDB by its four-character ID, as mmCIF (every entry has one; the large ones have no .pdb) */
 async function fetchPdb(id: string) {
@@ -198,8 +211,18 @@ async function loadMapBytes(bytes: ArrayBuffer, name: string, meta: { level?: nu
   const big = Math.max(m.nx, m.ny, m.nz); if (big > 320) m = downsample(m, 320);   // as molsketch.read_map does
   if (meta.level != null) m.level = meta.level; if (meta.mass) m.mass = meta.mass; if (meta.resolution) m.resolution = meta.resolution;
   mark('load map'); mapObj = m; mapRaw = { bytes, name, ...meta }; mapRef = null; R.map = m;
+  style.map.level = null;   // a level is in its map's units: a new map starts at its recommended one (σ, relative, is kept)
   if (!R.structure && !sceneDoc) { R.camera.base = mapBasis(m, mapLevel(m, style)); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.roll = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0 }
   rebuild(); panel.refresh(); status(`${m.name}: ${m.nx}×${m.ny}×${m.nz} at ${m.step[0].toFixed(2)} Å${m.binned && m.binned > 1 ? ` (averaged ${m.binned}×)` : ''}${m.level != null ? `, recommended level ${m.level}` : ''} · read in ${(performance.now() - t0).toFixed(0)} ms`);
+}
+/** whether a structure was built into a map: its atoms sit on the density (a fitted model's average density is near the
+    contour, and higher than 6 Å away from its atoms; another entry's structure, somewhere in the map's box, is neither) */
+function fitsMap(s: Structure, m: DensityMap) {
+  const rms = m.rms || 1, lv = ((m.level ?? m.mean + 3 * rms) - m.mean) / rms, D = [[6, 0, 0], [-6, 0, 0], [0, 6, 0], [0, -6, 0], [0, 0, 6], [0, 0, -6]];
+  let at = 0, off = 0, n = 0;
+  for (let i = 0; i < s.count; i += Math.max(1, Math.floor(s.count / 3000))) { if (s.element[i] === 'H') continue; n++; at += sampleMap(m, s.x[i], s.y[i], s.z[i]) - m.mean; for (const d of D) off += (sampleMap(m, s.x[i] + d[0], s.y[i] + d[1], s.z[i] + d[2]) - m.mean) / 6 }
+  if (!n) return false; at /= n * rms; off /= n * rms;
+  return at - off >= 1 || at >= 0.6 * lv;
 }
 /** drop the structure (a map is then drawn on its own) */
 function unloadStructure(why: string) {
@@ -562,7 +585,10 @@ function drawFrameTo(ctx: CanvasRenderingContext2D, W: number, H: number, f: num
   const E = classic(); const drawn = Math.floor(f / 2) * 2;
   let cam: any = { ...camOf(), fov: R.camera.fov };
   if (sceneDoc && sceneDoc.keyframes.some(k => k.view)) { E.cfg = cfgFromStyle(style, cam, true); const v = E.viewAt(drawn); if (v) cam = { ...v, fov: R.camera.fov } }
-  E.cfg = cfgFromStyle(style, cam, !!sceneDoc); if (sceneDoc) { if (E.scene !== sceneDoc) E.scene = sceneDoc } else E.scene = sceneFromStructure(R.structure!, style, R.overrides, R.camera.base, R.fitPoints, R.labels);
+  if (!sceneDoc) {   // a structure or a map: drawn as on screen, its map with it (prepared now if it is not ready)
+    const tmp: any = { structure: R.structure, camera: R.camera, overrides: R.overrides, fitPoints: R.fitPoints, labels: R.labels, w: W, h: H, map: R.map, localRes: R.localRes };
+    syncMaps(() => renderClassic(ctx, tmp, style, f, 1)); return }
+  E.cfg = cfgFromStyle(style, cam, true); if (E.scene !== sceneDoc) E.scene = sceneDoc;
   ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.restore();
   E.renderFrame(ctx, W, H, f, 1);
 }
@@ -610,7 +636,7 @@ function lookPreview(key: string, w: number, h: number): HTMLCanvasElement | nul
   const st = mergeStyle(DEFAULT_STYLE, L.style); if (!L.style.reps) st.reps = { ...style.reps }; st.map = { ...style.map, caption: false } as any; st.show = { ...st.show, caption: false, stepLabel: false, noLabels: true } as any;
   const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d', { willReadFrequently: true })!;
   const tmp: any = { structure: R.structure, camera: { ...R.camera, zoom: 1, panX: 0, panY: 0, capFrac: 0, topFrac: 0 }, overrides: R.overrides, fitPoints: R.fitPoints, labels: [], w, h, map: mapObj, fitOverride: R.fitOverride };
-  try { if (sceneDoc) renderScene(ctx, tmp, st, sceneDoc, posterFrame(), 1); else renderClassic(ctx, tmp, st, 0, 1) } catch { return null }
+  try { if (sceneDoc) renderScene(ctx, tmp, st, sceneDoc, posterFrame(), 1); else if (renderClassic(ctx, tmp, st, 0, 1) < 0) return null } catch { return null }   // the map not ready yet: no thumbnail
   if (sceneDoc) { sceneDoc.labels = R.labels } invalidate();
   return c;
 }
