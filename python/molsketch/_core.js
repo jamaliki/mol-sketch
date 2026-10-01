@@ -3110,15 +3110,21 @@
       }
       return groupIdx[key] ?? 0;
     }
+    function ownColor(a) {
+      const G = scene.groupColors;
+      if (!G) return null;
+      return G[a.group] || G[(a.resn || "") + (a.resi ?? "")] || a.chain && G[a.chain] || a.entity && G["entity:" + a.entity] || G["subunit:" + (a.subunit || "X")] || null;
+    }
     function carbonColor(a) {
       const P = cfg.palette, mode = cfg.rep.colorBy;
       if (a.color) return P[a.color] || a.color;
+      const own = ownColor(a);
+      if (own) return own;
       if (mode === "element") return P.C;
       if (mode === "subunit") return subunitColor(a);
       if (mode === "entity") return entityColor(a);
       if (mode === "chain") return chainColor(a);
-      const key = mode === "chain" ? "chain:" + (a.chain || "") : a.group || (a.resn || "") + (a.resi ?? "");
-      if (scene.groupColors && scene.groupColors[mode === "chain" ? a.chain || "" : key]) return scene.groupColors[mode === "chain" ? a.chain || "" : key];
+      const key = a.group || (a.resn || "") + (a.resi ?? "");
       if (mode === "group") return P.C;
       const GP = cfg.groupPalette && cfg.groupPalette.length ? cfg.groupPalette : GROUP_PALETTE;
       return GP[groupIndex(key) % GP.length];
@@ -3992,7 +3998,7 @@
     };
     function surfaceColour() {
       const P = cfg.palette, mode = cfg.rep.surfaceColor;
-      return (a) => mode === "single" ? P.surface : mode === "chain" ? chainColor(a) : mode === "subunit" ? subunitColor(a) : mode === "entity" ? entityColor(a) : mode === "carbon" ? carbonColor(a) : mix(atomColor(a), "#ffffff", 0.2);
+      return (a) => ownColor(a) || (mode === "single" ? P.surface : mode === "chain" ? chainColor(a) : mode === "subunit" ? subunitColor(a) : mode === "entity" ? entityColor(a) : mode === "carbon" ? carbonColor(a) : mix(atomColor(a), "#ffffff", 0.2));
     }
     const DISC10C = [], DISC10S = [];
     for (let i = 0; i < 10; i++) {
@@ -4308,7 +4314,7 @@
         const p = pos[a.id];
         const r = ((VDW[a.el] || 1.7) + probe * 0.55) * proj.pxPerA * p.d * cfg.rep.surfaceScale;
         const seed = seedBase + strHash("s" + a.id);
-        const col = cfg.rep.surfaceColor === "single" ? P.surface : cfg.rep.surfaceColor === "carbon" ? mix(carbonColor(a), "#ffffff", 0.25) : mix(atomColor(a), "#ffffff", 0.3);
+        const own = ownColor(a), col = own ? mix(own, "#ffffff", 0.25) : cfg.rep.surfaceColor === "single" ? P.surface : cfg.rep.surfaceColor === "carbon" ? mix(carbonColor(a), "#ffffff", 0.25) : mix(atomColor(a), "#ffffff", 0.3);
         items.push({ z: p.z + 0.02, draw: (ctx) => drawFlatBall(ctx, p.x, p.y, r, col, { seed, fog: p.fog, d: p.d, alpha: a.alpha, fillAlpha: cfg.rep.surfaceOpacity, outlineFirst: true, outlineAlpha: 0.6, passes: lowDetail ? 1 : void 0 }) });
       }
     }
@@ -5607,7 +5613,7 @@
       for (const tr of traces) {
         const A = tr.atoms, n = A.length;
         const pts = A.map((a) => a.pos.slice());
-        const rc = (i, t) => colourMode === "rainbow" ? mode === "ink colour" ? hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.9, 0.8) : hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.75, 0.95) : colourMode === "carbon" ? carbonColor(A[i]) : colourMode === "chain" ? chainColor(A[i]) : ssCol(t);
+        const rc = (i, t) => ownColor(A[i]) || (colourMode === "rainbow" ? mode === "ink colour" ? hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.9, 0.8) : hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.75, 0.95) : colourMode === "carbon" ? carbonColor(A[i]) : colourMode === "chain" ? chainColor(A[i]) : ssCol(t));
         const ss = A.map((a) => a.nucleic ? "L" : a.ss === "H" || a.ss === "E" ? a.ss : "L");
         const runs = [];
         for (let i = 0; i < n; ) {
@@ -5826,6 +5832,10 @@
       const SPR = 6;
       const traces = backboneTraces(atoms, sel);
       const ssColor = (ss) => ss === "H" ? P.helix : ss === "E" ? P.sheet : ss === "N" ? P.nucleic || "#e0a23a" : P.loop;
+      const sampColor = (s) => {
+        const cm2 = cartoonMode();
+        return ownColor(s.atom) || (cm2 === "ss" ? ssColor(s.ss) : cm2 === "chain" ? chainColor(s.atom) : carbonColor(s.atom));
+      };
       traces.forEach((tr, ti) => {
         const A = tr.atoms, n = A.length;
         const ss = A.map((a) => a.ss || "L");
@@ -5987,7 +5997,7 @@
           let j0 = 0;
           while (j0 < samp.length - 1) {
             let j1 = j0;
-            while (j1 < samp.length - 1 && samp[j1 + 1].ss === samp[j0].ss && front[j1 + 1] === front[j0]) j1++;
+            while (j1 < samp.length - 1 && samp[j1 + 1].ss === samp[j0].ss && front[j1 + 1] === front[j0] && ownColor(samp[j1 + 1].atom) === ownColor(samp[j0].atom)) j1++;
             const a0 = Math.max(0, j0 - 1), a1 = Math.min(samp.length - 1, j1 + 2);
             const poly = [];
             for (let j = a0; j <= a1; j++) poly.push(L[j]);
@@ -6011,7 +6021,7 @@
                 const wx = cv.getContext("2d", { willReadFrequently: true });
                 wx.scale(RF.dpr, RF.dpr);
                 wx.translate(-x0, -y0);
-                const cm = cartoonMode(), col = cm === "ss" ? ssColor(samp[j0].ss) : cm === "chain" ? chainColor(samp[j0].atom) : carbonColor(samp[j0].atom);
+                const col = sampColor(samp[j0]);
                 const fog = (fogs[j0] + fogs[j1]) / 2;
                 watercolourShape(wx, poly, col, seed + j0 * 13, { fog, layers: 10, strength: 0.85, offscreen: true, noScale: true });
                 const run = { canvas: cv, x0, y0, w: bw, h: bh };
@@ -6037,8 +6047,7 @@
           items.push({ z, draw: (ctx) => {
             const fog = (fogs[j] + fogs[j + 1]) / 2, fk = 1 - fog * cfg.view.fog;
             const d = (ds[j] + ds[j + 1]) / 2;
-            const cm = cartoonMode();
-            let col = cm === "ss" ? ssColor(s.ss) : cm === "chain" ? chainColor(s.atom) : carbonColor(s.atom);
+            let col = sampColor(s);
             const baseCol = col;
             const isFront = front[j];
             col = fillFor(col);

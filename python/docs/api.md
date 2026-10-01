@@ -163,6 +163,10 @@ Give one group a colour of your own, overriding the palette.
 
 `colour` is any CSS colour: `"#e6a45a"`, `"rgb(230, 164, 90)"`, `"white"` and so on. `None` removes your colour.
 
+Your colour wins over the look's own colouring: a chain given a colour is drawn in it whether the look colours the
+cartoon by secondary structure, by residue, by chain or as a rainbow, in the carbons, the cartoon and the surface alike.
+Where groups overlap, the narrowest wins: a residue's colour over its chain's, a chain's over its entity's or subunit's.
+
 ### Camera
 
 #### `fig.view(yaw=None, pitch=None, roll=None, zoom=None, pan=None, fov=None)`

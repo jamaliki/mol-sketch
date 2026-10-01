@@ -20,11 +20,15 @@ export class ColorScheme {
     for (const ch of s.chains) { if (!this.chainIdx.has(ch.id)) this.chainIdx.set(ch.id, this.chainIdx.size); const e = ch.entity || 'chain:' + ch.id; if (!this.entityIdx.has(e)) this.entityIdx.set(e, this.entityIdx.size) }
   }
   private auto(i: number) { const gp = this.style.groupPalette && this.style.groupPalette.length ? this.style.groupPalette : GROUP_PALETTE; return gp[i % gp.length] }
+  /** A colour of the user's own, from the narrowest group that has one (the classic engine's ownColor): it wins over every scheme. */
+  private own(r: Residue): string | undefined {
+    const o = this.overrides;
+    return o[r.resn + r.resi + (r.chain ? '.' + r.chain : '')] ?? o[r.resn + r.resi] ?? o[r.chain] ?? (r.entity ? o['entity:' + r.entity] : undefined) ?? o['subunit:' + (r.subunit || 'X')];
+  }
   /** Colour of a residue under the carbon scheme (colorBy). */
   residueCarbon(r: Residue): string {
     const o = this.overrides; const P = this.style.palette;
-    const key = r.resn + r.resi + (r.chain ? '.' + r.chain : '');
-    if (o[key]) return o[key];
+    const own = this.own(r); if (own) return own;
     switch (this.style.colorBy) {
       case 'element': return P.C;
       case 'chain': return o[r.chain] ?? this.auto(this.chainIdx.get(r.chain) ?? 0);
@@ -40,12 +44,14 @@ export class ColorScheme {
   }
   cartoon(r: Residue): string {
     const P = this.style.palette;
+    const own = this.own(r); if (own) return own;
     if (this.style.cartoonColor === 'carbon') return this.residueCarbon(r);
     if (r.nucleic) return P.nucleic;
     return r.ss === 'H' ? P.helix : r.ss === 'E' ? P.sheet : P.loop;
   }
   surface(r: Residue): string {
     const o = this.overrides; const P = this.style.palette;
+    const own = this.own(r); if (own) return own;
     switch (this.style.surfaceColor) {
       case 'single': return P.surface;
       case 'chain': return o[r.chain] ?? this.auto(this.chainIdx.get(r.chain) ?? 0);

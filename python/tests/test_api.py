@@ -54,6 +54,20 @@ def test_same_figure_same_pixels():
     assert np.array_equal(f().render(SMALL).to_numpy(), f().render(SMALL).to_numpy())
 
 
+def test_own_colours_win_over_the_look():
+    """a chain given a colour is drawn in it in every look, though the look colours its cartoon by secondary structure:
+    exactly as if helix, sheet and loop were all that colour; a residue's colour shows too, named with or without its chain"""
+    own = "#d55e00"
+    for look in ("engraved-colour", "dark-paper", "watercolour", "ink-colour", "chalkboard"):
+        f = lambda: ms.load(EX / "1A8O.pdb").look(look).show(sticks=None)
+        chain = f().color("A", own).render(SMALL).to_numpy()
+        assert np.array_equal(chain, f().set(palette={"helix": own, "sheet": own, "loop": own}).render(SMALL).to_numpy()), look
+    plain = ms.load(EX / "1A8O.pdb").look("engraved-colour")
+    residue = plain.copy().color("MSE151.A", own).render(SMALL).to_numpy()
+    assert not np.array_equal(residue, plain.render(SMALL).to_numpy())
+    assert np.array_equal(residue, plain.copy().color("MSE151", own).render(SMALL).to_numpy())
+
+
 def test_labels_follow_atoms_and_scene_roundtrip(tmp_path):
     fig = ms.load(EX / "trypsin_active_site.json")
     n = len(fig.scene()["labels"])

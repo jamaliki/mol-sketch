@@ -99,7 +99,9 @@ class Figure:
     def color(self, group: str, colour: str | None) -> "Figure":
         """Give one group a colour of your own. The group is a residue (``"SER195"``), a chain (``"A"``), a ribosome
         subunit (``"subunit:L"``, ``"subunit:S"``, ``"subunit:T"``) or an mmCIF entity (``"entity:1"``). The colour is
-        any CSS colour (``"#e6a45a"``, ``"rgb(230, 164, 90)"``). ``None`` removes your colour again."""
+        any CSS colour (``"#e6a45a"``, ``"rgb(230, 164, 90)"``). ``None`` removes your colour again.
+        Your colour wins over the look's own colouring (by secondary structure, residue, chain or rainbow) in the
+        carbons, the cartoon and the surface; where groups overlap, the narrowest wins (a residue's over its chain's)."""
         colors = dict(self._colors or self._info().get("groupColors") or {})
         if colour is None: colors.pop(group, None)
         else: colors[group] = colour

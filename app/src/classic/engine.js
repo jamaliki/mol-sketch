@@ -511,11 +511,17 @@ function compileSel(str){
 const GROUP_PALETTE=['#f2e85a','#7cbf72','#5fc9c9','#a98ad6','#f0a050','#d9a3c9','#8fb8a8','#b5c95a','#c9a27a','#9ad0b8']; // no blues or reds: those belong to N and O
 let groupIdx={},groupIdxKey='';
 function groupIndex(key){const sk=scene.keyframes.length+'|'+(scene.name||'');if(groupIdxKey!==sk){groupIdx={};groupIdxKey=sk;let n=0;for(const k of scene.keyframes)for(const id in k.atoms){const a=k.atoms[id];const g=a.group||((a.resn||'')+(a.resi??''));if(!(g in groupIdx))groupIdx[g]=n++;const c=a.chain||'';if(!(('chain:'+c) in groupIdx))groupIdx['chain:'+c]=n++;const e='entity:'+(a.entity||('chain:'+c));if(!(e in groupIdx))groupIdx[e]=n++}}return groupIdx[key]??0}
+/** a colour of the user's own for this atom (fig.color, a scene's groupColors), from the narrowest group that has one:
+    its residue (SER195.A, or SER195), its chain (A), its entity (entity:1), its subunit (subunit:L). It wins over every
+    scheme, so a chain given a colour is that colour whether the look colours by residue, by secondary structure or along
+    the chain, in the sticks, the cartoon and the surface alike */
+function ownColor(a){const G=scene.groupColors;if(!G)return null;
+  return G[a.group]||G[(a.resn||'')+(a.resi??'')]||(a.chain&&G[a.chain])||(a.entity&&G['entity:'+a.entity])||G['subunit:'+(a.subunit||'X')]||null}
 function carbonColor(a){const P=cfg.palette,mode=cfg.rep.colorBy;
   if(a.color)return P[a.color]||a.color;
+  const own=ownColor(a);if(own)return own;
   if(mode==='element')return P.C;if(mode==='subunit')return subunitColor(a);if(mode==='entity')return entityColor(a);if(mode==='chain')return chainColor(a);
-  const key=mode==='chain'?('chain:'+(a.chain||'')):(a.group||((a.resn||'')+(a.resi??'')));
-  if(scene.groupColors&&scene.groupColors[mode==='chain'?(a.chain||''):key])return scene.groupColors[mode==='chain'?(a.chain||''):key];
+  const key=a.group||((a.resn||'')+(a.resi??''));
   if(mode==='group')return P.C;
   const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[groupIndex(key)%GP.length];
 }
@@ -847,7 +853,7 @@ const inHull=(h,x,y)=>{let s=0;for(let i=0;i<h.length;i++){const a=h[i],b=h[(i+1
    painter decides whether a groove means more pigment, denser hatching or heavier scribble. */
 function surfaceColour(){
   const P=cfg.palette,mode=cfg.rep.surfaceColor;
-  return a=>mode==='single'?P.surface:mode==='chain'?chainColor(a):mode==='subunit'?subunitColor(a):mode==='entity'?entityColor(a):mode==='carbon'?carbonColor(a):mix(atomColor(a),'#ffffff',0.2);
+  return a=>ownColor(a)||(mode==='single'?P.surface:mode==='chain'?chainColor(a):mode==='subunit'?subunitColor(a):mode==='entity'?entityColor(a):mode==='carbon'?carbonColor(a):mix(atomColor(a),'#ffffff',0.2));
 }
 /** the surface's discs (an atom's van der Waals radius plus half the probe) and its residue patches, in model order;
    a patch keeps its first atom, and each painter asks for its colour when it always has */
@@ -982,7 +988,7 @@ function paintPatchSurface(items,model,seedBase){
 function paintAtomSurface(items,atoms,pos,proj,seedBase,lowDetail){
   const P=cfg.palette,probe=cfg.rep.probe;
   for(const a of atoms){const p=pos[a.id];const r=((VDW[a.el]||1.7)+probe*0.55)*proj.pxPerA*p.d*cfg.rep.surfaceScale;const seed=seedBase+strHash('s'+a.id);
-    const col=cfg.rep.surfaceColor==='single'?P.surface:cfg.rep.surfaceColor==='carbon'?mix(carbonColor(a),'#ffffff',0.25):mix(atomColor(a),'#ffffff',0.3);
+    const own=ownColor(a),col=own?mix(own,'#ffffff',0.25):cfg.rep.surfaceColor==='single'?P.surface:cfg.rep.surfaceColor==='carbon'?mix(carbonColor(a),'#ffffff',0.25):mix(atomColor(a),'#ffffff',0.3);
     items.push({z:p.z+0.02,draw:(ctx)=>drawFlatBall(ctx,p.x,p.y,r,col,{seed,fog:p.fog,d:p.d,alpha:a.alpha,fillAlpha:cfg.rep.surfaceOpacity,outlineFirst:true,outlineAlpha:0.6,passes:lowDetail?1:undefined})})}
 }
 
@@ -1365,7 +1371,8 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
   const nz=n=>proj.rot([n[0]+FIT.cx,n[1]+FIT.cy,n[2]+FIT.cz])[2]; // z of a direction in view space (+ toward the viewer)
   const P2=p=>{const q=proj.proj(p);return[q.x,q.y,q.z,q.d,q.fog]};
   const HA=32*Math.PI/180,HB=-11*Math.PI/180,HH=4.7;
-  // colour: by secondary structure, by the carbon scheme, or a blue→red ramp along each chain (MOLSCRIPT's colourramp)
+  // colour: by secondary structure, by the carbon scheme, or a blue→red ramp along each chain (MOLSCRIPT's colourramp);
+  // a colour of the user's own wins over each
   const ssCol=t=>t==='H'?P.helix:t==='E'?P.sheet:t==='N'?(P.nucleic||'#e0a23a'):P.loop;
   const hsv=(h,s,v)=>{const f=(k)=>{const q=(k+h*6)%6;return v-v*s*Math.max(0,Math.min(q,4-q,1))};return'#'+[f(5),f(3),f(1)].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('')};
   const mode=R.fill,colourMode=cartoonMode();
@@ -1412,7 +1419,7 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
   const baseEnd=g=>{const b=bases[g];return b?(b.N9?b.N1:b.N3)||null:null};
   for(const tr of traces){
     const A=tr.atoms,n=A.length;const pts=A.map(a=>a.pos.slice());
-    const rc=(i,t)=>colourMode==='rainbow'?(mode==='ink colour'?hsv(0.6667*(1-i/Math.max(1,n-1)),0.9,0.8):hsv(0.6667*(1-i/Math.max(1,n-1)),0.75,0.95)):colourMode==='carbon'?carbonColor(A[i]):colourMode==='chain'?chainColor(A[i]):ssCol(t);
+    const rc=(i,t)=>ownColor(A[i])||(colourMode==='rainbow'?(mode==='ink colour'?hsv(0.6667*(1-i/Math.max(1,n-1)),0.9,0.8):hsv(0.6667*(1-i/Math.max(1,n-1)),0.75,0.95)):colourMode==='carbon'?carbonColor(A[i]):colourMode==='chain'?chainColor(A[i]):ssCol(t));
     // elements: runs of H (≥3 residues) and E (≥2), the rest coil; neighbours share their end residue, as MolAuto writes them
     const ss=A.map(a=>a.nucleic?'L':(a.ss==='H'||a.ss==='E'?a.ss:'L'));
     const runs=[];for(let i=0;i<n;){let j=i;while(j+1<n&&ss[j+1]===ss[i])j++;runs.push({t:ss[i],s:i,e:j});i=j+1}
@@ -1496,6 +1503,7 @@ function buildCartoon(items,st,pos,atoms,sel,proj,seedBase,lowDetail){
   const P=cfg.palette,S=cfg.style;const K=cfg.rep.cartoonScale;const SPR=6; // samples per residue
   const traces=backboneTraces(atoms,sel);
   const ssColor=ss=>ss==='H'?P.helix:ss==='E'?P.sheet:ss==='N'?(P.nucleic||'#e0a23a'):P.loop;
+  const sampColor=s=>{const cm=cartoonMode();return ownColor(s.atom)||(cm==='ss'?ssColor(s.ss):cm==='chain'?chainColor(s.atom):carbonColor(s.atom))};   // a colour of the user's own wins over the scheme
   traces.forEach((tr,ti)=>{
     const A=tr.atoms,n=A.length;const ss=A.map(a=>a.ss||'L');
     // smoothed control points (sheets flattened)
@@ -1548,13 +1556,13 @@ function buildCartoon(items,st,pos,atoms,sel,proj,seedBase,lowDetail){
     let wcRuns=null; // per quad: {canvas,x0,y0} of the wash for the face-run it belongs to
     if(isWC()){
       wcRuns=new Array(samp.length).fill(null);
-      // one run per stretch of same secondary structure and same facing; each gets its own small canvas so overlapping turns occlude rather than stack
-      let j0=0;while(j0<samp.length-1){let j1=j0;while(j1<samp.length-1&&samp[j1+1].ss===samp[j0].ss&&front[j1+1]===front[j0])j1++;
+      // one run per stretch of same secondary structure, same facing and same colour of the user's own; each gets its own small canvas so overlapping turns occlude rather than stack
+      let j0=0;while(j0<samp.length-1){let j1=j0;while(j1<samp.length-1&&samp[j1+1].ss===samp[j0].ss&&front[j1+1]===front[j0]&&ownColor(samp[j1+1].atom)===ownColor(samp[j0].atom))j1++;
         const a0=Math.max(0,j0-1),a1=Math.min(samp.length-1,j1+2);const poly=[];for(let j=a0;j<=a1;j++)poly.push(L[j]);for(let j=a1;j>=a0;j--)poly.push(Rr[j]);
         if(poly.length>=3){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of poly){x0=Math.min(x0,p[0]);y0=Math.min(y0,p[1]);x1=Math.max(x1,p[0]);y1=Math.max(y1,p[1])}
           const m=10;x0=Math.floor(x0-m);y0=Math.floor(y0-m);const bw=Math.ceil(x1-x0+m),bh=Math.ceil(y1-y0+m);
           if(bw>0&&bh>0&&bw*bh<16e6){const cv=document.createElement('canvas');cv.width=Math.ceil(bw*RF.dpr);cv.height=Math.ceil(bh*RF.dpr);const wx=cv.getContext('2d',{willReadFrequently:true});wx.scale(RF.dpr,RF.dpr);wx.translate(-x0,-y0);
-            const cm=cartoonMode(),col=cm==='ss'?ssColor(samp[j0].ss):cm==='chain'?chainColor(samp[j0].atom):carbonColor(samp[j0].atom);const fog=(fogs[j0]+fogs[j1])/2;
+            const col=sampColor(samp[j0]);const fog=(fogs[j0]+fogs[j1])/2;
             watercolourShape(wx,poly,col,seed+j0*13,{fog,layers:10,strength:0.85,offscreen:true,noScale:true});
             const run={canvas:cv,x0,y0,w:bw,h:bh};for(let j=j0;j<=j1;j++)wcRuns[j]=run}}
         j0=j1+1}
@@ -1567,7 +1575,7 @@ function buildCartoon(items,st,pos,atoms,sel,proj,seedBase,lowDetail){
       const z=(zs[j]+zs[j+1])/2;const s=samp[j];
       items.push({z,draw:(ctx)=>{
         const fog=(fogs[j]+fogs[j+1])/2,fk=1-fog*cfg.view.fog;const d=(ds[j]+ds[j+1])/2;
-        const cm=cartoonMode();let col=cm==='ss'?ssColor(s.ss):cm==='chain'?chainColor(s.atom):carbonColor(s.atom);
+        let col=sampColor(s);
         const baseCol=col;const isFront=front[j];col=fillFor(col);if(!isFront&&!isInk())col=shade(col,-0.14);col=fogged(col,fog);
         const q=[Lf[j],Lf[j+1],Rf[j+1],Rf[j]];
         ctx.save();ctx.globalAlpha=s.atom.alpha;

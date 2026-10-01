@@ -85,7 +85,8 @@ Carbons are coloured by `color_by`: `element`, `residue` (an automatic palette),
 group palette (`fig.palette`). Other elements always take their element colour, and the automatic palettes contain no
 blues or reds so they never collide with N and O. The cartoon's colour is `cartoon_color` (`ss`, `carbon` or
 `rainbow`), the surface's `surface_color`. Colours of your own go on a residue (`SER195`), a chain (`A`), a subunit
-(`subunit:L`) or an entity (`entity:1`): `fig.color(...)` in Python, the scene's `groupColors` in a file.
+(`subunit:L`) or an entity (`entity:1`): `fig.color(...)` in Python, the scene's `groupColors` in a file. They win over
+`color_by`, `cartoon_color` and `surface_color`, and the narrowest group wins where they overlap.
 
 Every other field is in [python/docs/style.md](../python/docs/style.md).
 
