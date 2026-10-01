@@ -1,6 +1,7 @@
 {
   "name": "molsketch-app",
   "private": true,
+  "license": "Apache-2.0",
   "version": "0.1.0",
   "type": "module",
   "description": "Hand-drawn molecular illustration, interactive: WebGL2 impostors and ribbons stylised in screen space.",

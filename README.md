@@ -260,4 +260,4 @@ It also writes the style files in `looks/`. Each group is a short function in
 
 MolSketch was called Triad Sketch until September 2026; scripts that use `window.TriadSketch` still work.
 
-MIT licence, © 2026 Kiarash Jamali.
+Licensed under the [Apache License 2.0](LICENSE), © 2026 Kiarash Jamali.
