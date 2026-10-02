@@ -126,11 +126,11 @@ export class Renderer {
     }
   }
 
-  /** a map setting changed since the last rebuild (the level, say, which only redraws): take up the surface the
-      drawing prepared, once it has (the preview never waits for a map to be prepared) */
+  /** a map setting changed since the last rebuild (the level, say, which only redraws): take up the surface once it is
+      prepared, asking for it (the drawing may be made elsewhere, in a worker of its own); the preview never waits */
   private refreshMap(style: Style) {
     if (!this.map || style.map.visible === false) { if (this.mapBatch) this.rebuildMap(style, this.structure); return }
-    const em = preparedMap(this.map, style, this.structure, this.camera.base, this.localRes), L = em ? em.levels[em.primary] || em.levels[0] : null;
+    const em = this.mapSource ? this.mapSource(this.map, style, this.structure, this.camera.base, this.localRes) : preparedMap(this.map, style, this.structure, this.camera.base, this.localRes), L = em ? em.levels[em.primary] || em.levels[0] : null;
     if (L ? L !== this.mapDrawn || this.mapCol !== style.palette.surface + style.palette.paper : this.mapBatch && !this.map) this.rebuildMap(style, this.structure);
   }
 

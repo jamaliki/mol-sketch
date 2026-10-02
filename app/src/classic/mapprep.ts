@@ -29,6 +29,8 @@ export interface EngineMap {
 }
 
 const cache = new WeakMap<DensityMap, Map<string, EngineMap>>();
+/** forget the maps prepared from this one (a worker that hands its arrays over keeps none) */
+export function forgetPrepared(whole: DensityMap) { cache.delete(whole) }
 
 /** the base rotation that puts a map's widest spread in the picture plane, when there is no model to take it from */
 export function mapBasis(m: DensityMap, level: number): Float32Array {
@@ -97,8 +99,7 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   const R = o.smooth === 'auto' ? zoneSel ? 0 : (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
   // what is low-passed is the density above the contour level (the rest set to zero): a sharpened map has lost its
   // low frequencies (its protein's mean density is the solvent's), so low-passing it all would leave only noise
-  const above = R > 0 ? { ...m, data: m.data.map(v => v >= level ? v : 0) } : m;
-  let g0 = downsample(above, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
+  let g0 = downsample(m, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels, R > 0 ? level : undefined);
   // with a model, a low-passed map keeps only the density within 5 Å of it, before the low-pass (so its surface closes
   // smoothly, instead of being cut where the rest of an assembly joins it); the caption says so
   const zoned = R > 0 && !!s && s.count > 0 && o.finish !== 'sketch' && o.context !== 'show';
@@ -121,15 +122,16 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   // a mass the map cannot hold (a sample's, deposited for more than was reconstructed: its volume more than most of the
   // smoothed density): the level enclosing it would be the edge of everything, or nothing. 2 σ then, as without a mass
   let massTooBig = false;
-  if (R > 0 && mass > 0) { const n = mass * 1.21 / (g.step[0] * g.step[1] * g.step[2]); let support = 0; for (let i = 0; i < g.data.length; i++) if (g.data[i] > 0 && (!zone || zone[i])) support++; massTooBig = n > 0.6 * support }
+  if (R > 0 && mass > 0) { const n = mass * 1.21 / (g.step[0] * g.step[1] * g.step[2]), d = g.data; let support = 0;
+    if (zone) { for (let i = 0; i < d.length; i++) if (d[i] > 0 && zone[i]) support++ } else for (let i = 0; i < d.length; i++) if (d[i] > 0) support++;
+    massTooBig = n > 0.6 * support }
   // without a (usable) mass: twice the volume the level encloses on the map itself (a sharpened map's level encloses about
   // half a molecule's volume: over EMDB entries with a mass, 1.2 to 3.2 times, median 2); 2 σ of the smoothed map,
   // before, took in a wide envelope round the density
   let vAtLevel = 0; if (R > 0 && !(mass > 0 && !massTooBig)) { let c = 0; for (let i = 0; i < m.data.length; i++) if (m.data[i] >= level) c++; vAtLevel = c * m.step[0] * m.step[1] * m.step[2] }
   const byVolume = R > 0, vLevel = !byVolume ? 0 : mass > 0 && !massTooBig ? levelEnclosing(g, mass * 1.21, zone) : vAtLevel > 0 ? levelEnclosing(g, 2 * vAtLevel, zone) : g.mean + 2 * g.rms;
-  let sorted: Float32Array | null = null;
   const same = (lv: number) => { if (byVolume) return vLevel * lv / level; if (g1 === m) return lv; let n = 0; for (let i = 0; i < m.data.length; i++) if (m.data[i] >= lv) n++;
-    sorted ??= Float32Array.from(g1.data).sort(); return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((1 - n / m.data.length) * sorted.length)))] };
+    return sortedAt(g1.data, Math.max(0, Math.min(g1.data.length - 1, Math.floor((1 - n / m.data.length) * g1.data.length)))) };
   const turn = (x: number, y: number, z: number): [number, number, number] => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
   // the model's atoms on a 4 Å grid, for nearest-atom lookups (waters left out: they are not what the density is judged by)
   const atoms: number[] = []; if (s) for (let i = 0; i < s.count; i++) { const r = s.residues[s.residueOf[i]]; if (r.resn !== 'HOH' && s.element[i] !== 'H') atoms.push(i) }
@@ -150,12 +152,12 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
     // dust: on a low-passed map, the pieces under 2% of the largest are what low-passing noise leaves (the caption says so)
     if (R > 0 || o.finish !== 'sketch') { const par = new Int32Array(nv); for (let v = 0; v < nv; v++) par[v] = v; const find = (x: number) => { while (par[x] !== x) { par[x] = par[par[x]]; x = par[x] } return x };
       for (let t = 0; t < tri.length; t += 3) { const a = find(tri[t]), b = find(tri[t + 1]), c = find(tri[t + 2]); par[b] = a; par[find(c)] = a }
-      const size = new Map<number, number>(); for (let v = 0; v < nv; v++) { const r = find(v); size.set(r, (size.get(r) || 0) + 1) }
+      const size = new Int32Array(nv); let most = 0; for (let v = 0; v < nv; v++) { const r = find(v); if (++size[r] > most) most = size[r] }   // vertices per piece, by its root
       // (a close-up at full resolution breaks into a blob around each atom, and its largest piece is often a neighbour's
       // that carving then removes: there only true specks go, whatever their neighbours' size)
-      const big = zoneSel ? 12 : Math.max(0, ...size.values()) * 0.02, keep: number[] = [];
-      for (let t = 0; t < tri.length; t += 3) if (size.get(find(tri[t]))! >= big) keep.push(tri[t], tri[t + 1], tri[t + 2]); else dust++;
-      tri = new Uint32Array(keep) }
+      const big = zoneSel ? 12 : most * 0.02, keep = new Uint32Array(tri.length); let n = 0;
+      for (let t = 0; t < tri.length; t += 3) if (size[find(tri[t])] >= big) { keep[n++] = tri[t]; keep[n++] = tri[t + 1]; keep[n++] = tri[t + 2] } else dust++;
+      tri = keep.slice(0, n) }
     // the rest of an assembly, shown: cut at the crop margin from the model's atoms (the box's straight edges were a
     // box drawn on the picture), not at the box
     if (!zoneSel && carve <= 0 && atoms.length && o.context === 'show' && o.crop > 0) { const r = Math.min(o.crop, 7.99), k2: number[] = [];
@@ -223,6 +225,15 @@ export function prepareMap(whole: DensityMap, style: Style, s: Structure | null,
   return out;
 }
 
+/** the value sorting the array would put at index k (the array is left as it is): the k-th smallest, found without
+    sorting, and of a zero, the sign the sort gives it (−0 sorts before 0); an array with NaN in it is sorted */
+function sortedAt(a: Float32Array, k: number): number {
+  let neg = 0, negZero = 0;
+  for (let i = 0; i < a.length; i++) { const v = a[i]; if (v !== v) return Float32Array.from(a).sort()[k]; if (v < 0) neg++; else if (v === 0 && 1 / v < 0) negZero++ }
+  const v = kthOf(Float32Array.from(a), k);
+  return v === 0 ? (k < neg + negZero ? -0 : 0) : v;
+}
+
 function keep(per: Map<string, EngineMap>, key: string, em: EngineMap) { per.set(key, em); if (per.size > 6) per.delete(per.keys().next().value!) }
 /** density at a point of the drawing's frame, on the scale of the figure's level */
 function samplerOf(g: DensityMap, base: Float32Array, level: number, gLevel: number) {
@@ -248,12 +259,21 @@ function nearestAtom(s: Structure | null, atoms: number[]) {
   for (let c = 0; c < nx * ny * nz; c++) start[c + 1] += start[c];
   const fill = start.slice(0, -1), list = new Int32Array(atoms.length), ax = new Float64Array(atoms.length), ay = new Float64Array(atoms.length), az = new Float64Array(atoms.length);
   for (const i of atoms) { const k = fill[cellOf(i)]++; list[k] = i; ax[k] = s!.x[i]; ay[k] = s!.y[i]; az[k] = s!.z[i] }   // each cell's atoms, in the order given
+  // the nearest in the 5 × 5 × 5 cells round the point, the one listed first among equals. The 3 × 3 × 3 cells round it
+  // are looked at first, and the rest only when an atom there could be as near: they are all at least `ring` away
   return (x: number, y: number, z: number): [number, number] => {
-    let best = -1, bd = 64; const ci = Math.floor((x - x0) / cell), cj = Math.floor((y - y0) / cell), ck = Math.floor((z - z0) / cell);
-    for (let c = Math.max(0, ck - 2); c <= Math.min(nz - 1, ck + 2); c++) for (let b = Math.max(0, cj - 2); b <= Math.min(ny - 1, cj + 2); b++) {
-      const row = (c * ny + b) * nx, a0 = Math.max(0, ci - 2), a1 = Math.min(nx - 1, ci + 2); if (a0 > a1) continue;
-      for (let a = a0; a <= a1; a++) for (let k = start[row + a], e = start[row + a + 1]; k < e; k++) { const d = (ax[k] - x) ** 2 + (ay[k] - y) ** 2 + (az[k] - z) ** 2; if (d < bd) { bd = d; best = list[k] } }
-    }
+    const fx = (x - x0) / cell, fy = (y - y0) / cell, fz = (z - z0) / cell, ci = Math.floor(fx), cj = Math.floor(fy), ck = Math.floor(fz);
+    let best = -1, bd = 64, bk = -1;
+    const scan = (r: number) => {
+      for (let c = Math.max(0, ck - r); c <= Math.min(nz - 1, ck + r); c++) for (let b = Math.max(0, cj - r); b <= Math.min(ny - 1, cj + r); b++) {
+        const row = (c * ny + b) * nx, a0 = Math.max(0, ci - r), a1 = Math.min(nx - 1, ci + r), mid = r === 2 && Math.abs(c - ck) < 2 && Math.abs(b - cj) < 2;
+        for (let a = a0; a <= a1; a++) { if (mid && Math.abs(a - ci) < 2) continue;   // (looked at already)
+          for (let k = start[row + a], e = start[row + a + 1]; k < e; k++) { const d = (ax[k] - x) ** 2 + (ay[k] - y) ** 2 + (az[k] - z) ** 2; if (d < bd || (d === bd && k < bk)) { bd = d; best = list[k]; bk = k } } }
+      }
+    };
+    scan(1);
+    const ring = Math.min(fx - ci + 1, ci + 2 - fx, fy - cj + 1, cj + 2 - fy, fz - ck + 1, ck + 2 - fz) * cell - 1e-6;
+    if (!(bd < ring * ring)) scan(2);
     return [best, Math.sqrt(bd)];
   };
 }
@@ -286,7 +306,13 @@ function stampAtoms(g: DensityMap, s: Structure, r: number): Uint8Array {
     const x0 = Math.max(0, Math.floor(c0 - rv)), x1 = Math.min(nx - 1, Math.ceil(c0 + rv)), y0 = Math.max(0, Math.floor(c1 - rv)), y1 = Math.min(ny - 1, Math.ceil(c1 + rv));
     for (let z = Math.max(0, Math.floor(c2 - rv)), z1 = Math.min(nz - 1, Math.ceil(c2 + rv)); z <= z1; z++) { const dz = (z - c2) ** 2; if (dz > rv2) continue;
       for (let y = y0; y <= y1; y++) { const dy = (y - c1) ** 2, row = (z * ny + y) * nx;
-        for (let x = x0; x <= x1; x++) if ((x - c0) ** 2 + dy + dz <= rv2) out[row + x] = 1 } } }
+        // the voxels of the row inside are one run (the test grows with |x − c0|): its ends found from where the
+        // sphere's edge crosses the row, then checked with the test itself
+        const h = rv2 - dy - dz; if (h < -1) continue; const w = Math.sqrt(Math.max(0, h));
+        let a = Math.max(x0, Math.ceil(c0 - w)), b = Math.min(x1, Math.floor(c0 + w));
+        while (a > x0 && (a - 1 - c0) ** 2 + dy + dz <= rv2) a--; while (a <= b && !((a - c0) ** 2 + dy + dz <= rv2)) a++;
+        while (b < x1 && (b + 1 - c0) ** 2 + dy + dz <= rv2) b++; while (b >= a && !((b - c0) ** 2 + dy + dz <= rv2)) b--;
+        for (let x = row + a, e = row + b; x <= e; x++) out[x] = 1 } } }
   return out;
 }
 

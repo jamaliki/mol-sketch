@@ -298,9 +298,17 @@ async function mapForEntry() {
   const ids = d?.rcsb_entry_container_identifiers?.emdb_ids || []; if (!ids.length) throw new Error(`${name} has no EMDB map (it is not a cryo-EM structure)`);
   await fetchEmdb(ids[0]);
 }
+/** the density at each heavy atom of the model (waters left out), for the share inside the contour: the same at every
+    level, so sampled once per map and model (the panel asks at every move of the level) */
+let atomDensity: { m: DensityMap; s: Structure; v: Float64Array } | null = null;
+function densityAtAtoms(m: DensityMap, s: Structure) {
+  if (atomDensity && atomDensity.m === m && atomDensity.s === s) return atomDensity.v;
+  const v: number[] = []; for (let i = 0; i < s.count; i++) { if (s.element[i] === 'H' || s.residues[s.residueOf[i]].resn === 'HOH') continue; v.push(sampleMap(m, s.x[i], s.y[i], s.z[i])) }
+  atomDensity = { m, s, v: Float64Array.from(v) }; return atomDensity.v;
+}
 function mapInfo() {
   const m = mapObj; if (!m) return null; const lv = mapLevel(m, style); const s = R.structure; let inc: number | null = null;
-  if (s) { let n = 0, k = 0; for (let i = 0; i < s.count; i++) { if (s.element[i] === 'H' || s.residues[s.residueOf[i]].resn === 'HOH') continue; n++; if (sampleMap(m, s.x[i], s.y[i], s.z[i]) >= lv) k++ } inc = n ? k / n : null }
+  if (s) { const v = densityAtAtoms(m, s); let k = 0; for (let i = 0; i < v.length; i++) if (v[i] >= lv) k++; inc = v.length ? k / v.length : null }
   return { name: m.name, level: lv, sigma: (lv - m.mean) / (m.rms || 1), recommended: m.level ?? null, mean: m.mean, rms: m.rms, size: [m.nx, m.ny, m.nz], step: m.step[0], binned: m.binned || 1, atomInclusion: inc };
 }
 /** the map where the figure is drawn: sent once (to the server, its file's bytes; to the worker, its grid), again only
@@ -807,7 +815,7 @@ const api = {
   setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
   setSize: (w: number, h: number) => { fixedSize = [w, h]; R.resize(w, h) }, setDpr: (v: number) => { dpr = v }, rebuild,
   sketch: (b?: number, mode?: RestMode) => { preview(); if (b !== undefined) boil = b; runSketch(mode || 'sketch', true); return sketchStats },
-  renderClassic, classicEngine: () => classic(), seek: setFrame, loadScene, fetchMap: fetchEmdb, mapForEntry, loadMapBytes, clearMap, mapInfo, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
+  renderClassic, classicEngine: () => classic(), get mapBusy() { return mapPrep.busy }, seek: setFrame, loadScene, fetchMap: fetchEmdb, mapForEntry, loadMapBytes, clearMap, mapInfo, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
   /** the current figure as the headless core's FigureSpec (as the drawing worker or the server gets it) */
   spec: async (b = 0) => { const via = drawer(); return via ? figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : b, undefined, via) : null },
   /** the drawing worker's cost for the current frame: its own drawing time and the round trip (for benchmarks) */

@@ -6832,15 +6832,27 @@
     const mean = s / data.length;
     return { mean, rms: Math.sqrt(Math.max(0, s2 / data.length - mean * mean)), min: mn, max: mx };
   }
-  function downsample(m, maxDim) {
+  function downsample(m, maxDim, above2) {
     const f2 = Math.ceil(Math.max(m.nx, m.ny, m.nz) / maxDim);
-    if (f2 <= 1) return m;
-    const nx = Math.floor(m.nx / f2), ny = Math.floor(m.ny / f2), nz = Math.floor(m.nz / f2), out = new Float32Array(nx * ny * nz), w = 1 / (f2 * f2 * f2);
+    if (f2 <= 1) {
+      if (above2 === void 0) return m;
+      const d2 = m.data, a = new Float32Array(d2.length);
+      for (let i = 0; i < d2.length; i++) {
+        const v = d2[i];
+        a[i] = v >= above2 ? v : 0;
+      }
+      return { ...m, data: a };
+    }
+    const nx = Math.floor(m.nx / f2), ny = Math.floor(m.ny / f2), nz = Math.floor(m.nz / f2), out = new Float32Array(nx * ny * nz), w = 1 / (f2 * f2 * f2), d = m.data;
     for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
       let s = 0;
       for (let c = 0; c < f2; c++) for (let b = 0; b < f2; b++) {
         const o = (k * f2 + c) * m.nx * m.ny + (j * f2 + b) * m.nx + i * f2;
-        for (let a = 0; a < f2; a++) s += m.data[o + a];
+        if (above2 === void 0) for (let a = 0; a < f2; a++) s += d[o + a];
+        else for (let a = 0; a < f2; a++) {
+          const v = d[o + a];
+          s += v >= above2 ? v : 0;
+        }
       }
       out[k * nx * ny + j * nx + i] = s * w;
     }
@@ -6895,15 +6907,28 @@
       const kk = Z.c[k], w = Z.u[k];
       for (let j = 0; j < ny; j++) {
         const jj = Y.c[j], v = Y.u[j];
+        let at = -1, a0 = 0, a1 = 0, a2 = 0, a3 = 0, a4 = 0, a5 = 0, a6 = 0, a7 = 0;
         for (let i = 0; i < nx; i++, q++) {
           const ii = X.c[i];
           if (ii < 0 || jj < 0 || kk < 0) {
             out[q] = d0;
             continue;
           }
-          const u = X.u[i], o = kk * sz + jj * sy + ii;
-          const c00 = d[o] * (1 - u) + d[o + 1] * u, c10 = d[o + sy] * (1 - u) + d[o + sy + 1] * u;
-          const c01 = d[o + sz] * (1 - u) + d[o + sz + 1] * u, c11 = d[o + sz + sy] * (1 - u) + d[o + sz + sy + 1] * u;
+          const u = X.u[i];
+          if (ii !== at) {
+            const o = kk * sz + jj * sy + ii;
+            at = ii;
+            a0 = d[o];
+            a1 = d[o + 1];
+            a2 = d[o + sy];
+            a3 = d[o + sy + 1];
+            a4 = d[o + sz];
+            a5 = d[o + sz + 1];
+            a6 = d[o + sz + sy];
+            a7 = d[o + sz + sy + 1];
+          }
+          const c00 = a0 * (1 - u) + a1 * u, c10 = a2 * (1 - u) + a3 * u;
+          const c01 = a4 * (1 - u) + a5 * u, c11 = a6 * (1 - u) + a7 * u;
           out[q] = (c00 * (1 - v) + c10 * v) * (1 - w) + (c01 * (1 - v) + c11 * v) * w;
         }
       }
@@ -6913,45 +6938,60 @@
   function smoothSurface(iso, iterations) {
     const n = iso.positions.length / 3, tri = iso.triangles;
     if (!iterations || !n) return iso;
-    const nb = Array.from({ length: n }, () => []);
+    const deg = new Int32Array(n + 1);
+    for (let t = 0; t < tri.length; t += 3) {
+      deg[tri[t] + 1] += 2;
+      deg[tri[t + 1] + 1] += 2;
+      deg[tri[t + 2] + 1] += 2;
+    }
+    for (let v = 0; v < n; v++) deg[v + 1] += deg[v];
+    const at = deg.slice(0, n), nb = new Int32Array(deg[n]);
     for (let t = 0; t < tri.length; t += 3) for (let e = 0; e < 3; e++) {
       const a = tri[t + e], b = tri[t + (e + 1) % 3];
-      nb[a].push(b);
-      nb[b].push(a);
+      nb[at[a]++] = b;
+      nb[at[b]++] = a;
     }
-    let p = Float32Array.from(iso.positions);
-    const q = new Float32Array(p.length);
+    let p = Float32Array.from(iso.positions), q = new Float32Array(p.length);
     for (let it = 0; it < iterations * 2; it++) {
       const w = it % 2 ? -0.53 : 0.5;
       for (let v = 0; v < n; v++) {
-        const l = nb[v];
-        if (!l.length) {
-          q[v * 3] = p[v * 3];
-          q[v * 3 + 1] = p[v * 3 + 1];
-          q[v * 3 + 2] = p[v * 3 + 2];
+        const l0 = deg[v], l1 = deg[v + 1], o = v * 3;
+        if (l0 === l1) {
+          q[o] = p[o];
+          q[o + 1] = p[o + 1];
+          q[o + 2] = p[o + 2];
           continue;
         }
         let sx = 0, sy = 0, sz = 0;
-        for (const u of l) {
-          sx += p[u * 3];
-          sy += p[u * 3 + 1];
-          sz += p[u * 3 + 2];
+        for (let j = l0; j < l1; j++) {
+          const u = nb[j] * 3;
+          sx += p[u];
+          sy += p[u + 1];
+          sz += p[u + 2];
         }
-        const k = 1 / l.length;
-        for (let c = 0; c < 3; c++) q[v * 3 + c] = p[v * 3 + c] + w * ((c === 0 ? sx : c === 1 ? sy : sz) * k - p[v * 3 + c]);
+        const k = 1 / (l1 - l0);
+        q[o] = p[o] + w * (sx * k - p[o]);
+        q[o + 1] = p[o + 1] + w * (sy * k - p[o + 1]);
+        q[o + 2] = p[o + 2] + w * (sz * k - p[o + 2]);
       }
-      p.set(q);
+      const t = p;
+      p = q;
+      q = t;
     }
     const nor = new Float32Array(p.length);
     for (let t = 0; t < tri.length; t += 3) {
       const a = tri[t] * 3, b = tri[t + 1] * 3, c = tri[t + 2] * 3;
       const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2], vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
       const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-      for (const o of [a, b, c]) {
-        nor[o] += nx;
-        nor[o + 1] += ny;
-        nor[o + 2] += nz;
-      }
+      nor[a] += nx;
+      nor[a + 1] += ny;
+      nor[a + 2] += nz;
+      nor[b] += nx;
+      nor[b + 1] += ny;
+      nor[b + 2] += nz;
+      nor[c] += nx;
+      nor[c + 1] += ny;
+      nor[c + 2] += nz;
     }
     let agree = 0;
     for (let v = 0; v < n; v++) agree += nor[v * 3] * iso.normals[v * 3] + nor[v * 3 + 1] * iso.normals[v * 3 + 1] + nor[v * 3 + 2] * iso.normals[v * 3 + 2];
@@ -7019,137 +7059,212 @@
     const c01 = d[o + sz] * (1 - u) + d[o + sz + sx] * u, c11 = d[o + sz + sy] * (1 - u) + d[o + sz + sy + sx] * u;
     return (c00 * (1 - v) + c10 * v) * (1 - w) + (c01 * (1 - v) + c11 * v) * w;
   }
+  var EDGE_A = [0, 2, 4, 6, 0, 1, 4, 5, 0, 1, 2, 3];
+  var EDGE_B = [1, 3, 5, 7, 2, 3, 6, 7, 4, 5, 6, 7];
   function isosurface(m, level) {
     const { nx, ny, nz, data: d } = m, sy = nx, sz = nx * ny;
-    const cx = nx - 1, cy = ny - 1, cellIndex = new Int32Array(cx * cy * (nz - 1)).fill(-1);
-    const pos = [], nor = [], tri = [];
-    const corner = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
-    const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
-    const v = new Float64Array(8);
-    for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0, o = k * sz + j * sy; i < nx - 1; i++, o++) {
-      const v0 = d[o], v1 = d[o + 1], v2 = d[o + sy], v3 = d[o + sy + 1], v4 = d[o + sz], v5 = d[o + sz + 1], v6 = d[o + sz + sy], v7 = d[o + sz + sy + 1];
-      const mask = (v0 >= level ? 1 : 0) | (v1 >= level ? 2 : 0) | (v2 >= level ? 4 : 0) | (v3 >= level ? 8 : 0) | (v4 >= level ? 16 : 0) | (v5 >= level ? 32 : 0) | (v6 >= level ? 64 : 0) | (v7 >= level ? 128 : 0);
-      if (mask === 0 || mask === 255) continue;
-      v[0] = v0;
-      v[1] = v1;
-      v[2] = v2;
-      v[3] = v3;
-      v[4] = v4;
-      v[5] = v5;
-      v[6] = v6;
-      v[7] = v7;
-      let px = 0, py = 0, pz = 0, n = 0;
-      for (const [a, b] of edges) {
-        const ia = mask >> a & 1, ib = mask >> b & 1;
-        if (ia === ib) continue;
-        const t = (level - v[a]) / (v[b] - v[a]), qa = corner[a], qb = corner[b];
-        px += qa[0] + (qb[0] - qa[0]) * t;
-        py += qa[1] + (qb[1] - qa[1]) * t;
-        pz += qa[2] + (qb[2] - qa[2]) * t;
-        n++;
+    const cx = nx - 1, cy = ny - 1, cxy = cx * cy, cellIndex = new Int32Array(cx * cy * (nz - 1)).fill(-1);
+    let pos = new Float32Array(1 << 12), nor = new Float32Array(1 << 12), nv = 0;
+    let cells = new Int32Array(1 << 10), masks = new Uint8Array(1 << 10);
+    const v = new Float64Array(8), o0 = m.origin[0], o1 = m.origin[1], o2 = m.origin[2], s0 = m.step[0], s1 = m.step[1], s2 = m.step[2];
+    for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) {
+      let o = k * sz + j * sy, v0 = d[o], v2 = d[o + sy], v4 = d[o + sz], v6 = d[o + sz + sy];
+      let left = (v0 >= level ? 1 : 0) | (v2 >= level ? 4 : 0) | (v4 >= level ? 16 : 0) | (v6 >= level ? 64 : 0);
+      for (let i = 0; i < nx - 1; i++, o++) {
+        const v1 = d[o + 1], v3 = d[o + sy + 1], v5 = d[o + sz + 1], v7 = d[o + sz + sy + 1];
+        const right = (v1 >= level ? 1 : 0) | (v3 >= level ? 4 : 0) | (v5 >= level ? 16 : 0) | (v7 >= level ? 64 : 0), mask = left | right << 1;
+        if (mask !== 0 && mask !== 255) {
+          v[0] = v0;
+          v[1] = v1;
+          v[2] = v2;
+          v[3] = v3;
+          v[4] = v4;
+          v[5] = v5;
+          v[6] = v6;
+          v[7] = v7;
+          let px = 0, py = 0, pz = 0, n = 0;
+          for (let e = 0; e < 12; e++) {
+            const a = EDGE_A[e], b = EDGE_B[e];
+            if ((mask >> a & 1) === (mask >> b & 1)) continue;
+            const t = (level - v[a]) / (v[b] - v[a]), ax = a & 1, ay = a >> 1 & 1, az = a >> 2;
+            px += ax + ((b & 1) - ax) * t;
+            py += ay + ((b >> 1 & 1) - ay) * t;
+            pz += az + ((b >> 2) - az) * t;
+            n++;
+          }
+          px = i + px / n;
+          py = j + py / n;
+          pz = k + pz / n;
+          const fx = px - i, fy = py - j, fz = pz - k;
+          const gx = ((v[1] - v[0]) * (1 - fy) + (v[3] - v[2]) * fy) * (1 - fz) + ((v[5] - v[4]) * (1 - fy) + (v[7] - v[6]) * fy) * fz;
+          const gy = ((v[2] - v[0]) * (1 - fx) + (v[3] - v[1]) * fx) * (1 - fz) + ((v[6] - v[4]) * (1 - fx) + (v[7] - v[5]) * fx) * fz;
+          const gz = ((v[4] - v[0]) * (1 - fx) + (v[5] - v[1]) * fx) * (1 - fy) + ((v[6] - v[2]) * (1 - fx) + (v[7] - v[3]) * fx) * fy;
+          const ux = -gx / s0, uy = -gy / s1, uz = -gz / s2, L = Math.hypot(ux, uy, uz) || 1;
+          const c = k * cxy + j * cx + i;
+          cellIndex[c] = nv;
+          if (nv * 3 + 3 > pos.length) {
+            const P = new Float32Array(pos.length * 2), N = new Float32Array(pos.length * 2);
+            P.set(pos);
+            N.set(nor);
+            pos = P;
+            nor = N;
+          }
+          if (nv === cells.length) {
+            const C = new Int32Array(nv * 2), M = new Uint8Array(nv * 2);
+            C.set(cells);
+            M.set(masks);
+            cells = C;
+            masks = M;
+          }
+          const w = nv * 3;
+          pos[w] = o0 + px * s0;
+          pos[w + 1] = o1 + py * s1;
+          pos[w + 2] = o2 + pz * s2;
+          nor[w] = ux / L;
+          nor[w + 1] = uy / L;
+          nor[w + 2] = uz / L;
+          cells[nv] = c;
+          masks[nv] = mask;
+          nv++;
+        }
+        v0 = v1;
+        v2 = v3;
+        v4 = v5;
+        v6 = v7;
+        left = right;
       }
-      px = i + px / n;
-      py = j + py / n;
-      pz = k + pz / n;
-      const fx = px - i, fy = py - j, fz = pz - k;
-      const gx = ((v[1] - v[0]) * (1 - fy) + (v[3] - v[2]) * fy) * (1 - fz) + ((v[5] - v[4]) * (1 - fy) + (v[7] - v[6]) * fy) * fz;
-      const gy = ((v[2] - v[0]) * (1 - fx) + (v[3] - v[1]) * fx) * (1 - fz) + ((v[6] - v[4]) * (1 - fx) + (v[7] - v[5]) * fx) * fz;
-      const gz = ((v[4] - v[0]) * (1 - fx) + (v[5] - v[1]) * fx) * (1 - fy) + ((v[6] - v[2]) * (1 - fx) + (v[7] - v[3]) * fx) * fy;
-      const ux = -gx / m.step[0], uy = -gy / m.step[1], uz = -gz / m.step[2], L = Math.hypot(ux, uy, uz) || 1;
-      cellIndex[k * cx * cy + j * cx + i] = pos.length / 3;
-      pos.push(m.origin[0] + px * m.step[0], m.origin[1] + py * m.step[1], m.origin[2] + pz * m.step[2]);
-      nor.push(ux / L, uy / L, uz / L);
     }
-    const cell = (i, j, k) => cellIndex[k * cx * cy + j * cx + i];
+    let tri = new Uint32Array(1 << 12), nt = 0;
     const quad = (a, b, c, e, flip) => {
       if (a < 0 || b < 0 || c < 0 || e < 0) return;
-      if (flip) tri.push(a, c, b, b, c, e);
-      else tri.push(a, b, c, b, e, c);
+      if (nt + 6 > tri.length) {
+        const T = new Uint32Array(tri.length * 2);
+        T.set(tri);
+        tri = T;
+      }
+      if (flip) {
+        tri[nt] = a;
+        tri[nt + 1] = c;
+        tri[nt + 2] = b;
+        tri[nt + 3] = b;
+        tri[nt + 4] = c;
+        tri[nt + 5] = e;
+      } else {
+        tri[nt] = a;
+        tri[nt + 1] = b;
+        tri[nt + 2] = c;
+        tri[nt + 3] = b;
+        tri[nt + 4] = e;
+        tri[nt + 5] = c;
+      }
+      nt += 6;
     };
-    for (let k = 1; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      const o = k * sz + j * sy + i, a = d[o] >= level, b = d[o + 1] >= level;
-      if (a === b) continue;
-      quad(cell(i, j - 1, k - 1), cell(i, j, k - 1), cell(i, j - 1, k), cell(i, j, k), a);
+    for (let q = 0; q < nv; q++) {
+      const c = cells[q], mask = masks[q], j = (c / cx | 0) % cy, k = c / cxy | 0;
+      if (j < 1 || k < 1 || ((mask ^ mask >> 1) & 1) === 0) continue;
+      quad(cellIndex[c - cxy - cx], cellIndex[c - cxy], cellIndex[c - cx], q, (mask & 1) === 1);
     }
-    for (let k = 1; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
-      const o = k * sz + j * sy + i, a = d[o] >= level, b = d[o + sy] >= level;
-      if (a === b) continue;
-      quad(cell(i - 1, j, k - 1), cell(i - 1, j, k), cell(i, j, k - 1), cell(i, j, k), a);
+    for (let q = 0; q < nv; q++) {
+      const c = cells[q], mask = masks[q], i = c % cx, k = c / cxy | 0;
+      if (i < 1 || k < 1 || ((mask ^ mask >> 2) & 1) === 0) continue;
+      quad(cellIndex[c - cxy - 1], cellIndex[c - 1], cellIndex[c - cxy], q, (mask & 1) === 1);
     }
-    for (let k = 0; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
-      const o = k * sz + j * sy + i, a = d[o] >= level, b = d[o + sz] >= level;
-      if (a === b) continue;
-      quad(cell(i - 1, j - 1, k), cell(i, j - 1, k), cell(i - 1, j, k), cell(i, j, k), a);
+    for (let q = 0; q < nv; q++) {
+      const c = cells[q], mask = masks[q], i = c % cx, j = (c / cx | 0) % cy;
+      if (i < 1 || j < 1 || ((mask ^ mask >> 4) & 1) === 0) continue;
+      quad(cellIndex[c - cx - 1], cellIndex[c - cx], cellIndex[c - 1], q, (mask & 1) === 1);
     }
-    return { level, positions: new Float32Array(pos), normals: new Float32Array(nor), triangles: new Uint32Array(tri) };
+    return { level, positions: pos.slice(0, nv * 3), normals: nor.slice(0, nv * 3), triangles: tri.slice(0, nt) };
   }
   function sliceContours(m, axis, index, level) {
     const dims = [m.nx, m.ny, m.nz], [ua, va] = axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1];
-    const nu = dims[ua], nv = dims[va], sy = m.nx, sz = m.nx * m.ny;
+    const nu = dims[ua], nv = dims[va], stride = [1, m.nx, m.nx * m.ny], su = stride[ua], sw = stride[va], d = m.data, base = index * stride[axis];
+    const oU = m.origin[ua], hU = m.step[ua], oW = m.origin[va], hW = m.step[va], fixed = m.origin[axis] + index * m.step[axis];
+    const segs = [], pts = new Float64Array(8);
+    let np = 0;
     const at = (u, w) => {
-      const q = [0, 0, 0];
-      q[axis] = index;
-      q[ua] = u;
-      q[va] = w;
-      return m.data[q[2] * sz + q[1] * sy + q[0]];
+      pts[np++] = u;
+      pts[np++] = w;
     };
-    const P = (u, w) => {
-      const q = [0, 0, 0];
-      q[axis] = index;
-      q[ua] = u;
-      q[va] = w;
-      return [m.origin[0] + q[0] * m.step[0], m.origin[1] + q[1] * m.step[1], m.origin[2] + q[2] * m.step[2]];
+    const cross = (x0, y0, v0, x1, y1, v1) => {
+      const t = (level - v0) / (v1 - v0);
+      at(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
     };
-    const segs = [];
+    const xyz = (o, out, k) => {
+      out[k + axis] = fixed;
+      out[k + ua] = oU + pts[o] * hU;
+      out[k + va] = oW + pts[o + 1] * hW;
+    };
     for (let w = 0; w < nv - 1; w++) for (let u = 0; u < nu - 1; u++) {
-      const a = at(u, w), b = at(u + 1, w), c = at(u + 1, w + 1), e = at(u, w + 1);
+      const q = base + u * su + w * sw, a = d[q], b = d[q + su], c = d[q + su + sw], e = d[q + sw];
       const idx = (a >= level ? 1 : 0) | (b >= level ? 2 : 0) | (c >= level ? 4 : 0) | (e >= level ? 8 : 0);
       if (idx === 0 || idx === 15) continue;
-      const cross = (x0, y0, v0, x1, y1, v1) => {
-        const t = (level - v0) / (v1 - v0);
-        return P(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
-      };
-      const pts = [];
-      if ((idx & 1) !== (idx >> 1 & 1)) pts.push(cross(u, w, a, u + 1, w, b));
-      if ((idx >> 1 & 1) !== (idx >> 2 & 1)) pts.push(cross(u + 1, w, b, u + 1, w + 1, c));
-      if ((idx >> 2 & 1) !== (idx >> 3 & 1)) pts.push(cross(u + 1, w + 1, c, u, w + 1, e));
-      if ((idx >> 3 & 1) !== (idx & 1)) pts.push(cross(u, w + 1, e, u, w, a));
-      for (let s = 0; s + 1 < pts.length; s += 2) segs.push([...pts[s], ...pts[s + 1]]);
+      np = 0;
+      if ((idx & 1) !== (idx >> 1 & 1)) cross(u, w, a, u + 1, w, b);
+      if ((idx >> 1 & 1) !== (idx >> 2 & 1)) cross(u + 1, w, b, u + 1, w + 1, c);
+      if ((idx >> 2 & 1) !== (idx >> 3 & 1)) cross(u + 1, w + 1, c, u, w + 1, e);
+      if ((idx >> 3 & 1) !== (idx & 1)) cross(u, w + 1, e, u, w, a);
+      for (let s = 0; s + 3 < np; s += 4) {
+        const seg = [0, 0, 0, 0, 0, 0];
+        xyz(s, seg, 0);
+        xyz(s + 2, seg, 3);
+        segs.push(seg);
+      }
     }
     return segs;
   }
   function joinSegments(segs, tol = 1e-4) {
     const key = (x, y, z) => `${Math.round(x / tol)},${Math.round(y / tol)},${Math.round(z / tol)}`;
+    const n = segs.length, ka = new Array(n), kb = new Array(n);
     const ends = /* @__PURE__ */ new Map();
-    const used = new Uint8Array(segs.length);
-    segs.forEach((s, i) => {
-      for (const e of [key(s[0], s[1], s[2]), key(s[3], s[4], s[5])]) {
+    const used = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      const s = segs[i];
+      ka[i] = key(s[0], s[1], s[2]);
+      kb[i] = key(s[3], s[4], s[5]);
+      for (const e of [ka[i], kb[i]]) {
         let l = ends.get(e);
         if (!l) ends.set(e, l = []);
         l.push(i);
       }
-    });
+    }
+    const next = (k) => {
+      const cand = ends.get(k);
+      if (cand) {
+        for (const c of cand) if (!used[c]) return c;
+      }
+      return -1;
+    };
     const lines2 = [];
-    for (let i = 0; i < segs.length; i++) {
+    for (let i = 0; i < n; i++) {
       if (used[i]) continue;
       used[i] = 1;
       const s = segs[i];
       const line = [[s[0], s[1], s[2]], [s[3], s[4], s[5]]];
-      for (const dir of [1, 0]) {
-        for (; ; ) {
-          const p = dir ? line[line.length - 1] : line[0];
-          const cand = ends.get(key(p[0], p[1], p[2])) || [];
-          const nx = cand.find((c) => !used[c]);
-          if (nx === void 0) break;
-          used[nx] = 1;
-          const t = segs[nx];
-          const a = [t[0], t[1], t[2]], b = [t[3], t[4], t[5]];
-          const far = key(a[0], a[1], a[2]) === key(p[0], p[1], p[2]) ? b : a;
-          if (dir) line.push(far);
-          else line.unshift(far);
+      for (let k = kb[i], c = next(k); c >= 0; c = next(k)) {
+        used[c] = 1;
+        const t = segs[c];
+        if (ka[c] === k) {
+          line.push([t[3], t[4], t[5]]);
+          k = kb[c];
+        } else {
+          line.push([t[0], t[1], t[2]]);
+          k = ka[c];
         }
       }
-      lines2.push(line);
+      const head = [];
+      for (let k = ka[i], c = next(k); c >= 0; c = next(k)) {
+        used[c] = 1;
+        const t = segs[c];
+        if (ka[c] === k) {
+          head.push([t[3], t[4], t[5]]);
+          k = kb[c];
+        } else {
+          head.push([t[0], t[1], t[2]]);
+          k = ka[c];
+        }
+      }
+      lines2.push(head.length ? head.reverse().concat(line) : line);
     }
     return lines2;
   }
@@ -7452,8 +7567,7 @@
       extent = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
     }
     const R = o.smooth === "auto" ? zoneSel ? 0 : (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
-    const above2 = R > 0 ? { ...m, data: m.data.map((v) => v >= level ? v : 0) } : m;
-    let g0 = downsample(above2, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
+    let g0 = downsample(m, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels, R > 0 ? level : void 0);
     const zoned = R > 0 && !!s && s.count > 0 && o.finish !== "sketch" && o.context !== "show";
     const keepR = o.unexplained ? 10 : 5;
     if (zoned) {
@@ -7477,9 +7591,11 @@
     if (R > 0 && massFrom === "the model") zone = stampAtoms(g2, s, 6);
     let massTooBig = false;
     if (R > 0 && mass > 0) {
-      const n = mass * 1.21 / (g2.step[0] * g2.step[1] * g2.step[2]);
+      const n = mass * 1.21 / (g2.step[0] * g2.step[1] * g2.step[2]), d = g2.data;
       let support = 0;
-      for (let i = 0; i < g2.data.length; i++) if (g2.data[i] > 0 && (!zone || zone[i])) support++;
+      if (zone) {
+        for (let i = 0; i < d.length; i++) if (d[i] > 0 && zone[i]) support++;
+      } else for (let i = 0; i < d.length; i++) if (d[i] > 0) support++;
       massTooBig = n > 0.6 * support;
     }
     let vAtLevel = 0;
@@ -7489,14 +7605,12 @@
       vAtLevel = c * m.step[0] * m.step[1] * m.step[2];
     }
     const byVolume = R > 0, vLevel = !byVolume ? 0 : mass > 0 && !massTooBig ? levelEnclosing(g2, mass * 1.21, zone) : vAtLevel > 0 ? levelEnclosing(g2, 2 * vAtLevel, zone) : g2.mean + 2 * g2.rms;
-    let sorted = null;
     const same = (lv) => {
       if (byVolume) return vLevel * lv / level;
       if (g1 === m) return lv;
       let n = 0;
       for (let i = 0; i < m.data.length; i++) if (m.data[i] >= lv) n++;
-      sorted ?? (sorted = Float32Array.from(g1.data).sort());
-      return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((1 - n / m.data.length) * sorted.length)))];
+      return sortedAt(g1.data, Math.max(0, Math.min(g1.data.length - 1, Math.floor((1 - n / m.data.length) * g1.data.length))));
     };
     const turn = (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
     const atoms = [];
@@ -7534,15 +7648,20 @@
           par[b] = a;
           par[find(c)] = a;
         }
-        const size = /* @__PURE__ */ new Map();
+        const size = new Int32Array(nv);
+        let most = 0;
         for (let v = 0; v < nv; v++) {
           const r = find(v);
-          size.set(r, (size.get(r) || 0) + 1);
+          if (++size[r] > most) most = size[r];
         }
-        const big = zoneSel ? 12 : Math.max(0, ...size.values()) * 0.02, keep2 = [];
-        for (let t = 0; t < tri.length; t += 3) if (size.get(find(tri[t])) >= big) keep2.push(tri[t], tri[t + 1], tri[t + 2]);
-        else dust++;
-        tri = new Uint32Array(keep2);
+        const big = zoneSel ? 12 : most * 0.02, keep2 = new Uint32Array(tri.length);
+        let n = 0;
+        for (let t = 0; t < tri.length; t += 3) if (size[find(tri[t])] >= big) {
+          keep2[n++] = tri[t];
+          keep2[n++] = tri[t + 1];
+          keep2[n++] = tri[t + 2];
+        } else dust++;
+        tri = keep2.slice(0, n);
       }
       if (!zoneSel && carve <= 0 && atoms.length && o.context === "show" && o.crop > 0) {
         const r = Math.min(o.crop, 7.99), k2 = [];
@@ -7671,6 +7790,17 @@
     keep(per, key, out);
     return out;
   }
+  function sortedAt(a, k) {
+    let neg = 0, negZero = 0;
+    for (let i = 0; i < a.length; i++) {
+      const v2 = a[i];
+      if (v2 !== v2) return Float32Array.from(a).sort()[k];
+      if (v2 < 0) neg++;
+      else if (v2 === 0 && 1 / v2 < 0) negZero++;
+    }
+    const v = kthOf(Float32Array.from(a), k);
+    return v === 0 ? k < neg + negZero ? -0 : 0 : v;
+  }
   function keep(per, key, em) {
     per.set(key, em);
     if (per.size > 6) per.delete(per.keys().next().value);
@@ -7708,19 +7838,27 @@
       az[k] = s.z[i];
     }
     return (x, y, z) => {
-      let best = -1, bd = 64;
-      const ci = Math.floor((x - x0) / cell), cj = Math.floor((y - y0) / cell), ck = Math.floor((z - z0) / cell);
-      for (let c = Math.max(0, ck - 2); c <= Math.min(nz - 1, ck + 2); c++) for (let b = Math.max(0, cj - 2); b <= Math.min(ny - 1, cj + 2); b++) {
-        const row = (c * ny + b) * nx, a0 = Math.max(0, ci - 2), a1 = Math.min(nx - 1, ci + 2);
-        if (a0 > a1) continue;
-        for (let a = a0; a <= a1; a++) for (let k = start[row + a], e = start[row + a + 1]; k < e; k++) {
-          const d = (ax[k] - x) ** 2 + (ay[k] - y) ** 2 + (az[k] - z) ** 2;
-          if (d < bd) {
-            bd = d;
-            best = list[k];
+      const fx = (x - x0) / cell, fy = (y - y0) / cell, fz = (z - z0) / cell, ci = Math.floor(fx), cj = Math.floor(fy), ck = Math.floor(fz);
+      let best = -1, bd = 64, bk = -1;
+      const scan = (r) => {
+        for (let c = Math.max(0, ck - r); c <= Math.min(nz - 1, ck + r); c++) for (let b = Math.max(0, cj - r); b <= Math.min(ny - 1, cj + r); b++) {
+          const row = (c * ny + b) * nx, a0 = Math.max(0, ci - r), a1 = Math.min(nx - 1, ci + r), mid2 = r === 2 && Math.abs(c - ck) < 2 && Math.abs(b - cj) < 2;
+          for (let a = a0; a <= a1; a++) {
+            if (mid2 && Math.abs(a - ci) < 2) continue;
+            for (let k = start[row + a], e = start[row + a + 1]; k < e; k++) {
+              const d = (ax[k] - x) ** 2 + (ay[k] - y) ** 2 + (az[k] - z) ** 2;
+              if (d < bd || d === bd && k < bk) {
+                bd = d;
+                best = list[k];
+                bk = k;
+              }
+            }
           }
         }
-      }
+      };
+      scan(1);
+      const ring = Math.min(fx - ci + 1, ci + 2 - fx, fy - cj + 1, cj + 2 - fy, fz - ck + 1, ck + 2 - fz) * cell - 1e-6;
+      if (!(bd < ring * ring)) scan(2);
       return [best, Math.sqrt(bd)];
     };
   }
@@ -7766,7 +7904,15 @@
         if (dz > rv2) continue;
         for (let y = y0; y <= y1; y++) {
           const dy = (y - c1) ** 2, row = (z * ny + y) * nx;
-          for (let x = x0; x <= x1; x++) if ((x - c0) ** 2 + dy + dz <= rv2) out[row + x] = 1;
+          const h = rv2 - dy - dz;
+          if (h < -1) continue;
+          const w = Math.sqrt(Math.max(0, h));
+          let a = Math.max(x0, Math.ceil(c0 - w)), b = Math.min(x1, Math.floor(c0 + w));
+          while (a > x0 && (a - 1 - c0) ** 2 + dy + dz <= rv2) a--;
+          while (a <= b && !((a - c0) ** 2 + dy + dz <= rv2)) a++;
+          while (b < x1 && (b + 1 - c0) ** 2 + dy + dz <= rv2) b++;
+          while (b >= a && !((b - c0) ** 2 + dy + dz <= rv2)) b--;
+          for (let x = row + a, e = row + b; x <= e; x++) out[x] = 1;
         }
       }
     }
