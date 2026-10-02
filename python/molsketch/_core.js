@@ -1322,34 +1322,88 @@
       const cell = 2.2;
       const X = this.x, Y = this.y, Z = this.z;
       const el = this.element;
-      const grid = /* @__PURE__ */ new Map();
-      const K = (x, y, z) => ((x + 512) * 1024 + (y + 512)) * 1024 + (z + 512);
+      const gx = new Int32Array(n), gy = new Int32Array(n), gz = new Int32Array(n);
+      let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
       for (let i = 0; i < n; i++) {
-        const k = K(Math.floor(X[i] / cell), Math.floor(Y[i] / cell), Math.floor(Z[i] / cell));
-        let g2 = grid.get(k);
-        if (!g2) {
-          g2 = [];
-          grid.set(k, g2);
-        }
-        g2.push(i);
+        const a = gx[i] = Math.floor(X[i] / cell), b = gy[i] = Math.floor(Y[i] / cell), c = gz[i] = Math.floor(Z[i] / cell);
+        if (a < x0) x0 = a;
+        if (a > x1) x1 = a;
+        if (b < y0) y0 = b;
+        if (b > y1) y1 = b;
+        if (c < z0) z0 = c;
+        if (c > z1) z1 = c;
       }
-      const out = [];
+      const nx = x1 - x0 + 1, ny = y1 - y0 + 1, nz = z1 - z0 + 1, dense = n > 0 && nx * ny * nz <= Math.max(1 << 20, 32 * n);
+      let cellOf;
+      let start, list;
+      if (dense) {
+        const nc = nx * ny * nz;
+        start = new Int32Array(nc + 1);
+        const at = new Int32Array(n);
+        for (let i = 0; i < n; i++) {
+          const k = at[i] = gx[i] - x0 + nx * (gy[i] - y0 + ny * (gz[i] - z0));
+          start[k + 1]++;
+        }
+        for (let k = 0; k < nc; k++) start[k + 1] += start[k];
+        const fill = start.slice(0, nc);
+        list = new Int32Array(n);
+        for (let i = 0; i < n; i++) list[fill[at[i]]++] = i;
+        cellOf = (a, b, c) => a < x0 || a > x1 || b < y0 || b > y1 || c < z0 || c > z1 ? -1 : a - x0 + nx * (b - y0 + ny * (c - z0));
+      } else {
+        const K = (x, y, z) => ((x + 512) * 1024 + (y + 512)) * 1024 + (z + 512);
+        const ids = /* @__PURE__ */ new Map(), cnt = [], at = new Int32Array(n);
+        for (let i = 0; i < n; i++) {
+          const key = K(gx[i], gy[i], gz[i]);
+          let k = ids.get(key);
+          if (k === void 0) {
+            k = cnt.length;
+            ids.set(key, k);
+            cnt.push(0);
+          }
+          at[i] = k;
+          cnt[k]++;
+        }
+        start = new Int32Array(cnt.length + 1);
+        for (let k = 0; k < cnt.length; k++) start[k + 1] = start[k] + cnt[k];
+        const fill = start.slice(0, cnt.length);
+        list = new Int32Array(n);
+        for (let i = 0; i < n; i++) list[fill[at[i]]++] = i;
+        cellOf = (a, b, c) => ids.get(K(a, b, c)) ?? -1;
+      }
+      const rad = new Float64Array(n), isH = new Uint8Array(n);
       for (let i = 0; i < n; i++) {
-        const gx = Math.floor(X[i] / cell), gy = Math.floor(Y[i] / cell), gz = Math.floor(Z[i] / cell);
-        const ri = COV_R[el[i]] ?? 0.76;
+        rad[i] = COV_R[el[i]] ?? 0.76;
+        isH[i] = el[i] === "H" ? 1 : 0;
+      }
+      let out = new Int32Array(Math.max(16, n * 3)), m = 0;
+      const LO = 1 - 1e-9, HI = 1 + 1e-9;
+      for (let i = 0; i < n; i++) {
+        const ri = rad[i], hi = isH[i], xi = X[i], yi = Y[i], zi = Z[i];
         for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-          const g2 = grid.get(K(gx + dx, gy + dy, gz + dz));
-          if (!g2) continue;
-          for (const j of g2) {
+          const k = cellOf(gx[i] + dx, gy[i] + dy, gz[i] + dz);
+          if (k < 0) continue;
+          for (let q = start[k], qe = start[k + 1]; q < qe; q++) {
+            const j = list[q];
             if (j <= i) continue;
-            if (el[i] === "H" && el[j] === "H") continue;
-            const d = Math.hypot(X[i] - X[j], Y[i] - Y[j], Z[i] - Z[j]);
-            const rs = ri + (COV_R[el[j]] ?? 0.76);
-            if (d < rs * 1.15 && d > 0.4) out.push(i, j);
+            if (hi && isH[j]) continue;
+            const ex = xi - X[j], ey = yi - Y[j], ez = zi - Z[j], d2 = ex * ex + ey * ey + ez * ez;
+            const lim = (ri + rad[j]) * 1.15, L2 = lim * lim;
+            if (d2 > L2 * HI) continue;
+            if (!(d2 < L2 * LO && d2 > 0.16 * HI)) {
+              const d = Math.hypot(ex, ey, ez);
+              if (!(d < lim && d > 0.4)) continue;
+            }
+            if (m + 2 > out.length) {
+              const b = new Int32Array(out.length * 2);
+              b.set(out);
+              out = b;
+            }
+            out[m++] = i;
+            out[m++] = j;
           }
         }
       }
-      this.bonds = Int32Array.from(out);
+      this.bonds = out.slice(0, m);
     }
   };
 

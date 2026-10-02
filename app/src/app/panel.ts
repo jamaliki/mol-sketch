@@ -74,6 +74,8 @@ type Ctl = (
   | { t: 'check'; label: string; path: string; geom?: boolean }) & { when?: () => boolean; tip?: string };
 
 const get = (o: any, path: string) => path.split('.').reduce((a, k) => a?.[k], o);
+/** a text set only when it changes (setting it anew, even to the same words, has the panel laid out again) */
+const setText = (e: HTMLElement, t: string) => { if (e.textContent !== t) e.textContent = t };
 const set = (o: any, path: string, v: any) => { const ks = path.split('.'); let t = o; for (let i = 0; i < ks.length - 1; i++) t = t[ks[i]]; t[ks[ks.length - 1]] = v };
 const store = { get: (k: string) => { try { return localStorage.getItem(k) } catch { return null } }, set: (k: string, v: string) => { try { localStorage.setItem(k, v) } catch { } } };
 
@@ -728,7 +730,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   const aText = el('div', { class: 'note', style: 'min-height:2.6em' }); Ch.append(aText);
   Ch.append(el('div', { class: 'subhead' }, 'arrows of this keyframe')); const arList = el('div', { class: 'arrows' }); Ch.append(arList);
   let arKey = '';
-  const refreshAuthor = () => { const m = H.authorMode(); const dn = H.diffNote(); chgNote.textContent = dn || 'Hover the timeline: orange rings move, red breaks or leaves, green forms or arrives, yellow changes order or charge.'; mbs.forEach(b => b.classList.toggle('on', b.dataset.mode === m)); aText.textContent = H.authorText();
+  const refreshAuthor = () => { const m = H.authorMode(); const dn = H.diffNote(); setText(chgNote, dn || 'Hover the timeline: orange rings move, red breaks or leaves, green forms or arrives, yellow changes order or charge.'); mbs.forEach(b => b.classList.toggle('on', b.dataset.mode === m)); setText(aText, H.authorText());
     const ars = H.arrowsOf(); const key = JSON.stringify(ars) + H.currentKey(); if (key === arKey) return; arKey = key; arList.innerHTML = '';
     if (!ars.length) arList.append(note('none'));
     for (const a of ars) { const bul = el('input', { type: 'number', min: 0, max: 1.5, step: 0.05, value: String(a.bulge), title: 'bow: fraction of the arrow\'s length' }) as HTMLInputElement; bul.onchange = () => H.editArrow(a.j, 'bulge', +bul.value);
@@ -747,7 +749,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   /* ---------- the timeline under the drawing (animations) ---------- */
   const tl = document.getElementById('timeline');
   const playBtn = el('button', { class: 'play', title: 'play / pause (space)', onclick: () => { H.play(!H.isPlaying()); showPlay() } }, '▶') as HTMLButtonElement;
-  const showPlay = () => { playBtn.textContent = H.isPlaying() ? '❚❚' : '▶'; playBtn.classList.toggle('on', H.isPlaying()) };
+  const showPlay = () => { setText(playBtn, H.isPlaying() ? '❚❚' : '▶'); playBtn.classList.toggle('on', H.isPlaying()) };
   const frameIn = el('input', { type: 'range', min: 0, max: 100, step: 1, value: 0, 'aria-label': 'time' }) as HTMLInputElement;
   frameIn.oninput = () => { H.seek(+frameIn.value); showPlay() };
   frameIn.onmouseenter = () => H.setHoverChanges(true); frameIn.onmouseleave = () => H.setHoverChanges(false);
@@ -757,7 +759,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   let total = 1;
   function buildTicks() { ticks.innerHTML = ''; const st = H.keyStarts(); const ks = H.keyframes(); const cur = H.currentKey();
     st.forEach((f, i) => { const t = el('button', { class: 'tick' + (i === cur ? ' on' : ''), title: `${i + 1}. ${ks[i]?.name || ''}`, onclick: () => { H.goToKey(i); showPlay() } }, String(i + 1)); t.style.left = Math.min(100, 100 * f / Math.max(1, total - 1)) + '%'; ticks.append(t) }) }
-  const transport = (f: number, tot: number, name: string) => { const grew = tot !== total; total = tot; if (grew) buildTicks(); frameIn.max = String(tot - 1); frameIn.value = String(f); tName.textContent = name; tTime.textContent = `${(f / H.fps).toFixed(1)} / ${(tot / H.fps).toFixed(1)} s`; showPlay(); refreshKeys(); refreshAuthor() };
+  const transport = (f: number, tot: number, name: string) => { const grew = tot !== total; total = tot; if (grew) buildTicks(); frameIn.max = String(tot - 1); frameIn.value = String(f); setText(tName, name); setText(tTime, `${(f / H.fps).toFixed(1)} / ${(tot / H.fps).toFixed(1)} s`); showPlay(); refreshKeys(); refreshAuthor() };
   refreshers.push(() => { const on = H.hasScene(); if (tl) tl.hidden = !on; if (on) refreshChecks(); if (!on && current === 'scene') current = 'drawing' });
 
   /* ======================= Export (a dialog over the drawing) ======================= */
