@@ -28,6 +28,10 @@ import { renderVideo, codecSupport, hasWebCodecs, fmtBytes, type CodecName, type
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const skCanvas = document.getElementById('sk') as HTMLCanvasElement; const skCtx = skCanvas.getContext('2d', { willReadFrequently: true })!;   // CPU-backed: the classic engine composites huge offscreen canvases, which GPU canvases can drop silently
 const ovCanvas = document.getElementById('ov') as HTMLCanvasElement; const ovCtx = ovCanvas.getContext('2d')!;   // overlays: change highlights, authoring marks
+// both canvases touched now, before the preview's GL starts: a canvas's first drawing sets it up with the browser's
+// compositor, which waits while the GPU process is busy (compiling the preview's shaders); then it was the first
+// finished drawing that waited, up to half a second
+skCtx.clearRect(0, 0, 1, 1); ovCtx.clearRect(0, 0, 1, 1);
 const stage = document.getElementById('stage')!;
 const hud = document.getElementById('hud')!; if (!new URLSearchParams(location.search).has('debug')) hud.style.display = 'none';   // timings: ?debug
 
