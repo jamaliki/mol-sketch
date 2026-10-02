@@ -243,3 +243,17 @@ def test_modified_residues_stay_in_the_chain():
     atoms = engine().call("sceneJson", fig._spec())["keyframes"][0]["atoms"]
     het = {a["resn"]: a["het"] for a in atoms.values()}
     assert het["MSE"] is False and het["ALA"] is False and het["LIG"] is True
+
+
+def test_system_font_text_keeps_every_glyph():
+    """text in a system font (the α/β labels' serif, any character the web fonts lack) is shaped from tables HarfBuzz
+    must be able to keep: a table freed under it gave missing glyphs ("α3" drawn as "α"), varying from run to run"""
+    import gc
+    import uharfbuzz as hb
+    from molsketch._text import TextEngine
+    face = TextEngine()._system_face("Times New Roman", 400, "italic")
+    for _ in range(50):
+        _churn = [bytes(1000) for _ in range(200)]; gc.collect()
+        for s in ("α3", "β12", "a3", "α 3"):
+            buf = hb.Buffer(); buf.add_str(s); buf.guess_segment_properties(); hb.shape(face.hb, buf)
+            assert 0 not in [g.codepoint for g in buf.glyph_infos], s
