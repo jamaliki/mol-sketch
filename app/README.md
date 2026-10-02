@@ -84,7 +84,7 @@ isosurface the drawing prepared, pushed behind the model as the drawing puts it.
 **Off the main thread.** Without `molsketch serve`, every finished frame is drawn by the same headless core in a
 worker onto an OffscreenCanvas (`src/headless/drawworker.ts`, through `src/app/localdraw.ts`, which speaks the SDK's
 language), with the page's fonts: the rested frame, the lines' breathing, a scene's playback, the look gallery's
-thumbnails and every export. The page only asks and shows what comes back, one request at a time, the newest answer
+thumbnails and every export (a video's frames by up to four such workers at once, each taking every n-th frame). The page only asks and shows what comes back, one request at a time, the newest answer
 winning, so it never freezes while a ribosome is drawn. A figure the worker draws in under 50 ms follows the view live
 while it moves (the last frame stays up until the next arrives), and a playing scene in under 80 ms (a drawing every
 second frame of 24 a second); a slower one shows the GPU preview meanwhile.

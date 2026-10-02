@@ -789,8 +789,10 @@ window.addEventListener('keydown', e => { if ((e.target as HTMLElement)?.tagName
    With breathing on, the sketch is redrawn with a new boil seed every so often. */
 let lastT = performance.now(); let lastSketchAt = 0; let playAcc = 0;
 function previewHud() { return `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°${R.camera.roll ? ' roll ' + R.camera.roll.toFixed(0) + '°' : ''} · zoom ${R.camera.zoom.toFixed(2)} pan ${R.camera.panX.toFixed(2)}, ${R.camera.panY.toFixed(2)}${sceneDoc ? ` · ${(frame / FPS).toFixed(2)} s` : ''}` }
+let held = false;
 function loop(t: number) {
   const dt = (t - lastT) / 1000; lastT = t;
+  if (held) { requestAnimationFrame(loop); return }
   if (rebuildDue) rebuild();
   // the finished drawing comes from the drawing worker or the server: this thread only asks, and shows what comes back
   const away = restMode === 'classic' && sketchOn && !!drawer() && !!(sceneDoc || structureText || mapObj);
@@ -845,7 +847,9 @@ const api = {
   /** the current frame drawn by the drawing worker (as the rested app draws it), as a PNG data URL */
   workerPng: async (b = 0) => { if (!local || !localInputs) return null; const via = { d: local, inputs: localInputs };
     const bmp = await local.render(await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : b, undefined, via)); const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height; c.getContext('2d')!.drawImage(bmp, 0, 0); bmp.close(); return c.toDataURL('image/png') },
-  classic: (b?: number) => { preview(); if (b !== undefined) boil = b; runSketch('classic', true); return sketchStats.drawMs },
+  classic: (b?: number) => { if (rebuildDue) rebuild(); if (geomStale) { geomStale = false; R.rebuild(style) } if (b !== undefined) boil = b; runSketch('classic', true); return sketchStats.drawMs },   // (the geometry: the drawing is framed on it; not the preview's pixels)
+  /** the page's own loop stops drawing: a script that draws every frame itself (the CLI) has the thread to itself */
+  hold: (v: boolean) => { held = v; if (!v) invalidate() },
   setSketch: (v: boolean) => { sketchOn = v; invalidate() }, setRest: (m: RestMode) => { restMode = m; sketchOn = m !== 'preview'; invalidate() },
   fitFrame, screenBox: (what: 'all' | 'frame' = 'all') => R.camera.screenBox(R.w, R.h, framePoints(what)), framePresets: FRAME_PRESETS, renderCommand,
   history, lint: () => lintItems, suggest, adoptView, renderToFile, drawFrameTo, keyframes, setKeyView, setKeyTiming, duplicateKey, deleteKey, moveKey, setAuthorMode, authorClick, arrowsOf, editArrow, keyDiff: (i: number) => sceneDoc ? keyDiff(sceneDoc, i) : null, setPreviewAspect, projectNow,
