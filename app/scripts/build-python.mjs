@@ -5,5 +5,5 @@ const here = path.dirname(fileURLToPath(import.meta.url)); const app = path.join
 execSync('npm run build', { cwd: app, stdio: 'inherit' });
 execSync('node scripts/build-core.mjs', { cwd: app, stdio: 'inherit' });
 fs.rmSync(path.join(pkg, 'app'), { recursive: true, force: true });
-fs.cpSync(path.join(app, 'dist'), path.join(pkg, 'app'), { recursive: true, filter: s => !/6GZQ\.cif$/.test(s) });
+fs.cpSync(path.join(app, 'dist'), path.join(pkg, 'app'), { recursive: true, filter: s => !/6GZQ\.cif$/.test(s) && !/\.ttf$/.test(s) });   // the fonts: served from molsketch/fonts
 console.log('app → python/molsketch/app');

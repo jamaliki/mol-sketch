@@ -38,12 +38,18 @@ if (!input) { console.error('usage: node cli/render.mjs input.pdb --look waterco
 if (!fs.existsSync(path.join(dist, 'index.html'))) { console.error('dist/ not found: run  npm run build  first'); process.exit(1) }
 
 // static server for dist/
-const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.pdb': 'text/plain', '.cif': 'text/plain', '.png': 'image/png', '.svg': 'image/svg+xml' };
+const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.pdb': 'text/plain', '.cif': 'text/plain', '.png': 'image/png', '.svg': 'image/svg+xml', '.ttf': 'font/ttf' };
 const server = http.createServer((req, res) => { let p = decodeURIComponent(req.url.split('?')[0]); if (p === '/') p = '/index.html'; const f = path.join(dist, p); if (!f.startsWith(dist) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); res.end(); return } res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res) });
 await new Promise(r => server.listen(0, '127.0.0.1', r)); const port = server.address().port;
 
 const args = ['--ignore-gpu-blocklist']; if (opt.software) args.push('--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader');
-const browser = await chromium.launch({ args, executablePath: process.env.CHROMIUM || undefined });
+// Playwright's own Chromium, else an installed Chrome or Edge (CHROMIUM=/path/to/chrome picks one)
+async function launch() {
+  if (process.env.CHROMIUM) return chromium.launch({ args, executablePath: process.env.CHROMIUM });
+  for (const channel of [undefined, 'chrome', 'msedge']) { try { return await chromium.launch({ args, channel }) } catch { } }
+  console.error('no browser to draw with: run  npx playwright install chromium  (or set CHROMIUM=/path/to/chrome)'); process.exit(1);
+}
+const browser = await launch();
 const [W, H] = opt.size.split('x').map(Number); const SCALE = opt.scale > 0 ? opt.scale : 1;
 const page = await browser.newPage({ viewport: { width: Math.min(W, 4096) + 300, height: Math.min(H, 4096) }, deviceScaleFactor: SCALE });
 page.on('pageerror', e => console.error('page error:', e.message));

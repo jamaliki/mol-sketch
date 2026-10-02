@@ -9,13 +9,14 @@ const g = self as any;
 installAAClips();   // clips as a page's canvas draws them (antialiased), not as an OffscreenCanvas does
 g.document = { createElement(tag: string) { if (tag !== 'canvas') throw new Error('the drawing worker makes only canvases'); return new OffscreenCanvas(1, 1) } };
 
-/** the page's web fonts (its Google Fonts stylesheet), every face, loaded before anything is drawn */
+/** the page's web fonts (its stylesheet), every face, loaded before anything is drawn; a face's file is found from the
+    stylesheet's address */
 async function fonts(css: string) {
   const text = await (await fetch(css)).text(); const loads: Promise<any>[] = [];
   for (const block of text.match(/@font-face\s*{[^}]*}/g) || []) {
-    const get = (k: string) => (new RegExp(k + '\\s*:\\s*([^;]+);').exec(block) || [])[1]?.trim();
-    const family = get('font-family')?.replace(/['"]/g, ''), src = /url\(([^)]+)\)/.exec(block)?.[1]; if (!family || !src) continue;
-    const face = new FontFace(family, `url(${src})`, { weight: get('font-weight') || 'normal', style: get('font-style') || 'normal', unicodeRange: get('unicode-range') || 'U+0-10FFFF' });
+    const get = (k: string) => (new RegExp(k + '\\s*:\\s*([^;}]+)').exec(block) || [])[1]?.trim();
+    const family = get('font-family')?.replace(/['"]/g, ''), src = /url\(([^)]+)\)/.exec(block)?.[1]?.replace(/['"]/g, ''); if (!family || !src) continue;
+    const face = new FontFace(family, `url(${new URL(src, css).href})`, { weight: get('font-weight') || 'normal', style: get('font-style') || 'normal', unicodeRange: get('unicode-range') || 'U+0-10FFFF' });
     g.fonts.add(face); loads.push(face.load().catch(() => null));
   }
   await Promise.all(loads);

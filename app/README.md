@@ -10,9 +10,12 @@ with atoms, so the 144 000-atom ribosome settles in about a second.
 ```bash
 cd app
 npm install
-npm run dev            # open http://localhost:5173
-npm run build          # static bundle in dist/
+npm start              # the dev server, opened in the browser (npm run dev: without opening it)
+npm run build          # the static site in dist/: any web server, any folder
 ```
+
+(From the repository's root, `npm start` does both.) The fonts the drawing uses are served with the app, from
+`python/molsketch/fonts` (`vite.config.ts`), so it needs no font service and runs offline.
 
 Headless images, videos and SVG come from the Python package, which draws with this app's engine:
 `pip install ./python`, then `molsketch render public/examples/1A8O.pdb --look watercolour -o fig.png`, or
@@ -78,11 +81,18 @@ structures, but not identical, because visibility comes from pixels rather than 
 **Preview.** A per-pixel approximation on the GPU, for interaction only. A density map is in it too: the
 isosurface the drawing prepared, pushed behind the model as the drawing puts it.
 
-**Off the main thread.** Without `molsketch serve`, a figure whose drawing takes 100 ms or more (a large structure, a
-map) is drawn by the same headless core in a worker onto an OffscreenCanvas (`src/headless/drawworker.ts`, through
-`src/app/localdraw.ts`, which speaks the SDK's language), with the page's fonts: the app never freezes while a ribosome
-is drawn, and the drawing is the same to the pixel. Exports go the same way. A light figure is drawn on the main
-thread, live as it moves.
+**Off the main thread.** Without `molsketch serve`, every finished frame is drawn by the same headless core in a
+worker onto an OffscreenCanvas (`src/headless/drawworker.ts`, through `src/app/localdraw.ts`, which speaks the SDK's
+language), with the page's fonts: the rested frame, the lines' breathing, a scene's playback, the look gallery's
+thumbnails and every export. The page only asks and shows what comes back, one request at a time, the newest answer
+winning, so it never freezes while a ribosome is drawn. A figure the worker draws in under 50 ms follows the view live
+while it moves (the last frame stays up until the next arrives); a slower one shows the GPU preview meanwhile.
+
+An OffscreenCanvas does not antialias `clip()` in Chrome, as a page's canvas does: `src/headless/aaclip.ts` restores
+it in the worker (the pixels under a clip are kept, and on `restore()` blended with what was drawn through the path's
+antialiased mask), so the worker's frames match the page's to within the rounding of that blend, at clip edges
+where translucent strokes overlap. Frames of a moving view skip it and are replaced by the finished frame when the
+view rests. Only scripts (the CLI) draw on the main thread, where they read the canvas straight after.
 
 **Density maps** are prepared (cropped, low-passed, contoured, their surfaces smoothed and tied to the model) in a
 worker (`src/classic/mapworker.ts`, through `src/classic/mapasync.ts`), which for a large map takes a second or more:

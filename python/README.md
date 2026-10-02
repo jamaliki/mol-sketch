@@ -26,7 +26,11 @@ In a notebook, a figure shows itself. Every method returns the figure, so calls 
 pip install ./python            # from a clone of the repository (Python 3.10+)
 ```
 
-For `molsketch serve`, bundle the app into the package first: `cd app && npm install && node scripts/build-python.mjs`.
+On a Linux server without a desktop, Skia needs the EGL library: `sudo apt install libegl1` (Debian, Ubuntu) if
+`import molsketch` reports `libEGL.so.1` missing.
+
+For `molsketch serve`, build the app once: `cd app && npm install && npm run build` (the server finds `app/dist` in the
+clone), or `node scripts/build-python.mjs` to bundle it into the package itself.
 
 No browser, Node or GPU: the engine runs in an embedded V8 (mini-racer) and draws with Skia, the rasteriser behind
 Chrome's canvas. The fonts the app uses ship with the package.

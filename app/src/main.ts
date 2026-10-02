@@ -114,7 +114,7 @@ const sdkReady = connect().then(s => { sdk = s; if (s) { inputs = new InputSync(
 /* without the server, the finished frames are drawn in a worker by the same core: the app never waits for a drawing,
    and one quick enough follows the view live while it moves */
 let local: LocalDraw | null = null; let localInputs: InputSync | null = null;
-try { local = new LocalDraw((document.querySelector('link[href*="fonts.googleapis"]') as HTMLLinkElement | null)?.href || null); localInputs = new InputSync(local) } catch { local = null }
+try { local = new LocalDraw((document.querySelector('link[data-fonts]') as HTMLLinkElement | null)?.href || null); localInputs = new InputSync(local) } catch { local = null }
 /** who draws the finished frame: the server, else the drawing worker; null: this thread (the worker failed) */
 function drawer(): { d: SDK; inputs: InputSync } | null {
   if (sdk) return { d: sdk, inputs: inputs! };
@@ -124,7 +124,7 @@ function drawer(): { d: SDK; inputs: InputSync } | null {
 /** the finished drawing follows the view as it moves (rather than the GPU preview) when the worker draws it quickly
     enough (a turn or a drag shows the final look at the worker's pace, and the app goes on answering meanwhile) */
 const LIVE_MS = 50;
-function liveExact() { return restMode === 'classic' && sketchOn && !sdk && !!local && liveMs < LIVE_MS }
+function liveExact() { return restMode === 'classic' && sketchOn && !sdk && !!local && liveMs < LIVE_MS && performance.now() - resizedAt > 250 }
 /** the scene's version as the drawer holds it: a new one whenever its keyframes change (an edit, an undo, a load) */
 let sceneVer = 0;
 /** the current figure as the SDK's FigureSpec: the full style, the camera, labels, group colours, frame, size */
@@ -152,13 +152,14 @@ function runSketch(mode: RestMode = restMode, here = false) {   // here: drawn n
 
 /* the canvas fills the stage, or keeps the output's aspect inside it (letterboxed), so a fit made here is the fit of the video */
 let previewAspect: number | null = null;   // null: free
+let resizedAt = -Infinity;   // while the window is being resized, the preview shows: every size would cost the worker new paper
 let fixedSize: [number, number] | null = null;   // a script (the CLI) set the canvas size: the window no longer changes it
 function fit() {
   if (fixedSize) return;
   let cw = stage.clientWidth, ch = stage.clientHeight, left = 0, top = 0;
   if (previewAspect) { if (cw / ch > previewAspect) { const w = Math.floor(ch * previewAspect); left = Math.floor((cw - w) / 2); cw = w } else { const h = Math.floor(cw / previewAspect); top = Math.floor((ch - h) / 2); ch = h } }
   for (const c of [canvas, skCanvas, ovCanvas]) { c.style.left = left + 'px'; c.style.top = top + 'px'; c.style.width = cw + 'px'; c.style.height = ch + 'px' }
-  const w = Math.max(64, Math.floor(cw * dpr)), h = Math.max(64, Math.floor(ch * dpr)); R.resize(w, h); invalidate(); showGuides(guideBox);
+  const w = Math.max(64, Math.floor(cw * dpr)), h = Math.max(64, Math.floor(ch * dpr)); if (w !== R.w || h !== R.h) resizedAt = performance.now(); R.resize(w, h); invalidate(); showGuides(guideBox);
 }
 new ResizeObserver(() => fit()).observe(stage);   // the window, and the timeline showing or hiding
 function setPreviewAspect(a: number | null) { previewAspect = a; fit() }
@@ -773,6 +774,7 @@ function loop(t: number) {
     const covered = skCanvas.classList.contains('on') && liveExact();   // the finished drawing is up and follows the view: the preview under it is not seen
     if (dirty && !covered) { dirty = false; preview(); if (!skCanvas.classList.contains('on')) hud.textContent = previewHud() }
     if (exactBusy) { if (!sketchShown && t - exactAt > Math.max(150, 3 * liveMs) && skCanvas.classList.contains('on')) { skCanvas.classList.remove('on'); if (dirty) { dirty = false; preview() } } }   // a drawing slower than its frames were: the preview shows what has changed meanwhile
+    else if (t - resizedAt < 250) { }   // the size is still changing
     else if (!sketchShown && (liveExact() || drawNow || t - lastChange > 220 || (!quickKnown && !sdk && t - lastChange < 100))) { const quick = !drawNow && t - lastChange <= 220; drawNow = false; requestExact(false, quick) }   // a frame of a moving view: drawn quickly
     else if (sketchShown && shownQuick && t - lastChange > 220) requestExact()   // the view has come to rest on a quick frame: the finished one
     else if (live && sketchShown && !turntable && t - lastSketchAt > Math.max(900, classicMs * 3)) { boil++; requestExact(true) }   // the lines breathe
