@@ -161,7 +161,7 @@ const hashOf = (f: any[]) => { let h = f.length;
     if (typeof x === 'number') { HB[0] = x === 0 ? 0 : x; a = HW[0]; b = HW[1] }   // (−0 is 0, as a key string has it)
     else { let k = STRH.get(x); if (k === undefined) { k = 0; for (let i = 0; i < x.length; i++) k = Math.imul(k ^ x.charCodeAt(i), 0x01000193); if (STRH.size > 1024) STRH.clear(); STRH.set(x, k) } a = k; b = 0x5bd1e995 }
     h = Math.imul(h ^ a, 0x9E3779B1); h = Math.imul(h ^ b, 0x85EBCA77); h ^= h >>> 15 }
-  return h };
+  return h & 0x3fffffff };   // (a small integer: a map takes it as it is)
 
 export class RecCanvas {
   id: number; private w = 300; private h = 150; ops: Op[] = []; total = 0; private ctx: RecContext | null = null;

@@ -363,7 +363,7 @@
       h = Math.imul(h ^ b, 2246822519);
       h ^= h >>> 15;
     }
-    return h;
+    return h & 1073741823;
   };
   var RecCanvas = class {
     constructor() {
