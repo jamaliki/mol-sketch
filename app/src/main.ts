@@ -18,7 +18,7 @@ import { History, type Snapshot } from './app/history';
 import { lintScene, lintSummary, type LintItem } from './app/lint';
 import { keyDiff, drawDiff, diffSummary, type KeyDiff } from './app/diff';
 import { hitTest, anchorFor, anchorText, addArrow, anchorScreen, toggleLonePair, cycleCharge, type Anchor, type Hit } from './app/author';
-import { suggestViews, holdFrames, type ViewSuggestion } from './app/views';
+import { suggestViewsAsync, holdFrames, type ViewSuggestion } from './app/views';
 import { connect, InputSync, type SDK } from './app/sdk';
 import { LocalDraw } from './app/localdraw';
 import type { FigureSpec } from './headless/core';
@@ -604,7 +604,7 @@ async function suggest(onProgress: (msg: string) => void): Promise<ViewSuggestio
   if (!sceneDoc) return [];
   const E = classic(); E.cfg = cfgFromStyle(style, R.camera, true);
   onProgress('scoring 120 orientations…'); await new Promise(r => setTimeout(r, 10));
-  const frames = holdFrames(E); const picks = suggestViews(E, sceneDoc, R.w / dpr, R.h / dpr, frames, 12, previewAspect ? Math.max(0.6, Math.min(2.2, previewAspect * 0.8)) : 1.4);
+  const frames = holdFrames(E); const picks = await suggestViewsAsync(E, sceneDoc, R.w / dpr, R.h / dpr, frames, 12, previewAspect ? Math.max(0.6, Math.min(2.2, previewAspect * 0.8)) : 1.4, () => new Promise(r => setTimeout(r, 0)));
   const w = 224, h = 140; const f = frames[Math.min(frames.length - 1, Math.max(0, Math.round(frames.length * (frame / Math.max(1, timeline().total)))))];
   for (let i = 0; i < picks.length; i++) {
     const p = picks[i]; onProgress(`drawing ${i + 1} / ${picks.length}…`); await new Promise(r => setTimeout(r, 0));
