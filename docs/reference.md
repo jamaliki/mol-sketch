@@ -116,6 +116,8 @@ Warm render times at 900 × 900 on a laptop, with the Python package:
 | the 70S ribosome, ink or pencil surface | 0.8 to 1.2 s |
 
 The first render in a process also starts the engine and reads the structure (about a second for the ribosome). The
+paper, its grain and the chalkboard's tooth are drawn once and kept in `~/.cache/molsketch/textures`, so only the
+first run at a size pays for them (seconds at 1920 × 1440; `MOLSKETCH_TEXTURE_CACHE_MB=0` turns that off). The
 engine draws while Python rasterises what it has already recorded, so a figure takes about as long as the slower of
 the two. Above 260 stick atoms (or 600 surface patches) strokes get one pass and less texture, so large structures
 stay fast and legible; `detail="full"` turns that off.

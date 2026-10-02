@@ -86,7 +86,8 @@ worker onto an OffscreenCanvas (`src/headless/drawworker.ts`, through `src/app/l
 language), with the page's fonts: the rested frame, the lines' breathing, a scene's playback, the look gallery's
 thumbnails and every export. The page only asks and shows what comes back, one request at a time, the newest answer
 winning, so it never freezes while a ribosome is drawn. A figure the worker draws in under 50 ms follows the view live
-while it moves (the last frame stays up until the next arrives); a slower one shows the GPU preview meanwhile.
+while it moves (the last frame stays up until the next arrives), and a playing scene in under 80 ms (a drawing every
+second frame of 24 a second); a slower one shows the GPU preview meanwhile.
 
 An OffscreenCanvas does not antialias `clip()` in Chrome, as a page's canvas does: `src/headless/aaclip.ts` restores
 it in the worker (the pixels under a clip are kept, and on `restore()` blended with what was drawn through the path's
@@ -95,9 +96,11 @@ where translucent strokes overlap. Frames of a moving view skip it and are repla
 view rests. Only scripts (the CLI) draw on the main thread, where they read the canvas straight after.
 
 **Density maps** are prepared (cropped, low-passed, contoured, their surfaces smoothed and tied to the model) in a
-worker (`src/classic/mapworker.ts`, through `src/classic/mapasync.ts`), which for a large map takes a second or more:
-while it works, the preview goes on and the drawing waits for it, so changing the level or a close-up never freezes the
-app. Exports prepare the map in line. The headless core prepares maps in line, with the same code.
+worker (`src/classic/mapworker.ts`, through `src/classic/mapasync.ts`), which for a large map takes half a second or
+more: while it works, the preview goes on and the drawing waits for it, so changing the level or a close-up never
+freezes the app. One preparation per map runs at a time, and of the levels asked for meanwhile only the newest is
+prepared next, so dragging the contour slider does not queue up every level it passes. Exports prepare the map in
+line. The headless core prepares maps in line, with the same code.
 
 ```
 structure (typed arrays)
