@@ -129,7 +129,9 @@ function drawer(): { d: SDK; inputs: InputSync } | null {
 /** the finished drawing follows the view as it moves (rather than the GPU preview) when the worker draws it quickly
     enough (a turn or a drag shows the final look at the worker's pace, and the app goes on answering meanwhile) */
 const LIVE_MS = 50;
-function liveExact() { return restMode === 'classic' && sketchOn && !sdk && !!local && liveMs < LIVE_MS && performance.now() - resizedAt > 250 }
+/** a playing scene asks for a drawing every second frame of its 24 a second: one that comes within that keeps up */
+const LIVE_PLAY_MS = 80;
+function liveExact() { return restMode === 'classic' && sketchOn && !sdk && !!local && liveMs < (playing ? LIVE_PLAY_MS : LIVE_MS) && performance.now() - resizedAt > 250 }
 /** the scene's version as the drawer holds it: a new one whenever its keyframes change (an edit, an undo, a load) */
 let sceneVer = 0;
 /** the current figure as the SDK's FigureSpec: the full style, the camera, labels, group colours, frame, size */
@@ -634,7 +636,9 @@ async function requestExact(breathe = false, quick = false) {
   try {
     const spec = await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : boil, undefined, via);
     const bmp = await via.d.render(spec, { quick });
-    if (via.d === local) { classicMs = local.lastMs; if (quick) { liveMs = local.lastMs; quickKnown = true } else if (!breathe) liveMs = quickKnown ? Math.min(liveMs, local.lastMs) : local.lastMs }   // the worker's own drawing time
+    // the worker's own drawing time; a quick frame's is followed down at once and up a little at a time (one slow frame
+    // does not take the live drawing away, nor bring it back)
+    if (via.d === local) { const ms = local.lastMs; classicMs = ms; if (quick) { liveMs = quickKnown && ms > liveMs ? 0.7 * liveMs + 0.3 * ms : ms; quickKnown = true } else if (!breathe) liveMs = quickKnown ? Math.min(liveMs, ms) : ms }
     const current = seq === sdkSeq;
     if ((!current && !liveExact()) || bmp.width !== R.w || bmp.height !== R.h) { bmp.close(); return }   // superseded, or drawn for a size the canvas no longer has
     if (skCanvas.width !== R.w || skCanvas.height !== R.h) { skCanvas.width = R.w; skCanvas.height = R.h } skCtx.clearRect(0, 0, R.w, R.h); skCtx.drawImage(bmp, 0, 0); bmp.close();
@@ -824,9 +828,9 @@ const api = {
   renderClassic, classicEngine: () => classic(), get mapBusy() { return mapPrep.busy }, seek: setFrame, loadScene, fetchMap: fetchEmdb, mapForEntry, loadMapBytes, clearMap, mapInfo, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
   /** the current figure as the headless core's FigureSpec (as the drawing worker or the server gets it) */
   spec: async (b = 0) => { const via = drawer(); return via ? figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : b, undefined, via) : null },
-  /** the drawing worker's cost for the current frame: its own drawing time and the round trip (for benchmarks) */
-  workerTiming: async (b = 0) => { if (!local || !localInputs) return null; const t0 = performance.now(); const via = { d: local, inputs: localInputs };
-    const bmp = await local.render(await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : b, undefined, via)); const t1 = performance.now();
+  /** the drawing worker's cost for the current frame (quick: as a moving view draws it): its own drawing time and the round trip (for benchmarks) */
+  workerTiming: async (b = 0, quick = false) => { if (!local || !localInputs) return null; const t0 = performance.now(); const via = { d: local, inputs: localInputs };
+    const bmp = await local.render(await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : b, undefined, via), { quick }); const t1 = performance.now();
     skCtx.drawImage(bmp, 0, 0); bmp.close(); return { draw: local.lastMs, roundTrip: t1 - t0, show: performance.now() - t1 } },
   /** the current frame drawn by the drawing worker (as the rested app draws it), as a PNG data URL */
   workerPng: async (b = 0) => { if (!local || !localInputs) return null; const via = { d: local, inputs: localInputs };
