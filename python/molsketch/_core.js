@@ -1085,6 +1085,25 @@
     if (tag !== "canvas") throw new Error("headless: only canvases");
     return new RecCanvas();
   } };
+  var hostTextures = null;
+  function setHostTextures(keys) {
+    hostTextures = keys ? new Set(keys) : null;
+  }
+  var textureHost = {
+    take(key, w, h) {
+      if (!hostTextures || !hostTextures.has(key)) return null;
+      const c = new RecCanvas();
+      c.width = w;
+      c.height = h;
+      c.push(["ext", key]);
+      return c;
+    },
+    keep(key, c) {
+      if (!hostTextures || !(c instanceof RecCanvas)) return;
+      c.settle();
+      c.push(["keep", key]);
+    }
+  };
 
   // src/headless/core.ts
   var core_exports = {};
@@ -1093,6 +1112,7 @@
     catalog: () => catalog,
     drawOn: () => drawOn,
     drop: () => drop,
+    dropTextures: () => dropTextures,
     engineConfig: () => engineConfig,
     fitFrame: () => fitFrame,
     frameTheSite: () => frameTheSite,
@@ -2770,24 +2790,42 @@
       };
     }
     const paperCache = canvasCache(), baseCache = canvasCache();
+    let TEXHOST = null;
+    const TEXV = "t1";
+    function hostTexture(key, W, H, dpr, make) {
+      const k = TEXV + "|" + key;
+      if (TEXHOST) {
+        const c2 = TEXHOST.take(k, W * dpr, H * dpr);
+        if (c2) return c2;
+      }
+      const c = make();
+      if (TEXHOST) TEXHOST.keep(k, c);
+      return c;
+    }
     function paper(W, H, dpr, boil) {
       const life = cfg.style.wash > 0 ? cfg.style.washLife : 0;
       const wb = life > 0 ? boil | 0 : 0;
       const key = [W, H, dpr, cfg.palette.paper, cfg.style.grain, cfg.style.wash, cfg.style.washSeed, cfg.palette.wash, life, wb, cfg.style.wash > 0 ? shadeInk() : ""].join("|");
       const hit = paperCache.get(key);
       if (hit) return hit;
-      const bkey2 = [W, H, dpr, cfg.palette.paper, cfg.style.grain].join("|");
-      const base = baseCache.get(bkey2) || baseCache.put(bkey2, paperBase(W, H, dpr));
-      const c = document.createElement("canvas");
-      c.width = W * dpr;
-      c.height = H * dpr;
-      const x = c.getContext("2d", { willReadFrequently: true });
-      x.scale(dpr, dpr);
-      x.drawImage(base, 0, 0, W, H);
-      if (cfg.style.wash > 0) watercolourWash(x, W, H, wb, life);
-      return paperCache.put(key, c);
+      const make = () => {
+        const bkey2 = [W, H, dpr, cfg.palette.paper, cfg.style.grain].join("|");
+        const base = baseCache.get(bkey2) || baseCache.put(bkey2, paperBase(W, H, dpr));
+        const c = document.createElement("canvas");
+        c.width = W * dpr;
+        c.height = H * dpr;
+        const x = c.getContext("2d", { willReadFrequently: true });
+        x.scale(dpr, dpr);
+        x.drawImage(base, 0, 0, W, H);
+        if (cfg.style.wash > 0) watercolourWash(x, W, H, wb, life);
+        return c;
+      };
+      return paperCache.put(key, wb ? make() : hostTexture("paper|" + key, W, H, dpr, make));
     }
     function paperBase(W, H, dpr) {
+      return hostTexture("base|" + [W, H, dpr, cfg.palette.paper, cfg.style.grain].join("|"), W, H, dpr, () => paperBaseOnce(W, H, dpr));
+    }
+    function paperBaseOnce(W, H, dpr) {
       const c = document.createElement("canvas");
       c.width = W * dpr;
       c.height = H * dpr;
@@ -6605,6 +6643,9 @@
       const key = [W, H, dpr].join("|");
       const hit = pitCache.get(key);
       if (hit) return hit;
+      return pitCache.put(key, hostTexture("pit|" + key, W, H, dpr, () => pitOnce(W, H, dpr)));
+    }
+    function pitOnce(W, H, dpr) {
       const c = document.createElement("canvas");
       c.width = W * dpr;
       c.height = H * dpr;
@@ -6620,12 +6661,15 @@
         const s = rng() < 0.8 ? 1 : 1.6;
         x.fillRect(rng() * W, rng() * H, s, s);
       }
-      return pitCache.put(key, c);
+      return c;
     }
     function grainOverlay(W, H, dpr, light) {
       const key = [W, H, dpr, light].join("|");
       const hit = grainCache.get(key);
       if (hit) return hit;
+      return grainCache.put(key, hostTexture("grain|" + key, W, H, dpr, () => grainOnce(W, H, dpr, light)));
+    }
+    function grainOnce(W, H, dpr, light) {
       const c = document.createElement("canvas");
       c.width = W * dpr;
       c.height = H * dpr;
@@ -6650,7 +6694,7 @@
         x.lineTo(px + Math.cos(an) * l, py + Math.sin(an) * l);
         x.stroke();
       }
-      return grainCache.put(key, c);
+      return c;
     }
     let textGate = null;
     function probeTexts(ctx, st) {
@@ -6726,6 +6770,15 @@
       },
       setTextGate(f2) {
         textGate = f2 || null;
+      },
+      setTextureHost(h) {
+        TEXHOST = h || null;
+      },
+      dropTextures() {
+        paperCache.clear();
+        baseCache.clear();
+        grainCache.clear();
+        pitCache.clear();
       }
     };
   }
@@ -8521,6 +8574,7 @@
   }
   function render(spec, measure, gate) {
     if (measure) setMeasure(measure);
+    classic().setTextureHost(textureHost);
     classic().setTextGate(gate || null);
     const f2 = settle(spec);
     const c = new RecCanvas();
@@ -8546,7 +8600,12 @@
     const chunks = endRender();
     return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, chunks };
   }
+  function dropTextures() {
+    classic().dropTextures();
+    return 0;
+  }
   function drawOn(spec, make) {
+    classic().setTextureHost(null);
     const f2 = settle(spec);
     const c = make(Math.round(f2.W * f2.dpr), Math.round(f2.H * f2.dpr));
     const ctx = c.getContext("2d", { willReadFrequently: true });
@@ -8710,5 +8769,5 @@
     const log = [];
     g.console = { log: (...a) => log.push(a.join(" ")), warn: (...a) => log.push(a.join(" ")), error: (...a) => log.push(a.join(" ")), _log: log };
   }
-  g.MolSketchCore = { ...core_exports, flush, setStream, version: "0.1.0" };
+  g.MolSketchCore = { ...core_exports, flush, setStream, setHostTextures, version: "0.1.0" };
 })();

@@ -405,18 +405,26 @@ function canvasCache(){const E=[];const SMALL=500000;const small=c=>c.width*c.he
     put(key,canvas){E.unshift({key,canvas});let big=!small(canvas),n=0;for(let i=1;i<E.length;i++){const s=small(E[i].canvas);if(s?n++<4:!big)big=big||!s;else E.splice(i--,1)}return canvas},
     clear(){E.length=0}}}
 const paperCache=canvasCache(),baseCache=canvasCache();
+/* textures a host may keep between runs (the Python package keeps the paper, its grain and the chalk's tooth as files,
+   so a fresh process does not draw them again): made here unless the host has the one with this key, and then offered
+   to it. The key names everything the texture depends on; TEXV changes whenever the way they are drawn does */
+let TEXHOST=null;const TEXV='t1';
+function hostTexture(key,W,H,dpr,make){const k=TEXV+'|'+key;if(TEXHOST){const c=TEXHOST.take(k,W*dpr,H*dpr);if(c)return c}const c=make();if(TEXHOST)TEXHOST.keep(k,c);return c}
 function paper(W,H,dpr,boil){
   const life=cfg.style.wash>0?cfg.style.washLife:0;const wb=life>0?(boil|0):0; // the wash breathes with every drawing
   const key=[W,H,dpr,cfg.palette.paper,cfg.style.grain,cfg.style.wash,cfg.style.washSeed,cfg.palette.wash,life,wb,cfg.style.wash>0?shadeInk():''].join('|');   // (the wash's drying rings are shaded with the ink)
   const hit=paperCache.get(key);if(hit)return hit;
-  const bkey=[W,H,dpr,cfg.palette.paper,cfg.style.grain].join('|');
-  const base=baseCache.get(bkey)||baseCache.put(bkey,paperBase(W,H,dpr));
-  const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
-  x.drawImage(base,0,0,W,H);
-  if(cfg.style.wash>0)watercolourWash(x,W,H,wb,life);
-  return paperCache.put(key,c);
+  const make=()=>{
+    const bkey=[W,H,dpr,cfg.palette.paper,cfg.style.grain].join('|');
+    const base=baseCache.get(bkey)||baseCache.put(bkey,paperBase(W,H,dpr));
+    const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
+    x.drawImage(base,0,0,W,H);
+    if(cfg.style.wash>0)watercolourWash(x,W,H,wb,life);
+    return c};
+  return paperCache.put(key,wb?make():hostTexture('paper|'+key,W,H,dpr,make));   // (a breathing wash's later steps are a video's, each drawn once: not kept)
 }
-function paperBase(W,H,dpr){
+function paperBase(W,H,dpr){return hostTexture('base|'+[W,H,dpr,cfg.palette.paper,cfg.style.grain].join('|'),W,H,dpr,()=>paperBaseOnce(W,H,dpr))}
+function paperBaseOnce(W,H,dpr){
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
   x.fillStyle=cfg.palette.paper;x.fillRect(0,0,W,H);
   const rng=mulberry32(1234);const dark=luminance(cfg.palette.paper)>0.5;const g=cfg.style.grain;
@@ -1774,18 +1782,22 @@ const grainCache=canvasCache();
 /* the tooth of a chalkboard: dark pits that break every stroke, multiplied over the drawing */
 const pitCache=canvasCache();
 function pitOverlay(W,H,dpr){const key=[W,H,dpr].join('|');const hit=pitCache.get(key);if(hit)return hit;
+  return pitCache.put(key,hostTexture('pit|'+key,W,H,dpr,()=>pitOnce(W,H,dpr)))}
+function pitOnce(W,H,dpr){
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
   x.fillStyle='#ffffff';x.fillRect(0,0,W,H);const rng=mulberry32(8765);const n=Math.round(W*H/9);
   for(let i=0;i<n;i++){const a=rng();x.fillStyle=`rgba(0,0,0,${0.25+a*0.55})`;const s=rng()<0.8?1:1.6;x.fillRect(rng()*W,rng()*H,s,s)}
-  return pitCache.put(key,c)}
+  return c}
 function grainOverlay(W,H,dpr,light){
   const key=[W,H,dpr,light].join('|');const hit=grainCache.get(key);if(hit)return hit;
+  return grainCache.put(key,hostTexture('grain|'+key,W,H,dpr,()=>grainOnce(W,H,dpr,light)))}
+function grainOnce(W,H,dpr,light){
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
   x.fillStyle=light?'#ffffff':'#000000';x.fillRect(0,0,W,H);const rng=mulberry32(4321);
   const n=Math.round(W*H/26);
   for(let i=0;i<n;i++){const a=rng();x.fillStyle=light?`rgba(60,45,25,${0.05+a*0.13})`:`rgba(255,245,225,${0.04+a*0.1})`;const sz=rng()<0.8?1:1.5;x.fillRect(rng()*W,rng()*H,sz,sz)}
   x.lineWidth=0.7;for(let i=0;i<260;i++){const px=rng()*W,py=rng()*H,an=rng()*Math.PI,l=8+rng()*30;x.strokeStyle=light?`rgba(70,55,35,${0.05+rng()*0.08})`:`rgba(255,245,225,${0.04+rng()*0.07})`;x.beginPath();x.moveTo(px,py);x.lineTo(px+Math.cos(an)*l,py+Math.sin(an)*l);x.stroke()}
-  return grainCache.put(key,c);
+  return c;
 }
 let textGate=null;   // () => true when the host has words to learn (see renderFrame)
 /* the texts a frame measures (the map's caption, figure labels, the scene's captions), in their fonts, whole: the host
@@ -1811,5 +1823,7 @@ return {
   DEFAULT_CFG, PRESETS, GROUP_PALETTE, SUBUNIT_COLS,
   invalidatePaper(){paperCache.clear();baseCache.clear();grainCache.clear()},
   setTextGate(f){textGate=f||null},
+  setTextureHost(h){TEXHOST=h||null},
+  dropTextures(){paperCache.clear();baseCache.clear();grainCache.clear();pitCache.clear()},
 };
 }

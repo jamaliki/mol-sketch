@@ -16,7 +16,7 @@ import { selectAtoms } from '../model/selection';
 import { pcaBasis } from '../render/pca';
 import { Camera as ViewCamera } from '../render/camera';
 import { pocketSel, frameSite, labelSite, type FigLabel, type SiteHost } from '../app/site';
-import { RecCanvas, endRender, release, setMeasure } from './canvas';
+import { RecCanvas, endRender, release, setMeasure, textureHost } from './canvas';
 
 export type Camera = { yaw: number; pitch: number; roll: number; zoom: number; panX: number; panY: number; fov?: number | null };
 export interface FigureSpec {
@@ -184,6 +184,7 @@ function sceneFrame(f: Settled) {
 /** draw a figure; returns the recorded canvases (only what is new since the last call) and the frame's canvas id */
 export function render(spec: FigureSpec, measure?: (font: string, text: string) => number, gate?: () => boolean) {
   if (measure) setMeasure(measure);
+  (classic() as any).setTextureHost(textureHost);   // the host's kept textures (when it says which it has: setHostTextures)
   (classic() as any).setTextGate(gate || null);   // gate: true when a text the frame measures has words the host must learn (then nothing is drawn)
   const f = settle(spec); const c = new RecCanvas(); c.width = Math.round(f.W * f.dpr); c.height = Math.round(f.H * f.dpr);
   const ctx = c.getContext('2d') as any; const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: c.width, h: c.height, map: f.map, localRes: f.localRes };
@@ -199,8 +200,12 @@ export function render(spec: FigureSpec, measure?: (font: string, text: string) 
   return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, chunks };
 }
 
+/** forget the textures drawn so far (the host could not give back one it said it had: they are drawn again) */
+export function dropTextures() { (classic() as any).dropTextures(); return 0 }
+
 /** draw a figure onto a real canvas (the app's drawing worker: an OffscreenCanvas), as `render` records it */
 export function drawOn<C extends { getContext(k: '2d', o?: any): any }>(spec: FigureSpec, make: (w: number, h: number) => C): { canvas: C; ms: number } {
+  (classic() as any).setTextureHost(null);
   const f = settle(spec); const c = make(Math.round(f.W * f.dpr), Math.round(f.H * f.dpr)); const ctx = c.getContext('2d', { willReadFrequently: true });   // CPU-backed, as the app's own canvas: drawn the same to the pixel (a GPU canvas is not), and faster for many small paths
   const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: Math.round(f.W * f.dpr), h: Math.round(f.H * f.dpr), map: f.map, localRes: f.localRes };
   const t0 = Date.now();

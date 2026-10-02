@@ -14,6 +14,7 @@
      text kind(fill|stroke) s x y maxWidth|null paint font align baseline
      img id snap alpha composite smoothing filter … (the 2, 4 or 8 drawImage numbers)   snap: the source's snapshot
      snap id                        this canvas as it is now is snapshot `id` (drawn or patterned by another canvas)
+     ext key / keep key             the host's texture `key` is this canvas's picture / keep this canvas as texture `key`
    Paints are ids into the render's paint table (see Paints). */
 
 import { arcTo, type ArcSink } from './skarc';
@@ -503,3 +504,16 @@ export function flush(): Chunk { return takeChunk() }
 /** a canvas the host no longer needs (a finished frame): the host drops it itself */
 export function release(id: number) { alive.delete(id) }
 export const document = { createElement(tag: string) { if (tag !== 'canvas') throw new Error('headless: only canvases'); return new RecCanvas() } };
+
+/* Textures the host keeps between runs (the engine's hostTexture: the paper, its grain, the chalk's tooth), by key: one
+   it has is a canvas of one op, ext (the host puts its pixels there), instead of the ops that draw it; one drawn here
+   ends with keep (the host keeps its pixels, and says so before the next render). No host keys (the drawing worker): none. */
+let hostTextures: Set<string> | null = null;
+export function setHostTextures(keys: string[] | null) { hostTextures = keys ? new Set(keys) : null }
+export const textureHost = {
+  take(key: string, w: number, h: number): RecCanvas | null {
+    if (!hostTextures || !hostTextures.has(key)) return null;
+    const c = new RecCanvas(); c.width = w; c.height = h; c.push(['ext', key]); return c;
+  },
+  keep(key: string, c: any) { if (!hostTextures || !(c instanceof RecCanvas)) return; c.settle(); c.push(['keep', key]) },
+};

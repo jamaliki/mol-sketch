@@ -257,3 +257,24 @@ def test_system_font_text_keeps_every_glyph():
         for s in ("α3", "β12", "a3", "α 3"):
             buf = hb.Buffer(); buf.add_str(s); buf.guess_segment_properties(); hb.shape(face.hb, buf)
             assert 0 not in [g.codepoint for g in buf.glyph_infos], s
+
+
+def test_kept_textures_draw_the_same(tmp_path, monkeypatch):
+    """the paper and chalk textures kept as files: a later engine takes them and draws the same pixels, and one whose
+    files went after it started draws them again"""
+    from molsketch._engine import Engine
+    monkeypatch.setenv("MOLSKETCH_CACHE", str(tmp_path))
+    text = (EX / "1A8O.pdb").read_text()
+
+    def draw(e, look):
+        spec = {"input": {"ref": e.put({"text": text, "name": "1A8O.pdb"})}, "size": list(SMALL), "scale": 1, "frame": 0, "look": look}
+        return e.render(spec).toarray()
+
+    first = {look: draw(Engine(), look) for look in ("chalkboard", "watercolour")}
+    kept = list((tmp_path / "textures").glob("*.tex")); assert kept
+    for look, px in first.items(): assert np.array_equal(draw(Engine(), look), px)
+    e = Engine()
+    for f in kept: f.unlink()
+    assert np.array_equal(draw(e, "chalkboard"), first["chalkboard"])
+    (tmp_path / "textures" / "x.tex").write_bytes(b"MSTX1\n")   # a broken file is passed over
+    assert np.array_equal(draw(Engine(), "watercolour"), first["watercolour"])

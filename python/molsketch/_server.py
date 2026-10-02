@@ -27,10 +27,9 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-import skia
-
 from . import __version__
 from ._engine import CoreError, engine
+from ._image import png_of
 
 HERE = pathlib.Path(__file__).resolve().parent
 FONTS = HERE / "fonts"   # the app's fonts: the package's own copies (the bundled app leaves them out)
@@ -111,7 +110,7 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/render":
                 if body.pop("format", "png") == "svg": return self._send(200, E.render_svg(body).encode(), "image/svg+xml")
                 img = E.render(body)
-                return self._send(200, bytes(img.encodeToData(skia.kPNG, 100)), "image/png")
+                return self._send(200, png_of(img, 1), "image/png")   # a frame for the app on this machine: the fastest deflate
             if path == "/api/call":
                 if body.get("name") not in CALLS: return self._json({"error": f"no call {body.get('name')!r}"}, 400)
                 return self._json(E.call(body["name"], *body.get("args", [])))

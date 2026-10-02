@@ -13,6 +13,8 @@ import itertools
 
 import skia
 
+from ._image import png_of
+
 # the blend modes an SVG can say (as CSS mix-blend-mode); source-over is the default
 _BLEND = {skia.BlendMode.kMultiply: "multiply", skia.BlendMode.kScreen: "screen", skia.BlendMode.kOverlay: "overlay",
           skia.BlendMode.kDarken: "darken", skia.BlendMode.kLighten: "lighten", skia.BlendMode.kColorDodge: "color-dodge",
@@ -53,7 +55,7 @@ def _copy(m: skia.Matrix) -> skia.Matrix:
 
 
 def _png(img: skia.Image) -> str:
-    return "data:image/png;base64," + base64.b64encode(bytes(img.encodeToData(skia.kPNG, 100))).decode()
+    return "data:image/png;base64," + base64.b64encode(png_of(img)).decode()
 
 
 class SvgCanvas:

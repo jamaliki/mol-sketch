@@ -548,5 +548,6 @@ The server draws one figure at a time. It listens on 127.0.0.1 only, unless you 
 
 | variable | effect |
 |---|---|
-| `MOLSKETCH_CACHE` | where `fetch` keeps downloaded files (default `~/.cache/molsketch`) |
+| `MOLSKETCH_CACHE` | where `fetch` keeps downloaded files, and the drawing keeps its paper and chalk textures (default `~/.cache/molsketch`) |
+| `MOLSKETCH_TEXTURE_CACHE_MB` | how much the kept textures may take (default 300); `0` keeps none, and every process draws them afresh |
 | `MOLSKETCH_V8_SINGLE_THREADED=1` | run the embedded JavaScript engine on one thread. Set it if your program forks processes after drawing (for example `multiprocessing` with the `fork` start method); it makes large figures slower |

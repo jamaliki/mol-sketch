@@ -126,6 +126,12 @@ The engine records its drawing as it goes and hands it over in pieces, so Skia d
 is warm (the app in Chrome: 0.65 s and 2.7 s); a single protein takes a few tens of milliseconds. V8 runs with its
 background threads; set `MOLSKETCH_V8_SINGLE_THREADED=1` if your process forks after drawing.
 
+The paper, its grain and the chalkboard's tooth are hundreds of thousands of marks each, and drawing them was most of
+a fresh process's first figure. They are kept as files (`~/.cache/molsketch/textures`, at most 300 MB, least recently
+used first out), so a later run starts from their pixels: a 1920 × 1440 watercolour's first render falls from 2.8 s
+to 0.5 s, a chalkboard's from 5.7 s to 0.7 s, with the same pixels. `MOLSKETCH_TEXTURE_CACHE_MB` sets the limit; 0
+turns the cache off.
+
 ## Development
 
 The drawing core is built from the app's source (`app/src/headless/`) into `molsketch/_core.js`, and the app itself

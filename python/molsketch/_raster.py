@@ -124,6 +124,8 @@ class Raster:
         self.meta: dict[int, dict] = {}                        # what SVG needs of a paint that it does not tell: its pattern, its blur
         self.lazy = False                                      # draw canvases only when their pixels are needed (for SVG)
         self.text = text
+        self.textures = None                                   # the textures kept between runs (_textures.py), if any
+        self.missing: set[str] = set()                         # those it said it had and could not give back, this render
 
     # ---- chunks in ----
     def feed(self, js: str | dict, runs: bytes):
@@ -417,6 +419,11 @@ class _Replay:
                 p = paint(o[6])
                 if p is not None: self.r.text.draw(c, o[2], o[3], o[4], o[7], o[8], o[9], o[5], skia.Paint(p))
             elif k == "snap": self.r._snapped(self.live, o[1])
+            elif k == "ext":   # a kept texture: its pixels from the file (a fresh canvas of its size)
+                t = self.r.textures
+                if t is None or not t.load(o[1], c, self.w, self.h): self.r.missing.add(o[1])
+            elif k == "keep":   # a texture drawn: kept (unless one it was drawn from could not be given back)
+                if self.r.textures is not None and not self.r.missing: self.r.textures.keep(o[1], self.live.surface)
             elif k == "size": return i
             else: raise RuntimeError(f"unknown op {k}")
         return i1
