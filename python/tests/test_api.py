@@ -102,6 +102,14 @@ def test_save_frames(tmp_path):
     assert [f.name for f in files] == ["frame_0000.png", "frame_0001.png", "frame_0002.png", "frame_0003.png"]
 
 
+def test_frames_drawn_by_other_processes_are_the_same(tmp_path):
+    fig = ms.load(EX / "mechanism.json").look("chalkboard")
+    here = fig.save_frames(tmp_path / "here", list(range(0, 16, 2)), SMALL, workers=1)
+    there = fig.save_frames(tmp_path / "there", list(range(0, 16, 2)), SMALL, workers=2)
+    assert [f.name for f in here] == [f.name for f in there]
+    assert all(a.read_bytes() == b.read_bytes() for a, b in zip(here, there))
+
+
 def test_stack_of_structures(tmp_path):
     fig = ms.load([EX / "1A8O.pdb", EX / "1A8O.pdb"])
     assert "keyframe" in repr(fig) and fig.frames("keyframes")
