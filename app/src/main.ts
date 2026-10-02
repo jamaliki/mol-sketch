@@ -320,9 +320,9 @@ function mapInfo() {
 }
 /** the map where the figure is drawn: sent once (to the server, its file's bytes; to the worker, its grid), again only
     when another map is loaded */
-const localMaps = new WeakMap<object, Promise<string>>();
+const localMaps = new WeakMap<SDK, WeakMap<object, Promise<string>>>();   // per worker (an export draws with a few)
 async function mapRefOn(d: SDK): Promise<string | null> {
-  if (d instanceof LocalDraw) { if (!mapObj) return null; let p = localMaps.get(mapObj); if (!p) localMaps.set(mapObj, p = d.putMap(mapObj)); return p }
+  if (d instanceof LocalDraw) { if (!mapObj) return null; let m = localMaps.get(d); if (!m) localMaps.set(d, m = new WeakMap()); let p = m.get(mapObj); if (!p) m.set(mapObj, p = d.putMap(mapObj)); return p }
   return mapRefOnSdk();
 }
 async function mapRefOnSdk(): Promise<string | null> {
@@ -668,11 +668,21 @@ async function renderToFile(o: { width: number; height: number; codec: CodecName
   const frames: number[] = []; if (sceneDoc) { for (let f = 0; f < timeline().total; f += 2) frames.push(f) } else for (let f = 0; f < 24; f += 2) frames.push(f);
   const name = (sceneDoc?.name || R.structure?.name || 'molsketch').replace(/[^\w.-]+/g, '_'); renderCancel = false; const t0 = performance.now();
   const wasLive = live; live = false; sketchOn = false;   // no on-screen sketches while the engine is busy with the file
+  // the drawing worker and, on a machine with the cores for it, a few more made for the export: each draws every n-th
+  // frame (the same frame whichever draws it), and the encoder takes them in order
+  const via = drawer(), pool: { d: LocalDraw; inputs: InputSync }[] = [];
+  if (via && via.d === local && (sceneDoc || structureText || mapObj)) {
+    pool.push(via as { d: LocalDraw; inputs: InputSync });
+    const more = Math.max(0, Math.min(3, Math.floor((navigator.hardwareConcurrency || 2) / 2) - 1, Math.floor(frames.length / 8)));
+    for (let k = 0; k < more; k++) try { const d = new LocalDraw((document.querySelector('link[data-fonts]') as HTMLLinkElement | null)?.href || null); pool.push({ d, inputs: new InputSync(d) }) } catch { break }
+  }
+  const slot = new Map(frames.map((f, i) => [f, i] as [number, number]));
+  const bitmap = pool.length ? async (f: number) => { const w = pool[slot.get(f)! % pool.length]; return w.d.render(await figureSpec(o.width, o.height, 1, f, undefined, w)) } : undefined;
   try {
-    const res = await renderVideo({ width: o.width, height: o.height, fps: FPS / 2, codec: o.codec, quality: o.quality, frames, draw: drawFrameTo, cancelled: () => renderCancel, onProgress: (d, n, b) => { const el = (performance.now() - t0) / 1000; o.onProgress(d, n, b, d ? el / d * (n - d) : 0) } });
+    const res = await renderVideo({ width: o.width, height: o.height, fps: FPS / 2, codec: o.codec, quality: o.quality, frames, draw: drawFrameTo, bitmap, ahead: pool.length * 2, cancelled: () => renderCancel, onProgress: (d, n, b) => { const el = (performance.now() - t0) / 1000; o.onProgress(d, n, b, d ? el / d * (n - d) : 0) } });
     const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${name}.${res.ext}`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     return { name: a.download, bytes: res.bytes, seconds: res.seconds, codecString: res.codecString };
-  } finally { live = wasLive; sketchOn = restMode !== 'preview'; classic().cfg = cfgFromStyle(style, R.camera, !!sceneDoc); if (sceneDoc) classic().scene = sceneDoc; invalidate() }
+  } finally { for (const w of pool) if (w.d !== local) w.d.close(); live = wasLive; sketchOn = restMode !== 'preview'; classic().cfg = cfgFromStyle(style, R.camera, !!sceneDoc); if (sceneDoc) classic().scene = sceneDoc; invalidate() }
 }
 async function savePoster(width: number, height: number, f = frame, type: 'image/jpeg' | 'image/png' = 'image/jpeg') {
   const c = document.createElement('canvas'); c.width = width; c.height = height; const ctx = c.getContext('2d', { willReadFrequently: true })!; await drawFrameTo(ctx, width, height, f);

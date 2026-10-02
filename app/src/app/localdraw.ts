@@ -28,4 +28,6 @@ export class LocalDraw implements SDK {
   async render(spec: FigureSpec, o: { quick?: boolean } = {}): Promise<ImageBitmap> { await this.ready; const r = await this.ask('render', spec, o); this.lastMs = r.ms; return r.bitmap }
   svg(): Promise<string> { return Promise.reject(new Error('SVG needs the molsketch server: run `molsketch serve`')) }
   call<T = any>(name: string, ...args: any[]): Promise<T> { return this.ask('call', name, args) }
+  /** the worker stopped (one made for an export, done with) */
+  close() { this.w.terminate(); for (const p of this.waiting.values()) p.fail(new Error('the drawing worker was closed')); this.waiting.clear() }
 }

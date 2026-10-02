@@ -11,6 +11,9 @@ export type Quality = 'small' | 'medium' | 'high';
 export interface RenderJob {
   width: number; height: number; fps: number; codec: CodecName; quality: Quality; frames: number[];
   draw: (ctx: CanvasRenderingContext2D, W: number, H: number, frame: number) => void | Promise<void>;
+  /** the frame as a bitmap, when frames can be drawn several at a time (by a few workers): `ahead` are asked for at
+      once, and taken in order */
+  bitmap?: (frame: number) => Promise<ImageBitmap>; ahead?: number;
   onProgress?: (done: number, total: number, bytes: number) => void;
   cancelled?: () => boolean;
 }
@@ -68,10 +71,16 @@ export async function renderVideo(job: RenderJob): Promise<RenderResult> {
   const qp = QP[job.quality][job.codec];
   const opts = (key: boolean): any => { const o: any = { keyFrame: key }; if (sup.quantizer) { if (job.codec === 'av1') o.av1 = { quantizer: qp }; else if (job.codec === 'vp9') o.vp9 = { quantizer: qp }; else o.avc = { quantizer: qp } } return o };
   const n = job.frames.length; const us = Math.round(1e6 / fps);
+  const asked: Promise<ImageBitmap>[] = [], ask = (i: number) => { if (job.bitmap && i < n && !asked[i]) { asked[i] = job.bitmap(job.frames[i]); asked[i].catch(() => { }) } };
   for (let i = 0; i < n; i++) {
-    if (err) throw err; if (job.cancelled?.()) { encoder.close(); throw new Error('cancelled') }
-    await job.draw(ctx, W, H, job.frames[i]);
-    const vf = new VideoFrame(canvas, { timestamp: i * us, duration: us });
+    if (err) throw err; if (job.cancelled?.()) { encoder.close(); for (let k = i; k < n; k++) asked[k]?.then(b => b.close(), () => { }); throw new Error('cancelled') }
+    let vf: VideoFrame;
+    if (job.bitmap) {
+      for (let k = i; k < i + Math.max(1, job.ahead || 1); k++) ask(k);
+      const bmp = await asked[i]; delete asked[i];
+      if (bmp.width !== W || bmp.height !== H) { ctx.clearRect(0, 0, W, H); ctx.drawImage(bmp, 0, 0, W, H); bmp.close(); vf = new VideoFrame(canvas, { timestamp: i * us, duration: us }) }
+      else { vf = new VideoFrame(bmp, { timestamp: i * us, duration: us }); bmp.close() }
+    } else { await job.draw(ctx, W, H, job.frames[i]); vf = new VideoFrame(canvas, { timestamp: i * us, duration: us }) }
     encoder.encode(vf, opts(i % (fps * 10) === 0)); vf.close();
     while (encoder.encodeQueueSize > 3) await new Promise(r => setTimeout(r, 5));   // keep the queue short: frames are big
     job.onProgress?.(i + 1, n, bytes);
