@@ -3419,6 +3419,28 @@
       }
       return p;
     }
+    function wcDeformF(P, depth, variance, rng) {
+      let p = P;
+      for (let d = 0; d < depth; d++) {
+        const m = p.length >> 1, out = new Float64Array(m * 4);
+        for (let i = 0; i < m; i++) {
+          const j = i + 1 === m ? 0 : i + 1;
+          const ax = p[2 * i], ay = p[2 * i + 1], bx = p[2 * j], by = p[2 * j + 1];
+          const mx = (ax + bx) / 2, my = (ay + by) / 2;
+          const ex = bx - ax, ey = by - ay;
+          const len = Math.hypot(ex, ey) || 1;
+          const nx = -ey / len, ny = ex / len;
+          const dn = wcGauss(rng) * variance * len, dt = wcGauss(rng) * variance * len * 0.35;
+          const o = 4 * i;
+          out[o] = ax;
+          out[o + 1] = ay;
+          out[o + 2] = mx + nx * dn + ex / len * dt;
+          out[o + 3] = my + ny * dn + ey / len * dt;
+        }
+        p = out;
+      }
+      return p;
+    }
     function watercolourShape(ctx, pts, col, seed, o) {
       o = o || {};
       const rng = mulberry32(seed + 4242);
@@ -3435,10 +3457,16 @@
       cy /= pts.length;
       const path = (q) => {
         ctx.beginPath();
-        q.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        ctx.moveTo(q[0], q[1]);
+        for (let i = 2; i < q.length; i += 2) ctx.lineTo(q[i], q[i + 1]);
         ctx.closePath();
       };
-      const shape = wcDeform(pts, 1, 0.06, rng);
+      const P = new Float64Array(pts.length * 2);
+      for (let i = 0; i < pts.length; i++) {
+        P[2 * i] = pts[i][0];
+        P[2 * i + 1] = pts[i][1];
+      }
+      const shape = wcDeformF(P, 1, 0.06, rng), sn = shape.length >> 1;
       ctx.save();
       if (!light && !o.offscreen) {
         path(shape);
@@ -3447,15 +3475,24 @@
       }
       ctx.globalCompositeOperation = o.offscreen ? "source-over" : light ? "multiply" : "screen";
       const aFill = (o.strength || 0.75) / layers * 1.15;
+      const scaled = new Float64Array(shape.length);
       for (let L = 0; L < layers; L++) {
         const sc = o.noScale ? 1 : 0.9 + rng() * 0.16;
-        const lay = wcDeform(sc === 1 ? shape : shape.map((p) => [cx + (p[0] - cx) * sc, cy + (p[1] - cy) * sc]), 2, (0.08 + rng() * 0.1) * (o.noScale ? 1.6 : 1), rng);
+        let q = shape;
+        if (sc !== 1) {
+          for (let i = 0; i < shape.length; i += 2) {
+            scaled[i] = cx + (shape[i] - cx) * sc;
+            scaled[i + 1] = cy + (shape[i + 1] - cy) * sc;
+          }
+          q = scaled;
+        }
+        const lay = wcDeformF(q, 2, (0.08 + rng() * 0.1) * (o.noScale ? 1.6 : 1), rng);
         path(lay);
         ctx.fillStyle = rgba(col, aFill);
         ctx.fill();
       }
       if (!o.noRing) for (let e = 0; e < 2; e++) {
-        const lay = wcDeform(shape, 1, 0.03, rng);
+        const lay = wcDeformF(shape, 1, 0.03, rng);
         path(lay);
         ctx.lineWidth = 0.7 + rng() * 0.5;
         ctx.strokeStyle = rgba(mix(col, shadeInk(), 0.25), 0.16 * (o.strength || 0.75) / 0.75);
@@ -3466,18 +3503,18 @@
         path(shape);
         ctx.clip();
         let area = 0;
-        for (let i = 0; i < shape.length; i++) {
-          const a = shape[i], b = shape[(i + 1) % shape.length];
-          area += a[0] * b[1] - b[0] * a[1];
+        for (let i = 0; i < sn; i++) {
+          const j = i + 1 === sn ? 0 : i + 1;
+          area += shape[2 * i] * shape[2 * j + 1] - shape[2 * j] * shape[2 * i + 1];
         }
         area = Math.abs(area) / 2;
         const g2 = Math.round(area * 4e-3);
         let xs = 1e9, ys = 1e9, xe = -1e9, ye = -1e9;
-        for (const p of shape) {
-          xs = Math.min(xs, p[0]);
-          ys = Math.min(ys, p[1]);
-          xe = Math.max(xe, p[0]);
-          ye = Math.max(ye, p[1]);
+        for (let i = 0; i < shape.length; i += 2) {
+          xs = Math.min(xs, shape[i]);
+          ys = Math.min(ys, shape[i + 1]);
+          xe = Math.max(xe, shape[i]);
+          ye = Math.max(ye, shape[i + 1]);
         }
         for (let i = 0; i < g2; i++) {
           ctx.fillStyle = rgba(mix(col, shadeInk(), 0.4), 0.12 + rng() * 0.2);
@@ -5374,36 +5411,46 @@
       }
       if (ds.length < 64) return ds;
       const gw = Math.ceil((x1 - x0) / cs) + 1, gh = Math.ceil((y1 - y0) / cs) + 1, cnt = new Uint16Array(gw * gh);
-      const full = (d, f2) => {
+      const add = (d, k) => {
         const r = d.r - shrink, r2 = r * r;
         const i0 = Math.max(0, Math.floor((d.x - r - x0) / cs)), i1 = Math.min(gw - 1, Math.floor((d.x + r - x0) / cs)), j0 = Math.max(0, Math.floor((d.y - r - y0) / cs)), j1 = Math.min(gh - 1, Math.floor((d.y + r - y0) / cs));
         for (let j = j0; j <= j1; j++) {
           const ya = y0 + j * cs - d.y, yb = ya + cs, yy = Math.max(ya * ya, yb * yb);
           for (let i = i0; i <= i1; i++) {
             const xa = x0 + i * cs - d.x, xb = xa + cs;
-            if (Math.max(xa * xa, xb * xb) + yy <= r2) f2(j * gw + i, true);
-            else if (f2.length > 2) f2(j * gw + i, false, xa, xb, ya, yb, r2);
+            if (Math.max(xa * xa, xb * xb) + yy <= r2) {
+              const c = j * gw + i;
+              if (k > 0) {
+                if (cnt[c] < 65535) cnt[c]++;
+              } else cnt[c]--;
+            }
           }
         }
       };
-      for (const d of ds) full(d, (c) => {
-        if (cnt[c] < 65535) cnt[c]++;
-      });
+      const needs = (d) => {
+        const r = d.r - shrink, r2 = r * r;
+        const i0 = Math.max(0, Math.floor((d.x - r - x0) / cs)), i1 = Math.min(gw - 1, Math.floor((d.x + r - x0) / cs)), j0 = Math.max(0, Math.floor((d.y - r - y0) / cs)), j1 = Math.min(gh - 1, Math.floor((d.y + r - y0) / cs));
+        for (let j = j0; j <= j1; j++) {
+          const ya = y0 + j * cs - d.y, yb = ya + cs, yy = Math.max(ya * ya, yb * yb);
+          for (let i = i0; i <= i1; i++) {
+            const xa = x0 + i * cs - d.x, xb = xa + cs;
+            const c = j * gw + i;
+            if (Math.max(xa * xa, xb * xb) + yy <= r2) {
+              if (cnt[c] - 1 <= 0) return true;
+              continue;
+            }
+            const nx = Math.max(xa, Math.min(0, xb)), ny = Math.max(ya, Math.min(0, yb));
+            if (nx * nx + ny * ny >= r2) continue;
+            if (cnt[c] <= 0) return true;
+          }
+        }
+        return false;
+      };
+      for (const d of ds) add(d, 1);
       const keep2 = [];
       for (const d of ds) {
-        let needed = false;
-        full(d, function(c, inside, xa, xb, ya, yb, r2) {
-          if (needed) return;
-          if (!inside) {
-            const nx = Math.max(xa, Math.min(0, xb)), ny = Math.max(ya, Math.min(0, yb));
-            if (nx * nx + ny * ny >= r2) return;
-          }
-          if (cnt[c] - (inside ? 1 : 0) <= 0) needed = true;
-        });
-        if (needed) keep2.push(d);
-        else full(d, (c) => {
-          cnt[c]--;
-        });
+        if (needs(d)) keep2.push(d);
+        else add(d, -1);
       }
       return keep2;
     }
