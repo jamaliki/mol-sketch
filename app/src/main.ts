@@ -56,6 +56,7 @@ let sketchOn = true;
 let classicMs = Infinity;   // the last classic drawing's cost; when it is small the classic engine also draws while you drag, so what you see moving is the final look
 let liveMs = Infinity;   // the same for a frame of a moving view (quick: see requestExact), the cost that decides whether the drawing follows the view live
 let quickKnown = false;   // liveMs was measured on such a frame (otherwise it is a finished drawing's cost, an upper bound, and a moving view tries one quick frame to learn it)
+let probedAt = -Infinity;   // when a moving view last tried one: tried again now and then while frames seem too slow to follow the view (the first one at a size makes its paper, and is slow)
 let lastChange = 0; let sketchShown = false; let boil = 0; let sketchStats = { readMs: 0, regionMs: 0, drawMs: 0, regions: 0 };
 /** something on screen changed: the GPU preview draws it now, and the finished drawing follows. While the finished
     drawing follows the view live, the last one stays up until the next arrives; otherwise the preview shows meanwhile.
@@ -787,7 +788,8 @@ function loop(t: number) {
     if (dirty && !covered) { dirty = false; preview(); if (!skCanvas.classList.contains('on')) hud.textContent = previewHud() }
     if (exactBusy) { if (!sketchShown && t - exactAt > Math.max(150, 3 * liveMs) && skCanvas.classList.contains('on')) { skCanvas.classList.remove('on'); if (dirty) { dirty = false; preview() } } }   // a drawing slower than its frames were: the preview shows what has changed meanwhile
     else if (t - resizedAt < 250) { }   // the size is still changing
-    else if (!sketchShown && (liveExact() || drawNow || t - lastChange > 220 || (!quickKnown && !sdk && t - lastChange < 100))) { const quick = !drawNow && t - lastChange <= 220; drawNow = false; requestExact(false, quick) }   // a frame of a moving view: drawn quickly
+    else if (!sketchShown && (liveExact() || drawNow || t - lastChange > 220 || ((!quickKnown || (liveMs >= LIVE_MS && t - probedAt > 1500)) && !sdk && t - lastChange < 100))) {   // a frame of a moving view: drawn quickly
+      const quick = !drawNow && t - lastChange <= 220; drawNow = false; if (quick && !liveExact()) probedAt = t; requestExact(false, quick) }
     else if (sketchShown && shownQuick && t - lastChange > 220) requestExact()   // the view has come to rest on a quick frame: the finished one
     else if (live && sketchShown && !turntable && t - lastSketchAt > Math.max(900, classicMs * 3)) { boil++; requestExact(true) }   // the lines breathe
   }
