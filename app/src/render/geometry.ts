@@ -117,6 +117,7 @@ export function buildCartoon(s: Structure, mask: Uint8Array, scheme: ColorScheme
       const rid = seg.map((r, i) => { runLen++; if (i === 0 || r.ss !== seg[i - 1].ss || runLen > (r.nucleic ? 10 : r.ss === 'L' ? 16 : 40)) { runId++; runLen = 1 } return runId });
       const samples: Sample[] = [];
       let prevN: number[] | null = null;
+      const colours = new Map<Residue, [number, number, number]>(), colourOf = (r: Residue) => { let c = colours.get(r); if (!c) colours.set(r, c = hexToRgb(scheme.cartoon(r))); return c };   // (once per residue, not per sample)
       for (let i = 0; i < n - 1; i++) {
         const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(n - 1, i + 2)];
         const isArrow = seg[i].ss === 'E' && (i === n - 2 || seg[i + 1].ss !== 'E');
@@ -134,7 +135,7 @@ export function buildCartoon(s: Structure, mask: Uint8Array, scheme: ColorScheme
           let w = a.w + (b.w - a.w) * t, th = a.th + (b.th - a.th) * t, flat = a.flat + (b.flat - a.flat) * t;
           if (isArrow) { w = 2.4 * a.w * (1 - t) + 0.08; th = a.th; flat = 1 }
           const near = t < 0.5 ? i : i + 1;
-          samples.push({ p, t: T, n: N, w, th, flat, color: hexToRgb(scheme.cartoon(seg[near])), id: rid[near], ss: seg[near].ss, nucleic: seg[near].nucleic });
+          samples.push({ p, t: T, n: N, w, th, flat, color: colourOf(seg[near]), id: rid[near], ss: seg[near].ss, nucleic: seg[near].nucleic });
         }
       }
       // split the samples into runs (one per SS stretch) so each run is one region family for the sketch pass
@@ -177,10 +178,10 @@ function emitRibbon(S: Sample[], verts: Grow<Float32Array>, idx: Grow<Uint32Arra
       r[o + 3] = m0 / l; r[o + 4] = m1 / l; r[o + 5] = m2 / l;
     }
   };
-  const vert = (s: Sample, r: Float64Array, o: number, id: number) => { verts.room(MESH_STRIDE); const A = verts.a, q = verts.n;
+  const vert = (s: Sample, r: Float64Array, o: number, id: number) => { if (verts.n + MESH_STRIDE > verts.a.length) verts.room(MESH_STRIDE); const A = verts.a, q = verts.n;
     A[q] = r[o]; A[q + 1] = r[o + 1]; A[q + 2] = r[o + 2]; A[q + 3] = r[o + 3]; A[q + 4] = r[o + 4]; A[q + 5] = r[o + 5]; A[q + 6] = s.color[0]; A[q + 7] = s.color[1]; A[q + 8] = s.color[2]; A[q + 9] = id; A[q + 10] = CLS_CARTOON;
     verts.n = q + MESH_STRIDE; return verts.n / MESH_STRIDE - 1 };
-  const tri = (a: number, b: number, c: number) => { idx.room(3); const I = idx.a, o = idx.n; I[o] = a; I[o + 1] = b; I[o + 2] = c; idx.n = o + 3 };
+  const tri = (a: number, b: number, c: number) => { if (idx.n + 3 > idx.a.length) idx.room(3); const I = idx.a, o = idx.n; I[o] = a; I[o + 1] = b; I[o + 2] = c; idx.n = o + 3 };
   // a ring point's vertex is shared by the quads that give it the same face id (the same position, normal, colour and
   // id, so every triangle is what it was with a vertex of its own): per point and face, the vertex made and its id
   let prev = new Float64Array(RING * 6), cur = new Float64Array(RING * 6);
