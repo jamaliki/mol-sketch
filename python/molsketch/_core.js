@@ -336,6 +336,35 @@
   var SPECS = [];
   var nextPaint = 1;
   var EPOCH = 0;
+  var PLAIN = /* @__PURE__ */ new Map();
+  var HB = new Float64Array(1);
+  var HW = new Int32Array(HB.buffer);
+  var STRH = /* @__PURE__ */ new Map();
+  var hashOf = (f2) => {
+    let h = f2.length;
+    for (const x of f2) {
+      let a, b;
+      if (typeof x === "number") {
+        HB[0] = x === 0 ? 0 : x;
+        a = HW[0];
+        b = HW[1];
+      } else {
+        let k = STRH.get(x);
+        if (k === void 0) {
+          k = 0;
+          for (let i = 0; i < x.length; i++) k = Math.imul(k ^ x.charCodeAt(i), 16777619);
+          if (STRH.size > 1024) STRH.clear();
+          STRH.set(x, k);
+        }
+        a = k;
+        b = 1540483477;
+      }
+      h = Math.imul(h ^ a, 2654435761);
+      h = Math.imul(h ^ b, 2246822519);
+      h ^= h >>> 15;
+    }
+    return h;
+  };
   var RecCanvas = class {
     constructor() {
       __publicField(this, "id");
@@ -584,12 +613,37 @@
         if (stroke) o.push(s.lineWidth, cap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
         return o;
       };
-      const key = Array.isArray(v) && !s.lineDash.length ? stroke ? "s" + v[0] + "," + v[1] + "," + v[2] + "," + v[3] + "," + s.globalAlpha + "," + s.globalCompositeOperation + "," + s.lineWidth + "," + cap + "," + s.lineJoin + "," + s.miterLimit + "," + s.lineDashOffset + "," + s.filter : "f" + v[0] + "," + v[1] + "," + v[2] + "," + v[3] + "," + s.globalAlpha + "," + s.globalCompositeOperation + "," + s.filter : JSON.stringify(spec());
-      let id = PAINTS.get(key);
-      if (id === void 0) {
-        id = nextPaint++;
-        PAINTS.set(key, id);
-        SPECS.push(id, spec());
+      let id;
+      if (Array.isArray(v) && !s.lineDash.length) {
+        const f2 = stroke ? [1, v[0], v[1], v[2], v[3], s.globalAlpha, s.globalCompositeOperation, s.filter, s.lineWidth, cap, s.lineJoin, s.miterLimit, s.lineDashOffset] : [0, v[0], v[1], v[2], v[3], s.globalAlpha, s.globalCompositeOperation, s.filter];
+        const h = hashOf(f2);
+        let bucket = PLAIN.get(h);
+        if (bucket) for (const e of bucket) {
+          let same = true;
+          for (let i = 0; i < f2.length; i++) if (e[i] !== f2[i]) {
+            same = false;
+            break;
+          }
+          if (same) {
+            id = e[f2.length];
+            break;
+          }
+        }
+        if (id === void 0) {
+          id = nextPaint++;
+          f2.push(id);
+          if (bucket) bucket.push(f2);
+          else PLAIN.set(h, [f2]);
+          SPECS.push(id, spec());
+        }
+      } else {
+        const key = JSON.stringify(spec());
+        id = PAINTS.get(key);
+        if (id === void 0) {
+          id = nextPaint++;
+          PAINTS.set(key, id);
+          SPECS.push(id, spec());
+        }
       }
       if (butt) {
         s.bid = id;
@@ -1076,6 +1130,7 @@
   function endRender() {
     emit();
     PAINTS = /* @__PURE__ */ new Map();
+    PLAIN = /* @__PURE__ */ new Map();
     EPOCH++;
     return held.splice(0);
   }
@@ -5698,7 +5753,7 @@
         const q = proj.proj(p);
         return [q.x, q.y, q.z, q.d, q.fog];
       };
-      const HA = 32 * Math.PI / 180, HB = -11 * Math.PI / 180, HH = 4.7;
+      const HA = 32 * Math.PI / 180, HB2 = -11 * Math.PI / 180, HH = 4.7;
       const ssCol = (t) => t === "H" ? P.helix : t === "E" ? P.sheet : t === "N" ? P.nucleic || "#e0a23a" : P.loop;
       const hsv = (h, s, v) => {
         const f2 = (k) => {
@@ -5841,7 +5896,7 @@
               const c = norm3(sub3(p[i + 1], p[i - 1]));
               const r = norm3(cross3(sub3(p[i], p[i - 1]), sub3(p[i + 1], p[i])));
               ax[i] = add(scl(r, Math.cos(HA)), c, Math.sin(HA));
-              tg[i] = scl(add(scl(c, Math.cos(HB)), r, Math.sin(HB)), HH);
+              tg[i] = scl(add(scl(c, Math.cos(HB2)), r, Math.sin(HB2)), HH);
             }
             ax[0] = ax[1];
             ax[m - 1] = ax[m - 2];

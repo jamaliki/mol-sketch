@@ -152,6 +152,16 @@ const fresh = (): State => ({ m: [1, 0, 0, 1, 0, 0], fillStyle: '#000000', strok
      stroke pattern  3 pat snap rep m smoothing alpha composite filter width cap join miter dash dashOffset
    Ids are never reused; a state keeps its paints' ids for the render they were made in (the epoch). */
 let PAINTS = new Map<string, number>(), SPECS: any[] = [], nextPaint = 1, EPOCH = 0;
+/* a plain colour's paint (most paints) is found by a hash of its fields and then the fields themselves: a key string
+   built for every paint, and hashed, cost more than drawing with it */
+let PLAIN = new Map<number, any[][]>();
+const HB = new Float64Array(1), HW = new Int32Array(HB.buffer), STRH = new Map<string, number>();
+const hashOf = (f: any[]) => { let h = f.length;
+  for (const x of f) { let a: number, b: number;
+    if (typeof x === 'number') { HB[0] = x === 0 ? 0 : x; a = HW[0]; b = HW[1] }   // (−0 is 0, as a key string has it)
+    else { let k = STRH.get(x); if (k === undefined) { k = 0; for (let i = 0; i < x.length; i++) k = Math.imul(k ^ x.charCodeAt(i), 0x01000193); if (STRH.size > 1024) STRH.clear(); STRH.set(x, k) } a = k; b = 0x5bd1e995 }
+    h = Math.imul(h ^ a, 0x9E3779B1); h = Math.imul(h ^ b, 0x85EBCA77); h ^= h >>> 15 }
+  return h };
 
 export class RecCanvas {
   id: number; private w = 300; private h = 150; ops: Op[] = []; total = 0; private ctx: RecContext | null = null;
@@ -243,14 +253,17 @@ export class RecContext {
       if (stroke) o.push(s.lineWidth, cap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
       return o;
     };
-    // a plain colour (most paints) is keyed without building its spec: numbers and keywords, then the filter, the one
-    // free text, last (so the key reads back one way); anything else by its spec as JSON (which starts '[')
-    const key = Array.isArray(v) && !s.lineDash.length
-      ? (stroke ? 's' + v[0] + ',' + v[1] + ',' + v[2] + ',' + v[3] + ',' + s.globalAlpha + ',' + s.globalCompositeOperation + ',' + s.lineWidth + ',' + cap + ',' + s.lineJoin + ',' + s.miterLimit + ',' + s.lineDashOffset + ',' + s.filter
-        : 'f' + v[0] + ',' + v[1] + ',' + v[2] + ',' + v[3] + ',' + s.globalAlpha + ',' + s.globalCompositeOperation + ',' + s.filter)
-      : JSON.stringify(spec());
-    let id = PAINTS.get(key);
-    if (id === undefined) { id = nextPaint++; PAINTS.set(key, id); SPECS.push(id, spec()) }
+    let id: number | undefined;
+    if (Array.isArray(v) && !s.lineDash.length) {   // a plain colour: its fields (the same paint as each field the same)
+      const f = stroke ? [1, v[0], v[1], v[2], v[3], s.globalAlpha, s.globalCompositeOperation, s.filter, s.lineWidth, cap, s.lineJoin, s.miterLimit, s.lineDashOffset]
+        : [0, v[0], v[1], v[2], v[3], s.globalAlpha, s.globalCompositeOperation, s.filter];
+      const h = hashOf(f); let bucket = PLAIN.get(h);
+      if (bucket) for (const e of bucket) { let same = true; for (let i = 0; i < f.length; i++) if (e[i] !== f[i]) { same = false; break } if (same) { id = e[f.length]; break } }
+      if (id === undefined) { id = nextPaint++; f.push(id); if (bucket) bucket.push(f); else PLAIN.set(h, [f]); SPECS.push(id, spec()) }
+    } else {   // anything else by its spec as JSON
+      const key = JSON.stringify(spec()); id = PAINTS.get(key);
+      if (id === undefined) { id = nextPaint++; PAINTS.set(key, id); SPECS.push(id, spec()) }
+    }
     if (butt) { s.bid = id; s.bidE = EPOCH } else if (stroke) { s.sid = id; s.sidE = EPOCH } else { s.fid = id; s.fidE = EPOCH }
     return id;
   }
@@ -508,7 +521,7 @@ function emit() { const c = takeChunk(); if (held.length || !stream || !stream(c
 /** after a draw: hand over what has built up, if enough has */
 function handOver() { if (stream && (pendingOps >= STREAM_OPS || runsN >= STREAM_BYTES)) emit() }
 /** the end of a render: the last chunk out, and the chunks the stream did not take (for the host to pull) */
-export function endRender(): Chunk[] { emit(); PAINTS = new Map(); EPOCH++; return held.splice(0) }
+export function endRender(): Chunk[] { emit(); PAINTS = new Map(); PLAIN = new Map(); EPOCH++; return held.splice(0) }
 /** everything recorded so far, as one chunk (no stream) */
 export function flush(): Chunk { return takeChunk() }
 /** a canvas the host no longer needs (a finished frame): the host drops it itself */
