@@ -621,24 +621,31 @@ function wcDeform(pts,depth,variance,rng){let p=pts;for(let d=0;d<depth;d++){con
 function wcDeformF(P,depth,variance,rng){let p=P;for(let d=0;d<depth;d++){const m=p.length>>1,out=new Float64Array(m*4);
   for(let i=0;i<m;i++){const j=i+1===m?0:i+1;const ax=p[2*i],ay=p[2*i+1],bx=p[2*j],by=p[2*j+1];const mx=(ax+bx)/2,my=(ay+by)/2;const ex=bx-ax,ey=by-ay;const len=Math.hypot(ex,ey)||1;const nx=-ey/len,ny=ex/len;const dn=wcGauss(rng)*variance*len,dt=wcGauss(rng)*variance*len*0.35;
     const o=4*i;out[o]=ax;out[o+1]=ay;out[o+2]=mx+nx*dn+ex/len*dt;out[o+3]=my+ny*dn+ey/len*dt}p=out}return p}
+/* wcDeformF of the first n numbers of P into scratch arrays the next call reuses (a layer drawn at once and dropped):
+   its first n·2^depth numbers */
+let WCA=new Float64Array(4096),WCB=new Float64Array(4096);
+function wcDeformS(P,n,depth,variance,rng){let p=P;for(let d=0;d<depth;d++){const m=n>>1;let out=d&1?WCB:WCA;if(out.length<m*4){out=new Float64Array(m*8);if(d&1)WCB=out;else WCA=out}
+  for(let i=0;i<m;i++){const j=i+1===m?0:i+1;const ax=p[2*i],ay=p[2*i+1],bx=p[2*j],by=p[2*j+1];const mx=(ax+bx)/2,my=(ay+by)/2;const ex=bx-ax,ey=by-ay;const len=Math.hypot(ex,ey)||1;const nx=-ey/len,ny=ex/len;const dn=wcGauss(rng)*variance*len,dt=wcGauss(rng)*variance*len*0.35;
+    const o=4*i;out[o]=ax;out[o+1]=ay;out[o+2]=mx+nx*dn+ex/len*dt;out[o+3]=my+ny*dn+ey/len*dt}p=out;n=m*4}return p}
 function watercolourShape(ctx,pts,col,seed,o){
   o=o||{};const rng=mulberry32(seed+4242);const layers=o.layers||9;const fog=o.fog||0;
   col=fogged(col,fog);const light=luminance(cfg.palette.paper)>0.5;
   let cx=0,cy=0;for(const p of pts){cx+=p[0];cy+=p[1]}cx/=pts.length;cy/=pts.length;
-  const path=q=>{ctx.beginPath();ctx.moveTo(q[0],q[1]);for(let i=2;i<q.length;i+=2)ctx.lineTo(q[i],q[i+1]);ctx.closePath()};
+  const path=(q,n=q.length)=>{ctx.beginPath();ctx.moveTo(q[0],q[1]);for(let i=2;i<n;i+=2)ctx.lineTo(q[i],q[i+1]);ctx.closePath()};
   const P=new Float64Array(pts.length*2);for(let i=0;i<pts.length;i++){P[2*i]=pts[i][0];P[2*i+1]=pts[i][1]}
   const shape=wcDeformF(P,1,0.06,rng),sn=shape.length>>1;
   ctx.save();
   // on dark paper, screened layers alone never reach the pigment: lay the colour down first, then let the layers glow over it
   if(!light&&!o.offscreen){path(shape);ctx.fillStyle=rgba(col,0.7*(o.strength||0.75)/0.75);ctx.fill()}
   ctx.globalCompositeOperation=o.offscreen?'source-over':(light?'multiply':'screen');
-  const aFill=(o.strength||0.75)/layers*1.15;const scaled=new Float64Array(shape.length);
-  for(let L=0;L<layers;L++){const sc=o.noScale?1:0.9+rng()*0.16;let q=shape;if(sc!==1){for(let i=0;i<shape.length;i+=2){scaled[i]=cx+(shape[i]-cx)*sc;scaled[i+1]=cy+(shape[i+1]-cy)*sc}q=scaled}
-    const lay=wcDeformF(q,2,(0.08+rng()*0.1)*(o.noScale?1.6:1),rng);path(lay);ctx.fillStyle=rgba(col,aFill);ctx.fill()}
-  if(!o.noRing)for(let e=0;e<2;e++){const lay=wcDeformF(shape,1,0.03,rng);path(lay);ctx.lineWidth=0.7+rng()*0.5;ctx.strokeStyle=rgba(mix(col,shadeInk(),0.25),0.16*(o.strength||0.75)/0.75);ctx.stroke()}
+  const aFill=(o.strength||0.75)/layers*1.15,fill=rgba(col,aFill),N=shape.length;const scaled=new Float64Array(N);
+  for(let L=0;L<layers;L++){const sc=o.noScale?1:0.9+rng()*0.16;let q=shape;if(sc!==1){for(let i=0;i<N;i+=2){scaled[i]=cx+(shape[i]-cx)*sc;scaled[i+1]=cy+(shape[i+1]-cy)*sc}q=scaled}
+    path(wcDeformS(q,N,2,(0.08+rng()*0.1)*(o.noScale?1.6:1),rng),N*4);ctx.fillStyle=fill;ctx.fill()}
+  if(!o.noRing){const ring=rgba(mix(col,shadeInk(),0.25),0.16*(o.strength||0.75)/0.75);
+    for(let e=0;e<2;e++){path(wcDeformS(shape,N,1,0.03,rng),N*2);ctx.lineWidth=0.7+rng()*0.5;ctx.strokeStyle=ring;ctx.stroke()}}
   if(o.granulate!==false){ctx.save();path(shape);ctx.clip();let area=0;for(let i=0;i<sn;i++){const j=i+1===sn?0:i+1;area+=shape[2*i]*shape[2*j+1]-shape[2*j]*shape[2*i+1]}area=Math.abs(area)/2;
     const g=Math.round(area*0.004);let xs=1e9,ys=1e9,xe=-1e9,ye=-1e9;for(let i=0;i<shape.length;i+=2){xs=Math.min(xs,shape[i]);ys=Math.min(ys,shape[i+1]);xe=Math.max(xe,shape[i]);ye=Math.max(ye,shape[i+1])}
-    for(let i=0;i<g;i++){ctx.fillStyle=rgba(mix(col,shadeInk(),0.4),0.12+rng()*0.2);ctx.fillRect(xs+rng()*(xe-xs),ys+rng()*(ye-ys),1,1)}ctx.restore()}
+    const gc=mix(col,shadeInk(),0.4);for(let i=0;i<g;i++){ctx.fillStyle=rgba(gc,0.12+rng()*0.2);ctx.fillRect(xs+rng()*(xe-xs),ys+rng()*(ye-ys),1,1)}ctx.restore()}
   ctx.restore();
 }
 /* line hierarchy: silhouettes heavier, interior marks lighter */

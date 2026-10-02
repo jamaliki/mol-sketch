@@ -236,11 +236,21 @@ export class RecContext {
     const s = this.s;
     if (butt) { if (s.bidE === EPOCH) return s.bid }
     else if (stroke ? s.sidE === EPOCH : s.fidE === EPOCH) return stroke ? s.sid : s.fid;
-    const v = stroke ? s.strokeV : s.fillV, common = [s.globalAlpha, s.globalCompositeOperation, s.filter];
-    const spec: any[] = Array.isArray(v) ? [stroke ? 1 : 0, ...v, ...common] : [stroke ? 3 : 2, v.pat, v.snap, v.rep, v.m, s.imageSmoothingEnabled, ...common];
-    if (stroke) spec.push(s.lineWidth, butt ? 'butt' : s.lineCap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
-    const key = JSON.stringify(spec); let id = PAINTS.get(key);
-    if (id === undefined) { id = nextPaint++; PAINTS.set(key, id); SPECS.push(id, spec) }
+    const v = stroke ? s.strokeV : s.fillV, cap = butt ? 'butt' : s.lineCap;
+    const spec = (): any[] => {
+      const common = [s.globalAlpha, s.globalCompositeOperation, s.filter];
+      const o: any[] = Array.isArray(v) ? [stroke ? 1 : 0, ...v, ...common] : [stroke ? 3 : 2, v.pat, v.snap, v.rep, v.m, s.imageSmoothingEnabled, ...common];
+      if (stroke) o.push(s.lineWidth, cap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
+      return o;
+    };
+    // a plain colour (most paints) is keyed without building its spec: numbers and keywords, then the filter, the one
+    // free text, last (so the key reads back one way); anything else by its spec as JSON (which starts '[')
+    const key = Array.isArray(v) && !s.lineDash.length
+      ? (stroke ? 's' + v[0] + ',' + v[1] + ',' + v[2] + ',' + v[3] + ',' + s.globalAlpha + ',' + s.globalCompositeOperation + ',' + s.lineWidth + ',' + cap + ',' + s.lineJoin + ',' + s.miterLimit + ',' + s.lineDashOffset + ',' + s.filter
+        : 'f' + v[0] + ',' + v[1] + ',' + v[2] + ',' + v[3] + ',' + s.globalAlpha + ',' + s.globalCompositeOperation + ',' + s.filter)
+      : JSON.stringify(spec());
+    let id = PAINTS.get(key);
+    if (id === undefined) { id = nextPaint++; PAINTS.set(key, id); SPECS.push(id, spec()) }
     if (butt) { s.bid = id; s.bidE = EPOCH } else if (stroke) { s.sid = id; s.sidE = EPOCH } else { s.fid = id; s.fidE = EPOCH }
     return id;
   }
