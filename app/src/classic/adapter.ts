@@ -43,9 +43,11 @@ export function sceneFromStructure(s: Structure, style: Style, overrides: Record
   const bk = Array.from(base).join(','); let hit = keyframes.get(s);
   if (!hit || hit.base !== bk) { hit = { base: bk, ...keyframeOf(s, rot) }; keyframes.set(s, hit) }
   (sceneFromStructure as any).lastIds = hit.ids;
-  const fp = new Float32Array(fitPoints.length); for (let i = 0; i < fitPoints.length; i += 3) { const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]); fp[i] = r[0]; fp[i + 1] = r[1]; fp[i + 2] = r[2] }
-  return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: fp, keyframes: [hit.kf] };
+  let r = rotated.get(fitPoints);   // the fit points turned by the base: once per points and base, not once per frame
+  if (!r || r.base !== bk) { const fp = new Float32Array(fitPoints.length); for (let i = 0; i < fitPoints.length; i += 3) { const q = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]); fp[i] = q[0]; fp[i + 1] = q[1]; fp[i + 2] = q[2] } rotated.set(fitPoints, r = { base: bk, fp }) }
+  return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: r.fp, keyframes: [hit.kf] };
 }
+const rotated = new WeakMap<Float32Array, { base: string; fp: Float32Array }>();
 /** a structure's keyframe of its own (not the shared one): for stacks, whose keyframes are edited (lone pairs, charges) */
 export function freshKeyframe(s: Structure, base: Float32Array) {
   return keyframeOf(s, (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z]).kf;
@@ -74,7 +76,10 @@ export function renderClassic(ctx: CanvasRenderingContext2D, R: Renderer, style:
   // a close-up with no active site: its residues are the site, so the ribbons in front of them fade and the rest is
   // quieter (at their own size: larger sticks would cover their density)
   if (em?.closeUp && s && !E.cfg.rep.siteSel.trim()) E.cfg.rep = { ...E.cfg.rep, siteSel: style.map.zone, siteCutaway: true, siteScale: 1 };
-  if (s) { E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints, s) : R.fitPoints, R.labels);
+  if (s) { const sc: any = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints, s) : R.fitPoints, R.labels), prev: any = E.scene;
+    // the same structure, fitted to the same points: the engine's scene is updated rather than replaced, so it keeps its
+    // fit and sampled state (replacing it would work them out again, every frame)
+    if (prev && prev._src === s && prev.fitPoints === sc.fitPoints && prev.keyframes?.[0] === sc.keyframes[0] && prev.keyframes.length === 1) Object.assign(prev, sc); else E.scene = sc;
     if (em?.closeUp && style.map.zone.trim()) (E.scene as any).reps.sticks = withZone((E.scene as any).reps.sticks, style.map.zone); /* a close-up's residues are drawn as sticks */ (E.scene as any)._src = s; (E.scene as any).atomIds = (sceneFromStructure as any).lastIds }   // which structure it was built from
   else E.scene = mapScene(map!, style, R.camera.base, R.labels, em!);
   (E.scene as any).map = em;

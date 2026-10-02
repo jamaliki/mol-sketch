@@ -82,19 +82,37 @@ function withLook(style: Style, key: string): Style {
   const keep = style.reps; const s = mergeStyle(DEFAULT_STYLE, L.style); if (!L.style.reps) s.reps = keep; return s;
 }
 
-/** what the app's rebuild() fits the camera to: the atoms any representation draws (or all, if none) */
+/** what the app's rebuild() fits the camera to: the atoms any representation draws (or all, if none); kept for the
+    structure's last selections, as a host drawing frame after frame asks again and again */
+const fits = new WeakMap<Structure, { key: string; pts: Float32Array }>();
 function fitPointsOf(s: Structure, style: Style): Float32Array {
-  const shown = new Uint8Array(s.count); const siteSel = style.site?.sel?.trim();
+  const siteSel = style.site?.sel?.trim();
   const stickSel = siteSel ? (style.reps.sticks.trim() ? `(${style.reps.sticks}) or (${siteSel})` : siteSel) : style.reps.sticks;
+  const key = [stickSel, style.reps.cartoon, style.reps.surface].join('\u0000'); const hit = fits.get(s); if (hit && hit.key === key) return hit.pts;
+  const shown = new Uint8Array(s.count);
   for (const sel of [stickSel, style.reps.cartoon, style.reps.surface]) if (sel && sel.trim()) { const m = selectAtoms(s, sel); for (let i = 0; i < s.count; i++) shown[i] |= m[i] }
   let n = 0; for (let i = 0; i < s.count; i++) n += shown[i];
   const pts = new Float32Array((n || s.count) * 3); let k = 0;
   for (let i = 0; i < s.count; i++) if (!n || shown[i]) { pts[k++] = s.x[i]; pts[k++] = s.y[i]; pts[k++] = s.z[i] }
-  return pts;
+  fits.set(s, { key, pts }); return pts;
+}
+const bases0 = new WeakMap<Structure, Float32Array>();
+function pcaOf(s: Structure) { let b = bases0.get(s); if (!b) bases0.set(s, b = pcaBasis(s)); return b }
+/** a scene input as settle reads it: copied once (the drawing writes the spec's reps, colours and labels into it), and
+    those fields put back as they came before every use. One document per input: the engine keeps its timeline, fit and
+    sampled state between frames of the same scene */
+const docs = new WeakMap<object, { doc: any; orig: Record<string, string | undefined> }>();
+const OWN = ['reps', 'groupColors', 'labels'];
+function sceneDocOf(inp: any): any {
+  let c = docs.get(inp);
+  if (!c) { const doc = inp.scene ? JSON.parse(JSON.stringify(inp.scene)) : stackScene(inp.stack); const orig: Record<string, string | undefined> = {};
+    for (const k of OWN) orig[k] = doc[k] === undefined ? undefined : JSON.stringify(doc[k]); docs.set(inp, c = { doc, orig }) }
+  else for (const k of OWN) { const v = c.orig[k]; if (v === undefined) delete c.doc[k]; else c.doc[k] = JSON.parse(v) }
+  return c.doc;
 }
 
 /** a stack of structures as one scene, one keyframe each, as the app's loadStack builds it */
-function stackScene(files: { text: string; name: string }[], style: Style): SceneDoc {
+function stackScene(files: { text: string; name: string }[]): SceneDoc {
   files = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
   const structs = files.map(f => structureOf(f.text, f.name)); const base = pcaBasis(structs[0]); const one = structs.length === 1;
   const keyframes = structs.map(st => { const k = freshKeyframe(st, base); return { name: st.name, hold: one ? 24 : 0, transition: one ? 0 : 2, atoms: k.atoms, bonds: k.bonds, arrows: [] } });
@@ -111,13 +129,13 @@ export function settle(spec: FigureSpec): Settled {
   let map: DensityMap | null = null;
   if (inp.map !== undefined) { map = mapOf(inp.map) }   // a map on its own
   else if (inp.scene || inp.stack) {   // loadScene
-    const doc: any = inp.scene ? JSON.parse(JSON.stringify(inp.scene)) : stackScene(inp.stack, style); scene = doc;
+    const doc: any = sceneDocOf(inp); scene = doc;
     if (doc.look && LOOKS[doc.look]) { style = withLook(style, doc.look); look = doc.look }
     if (doc.site) style.site = { ...style.site, ...doc.site };
     if (doc.reps) style.reps = { ...doc.reps }; overrides = { ...(doc.groupColors || {}) }; labels = (doc.labels || []).map((l: any) => ({ ...l }));
     const dv = doc.view; if (dv) { if (dv.fov !== undefined) style.view.fov = dv.fov; if (dv.fog !== undefined) style.view.fog = dv.fog; if (dv.fogStart !== undefined) style.view.fogStart = dv.fogStart }   // as loadScene: a later look replaces them
   } else {   // loadText
-    structure = structureOf(inp.text, inp.name); cam.base = pcaBasis(structure);
+    structure = structureOf(inp.text, inp.name); cam.base = pcaOf(structure);
     if (!structure.residues.some(r => !r.het)) style.reps = { sticks: 'all', cartoon: '', surface: '' };
   }
   if (spec.look) { style = withLook(style, spec.look); look = spec.look }
@@ -182,8 +200,8 @@ export function render(spec: FigureSpec, measure?: (font: string, text: string) 
 }
 
 /** draw a figure onto a real canvas (the app's drawing worker: an OffscreenCanvas), as `render` records it */
-export function drawOn<C extends { getContext(k: '2d'): any }>(spec: FigureSpec, make: (w: number, h: number) => C): { canvas: C; ms: number } {
-  const f = settle(spec); const c = make(Math.round(f.W * f.dpr), Math.round(f.H * f.dpr)); const ctx = c.getContext('2d');
+export function drawOn<C extends { getContext(k: '2d', o?: any): any }>(spec: FigureSpec, make: (w: number, h: number) => C): { canvas: C; ms: number } {
+  const f = settle(spec); const c = make(Math.round(f.W * f.dpr), Math.round(f.H * f.dpr)); const ctx = c.getContext('2d', { willReadFrequently: true });   // CPU-backed, as the app's own canvas: drawn the same to the pixel (a GPU canvas is not), and faster for many small paths
   const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: Math.round(f.W * f.dpr), h: Math.round(f.H * f.dpr), map: f.map, localRes: f.localRes };
   const t0 = Date.now();
   if (f.scene) { sceneFrame(f); renderScene(ctx, R, f.style, f.scene, f.frame, f.dpr) } else renderClassic(ctx, R, f.style, f.frame, f.dpr);

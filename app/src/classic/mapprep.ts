@@ -260,8 +260,13 @@ function nearestAtom(s: Structure | null, atoms: number[]) {
 
 /** a close-up's density surface, back in the structure's frame (a few thousand of its vertices): with the atoms, what a
     close-up is framed on, so its density is not cut by the frame */
+const closeUps = new WeakMap<EngineMap, { base: Float32Array; atoms: Float32Array; s: Structure | null; out: Float32Array }>();   // the last answer for each prepared map: the same frame after frame
 export function closeUpFit(em: EngineMap, base: Float32Array, atoms: Float32Array, s: Structure | null = null): Float32Array {
   const L = em.levels[em.primary] || em.levels[0]; if (!em.closeUp || !L) return atoms;
+  const hit = closeUps.get(em); if (hit && hit.base === base && hit.atoms === atoms && hit.s === s) return hit.out;
+  const out = closeUpFitOnce(em, L, base, atoms, s); closeUps.set(em, { base, atoms, s, out }); return out;
+}
+function closeUpFitOnce(em: EngineMap, L: EngineMap['levels'][number], base: Float32Array, atoms: Float32Array, s: Structure | null): Float32Array {
   // framed on the zone's own atoms (the rest of the model stays in the picture as context, beyond the frame)
   if (s && em.opts.zone) { const sel = selectAtoms(s, em.opts.zone), z: number[] = []; for (let i = 0; i < s.count; i++) if (sel[i]) z.push(s.x[i], s.y[i], s.z[i]); if (z.length) atoms = Float32Array.from(z) }
   const used = new Uint8Array(L.pos.length / 3); for (let t = 0; t < L.tri.length; t++) used[L.tri[t]] = 1;   // what is drawn (carving leaves vertices unused)

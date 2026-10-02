@@ -20,7 +20,7 @@ export interface PanelHost {
   currentLook: () => string;
   applyLook: (k: string) => void;
   molecule: () => Molecule;
-  lookPreview: (k: string, w: number, h: number) => HTMLCanvasElement | null;
+  lookPreview: (k: string, w: number, h: number) => Promise<HTMLCanvasElement | null>;
   openFileDialog: () => void;
   rebuild: () => void; redraw: () => void;
   camera: Camera;
@@ -346,8 +346,10 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     refreshers.push(() => btns.forEach(b => b.classList.toggle('on', b.dataset.key === H.currentLook())));
     // thumbnails of the loaded molecule in each look, drawn one at a time when the drawing is idle
     let thumbKey = '', queue: string[] = [], timer = 0;
-    const drawNext = () => { const k = queue.shift(); if (!k) return; const c = H.lookPreview(k, 200, 150); const th = thumbs[k]; th.innerHTML = ''; if (c) th.append(c); timer = window.setTimeout(drawNext, 30) };
-    refreshers.push(() => { const m = H.molecule(); const key = JSON.stringify([m.name, m.atoms, m.map, S().reps, current]); if (current !== 'drawing' || key === thumbKey || navigator.webdriver) return;   // not in scripted browsers (the CLI) thumbKey = key; clearTimeout(timer);
+    let thumbGen = 0;
+    const drawNext = () => { const k = queue.shift(); if (!k) return; const gen = thumbGen;
+      H.lookPreview(k, 200, 150).then(c => { if (gen !== thumbGen) return; const th = thumbs[k]; th.innerHTML = ''; if (c) th.append(c); timer = window.setTimeout(drawNext, 30) }) };
+    refreshers.push(() => { const m = H.molecule(); const key = JSON.stringify([m.name, m.atoms, m.map, S().reps, current]); if (current !== 'drawing' || key === thumbKey || navigator.webdriver) return;   // not in scripted browsers (the CLI) thumbKey = key; clearTimeout(timer); thumbGen++;
       if (!m.kind || m.atoms > 30000) { for (const k in thumbs) thumbs[k].innerHTML = ''; return } queue = Object.keys(thumbs); timer = window.setTimeout(drawNext, 250) });
   }
   {

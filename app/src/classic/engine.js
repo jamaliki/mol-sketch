@@ -398,18 +398,23 @@ function drawArrow(ctx,p0,p1,o){
 }
 
 /* paper */
-const paperCache={key:'',canvas:null};const baseCache={key:'',canvas:null};
+/* canvases made once and kept by key: the newest, the newest large one, and a few small ones besides (a look's
+   thumbnail drawn between two frames of the figure must not cost the figure its paper, nor keep a second large one) */
+function canvasCache(){const E=[];const SMALL=500000;const small=c=>c.width*c.height<=SMALL;
+  return{get(key){for(let i=0;i<E.length;i++)if(E[i].key===key){const e=E[i];if(i){E.splice(i,1);E.unshift(e)}return e.canvas}return null},
+    put(key,canvas){E.unshift({key,canvas});let big=!small(canvas),n=0;for(let i=1;i<E.length;i++){const s=small(E[i].canvas);if(s?n++<4:!big)big=big||!s;else E.splice(i--,1)}return canvas},
+    clear(){E.length=0}}}
+const paperCache=canvasCache(),baseCache=canvasCache();
 function paper(W,H,dpr,boil){
   const life=cfg.style.wash>0?cfg.style.washLife:0;const wb=life>0?(boil|0):0; // the wash breathes with every drawing
-  const key=[W,H,dpr,cfg.palette.paper,cfg.style.grain,cfg.style.wash,cfg.style.washSeed,cfg.palette.wash,life,wb].join('|');
-  if(paperCache.key===key)return paperCache.canvas;
+  const key=[W,H,dpr,cfg.palette.paper,cfg.style.grain,cfg.style.wash,cfg.style.washSeed,cfg.palette.wash,life,wb,cfg.style.wash>0?shadeInk():''].join('|');   // (the wash's drying rings are shaded with the ink)
+  const hit=paperCache.get(key);if(hit)return hit;
   const bkey=[W,H,dpr,cfg.palette.paper,cfg.style.grain].join('|');
-  let base=baseCache.canvas;
-  if(baseCache.key!==bkey){base=paperBase(W,H,dpr);baseCache.key=bkey;baseCache.canvas=base}
+  const base=baseCache.get(bkey)||baseCache.put(bkey,paperBase(W,H,dpr));
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
   x.drawImage(base,0,0,W,H);
   if(cfg.style.wash>0)watercolourWash(x,W,H,wb,life);
-  paperCache.key=key;paperCache.canvas=c;return c;
+  return paperCache.put(key,c);
 }
 function paperBase(W,H,dpr){
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
@@ -1753,22 +1758,22 @@ function renderFrame(ctx,W,H,frame,dpr){
   ctx.restore();
   return st;
 }
-const grainCache={key:'',canvas:null};
+const grainCache=canvasCache();
 /* the tooth of a chalkboard: dark pits that break every stroke, multiplied over the drawing */
-const pitCache={key:'',canvas:null};
-function pitOverlay(W,H,dpr){const key=[W,H,dpr].join('|');if(pitCache.key===key)return pitCache.canvas;
+const pitCache=canvasCache();
+function pitOverlay(W,H,dpr){const key=[W,H,dpr].join('|');const hit=pitCache.get(key);if(hit)return hit;
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
   x.fillStyle='#ffffff';x.fillRect(0,0,W,H);const rng=mulberry32(8765);const n=Math.round(W*H/9);
   for(let i=0;i<n;i++){const a=rng();x.fillStyle=`rgba(0,0,0,${0.25+a*0.55})`;const s=rng()<0.8?1:1.6;x.fillRect(rng()*W,rng()*H,s,s)}
-  pitCache.key=key;pitCache.canvas=c;return c}
+  return pitCache.put(key,c)}
 function grainOverlay(W,H,dpr,light){
-  const key=[W,H,dpr,light].join('|');if(grainCache.key===key)return grainCache.canvas;
+  const key=[W,H,dpr,light].join('|');const hit=grainCache.get(key);if(hit)return hit;
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
   x.fillStyle=light?'#ffffff':'#000000';x.fillRect(0,0,W,H);const rng=mulberry32(4321);
   const n=Math.round(W*H/26);
   for(let i=0;i<n;i++){const a=rng();x.fillStyle=light?`rgba(60,45,25,${0.05+a*0.13})`:`rgba(255,245,225,${0.04+a*0.1})`;const sz=rng()<0.8?1:1.5;x.fillRect(rng()*W,rng()*H,sz,sz)}
   x.lineWidth=0.7;for(let i=0;i<260;i++){const px=rng()*W,py=rng()*H,an=rng()*Math.PI,l=8+rng()*30;x.strokeStyle=light?`rgba(70,55,35,${0.05+rng()*0.08})`:`rgba(255,245,225,${0.04+rng()*0.07})`;x.beginPath();x.moveTo(px,py);x.lineTo(px+Math.cos(an)*l,py+Math.sin(an)*l);x.stroke()}
-  grainCache.key=key;grainCache.canvas=c;return c;
+  return grainCache.put(key,c);
 }
 let textGate=null;   // () => true when the host has words to learn (see renderFrame)
 /* the texts a frame measures (the map's caption, figure labels, the scene's captions), in their fonts, whole: the host
@@ -1792,7 +1797,7 @@ return {
   get TL(){return TL},
   renderFrame, sampleState, locate, buildTimeline, demoScene, compileSel, projectFrame, figLabelBoxes, viewAt,
   DEFAULT_CFG, PRESETS, GROUP_PALETTE, SUBUNIT_COLS,
-  invalidatePaper(){paperCache.key='';baseCache.key='';grainCache.key=''},
+  invalidatePaper(){paperCache.clear();baseCache.clear();grainCache.clear()},
   setTextGate(f){textGate=f||null},
 };
 }

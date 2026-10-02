@@ -24,7 +24,8 @@ export class LocalDraw implements SDK {
   putMap(m: DensityMap): Promise<string> {
     return this.ask('putMap', { name: m.name, nx: m.nx, ny: m.ny, nz: m.nz, origin: m.origin, step: m.step, level: m.level ?? null, binned: m.binned || 1, mass: m.mass ?? null, resolution: m.resolution ?? null }, m.data);
   }
-  async render(spec: FigureSpec): Promise<ImageBitmap> { await this.ready; const r = await this.ask('render', spec); this.lastMs = r.ms; return r.bitmap }
+  /** `quick`: a frame of a moving view (clip edges drawn as the OffscreenCanvas draws them, at its own speed) */
+  async render(spec: FigureSpec, o: { quick?: boolean } = {}): Promise<ImageBitmap> { await this.ready; const r = await this.ask('render', spec, o); this.lastMs = r.ms; return r.bitmap }
   svg(): Promise<string> { return Promise.reject(new Error('SVG needs the molsketch server: run `molsketch serve`')) }
   call<T = any>(name: string, ...args: any[]): Promise<T> { return this.ask('call', name, args) }
 }

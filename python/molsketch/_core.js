@@ -2684,20 +2684,46 @@
       sketchLine(ctx, [l1, e], { seed: o.seed + 3, width: o.width, color: o.color, alpha: o.alpha, ampScale: 0.5, overshoot: false, passes: 1 });
       sketchLine(ctx, [l2, e], { seed: o.seed + 5, width: o.width, color: o.color, alpha: o.alpha, ampScale: 0.5, overshoot: false, passes: 1 });
     }
-    const paperCache = { key: "", canvas: null };
-    const baseCache = { key: "", canvas: null };
+    function canvasCache() {
+      const E = [];
+      const SMALL = 5e5;
+      const small = (c) => c.width * c.height <= SMALL;
+      return {
+        get(key) {
+          for (let i = 0; i < E.length; i++) if (E[i].key === key) {
+            const e = E[i];
+            if (i) {
+              E.splice(i, 1);
+              E.unshift(e);
+            }
+            return e.canvas;
+          }
+          return null;
+        },
+        put(key, canvas) {
+          E.unshift({ key, canvas });
+          let big = !small(canvas), n = 0;
+          for (let i = 1; i < E.length; i++) {
+            const s = small(E[i].canvas);
+            if (s ? n++ < 4 : !big) big = big || !s;
+            else E.splice(i--, 1);
+          }
+          return canvas;
+        },
+        clear() {
+          E.length = 0;
+        }
+      };
+    }
+    const paperCache = canvasCache(), baseCache = canvasCache();
     function paper(W, H, dpr, boil) {
       const life = cfg.style.wash > 0 ? cfg.style.washLife : 0;
       const wb = life > 0 ? boil | 0 : 0;
-      const key = [W, H, dpr, cfg.palette.paper, cfg.style.grain, cfg.style.wash, cfg.style.washSeed, cfg.palette.wash, life, wb].join("|");
-      if (paperCache.key === key) return paperCache.canvas;
+      const key = [W, H, dpr, cfg.palette.paper, cfg.style.grain, cfg.style.wash, cfg.style.washSeed, cfg.palette.wash, life, wb, cfg.style.wash > 0 ? shadeInk() : ""].join("|");
+      const hit = paperCache.get(key);
+      if (hit) return hit;
       const bkey2 = [W, H, dpr, cfg.palette.paper, cfg.style.grain].join("|");
-      let base = baseCache.canvas;
-      if (baseCache.key !== bkey2) {
-        base = paperBase(W, H, dpr);
-        baseCache.key = bkey2;
-        baseCache.canvas = base;
-      }
+      const base = baseCache.get(bkey2) || baseCache.put(bkey2, paperBase(W, H, dpr));
       const c = document.createElement("canvas");
       c.width = W * dpr;
       c.height = H * dpr;
@@ -2705,9 +2731,7 @@
       x.scale(dpr, dpr);
       x.drawImage(base, 0, 0, W, H);
       if (cfg.style.wash > 0) watercolourWash(x, W, H, wb, life);
-      paperCache.key = key;
-      paperCache.canvas = c;
-      return c;
+      return paperCache.put(key, c);
     }
     function paperBase(W, H, dpr) {
       const c = document.createElement("canvas");
@@ -6474,11 +6498,12 @@
       ctx.restore();
       return st;
     }
-    const grainCache = { key: "", canvas: null };
-    const pitCache = { key: "", canvas: null };
+    const grainCache = canvasCache();
+    const pitCache = canvasCache();
     function pitOverlay(W, H, dpr) {
       const key = [W, H, dpr].join("|");
-      if (pitCache.key === key) return pitCache.canvas;
+      const hit = pitCache.get(key);
+      if (hit) return hit;
       const c = document.createElement("canvas");
       c.width = W * dpr;
       c.height = H * dpr;
@@ -6494,13 +6519,12 @@
         const s = rng() < 0.8 ? 1 : 1.6;
         x.fillRect(rng() * W, rng() * H, s, s);
       }
-      pitCache.key = key;
-      pitCache.canvas = c;
-      return c;
+      return pitCache.put(key, c);
     }
     function grainOverlay(W, H, dpr, light) {
       const key = [W, H, dpr, light].join("|");
-      if (grainCache.key === key) return grainCache.canvas;
+      const hit = grainCache.get(key);
+      if (hit) return hit;
       const c = document.createElement("canvas");
       c.width = W * dpr;
       c.height = H * dpr;
@@ -6525,9 +6549,7 @@
         x.lineTo(px + Math.cos(an) * l, py + Math.sin(an) * l);
         x.stroke();
       }
-      grainCache.key = key;
-      grainCache.canvas = c;
-      return c;
+      return grainCache.put(key, c);
     }
     let textGate = null;
     function probeTexts(ctx, st) {
@@ -6597,9 +6619,9 @@
       GROUP_PALETTE,
       SUBUNIT_COLS,
       invalidatePaper() {
-        paperCache.key = "";
-        baseCache.key = "";
-        grainCache.key = "";
+        paperCache.clear();
+        baseCache.clear();
+        grainCache.clear();
       },
       setTextGate(f2) {
         textGate = f2 || null;
@@ -7512,9 +7534,17 @@
       return [best, Math.sqrt(bd)];
     };
   }
+  var closeUps = /* @__PURE__ */ new WeakMap();
   function closeUpFit(em, base, atoms, s = null) {
     const L = em.levels[em.primary] || em.levels[0];
     if (!em.closeUp || !L) return atoms;
+    const hit = closeUps.get(em);
+    if (hit && hit.base === base && hit.atoms === atoms && hit.s === s) return hit.out;
+    const out = closeUpFitOnce(em, L, base, atoms, s);
+    closeUps.set(em, { base, atoms, s, out });
+    return out;
+  }
+  function closeUpFitOnce(em, L, base, atoms, s) {
     if (s && em.opts.zone) {
       const sel = selectAtoms(s, em.opts.zone), z = [];
       for (let i = 0; i < s.count; i++) if (sel[i]) z.push(s.x[i], s.y[i], s.z[i]);
@@ -7695,15 +7725,20 @@
       keyframes.set(s, hit);
     }
     sceneFromStructure.lastIds = hit.ids;
-    const fp = new Float32Array(fitPoints.length);
-    for (let i = 0; i < fitPoints.length; i += 3) {
-      const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]);
-      fp[i] = r[0];
-      fp[i + 1] = r[1];
-      fp[i + 2] = r[2];
+    let r = rotated.get(fitPoints);
+    if (!r || r.base !== bk) {
+      const fp = new Float32Array(fitPoints.length);
+      for (let i = 0; i < fitPoints.length; i += 3) {
+        const q = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]);
+        fp[i] = q[0];
+        fp[i + 1] = q[1];
+        fp[i + 2] = q[2];
+      }
+      rotated.set(fitPoints, r = { base: bk, fp });
     }
-    return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: fp, keyframes: [hit.kf] };
+    return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: r.fp, keyframes: [hit.kf] };
   }
+  var rotated = /* @__PURE__ */ new WeakMap();
   function freshKeyframe(s, base) {
     return keyframeOf(s, (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z]).kf;
   }
@@ -7748,7 +7783,9 @@
     E.cfg = cfgFromStyle(style, R.camera, false);
     if (em?.closeUp && s && !E.cfg.rep.siteSel.trim()) E.cfg.rep = { ...E.cfg.rep, siteSel: style.map.zone, siteCutaway: true, siteScale: 1 };
     if (s) {
-      E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints, s) : R.fitPoints, R.labels);
+      const sc = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints, s) : R.fitPoints, R.labels), prev = E.scene;
+      if (prev && prev._src === s && prev.fitPoints === sc.fitPoints && prev.keyframes?.[0] === sc.keyframes[0] && prev.keyframes.length === 1) Object.assign(prev, sc);
+      else E.scene = sc;
       if (em?.closeUp && style.map.zone.trim()) E.scene.reps.sticks = withZone(E.scene.reps.sticks, style.map.zone);
       E.scene._src = s;
       E.scene.atomIds = sceneFromStructure.lastIds;
@@ -8200,10 +8237,14 @@
     if (!L.style.reps) s.reps = keep2;
     return s;
   }
+  var fits = /* @__PURE__ */ new WeakMap();
   function fitPointsOf(s, style) {
-    const shown = new Uint8Array(s.count);
     const siteSel = style.site?.sel?.trim();
     const stickSel = siteSel ? style.reps.sticks.trim() ? `(${style.reps.sticks}) or (${siteSel})` : siteSel : style.reps.sticks;
+    const key = [stickSel, style.reps.cartoon, style.reps.surface].join("\0");
+    const hit = fits.get(s);
+    if (hit && hit.key === key) return hit.pts;
+    const shown = new Uint8Array(s.count);
     for (const sel of [stickSel, style.reps.cartoon, style.reps.surface]) if (sel && sel.trim()) {
       const m = selectAtoms(s, sel);
       for (let i = 0; i < s.count; i++) shown[i] |= m[i];
@@ -8217,9 +8258,32 @@
       pts[k++] = s.y[i];
       pts[k++] = s.z[i];
     }
+    fits.set(s, { key, pts });
     return pts;
   }
-  function stackScene(files, style) {
+  var bases0 = /* @__PURE__ */ new WeakMap();
+  function pcaOf(s) {
+    let b = bases0.get(s);
+    if (!b) bases0.set(s, b = pcaBasis(s));
+    return b;
+  }
+  var docs = /* @__PURE__ */ new WeakMap();
+  var OWN = ["reps", "groupColors", "labels"];
+  function sceneDocOf(inp) {
+    let c = docs.get(inp);
+    if (!c) {
+      const doc = inp.scene ? JSON.parse(JSON.stringify(inp.scene)) : stackScene(inp.stack);
+      const orig = {};
+      for (const k of OWN) orig[k] = doc[k] === void 0 ? void 0 : JSON.stringify(doc[k]);
+      docs.set(inp, c = { doc, orig });
+    } else for (const k of OWN) {
+      const v = c.orig[k];
+      if (v === void 0) delete c.doc[k];
+      else c.doc[k] = JSON.parse(v);
+    }
+    return c.doc;
+  }
+  function stackScene(files) {
     files = [...files].sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
     const structs = files.map((f2) => structureOf(f2.text, f2.name));
     const base = pcaBasis(structs[0]);
@@ -8249,7 +8313,7 @@
     if (inp.map !== void 0) {
       map = mapOf(inp.map);
     } else if (inp.scene || inp.stack) {
-      const doc = inp.scene ? JSON.parse(JSON.stringify(inp.scene)) : stackScene(inp.stack, style);
+      const doc = sceneDocOf(inp);
       scene = doc;
       if (doc.look && LOOKS[doc.look]) {
         style = withLook(style, doc.look);
@@ -8267,7 +8331,7 @@
       }
     } else {
       structure = structureOf(inp.text, inp.name);
-      cam.base = pcaBasis(structure);
+      cam.base = pcaOf(structure);
       if (!structure.residues.some((r) => !r.het)) style.reps = { sticks: "all", cartoon: "", surface: "" };
     }
     if (spec.look) {
@@ -8384,7 +8448,7 @@
   function drawOn(spec, make) {
     const f2 = settle(spec);
     const c = make(Math.round(f2.W * f2.dpr), Math.round(f2.H * f2.dpr));
-    const ctx = c.getContext("2d");
+    const ctx = c.getContext("2d", { willReadFrequently: true });
     const R = { structure: f2.structure, camera: f2.camera, overrides: f2.overrides, fitPoints: f2.fitPoints, labels: f2.labels, w: Math.round(f2.W * f2.dpr), h: Math.round(f2.H * f2.dpr), map: f2.map, localRes: f2.localRes };
     const t0 = Date.now();
     if (f2.scene) {
