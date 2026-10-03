@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import gc
+import hashlib
 import itertools
 import json
 import os
@@ -19,6 +20,7 @@ from py_mini_racer import MiniRacer
 
 from ._raster import Raster
 from ._text import TextEngine
+from ._textures import TextureCache
 
 CORE = pathlib.Path(__file__).resolve().parent / "_core.js"
 # the engine measures text synchronously; V8 cannot call back into Python, so the host keeps a table of measured
@@ -106,6 +108,11 @@ class Engine:
         self.v8.eval(PRELUDE.replace("%RING%", str(RING)))
         self.text = TextEngine()
         self.raster = Raster(self.text)
+        # the paper, grain and chalk textures earlier runs drew (files): the engine is told which there are before each
+        # render, and takes those instead of drawing them
+        self.textures = TextureCache(_host_id())
+        if self.textures.on: self.raster.textures = self.textures
+        self._told: list[str] | None = None
         # the ring the engine writes its recording into, read in place, and the notification that a record is there:
         # handled on mini-racer's event-loop thread, so the replay runs while V8 goes on drawing
         self._maps: dict[int, tuple] = {}
@@ -184,11 +191,28 @@ class Engine:
             sys.setswitchinterval(sw)
             if was: gc.enable()
 
+    def _tell_textures(self):
+        """the engine told which textures there are, when that changed"""
+        if not self.textures.on: return
+        keys = sorted(self.textures.keys())
+        if keys != self._told: self.v8.call("__call", "setHostTextures", json.dumps([keys])); self._told = keys
+
+    def _lost_textures(self, times: int):
+        """a texture file gone since the engine was told of it (another process's cache pruned it, say): the engine
+        forgets the textures it made from what it was given, and draws them again; a second time, it draws them all"""
+        if times:
+            self.raster.textures = None; self.textures.limit = 0
+            self.v8.call("__call", "setHostTextures", "[null]"); self._told = None
+        else: self.textures.rescan()
+        self.v8.call("__call", "dropTextures", "[]")
+
     def _render(self, spec: dict, svg: bool = False):
         with self._lock:
             main = None
             try:
-                for attempt in range(4):
+                learned = lost = 0
+                while True:
+                    self._tell_textures(); self.raster.missing.clear()
                     self.v8.eval("__ringReset()"); self._read = 0; self._err = None
                     try:
                         # the records the ring takes are drawn while this runs; by the time it returns (mini-racer
@@ -200,12 +224,16 @@ class Engine:
                         self._resync(); raise CoreError(_js_message(e)) from None
                     if self._err is not None: raise self._err
                     for js, runs in held: self.raster.feed(js, runs)
-                    if not r["miss"] or attempt == 3: break
-                    self.raster.drop(main)   # a frame drawn with guessed text widths: measure them and draw it again
-                    rows = [(f, t, self.text.measure(f, t)) for f, t in {(f, t) for f, t in r["miss"]}]
-                    self.v8.call("__learn", json.dumps(rows))
-                    self.misses = r["miss"]
-                img = self.raster.vector(main, spec.get("scale", 1)) if svg else self.raster.image(main)
+                    if r["miss"] and learned < 3:   # a frame drawn with guessed text widths: measure them and draw it again
+                        self.raster.drop(main); main = None; learned += 1
+                        if self.raster.missing: self._lost_textures(lost); lost += 1
+                        rows = [(f, t, self.text.measure(f, t)) for f, t in {(f, t) for f, t in r["miss"]}]
+                        self.v8.call("__learn", json.dumps(rows))
+                        self.misses = r["miss"]
+                        continue
+                    img = self.raster.vector(main, spec.get("scale", 1)) if svg else self.raster.image(main)
+                    if not self.raster.missing: break
+                    self.raster.drop(main); main = None; self._lost_textures(lost); lost += 1
             finally:   # the frame's canvas and the render's paints are done with, whatever happened
                 if main is not None: self.raster.drop(main)
                 self.raster.end_render()
@@ -214,6 +242,13 @@ class Engine:
 
 
 RING = 64 << 20   # bytes: records larger than this wait for the end of the render
+
+
+def _host_id() -> str:
+    """what a kept texture's pixels depend on beyond its key: the code that draws it and the code that replays it"""
+    h = hashlib.sha1(skia.__version__.encode())
+    for f in (CORE, pathlib.Path(__file__).resolve().parent / "_raster.py", pathlib.Path(__file__).resolve().parent / "_blur.py"): h.update(f.read_bytes())
+    return h.hexdigest()[:16]
 
 
 def _js_message(e: Exception) -> str:

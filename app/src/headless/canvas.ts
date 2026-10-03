@@ -14,6 +14,7 @@
      text kind(fill|stroke) s x y maxWidth|null paint font align baseline
      img id snap alpha composite smoothing filter … (the 2, 4 or 8 drawImage numbers)   snap: the source's snapshot
      snap id                        this canvas as it is now is snapshot `id` (drawn or patterned by another canvas)
+     ext key / keep key             the host's texture `key` is this canvas's picture / keep this canvas as texture `key`
    Paints are ids into the render's paint table (see Paints). */
 
 import { arcTo, type ArcSink } from './skarc';
@@ -151,6 +152,16 @@ const fresh = (): State => ({ m: [1, 0, 0, 1, 0, 0], fillStyle: '#000000', strok
      stroke pattern  3 pat snap rep m smoothing alpha composite filter width cap join miter dash dashOffset
    Ids are never reused; a state keeps its paints' ids for the render they were made in (the epoch). */
 let PAINTS = new Map<string, number>(), SPECS: any[] = [], nextPaint = 1, EPOCH = 0;
+/* a plain colour's paint (most paints) is found by a hash of its fields and then the fields themselves: a key string
+   built for every paint, and hashed, cost more than drawing with it */
+let PLAIN = new Map<number, any[][]>();
+const HB = new Float64Array(1), HW = new Int32Array(HB.buffer), STRH = new Map<string, number>();
+const hashOf = (f: any[]) => { let h = f.length;
+  for (const x of f) { let a: number, b: number;
+    if (typeof x === 'number') { HB[0] = x === 0 ? 0 : x; a = HW[0]; b = HW[1] }   // (−0 is 0, as a key string has it)
+    else { let k = STRH.get(x); if (k === undefined) { k = 0; for (let i = 0; i < x.length; i++) k = Math.imul(k ^ x.charCodeAt(i), 0x01000193); if (STRH.size > 1024) STRH.clear(); STRH.set(x, k) } a = k; b = 0x5bd1e995 }
+    h = Math.imul(h ^ a, 0x9E3779B1); h = Math.imul(h ^ b, 0x85EBCA77); h ^= h >>> 15 }
+  return h & 0x3fffffff };   // (a small integer: a map takes it as it is)
 
 export class RecCanvas {
   id: number; private w = 300; private h = 150; ops: Op[] = []; total = 0; private ctx: RecContext | null = null;
@@ -235,11 +246,24 @@ export class RecContext {
     const s = this.s;
     if (butt) { if (s.bidE === EPOCH) return s.bid }
     else if (stroke ? s.sidE === EPOCH : s.fidE === EPOCH) return stroke ? s.sid : s.fid;
-    const v = stroke ? s.strokeV : s.fillV, common = [s.globalAlpha, s.globalCompositeOperation, s.filter];
-    const spec: any[] = Array.isArray(v) ? [stroke ? 1 : 0, ...v, ...common] : [stroke ? 3 : 2, v.pat, v.snap, v.rep, v.m, s.imageSmoothingEnabled, ...common];
-    if (stroke) spec.push(s.lineWidth, butt ? 'butt' : s.lineCap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
-    const key = JSON.stringify(spec); let id = PAINTS.get(key);
-    if (id === undefined) { id = nextPaint++; PAINTS.set(key, id); SPECS.push(id, spec) }
+    const v = stroke ? s.strokeV : s.fillV, cap = butt ? 'butt' : s.lineCap;
+    const spec = (): any[] => {
+      const common = [s.globalAlpha, s.globalCompositeOperation, s.filter];
+      const o: any[] = Array.isArray(v) ? [stroke ? 1 : 0, ...v, ...common] : [stroke ? 3 : 2, v.pat, v.snap, v.rep, v.m, s.imageSmoothingEnabled, ...common];
+      if (stroke) o.push(s.lineWidth, cap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
+      return o;
+    };
+    let id: number | undefined;
+    if (Array.isArray(v) && !s.lineDash.length) {   // a plain colour: its fields (the same paint as each field the same)
+      const f = stroke ? [1, v[0], v[1], v[2], v[3], s.globalAlpha, s.globalCompositeOperation, s.filter, s.lineWidth, cap, s.lineJoin, s.miterLimit, s.lineDashOffset]
+        : [0, v[0], v[1], v[2], v[3], s.globalAlpha, s.globalCompositeOperation, s.filter];
+      const h = hashOf(f); let bucket = PLAIN.get(h);
+      if (bucket) for (const e of bucket) { let same = true; for (let i = 0; i < f.length; i++) if (e[i] !== f[i]) { same = false; break } if (same) { id = e[f.length]; break } }
+      if (id === undefined) { id = nextPaint++; f.push(id); if (bucket) bucket.push(f); else PLAIN.set(h, [f]); SPECS.push(id, spec()) }
+    } else {   // anything else by its spec as JSON
+      const key = JSON.stringify(spec()); id = PAINTS.get(key);
+      if (id === undefined) { id = nextPaint++; PAINTS.set(key, id); SPECS.push(id, spec()) }
+    }
     if (butt) { s.bid = id; s.bidE = EPOCH } else if (stroke) { s.sid = id; s.sidE = EPOCH } else { s.fid = id; s.fidE = EPOCH }
     return id;
   }
@@ -497,9 +521,22 @@ function emit() { const c = takeChunk(); if (held.length || !stream || !stream(c
 /** after a draw: hand over what has built up, if enough has */
 function handOver() { if (stream && (pendingOps >= STREAM_OPS || runsN >= STREAM_BYTES)) emit() }
 /** the end of a render: the last chunk out, and the chunks the stream did not take (for the host to pull) */
-export function endRender(): Chunk[] { emit(); PAINTS = new Map(); EPOCH++; return held.splice(0) }
+export function endRender(): Chunk[] { emit(); PAINTS = new Map(); PLAIN = new Map(); EPOCH++; return held.splice(0) }
 /** everything recorded so far, as one chunk (no stream) */
 export function flush(): Chunk { return takeChunk() }
 /** a canvas the host no longer needs (a finished frame): the host drops it itself */
 export function release(id: number) { alive.delete(id) }
 export const document = { createElement(tag: string) { if (tag !== 'canvas') throw new Error('headless: only canvases'); return new RecCanvas() } };
+
+/* Textures the host keeps between runs (the engine's hostTexture: the paper, its grain, the chalk's tooth), by key: one
+   it has is a canvas of one op, ext (the host puts its pixels there), instead of the ops that draw it; one drawn here
+   ends with keep (the host keeps its pixels, and says so before the next render). No host keys (the drawing worker): none. */
+let hostTextures: Set<string> | null = null;
+export function setHostTextures(keys: string[] | null) { hostTextures = keys ? new Set(keys) : null }
+export const textureHost = {
+  take(key: string, w: number, h: number): RecCanvas | null {
+    if (!hostTextures || !hostTextures.has(key)) return null;
+    const c = new RecCanvas(); c.width = w; c.height = h; c.push(['ext', key]); return c;
+  },
+  keep(key: string, c: any) { if (!hostTextures || !(c instanceof RecCanvas)) return; c.settle(); c.push(['keep', key]) },
+};

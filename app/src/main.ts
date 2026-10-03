@@ -18,7 +18,7 @@ import { History, type Snapshot } from './app/history';
 import { lintScene, lintSummary, type LintItem } from './app/lint';
 import { keyDiff, drawDiff, diffSummary, type KeyDiff } from './app/diff';
 import { hitTest, anchorFor, anchorText, addArrow, anchorScreen, toggleLonePair, cycleCharge, type Anchor, type Hit } from './app/author';
-import { suggestViews, holdFrames, type ViewSuggestion } from './app/views';
+import { suggestViewsAsync, holdFrames, type ViewSuggestion } from './app/views';
 import { connect, InputSync, type SDK } from './app/sdk';
 import { LocalDraw } from './app/localdraw';
 import type { FigureSpec } from './headless/core';
@@ -28,6 +28,10 @@ import { renderVideo, codecSupport, hasWebCodecs, fmtBytes, type CodecName, type
 const canvas = document.getElementById('c') as HTMLCanvasElement;
 const skCanvas = document.getElementById('sk') as HTMLCanvasElement; const skCtx = skCanvas.getContext('2d', { willReadFrequently: true })!;   // CPU-backed: the classic engine composites huge offscreen canvases, which GPU canvases can drop silently
 const ovCanvas = document.getElementById('ov') as HTMLCanvasElement; const ovCtx = ovCanvas.getContext('2d')!;   // overlays: change highlights, authoring marks
+// both canvases touched now, before the preview's GL starts: a canvas's first drawing sets it up with the browser's
+// compositor, which waits while the GPU process is busy (compiling the preview's shaders); then it was the first
+// finished drawing that waited, up to half a second
+skCtx.clearRect(0, 0, 1, 1); ovCtx.clearRect(0, 0, 1, 1);
 const stage = document.getElementById('stage')!;
 const hud = document.getElementById('hud')!; if (!new URLSearchParams(location.search).has('debug')) hud.style.display = 'none';   // timings: ?debug
 
@@ -35,9 +39,12 @@ let style: Style = cloneStyle(DEFAULT_STYLE);
 try { const s = localStorage.getItem('triad-sketch-style'); if (s) style = mergeStyle(DEFAULT_STYLE, JSON.parse(s)) } catch { }
 
 const R = new Renderer(canvas);
+/** the GPU preview of what is on screen; its geometry made first if a scene's frame moved on without it */
+let geomStale = false;
+function preview() { if (geomStale) { geomStale = false; R.rebuild(style) } R.render(style) }
 /* maps are prepared in a worker: the preview goes on while a new level or zone is prepared, and the drawing follows
    (exports prepare in line: they must draw the map) */
-const mapPrep = new MapPrep(err => { if (err) status('the map could not be prepared: ' + err); else status(); R.render(style); invalidate() });
+const mapPrep = new MapPrep(err => { if (err) status('the map could not be prepared: ' + err); else status(); preview(); invalidate() });
 const asyncMaps = mapPrep.get.bind(mapPrep);
 setMapSource(asyncMaps); R.mapSource = asyncMaps;
 function syncMaps<T>(f: () => T): T { setMapSource(null); try { return f() } finally { setMapSource(asyncMaps) } }
@@ -47,8 +54,15 @@ type RestMode = 'preview' | 'sketch' | 'classic';
 let restMode: RestMode = 'classic';   // what is drawn once the view rests: the fast hybrid sketch or the exact classic engine
 let sketchOn = true;
 let classicMs = Infinity;   // the last classic drawing's cost; when it is small the classic engine also draws while you drag, so what you see moving is the final look
+let liveMs = Infinity;   // the same for a frame of a moving view (quick: see requestExact), the cost that decides whether the drawing follows the view live
+let quickKnown = false;   // liveMs was measured on such a frame (otherwise it is a finished drawing's cost, an upper bound, and a moving view tries one quick frame to learn it)
+let probedAt = -Infinity;   // when a moving view last tried one: tried again now and then while frames seem too slow to follow the view (the first one at a size makes its paper, and is slow)
 let lastChange = 0; let sketchShown = false; let boil = 0; let sketchStats = { readMs: 0, regionMs: 0, drawMs: 0, regions: 0 };
-function invalidate() { dirty = true; lastChange = performance.now(); sdkSeq++; if (sketchShown) { sketchShown = false; skCanvas.classList.remove('on') } drawOverlay() }
+/** something on screen changed: the GPU preview draws it now, and the finished drawing follows. While the finished
+    drawing follows the view live, the last one stays up until the next arrives; otherwise the preview shows meanwhile.
+    `hard`: what was drawn no longer applies at all (another molecule): it goes, and the next drawing's cost is unknown */
+let drawNow = false;   // a new molecule: its first drawing is asked for at once (nothing is moving to wait for)
+function invalidate(hard = false) { dirty = true; lastChange = performance.now(); sdkSeq++; if (hard) { liveMs = Infinity; quickKnown = false; drawNow = true } if (sketchShown || hard) { sketchShown = false; if (hard || !liveExact()) skCanvas.classList.remove('on') } drawOverlay() }
 /* scenes: a keyframed document; the GPU previews the sampled state of the current frame, the classic engine draws the frame */
 let sceneDoc: SceneDoc | null = null; let frame = 0; let playing = false; let sceneFast = false;
 const FPS = 24;   // the timeline's frames per second; drawings are every second frame (12 per second)
@@ -65,12 +79,12 @@ function setFrame(f: number) {
   const E = classic(); E.cfg = { ...E.cfg, stepEvery: 2 }; const drawn = Math.floor(frame / 2) * 2;
   syncKeyView(drawn);
   const st = E.sampleState(drawn); const struct = structureFromState(st, sceneDoc.name || 'scene');
-  R.structure = struct; R.rebuild(style); invalidate(); panel.transport?.(frame, total, st.stepName);
+  R.structure = struct; geomStale = true; invalidate(); panel.transport?.(frame, total, st.stepName);   // the preview's geometry: built when the preview is next drawn (a scene playing under the finished drawing never needs it)
 }
 let lintItems: LintItem[] = [];
 function relint() { lintItems = sceneDoc ? lintScene(sceneDoc) : []; panel.refreshChecks?.() }
 function loadScene(doc: SceneDoc, name: string) {
-  sceneDoc = doc; const E = classic(); E.scene = doc; frame = 0; playing = false; pendingTail = null;
+  sceneDoc = doc; sceneVer++; const E = classic(); E.scene = doc; frame = 0; playing = false; pendingTail = null;
   if (doc.look && LOOKS[doc.look]) { const reps = style.reps; style = mergeStyle(DEFAULT_STYLE, LOOKS[doc.look].style); if (!LOOKS[doc.look].style.reps) style.reps = reps; currentLook = doc.look }   // a scene can name its look
   if (doc.site) style.site = { ...style.site, ...doc.site };
   if (doc.reps) style.reps = { ...doc.reps }; R.overrides = { ...(doc.groupColors || {}) }; R.labels = (doc.labels || []).map((l: any) => ({ ...l })); selLabel = -1;
@@ -78,7 +92,7 @@ function loadScene(doc: SceneDoc, name: string) {
   R.camera.base = new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   R.fitOverride = sceneFitPoints(doc); R.camera.capFrac = style.show.caption ? 0.13 : 0; R.camera.topFrac = style.show.stepLabel ? 0.05 : 0;
   history.clear(); relint();
-  panel.refresh(); setFrame(0); status(`scene: ${doc.keyframes.length} keyframes, ${(timeline().total / FPS).toFixed(1)} s · ${lintSummary(lintItems)}`);
+  panel.refresh(); setFrame(0); invalidate(true); status(`scene: ${doc.keyframes.length} keyframes, ${(timeline().total / FPS).toFixed(1)} s · ${lintSummary(lintItems)}`);
 }
 /** A PDB/mmCIF stack → a scene with one keyframe per file (atoms matched by residue and name across files), oriented by PCA. */
 function loadStack(files: { name: string; text: string }[]) {
@@ -100,34 +114,41 @@ function sceneJson(): string {
   return JSON.stringify(doc, null, 1);
 }
 /* ---------- the SDK: when molsketch serve runs, it draws the exact frames (the same engine as the Python package) ---------- */
-let sdk: SDK | null = null; let inputs: InputSync | null = null; let sdkSeq = 0; let sdkBusy = false; let sdkAgain = false;
-const sdkReady = connect().then(s => { sdk = s; if (s) { inputs = new InputSync(s); classicMs = Infinity; status(`drawing with molsketch ${s.version} (${s.url})`); invalidate() } return s });
-/* without the server, a figure whose drawing takes long (≥ 100 ms: a large structure, a map) is drawn in a worker by the
-   same core, so the app does not freeze while it is; a light one is drawn here, live while it moves */
+let sdk: SDK | null = null; let inputs: InputSync | null = null; let sdkSeq = 0;
+const sdkReady = connect().then(s => { sdk = s; if (s) { inputs = new InputSync(s); classicMs = liveMs = Infinity; status(`drawing with molsketch ${s.version} (${s.url})`); invalidate() } return s });
+/* without the server, the finished frames are drawn in a worker by the same core: the app never waits for a drawing,
+   and one quick enough follows the view live while it moves */
 let local: LocalDraw | null = null; let localInputs: InputSync | null = null;
-try { local = new LocalDraw((document.querySelector('link[href*="fonts.googleapis"]') as HTMLLinkElement | null)?.href || null); localInputs = new InputSync(local) } catch { local = null }
-const HEAVY_MS = 100;
-/** who draws the finished frame: the server, else the worker for a heavy figure (or an export), else nobody (here) */
-function drawer(forExport = false): { d: SDK; inputs: InputSync } | null {
+try { local = new LocalDraw((document.querySelector('link[data-fonts]') as HTMLLinkElement | null)?.href || null); localInputs = new InputSync(local) } catch { local = null }
+/** who draws the finished frame: the server, else the drawing worker; null: this thread (the worker failed) */
+function drawer(): { d: SDK; inputs: InputSync } | null {
   if (sdk) return { d: sdk, inputs: inputs! };
-  if (local && localInputs && (forExport || classicMs >= HEAVY_MS)) return { d: local, inputs: localInputs };
+  if (local && localInputs) return { d: local, inputs: localInputs };
   return null;
 }
+/** the finished drawing follows the view as it moves (rather than the GPU preview) when the worker draws it quickly
+    enough (a turn or a drag shows the final look at the worker's pace, and the app goes on answering meanwhile) */
+const LIVE_MS = 50;
+/** a playing scene asks for a drawing every second frame of its 24 a second: one that comes within that keeps up */
+const LIVE_PLAY_MS = 80;
+function liveExact() { return restMode === 'classic' && sketchOn && !sdk && !!local && liveMs < (playing ? LIVE_PLAY_MS : LIVE_MS) && performance.now() - resizedAt > 250 }
+/** the scene's version as the drawer holds it: a new one whenever its keyframes change (an edit, an undo, a load) */
+let sceneVer = 0;
 /** the current figure as the SDK's FigureSpec: the full style, the camera, labels, group colours, frame, size */
-async function figureSpec(W: number, H: number, scale: number, f: number, cam?: any, via = drawer(true)!): Promise<FigureSpec> {
+async function figureSpec(W: number, H: number, scale: number, f: number, cam?: any, via = drawer()!, st: Style = style, labels = R.labels): Promise<FigureSpec> {
   let ref: string;
   const mref = await mapRefOn(via.d);
-  if (sceneDoc) { const json = sceneJsonForSdk(); ref = await via.inputs.get(json, () => ({ scene: JSON.parse(json) })) }   // a scene: again whenever it is edited (undo included)
+  if (sceneDoc) { const doc = sceneDoc; ref = await via.inputs.get('scene ' + sceneVer, () => ({ scene: JSON.parse(sceneJsonForSdk(doc)) })) }   // a scene: again whenever it is edited (undo included)
   else if (structureText) ref = await via.inputs.get(structureText, () => structureText);
   else ref = '';
   const c = cam || camOf();
-  return { input: ref ? { ref } : { map: mref! }, ...(mref && ref ? { map: { ref: mref } } : {}), styleFile: JSON.parse(JSON.stringify(style)), camera: { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: R.camera.fov },
-    labels: R.labels.map(l => ({ ...l })), groupColors: { ...R.overrides }, size: [W, H], scale, frame: f };
+  return { input: ref ? { ref } : { map: mref! }, ...(mref && ref ? { map: { ref: mref } } : {}), styleFile: JSON.parse(JSON.stringify(st)), camera: { yaw: c.yaw, pitch: c.pitch, roll: c.roll, zoom: c.zoom, panX: c.panX, panY: c.panY, fov: R.camera.fov },
+    labels: labels.map(l => ({ ...l })), groupColors: { ...R.overrides }, size: [W, H], scale, frame: f };
 }
 /** a scene as the SDK gets it: its keyframes and settings (labels, colours and camera come with each spec) */
-function sceneJsonForSdk() { const d: any = { ...sceneDoc }; delete d.fitPoints; delete d._rev; return JSON.stringify(d) }
+function sceneJsonForSdk(doc: SceneDoc) { const d: any = { ...doc }; delete d.fitPoints; delete d._rev; return JSON.stringify(d) }
 function runSketch(mode: RestMode = restMode, here = false) {   // here: drawn now, on this thread (a script reads the canvas straight after)
-  const via = drawer(); if (mode === 'classic' && via && !(here && via.d === local) && (sceneDoc || structureText || mapObj)) { runSketchSdk(); return }
+  const via = drawer(); if (mode === 'classic' && via && !(here && via.d === local) && (sceneDoc || structureText || mapObj)) { requestExact(); return }
   if (skCanvas.width !== R.w || skCanvas.height !== R.h) { skCanvas.width = R.w; skCanvas.height = R.h }
   if (mode === 'classic' && sceneDoc) { const ms = renderScene(skCtx, R, style, sceneDoc, frame, dpr); sketchStats = { readMs: 0, regionMs: 0, drawMs: ms, regions: 0 }; sceneFast = ms < 90; classicMs = ms }
   else if (mode === 'classic') { const ms = here ? syncMaps(() => renderClassic(skCtx, R, style, boil, dpr)) : renderClassic(skCtx, R, style, boil, dpr); if (ms < 0) { hud.textContent = 'preparing the map…'; return }   // the preview stays until the map is ready
@@ -138,20 +159,28 @@ function runSketch(mode: RestMode = restMode, here = false) {   // here: drawn n
 
 /* the canvas fills the stage, or keeps the output's aspect inside it (letterboxed), so a fit made here is the fit of the video */
 let previewAspect: number | null = null;   // null: free
+let resizedAt = -Infinity;   // while the window is being resized, the preview shows: every size would cost the worker new paper
 let fixedSize: [number, number] | null = null;   // a script (the CLI) set the canvas size: the window no longer changes it
 function fit() {
   if (fixedSize) return;
   let cw = stage.clientWidth, ch = stage.clientHeight, left = 0, top = 0;
   if (previewAspect) { if (cw / ch > previewAspect) { const w = Math.floor(ch * previewAspect); left = Math.floor((cw - w) / 2); cw = w } else { const h = Math.floor(cw / previewAspect); top = Math.floor((ch - h) / 2); ch = h } }
   for (const c of [canvas, skCanvas, ovCanvas]) { c.style.left = left + 'px'; c.style.top = top + 'px'; c.style.width = cw + 'px'; c.style.height = ch + 'px' }
-  const w = Math.max(64, Math.floor(cw * dpr)), h = Math.max(64, Math.floor(ch * dpr)); R.resize(w, h); invalidate(); showGuides(guideBox);
+  const w = Math.max(64, Math.floor(cw * dpr)), h = Math.max(64, Math.floor(ch * dpr)); if (w !== R.w || h !== R.h) resizedAt = performance.now(); R.resize(w, h); invalidate(); showGuides(guideBox);
 }
 new ResizeObserver(() => fit()).observe(stage);   // the window, and the timeline showing or hiding
 function setPreviewAspect(a: number | null) { previewAspect = a; fit() }
 
-function save() { try { localStorage.setItem('triad-sketch-style', JSON.stringify(style)) } catch { } }
+/** the style, kept in the browser: written once changes pause (a slider sends dozens), and when the page is left */
+let saveTimer = 0;
+function saveNow() { clearTimeout(saveTimer); saveTimer = 0; try { localStorage.setItem('triad-sketch-style', JSON.stringify(style)) } catch { } }
+function save() { clearTimeout(saveTimer); saveTimer = window.setTimeout(saveNow, 400) }
+window.addEventListener('pagehide', () => { if (saveTimer) saveNow() }); document.addEventListener('visibilitychange', () => { if (document.hidden && saveTimer) saveNow() });
 function margins() { R.camera.capFrac = sceneDoc && style.show.caption ? 0.13 : 0; R.camera.topFrac = sceneDoc && style.show.stepLabel ? 0.05 : 0 }
-function rebuild() { margins(); R.rebuild(style); invalidate(); save(); status() }
+/** a rebuild a control asks for: made once, at the next frame, however often it is asked meanwhile (a slider asks at every step) */
+let rebuildDue = false;
+function rebuild() { rebuildDue = false; geomStale = false; margins(); R.rebuild(style); quickKnown = false; invalidate(); save(); status() }   // (what is drawn changed: its cost is learned again)
+function rebuildSoon() { rebuildDue = true; quickKnown = false; invalidate() }
 function redraw() { margins(); invalidate(); save() }
 
 /* undo: snapshots of style, camera, colour overrides and (for keyframe edits) the keyframes */
@@ -159,7 +188,7 @@ const history = new History(
   (withScene): Snapshot => ({ label: '', at: performance.now(), style: JSON.stringify(style), cam: [R.camera.yaw, R.camera.pitch, R.camera.roll, R.camera.zoom, R.camera.panX, R.camera.panY, R.camera.fov], overrides: JSON.stringify(R.overrides), labels: JSON.stringify(R.labels), keyframes: withScene && sceneDoc ? JSON.stringify(sceneDoc.keyframes) : null, frame }),
   (s) => {
     style = mergeStyle(DEFAULT_STYLE, JSON.parse(s.style)); const c = s.cam; R.camera.yaw = c[0]; R.camera.pitch = c[1]; R.camera.roll = c[2]; R.camera.zoom = c[3]; R.camera.panX = c[4]; R.camera.panY = c[5]; R.camera.fov = c[6]; R.overrides = JSON.parse(s.overrides); R.labels = JSON.parse(s.labels || '[]'); selLabel = -1; closeLabelEditor(false);
-    if (s.keyframes && sceneDoc) { sceneDoc.keyframes = JSON.parse(s.keyframes); classic().scene = sceneDoc; R.fitOverride = sceneFitPoints(sceneDoc); relint() }
+    if (s.keyframes && sceneDoc) { sceneDoc.keyframes = JSON.parse(s.keyframes); sceneVer++; classic().scene = sceneDoc; R.fitOverride = sceneFitPoints(sceneDoc); relint() }
     pendingTail = null; panel.refresh(); rebuild(); if (sceneDoc) setFrame(s.keyframes ? s.frame : frame);
   },
   () => panel.refreshHistory?.());
@@ -198,7 +227,7 @@ async function loadText(text: string, name: string) {
   // into it, loaded after it), not if it is another entry's, which would be drawn in the wrong place
   style.map.zone = ''; let note = '';
   if (mapObj && !fitsMap(s, mapObj)) { note = ` · ${mapObj.name} removed: this structure is not in it`; mapObj = null; mapRaw = null; mapRef = null; R.map = null }
-  rebuild(); panel.refresh(); panel.refreshChecks?.(); status(`parsed in ${(performance.now() - t0).toFixed(0)} ms${note}`);
+  rebuild(); invalidate(true); panel.refresh(); panel.refreshChecks?.(); status(`parsed in ${(performance.now() - t0).toFixed(0)} ms${note}`);
 }
 /** an entry from the PDB by its four-character ID, as mmCIF (every entry has one; the large ones have no .pdb) */
 async function fetchPdb(id: string) {
@@ -225,7 +254,7 @@ async function loadMapBytes(bytes: ArrayBuffer, name: string, meta: { level?: nu
   mark('load map'); mapObj = m; mapRaw = { bytes, name, ...meta }; mapRef = null; R.map = m;
   style.map.level = null;   // a level is in its map's units: a new map starts at its recommended one (σ, relative, is kept)
   if (!R.structure && !sceneDoc) { R.camera.base = mapBasis(m, mapLevel(m, style)); R.camera.yaw = 0; R.camera.pitch = 0; R.camera.roll = 0; R.camera.zoom = 1; R.camera.panX = 0; R.camera.panY = 0 }
-  rebuild(); panel.refresh(); status(`${m.name}: ${m.nx}×${m.ny}×${m.nz} at ${m.step[0].toFixed(2)} Å${m.binned && m.binned > 1 ? ` (averaged ${m.binned}×)` : ''}${m.level != null ? `, recommended level ${m.level}` : ''} · read in ${(performance.now() - t0).toFixed(0)} ms`);
+  rebuild(); invalidate(true); panel.refresh(); status(`${m.name}: ${m.nx}×${m.ny}×${m.nz} at ${m.step[0].toFixed(2)} Å${m.binned && m.binned > 1 ? ` (averaged ${m.binned}×)` : ''}${m.level != null ? `, recommended level ${m.level}` : ''} · read in ${(performance.now() - t0).toFixed(0)} ms`);
 }
 /** whether a structure was built into a map: its atoms sit on the density (a fitted model's average density is near the
     contour, and higher than 6 Å away from its atoms; another entry's structure, somewhere in the map's box, is neither) */
@@ -241,7 +270,7 @@ function unloadStructure(why: string) {
   sceneDoc = null; structureText = null; R.fitOverride = null; R.labels = []; selLabel = -1; R.setStructure(null); inputs = sdk ? new InputSync(sdk) : null; localInputs = local ? new InputSync(local) : null;
   status(why ? `showing the map on its own (${why}; open that entry to see the model in it)` : 'showing the map on its own');
 }
-function clearMap() { mark('remove map'); mapObj = null; mapRaw = null; mapRef = null; R.map = null; rebuild(); panel.refresh(); status('map removed') }
+function clearMap() { mark('remove map'); mapObj = null; mapRaw = null; mapRef = null; R.map = null; rebuild(); invalidate(true); panel.refresh(); status('map removed') }
 /** an EMDB entry's primary map, with the depositors' recommended contour level and the sample's mass */
 async function fetchEmdb(key: string) {
   const m = key.trim().match(/^(?:emd[-_]?)?(\d{4,6})$/i); if (!m) throw new Error(`"${key}" is not an EMDB ID, e.g. EMD-11638`);
@@ -276,16 +305,24 @@ async function mapForEntry() {
   const ids = d?.rcsb_entry_container_identifiers?.emdb_ids || []; if (!ids.length) throw new Error(`${name} has no EMDB map (it is not a cryo-EM structure)`);
   await fetchEmdb(ids[0]);
 }
+/** the density at each heavy atom of the model (waters left out), for the share inside the contour: the same at every
+    level, so sampled once per map and model (the panel asks at every move of the level) */
+let atomDensity: { m: DensityMap; s: Structure; v: Float64Array } | null = null;
+function densityAtAtoms(m: DensityMap, s: Structure) {
+  if (atomDensity && atomDensity.m === m && atomDensity.s === s) return atomDensity.v;
+  const v: number[] = []; for (let i = 0; i < s.count; i++) { if (s.element[i] === 'H' || s.residues[s.residueOf[i]].resn === 'HOH') continue; v.push(sampleMap(m, s.x[i], s.y[i], s.z[i])) }
+  atomDensity = { m, s, v: Float64Array.from(v) }; return atomDensity.v;
+}
 function mapInfo() {
   const m = mapObj; if (!m) return null; const lv = mapLevel(m, style); const s = R.structure; let inc: number | null = null;
-  if (s) { let n = 0, k = 0; for (let i = 0; i < s.count; i++) { if (s.element[i] === 'H' || s.residues[s.residueOf[i]].resn === 'HOH') continue; n++; if (sampleMap(m, s.x[i], s.y[i], s.z[i]) >= lv) k++ } inc = n ? k / n : null }
+  if (s) { const v = densityAtAtoms(m, s); let k = 0; for (let i = 0; i < v.length; i++) if (v[i] >= lv) k++; inc = v.length ? k / v.length : null }
   return { name: m.name, level: lv, sigma: (lv - m.mean) / (m.rms || 1), recommended: m.level ?? null, mean: m.mean, rms: m.rms, size: [m.nx, m.ny, m.nz], step: m.step[0], binned: m.binned || 1, atomInclusion: inc };
 }
 /** the map where the figure is drawn: sent once (to the server, its file's bytes; to the worker, its grid), again only
     when another map is loaded */
-const localMaps = new WeakMap<object, Promise<string>>();
+const localMaps = new WeakMap<SDK, WeakMap<object, Promise<string>>>();   // per worker (an export draws with a few)
 async function mapRefOn(d: SDK): Promise<string | null> {
-  if (d instanceof LocalDraw) { if (!mapObj) return null; let p = localMaps.get(mapObj); if (!p) localMaps.set(mapObj, p = d.putMap(mapObj)); return p }
+  if (d instanceof LocalDraw) { if (!mapObj) return null; let m = localMaps.get(d); if (!m) localMaps.set(d, m = new WeakMap()); let p = m.get(mapObj); if (!p) m.set(mapObj, p = d.putMap(mapObj)); return p }
   return mapRefOnSdk();
 }
 async function mapRefOnSdk(): Promise<string | null> {
@@ -366,7 +403,7 @@ function keyframes() {
   return sceneDoc.keyframes.map((k, i) => ({ i, name: k.name || 'step ' + (i + 1), hold: (k.hold ?? 24) / FPS, transition: (k.transition ?? 48) / FPS, atoms: Object.keys(k.atoms || {}).length, arrows: (k.arrows || []).length, view: !!k.view, path: !!(k.path && k.path.length) }));
 }
 function loopSeconds() { return sceneDoc ? timeline().total / FPS : 0 }
-function sceneChanged(what: string) { const E = classic(); E.scene = sceneDoc; R.fitOverride = sceneDoc ? sceneFitPoints(sceneDoc) : null; (sceneDoc as any)._rev = ((sceneDoc as any)._rev || 0) + 1; relint(); panel.refresh(); setFrame(Math.min(frame, timeline().total - 1)); status(what) }
+function sceneChanged(what: string) { sceneVer++; const E = classic(); E.scene = sceneDoc; R.fitOverride = sceneDoc ? sceneFitPoints(sceneDoc) : null; (sceneDoc as any)._rev = ((sceneDoc as any)._rev || 0) + 1; relint(); panel.refresh(); setFrame(Math.min(frame, timeline().total - 1)); status(what) }
 function setKeyTiming(i: number, holdS: number, transS: number) {
   if (!sceneDoc) return; mark('timing', true); const k = sceneDoc.keyframes[i];
   k.hold = Math.max(0, Math.round(holdS * FPS)); k.transition = Math.max(0, Math.round(transS * FPS)); sceneChanged(`keyframe ${i + 1}: hold ${(k.hold / FPS).toFixed(2)} s, transition ${(k.transition / FPS).toFixed(2)} s`);
@@ -390,13 +427,16 @@ function setKeyView(i: number, on: boolean) {
 /* ---------- changes to the next keyframe, drawn over the frame while the timeline is hovered ---------- */
 let showChanges = false; let hoverChanges = false; let diffNote = '';
 function projectNow() { const E = classic(); E.cfg = cfgFromStyle(style, R.camera, true); return E.projectFrame(R.w / dpr, R.h / dpr, frame) }
+let ovDrawn = false;   // something is on the overlay (left alone otherwise: touching a canvas, even to clear it, sends all of it to the screen again)
 function drawOverlay() {
-  ovCanvas.width = R.w; ovCanvas.height = R.h; ovCtx.clearRect(0, 0, R.w, R.h);
-  drawLabelMarks();
+  if (ovCanvas.width !== R.w || ovCanvas.height !== R.h) { ovCanvas.width = R.w; ovCanvas.height = R.h; ovDrawn = false }
+  const want = !!sceneDoc && !!(showChanges || hoverChanges || pendingTail || authorMode !== 'off');
+  if (ovDrawn) { ovCtx.clearRect(0, 0, R.w, R.h); ovDrawn = false }
+  if (selLabel >= 0 || hoverLabel >= 0) { drawLabelMarks(); ovDrawn = true }
   if (!sceneDoc) return;
-  const want = showChanges || hoverChanges || pendingTail || authorMode !== 'off';
   if (!(showChanges || hoverChanges)) diffNote = '';
   if (!want) { panel.refreshAuthor?.(); return }
+  ovDrawn = true;
   const { st, proj } = projectNow();
   if (showChanges || hoverChanges) { const d: KeyDiff | null = keyDiff(sceneDoc, st.kf); if (d) { drawDiff(ovCtx, d, st, proj, dpr, proj.pxPerA); diffNote = `to keyframe ${(st.kf + 1) % sceneDoc.keyframes.length + 1}: ${diffSummary(d)}` } else diffNote = '' }
   if (pendingTail) { const p = anchorScreen(pendingTail, st, proj); if (p) { ovCtx.save(); ovCtx.setTransform(dpr, 0, 0, dpr, 0, 0); ovCtx.beginPath(); ovCtx.arc(p[0], p[1], 9, 0, Math.PI * 2); ovCtx.strokeStyle = '#f97316'; ovCtx.lineWidth = 2; ovCtx.stroke(); ovCtx.restore() } }
@@ -566,7 +606,7 @@ async function suggest(onProgress: (msg: string) => void): Promise<ViewSuggestio
   if (!sceneDoc) return [];
   const E = classic(); E.cfg = cfgFromStyle(style, R.camera, true);
   onProgress('scoring 120 orientations…'); await new Promise(r => setTimeout(r, 10));
-  const frames = holdFrames(E); const picks = suggestViews(E, sceneDoc, R.w / dpr, R.h / dpr, frames, 12, previewAspect ? Math.max(0.6, Math.min(2.2, previewAspect * 0.8)) : 1.4);
+  const frames = holdFrames(E); const picks = await suggestViewsAsync(E, sceneDoc, R.w / dpr, R.h / dpr, frames, 12, previewAspect ? Math.max(0.6, Math.min(2.2, previewAspect * 0.8)) : 1.4, () => new Promise(r => setTimeout(r, 0)));
   const w = 224, h = 140; const f = frames[Math.min(frames.length - 1, Math.max(0, Math.round(frames.length * (frame / Math.max(1, timeline().total)))))];
   for (let i = 0; i < picks.length; i++) {
     const p = picks[i]; onProgress(`drawing ${i + 1} / ${picks.length}…`); await new Promise(r => setTimeout(r, 0));
@@ -586,26 +626,32 @@ function adoptView(v: ViewSuggestion) { mark('suggested view'); R.camera.yaw = v
 /* ---------- render from the app ---------- */
 let renderSize: [number, number] | null = null;   // the output size the Render section has chosen (also the CLI command's --size and the preview's aspect)
 let renderCancel = false;
-/** the exact frame from the SDK onto the sketch canvas; a newer request supersedes an older one */
-async function runSketchSdk() {
-  if (sdkBusy) { sdkAgain = true; return }   // one request at a time; the loop asks every frame until a drawing is up
-  sdkBusy = true; const seq = sdkSeq; const t0 = performance.now(); const via = drawer();
+/** the exact frame from the server or the drawing worker onto the sketch canvas, one request at a time. An answer for a
+    view that has moved on since is still shown while the drawing follows the view live (it is the nearest finished
+    frame; the next request is made at once), and dropped otherwise */
+let exactBusy = false; let exactAt = 0; let shownQuick = false;
+async function requestExact(breathe = false, quick = false) {
+  const via = drawer(); if (exactBusy || !via) return;
+  exactBusy = true; const seq = sdkSeq; const t0 = exactAt = performance.now();
   try {
-    if (!via) return;
     const spec = await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : boil, undefined, via);
-    const bmp = await via.d.render(spec); if (seq !== sdkSeq) { bmp.close(); return }
+    const bmp = await via.d.render(spec, { quick });
+    // the worker's own drawing time; a quick frame's is followed down at once and up a little at a time (one slow frame
+    // does not take the live drawing away, nor bring it back)
+    if (via.d === local) { const ms = local.lastMs; classicMs = ms; if (quick) { liveMs = quickKnown && ms > liveMs ? 0.7 * liveMs + 0.3 * ms : ms; quickKnown = true } else if (!breathe) liveMs = quickKnown ? Math.min(liveMs, ms) : ms }
+    const current = seq === sdkSeq;
+    if ((!current && !liveExact()) || bmp.width !== R.w || bmp.height !== R.h) { bmp.close(); return }   // superseded, or drawn for a size the canvas no longer has
     if (skCanvas.width !== R.w || skCanvas.height !== R.h) { skCanvas.width = R.w; skCanvas.height = R.h } skCtx.clearRect(0, 0, R.w, R.h); skCtx.drawImage(bmp, 0, 0); bmp.close();
-    sketchStats = { readMs: 0, regionMs: 0, drawMs: performance.now() - t0, regions: 0 }; sceneFast = false;
-    if (via.d === local) classicMs = local.lastMs;   // the worker's own drawing time: a figure grown light is drawn here again
-    hud.textContent = `classic ${via.d === local ? '(worker) ' : '(server) '}${Math.round(via.d === local ? local.lastMs : sketchStats.drawMs)} ms · ${R.w}×${R.h}`;
-    sketchShown = true; skCanvas.classList.add('on'); drawOverlay();
+    sketchStats = { readMs: 0, regionMs: 0, drawMs: performance.now() - t0, regions: 0 };
+    hud.textContent = `classic ${via.d === local ? '(worker' + (liveExact() ? ', live' : '') + ') ' : '(server) '}${Math.round(via.d === local ? local.lastMs : sketchStats.drawMs)} ms · ${R.w}×${R.h}`;
+    skCanvas.classList.add('on'); shownQuick = quick; if (current) { sketchShown = true; lastSketchAt = performance.now(); drawOverlay() }
   } catch (e: any) {
-    if (via && via.d === local) { local = null; localInputs = null; status('drawing here (the drawing worker failed: ' + e.message + ')'); classicMs = 0; invalidate() }   // the main thread draws from now on
+    if (via.d === local) { local = null; localInputs = null; status('drawing here (the drawing worker failed: ' + e.message + ')'); classicMs = liveMs = 0; invalidate() }   // the main thread draws from now on
     else status('molsketch could not draw this: ' + e.message) }
-  finally { sdkBusy = false; if (sdkAgain) { sdkAgain = false; if (!sketchShown) runSketchSdk() } }
+  finally { exactBusy = false }
 }
 function drawFrameTo(ctx: CanvasRenderingContext2D, W: number, H: number, f: number): void | Promise<void> {
-  const via = drawer(true);
+  const via = drawer();
   if (via && (sceneDoc || structureText || mapObj)) return (async () => {   // exports through the SDK (or the drawing worker): the same frame the Python package draws
     const bmp = await via.d.render(await figureSpec(W, H, 1, f, undefined, via)); ctx.save(); ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.clearRect(0, 0, W, H); ctx.drawImage(bmp, 0, 0); ctx.restore(); bmp.close() })();
   const E = classic(); const drawn = Math.floor(f / 2) * 2;
@@ -622,11 +668,21 @@ async function renderToFile(o: { width: number; height: number; codec: CodecName
   const frames: number[] = []; if (sceneDoc) { for (let f = 0; f < timeline().total; f += 2) frames.push(f) } else for (let f = 0; f < 24; f += 2) frames.push(f);
   const name = (sceneDoc?.name || R.structure?.name || 'molsketch').replace(/[^\w.-]+/g, '_'); renderCancel = false; const t0 = performance.now();
   const wasLive = live; live = false; sketchOn = false;   // no on-screen sketches while the engine is busy with the file
+  // the drawing worker and, on a machine with the cores for it, a few more made for the export: each draws every n-th
+  // frame (the same frame whichever draws it), and the encoder takes them in order
+  const via = drawer(), pool: { d: LocalDraw; inputs: InputSync }[] = [];
+  if (via && via.d === local && (sceneDoc || structureText || mapObj)) {
+    pool.push(via as { d: LocalDraw; inputs: InputSync });
+    const more = Math.max(0, Math.min(3, Math.floor((navigator.hardwareConcurrency || 2) / 2) - 1, Math.floor(frames.length / 8)));
+    for (let k = 0; k < more; k++) try { const d = new LocalDraw((document.querySelector('link[data-fonts]') as HTMLLinkElement | null)?.href || null); pool.push({ d, inputs: new InputSync(d) }) } catch { break }
+  }
+  const slot = new Map(frames.map((f, i) => [f, i] as [number, number]));
+  const bitmap = pool.length ? async (f: number) => { const w = pool[slot.get(f)! % pool.length]; return w.d.render(await figureSpec(o.width, o.height, 1, f, undefined, w)) } : undefined;
   try {
-    const res = await renderVideo({ width: o.width, height: o.height, fps: FPS / 2, codec: o.codec, quality: o.quality, frames, draw: drawFrameTo, cancelled: () => renderCancel, onProgress: (d, n, b) => { const el = (performance.now() - t0) / 1000; o.onProgress(d, n, b, d ? el / d * (n - d) : 0) } });
+    const res = await renderVideo({ width: o.width, height: o.height, fps: FPS / 2, codec: o.codec, quality: o.quality, frames, draw: drawFrameTo, bitmap, ahead: pool.length * 2, cancelled: () => renderCancel, onProgress: (d, n, b) => { const el = (performance.now() - t0) / 1000; o.onProgress(d, n, b, d ? el / d * (n - d) : 0) } });
     const a = document.createElement('a'); a.href = URL.createObjectURL(res.blob); a.download = `${name}.${res.ext}`; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 60000);
     return { name: a.download, bytes: res.bytes, seconds: res.seconds, codecString: res.codecString };
-  } finally { live = wasLive; sketchOn = restMode !== 'preview'; classic().cfg = cfgFromStyle(style, R.camera, !!sceneDoc); if (sceneDoc) classic().scene = sceneDoc; invalidate() }
+  } finally { for (const w of pool) if (w.d !== local) w.d.close(); live = wasLive; sketchOn = restMode !== 'preview'; classic().cfg = cfgFromStyle(style, R.camera, !!sceneDoc); if (sceneDoc) classic().scene = sceneDoc; invalidate() }
 }
 async function savePoster(width: number, height: number, f = frame, type: 'image/jpeg' | 'image/png' = 'image/jpeg') {
   const c = document.createElement('canvas'); c.width = width; c.height = height; const ctx = c.getContext('2d', { willReadFrequently: true })!; await drawFrameTo(ctx, width, height, f);
@@ -656,11 +712,18 @@ function molecule() {
   for (const r of s.residues) { if (r.resn === 'HOH' || r.resn === 'WAT') water++; else if (r.het) lig.set(r.resn, (lig.get(r.resn) || 0) + 1); else if (r.nucleic) nucleic = true; else protein = true }
   return { kind, name, atoms: s.count, residues: s.residues.length, chains, ligands: [...lig.keys()], water, protein, nucleic, map: mapObj?.name || '' };
 }
-/** the loaded molecule drawn small in a look (the look gallery's thumbnails) */
-function lookPreview(key: string, w: number, h: number): HTMLCanvasElement | null {
+/** the loaded molecule drawn small in a look (the look gallery's thumbnails): by the drawing worker (or the server),
+    else here */
+async function lookPreview(key: string, w: number, h: number): Promise<HTMLCanvasElement | null> {
   const L = LOOKS[key]; if (!L || (!R.structure && !sceneDoc && !mapObj)) return null;
   const st = mergeStyle(DEFAULT_STYLE, L.style); if (!L.style.reps) st.reps = { ...style.reps }; st.map = { ...style.map, caption: false } as any; st.show = { ...st.show, caption: false, stepLabel: false, noLabels: true } as any;
-  const c = document.createElement('canvas'); c.width = w; c.height = h; const ctx = c.getContext('2d', { willReadFrequently: true })!;
+  const c = document.createElement('canvas'); c.width = w; c.height = h;
+  const via = drawer();
+  if (via && (sceneDoc || structureText || mapObj)) {
+    try { const bmp = await via.d.render(await figureSpec(w, h, 1, sceneDoc ? posterFrame() : 0, { ...camOf(), zoom: 1, panX: 0, panY: 0 }, via, st, []));
+      c.getContext('2d')!.drawImage(bmp, 0, 0); bmp.close(); return c } catch { return null }
+  }
+  const ctx = c.getContext('2d', { willReadFrequently: true })!;
   const tmp: any = { structure: R.structure, camera: { ...R.camera, zoom: 1, panX: 0, panY: 0, capFrac: 0, topFrac: 0 }, overrides: R.overrides, fitPoints: R.fitPoints, labels: [], w, h, map: mapObj, fitOverride: R.fitOverride };
   try { if (sceneDoc) renderScene(ctx, tmp, st, sceneDoc, posterFrame(), 1); else if (renderClassic(ctx, tmp, st, 0, 1) < 0) return null } catch { return null }   // the map not ready yet: no thumbnail
   if (sceneDoc) { sceneDoc.labels = R.labels } invalidate();
@@ -676,10 +739,10 @@ function applyLook(key: string) {
 const panel = buildPanel(document.getElementById('controls')!, {
   get style() { return style }, set style(v) { style = v },
   looks: LOOKS, currentLook: () => currentLook, applyLook, molecule, lookPreview, openFileDialog: () => (document.getElementById('fileIn') as HTMLInputElement | null)?.click(),
-  rebuild, redraw, camera: R.camera, mark, settle: () => history.settle(),
+  rebuild: rebuildSoon, redraw, camera: R.camera, mark, settle: () => history.settle(),
   onLive: v => { live = v; invalidate() }, onTurntable: v => { turntable = v; invalidate() }, onPitchSwing: v => { pitchSwing = v },
   onRest: (v: string) => { restMode = v as RestMode; sketchOn = v !== 'preview'; invalidate() },
-  renderNow: () => { R.render(style); runSketch('classic'); hud.textContent = `classic ${sketchStats.drawMs.toFixed(0)} ms · ${R.w}×${R.h}` },
+  renderNow: () => { preview(); runSketch('classic'); hud.textContent = `classic ${sketchStats.drawMs.toFixed(0)} ms · ${R.w}×${R.h}` },
   savePng: () => { const a = document.createElement('a'); a.href = snapshot(); a.download = `${sceneDoc?.name || R.structure?.name || 'molsketch'}.png`; a.click() },
   saveStyle: () => { const a = document.createElement('a'); a.href = 'data:application/json,' + encodeURIComponent(JSON.stringify(style, null, 1)); a.download = `${docName()}-style.json`; a.click() },
   loadStyle: async (f: File) => { mark('load style'); style = mergeStyle(DEFAULT_STYLE, JSON.parse(await f.text())); panel.refresh(); rebuild() },
@@ -717,7 +780,7 @@ const panel = buildPanel(document.getElementById('controls')!, {
 });
 
 /** PNG of what is on screen: the sketch when it is shown, else the GPU frame */
-function snapshot() { if (sketchShown) return skCanvas.toDataURL('image/png'); R.render(style); return R.toDataURL() }
+function snapshot() { if (sketchShown || skCanvas.classList.contains('on')) return skCanvas.toDataURL('image/png'); preview(); return R.toDataURL() }
 
 /* keyboard transport: space plays, , and . step a drawn frame */
 window.addEventListener('keydown', e => { if ((e.target as HTMLElement)?.tagName === 'INPUT' || !sceneDoc || e.ctrlKey || e.metaKey) return; if (e.key === ' ') { e.preventDefault(); playing = !playing } else if (e.key === ',') setFrame(frame - 2); else if (e.key === '.') setFrame(frame + 2) });
@@ -725,24 +788,43 @@ window.addEventListener('keydown', e => { if ((e.target as HTMLElement)?.tagName
 /* render loop: the GPU preview draws whenever something changed; once the view has rested, the sketch pass draws the real thing on the overlay.
    With breathing on, the sketch is redrawn with a new boil seed every so often. */
 let lastT = performance.now(); let lastSketchAt = 0; let playAcc = 0;
+function previewHud() { return `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°${R.camera.roll ? ' roll ' + R.camera.roll.toFixed(0) + '°' : ''} · zoom ${R.camera.zoom.toFixed(2)} pan ${R.camera.panX.toFixed(2)}, ${R.camera.panY.toFixed(2)}${sceneDoc ? ` · ${(frame / FPS).toFixed(2)} s` : ''}` }
+let held = false;
 function loop(t: number) {
   const dt = (t - lastT) / 1000; lastT = t;
-  if (playing && sceneDoc) { playAcc += dt * FPS; if (playAcc >= 2) { playAcc -= 2; setFrame(frame + 2); if (restMode === 'classic' && sceneFast) { dirty = false; R.render(style); runSketch('classic') } } }
+  if (held) { requestAnimationFrame(loop); return }
+  if (rebuildDue) rebuild();
+  // the finished drawing comes from the drawing worker or the server: this thread only asks, and shows what comes back
+  const away = restMode === 'classic' && sketchOn && !!drawer() && !!(sceneDoc || structureText || mapObj);
+  if (playing && sceneDoc) { playAcc += dt * FPS; if (playAcc >= 2) { playAcc -= 2; setFrame(frame + 2); if (!away && restMode === 'classic' && sceneFast) { dirty = false; preview(); runSketch('classic') } } }
   if (turntable) { R.camera.yaw = (R.camera.yaw + turntable * dt) % 360; if (pitchSwing) R.camera.pitch = pitchSwing * Math.sin(R.camera.yaw * Math.PI / 180); invalidate() }
   if (!sketchOn && live && t - lastLive > 1000 / 10) { lastLive = t; dirty = true }
-  if (dirty && restMode === 'classic' && sketchOn && (R.structure || mapObj) && !turntable && classicMs < 45) {   // live exact: cheap enough to draw the real thing every frame
-    dirty = false; R.render(style); runSketch('classic'); lastSketchAt = t; hud.textContent = `classic (live) ${classicMs.toFixed(0)} ms · ${R.w}×${R.h}` }
-  else if (dirty) { dirty = false; R.render(style); hud.textContent = `preview ${R.stats.frameMs.toFixed(1)} ms · ${R.w}×${R.h} · yaw ${R.camera.yaw.toFixed(0)}° pitch ${R.camera.pitch.toFixed(0)}°${R.camera.roll ? ' roll ' + R.camera.roll.toFixed(0) + '°' : ''} · zoom ${R.camera.zoom.toFixed(2)} pan ${R.camera.panX.toFixed(2)}, ${R.camera.panY.toFixed(2)}${sceneDoc ? ` · ${(frame / FPS).toFixed(2)} s` : ''}` }
+  if (away) {
+    const covered = skCanvas.classList.contains('on') && liveExact();   // the finished drawing is up and follows the view: the preview under it is not seen
+    if (dirty && !covered) { dirty = false; preview(); if (!skCanvas.classList.contains('on')) hud.textContent = previewHud() }
+    if (exactBusy) { if (!sketchShown && t - exactAt > Math.max(150, 3 * liveMs) && skCanvas.classList.contains('on')) { skCanvas.classList.remove('on'); if (dirty) { dirty = false; preview() } } }   // a drawing slower than its frames were: the preview shows what has changed meanwhile
+    else if (t - resizedAt < 250) { }   // the size is still changing
+    else if (!sketchShown && (liveExact() || drawNow || t - lastChange > 220 || ((!quickKnown || (liveMs >= LIVE_MS && t - probedAt > 1500)) && !sdk && t - lastChange < 100))) {   // a frame of a moving view: drawn quickly
+      const quick = !drawNow && t - lastChange <= 220; drawNow = false; if (quick && !liveExact()) probedAt = t; requestExact(false, quick) }
+    else if (sketchShown && shownQuick && t - lastChange > 220) requestExact()   // the view has come to rest on a quick frame: the finished one
+    else if (live && sketchShown && !turntable && t - lastSketchAt > Math.max(900, classicMs * 3)) { boil++; requestExact(true) }   // the lines breathe
+  }
+  else if (dirty && restMode === 'classic' && sketchOn && (R.structure || mapObj) && !turntable && classicMs < 45) {   // live exact: cheap enough to draw the real thing every frame
+    dirty = false; preview(); runSketch('classic'); lastSketchAt = t; hud.textContent = `classic (live) ${classicMs.toFixed(0)} ms · ${R.w}×${R.h}` }
+  else if (dirty) { dirty = false; preview(); hud.textContent = previewHud() }
   else if (sketchOn && (R.structure || mapObj) && !turntable) {
     const rested = t - lastChange > 220; const period = Math.max(900, (sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs) * 3);
     if ((!sketchShown && rested) || (live && sketchShown && t - lastSketchAt > period)) {
       if (sketchShown) boil++; lastSketchAt = t; runSketch();
-      if (!(restMode === 'classic' && drawer())) hud.textContent = restMode === 'classic' ? `classic ${sketchStats.drawMs.toFixed(0)} ms · ${R.w}×${R.h}` : `sketch ${(sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs).toFixed(0)} ms (read ${sketchStats.readMs.toFixed(0)}, regions ${sketchStats.regionMs.toFixed(0)}, draw ${sketchStats.drawMs.toFixed(0)}) · ${sketchStats.regions} regions · ${R.w}×${R.h}`;
+      hud.textContent = restMode === 'classic' ? `classic ${sketchStats.drawMs.toFixed(0)} ms · ${R.w}×${R.h}` : `sketch ${(sketchStats.readMs + sketchStats.regionMs + sketchStats.drawMs).toFixed(0)} ms (read ${sketchStats.readMs.toFixed(0)}, regions ${sketchStats.regionMs.toFixed(0)}, draw ${sketchStats.drawMs.toFixed(0)}) · ${sketchStats.regions} regions · ${R.w}×${R.h}`;
     }
   }
   requestAnimationFrame(loop);
 }
 fit(); requestAnimationFrame(loop);
+/* while the molecule loads, the drawing worker makes the paper for this canvas (its grain, wash and tooth): the first
+   drawing then only draws */
+if (local) local.render({ input: { scene: { name: '', keyframes: [{ name: '', atoms: {}, bonds: [], arrows: [] }] } as SceneDoc }, styleFile: JSON.parse(JSON.stringify(style)), size: [R.w / dpr, R.h / dpr], scale: dpr, frame: 0 }).then(b => b.close(), () => { });
 /* start-up: ?pdb=3J5P loads that entry, ?map=auto (its map) or ?map=EMD-5778 a map, and opens the Map tab; else the example */
 { const q = new URLSearchParams(location.search), pdb = q.get('pdb'), mp = q.get('map');
   if (pdb || mp) (async () => { try { if (pdb) await fetchPdb(pdb); if (mp) { panel.selectTab?.('map'); if (mp === 'auto') await mapForEntry(); else await fetchEmdb(mp); panel.refresh() } } catch (e: any) { status(e.message) } })();
@@ -751,15 +833,23 @@ fit(); requestAnimationFrame(loop);
 /* scripting hook (used by the CLI and tests) */
 const api = {
   get style() { return style }, set style(v: Style) { style = mergeStyle(DEFAULT_STYLE, v); panel.refresh(); rebuild() },
-  applyLook, loadText, loadUrl, fetchPdb, render: () => { R.render(style); return R.stats.frameMs }, renderer: R, camera: R.camera,
+  applyLook, loadText, loadUrl, fetchPdb, render: () => { preview(); return R.stats.frameMs }, renderer: R, camera: R.camera,
   setLive: (v: boolean) => { live = v }, setTurntable: (v: number) => { turntable = v }, png: snapshot,
   setSize: (w: number, h: number) => { fixedSize = [w, h]; R.resize(w, h) }, setDpr: (v: number) => { dpr = v }, rebuild,
-  sketch: (b?: number, mode?: RestMode) => { R.render(style); if (b !== undefined) boil = b; runSketch(mode || 'sketch', true); return sketchStats },
-  renderClassic, classicEngine: () => classic(), seek: setFrame, loadScene, fetchMap: fetchEmdb, mapForEntry, loadMapBytes, clearMap, mapInfo, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
-  /** the current frame drawn by the drawing worker (as the rested app draws a heavy figure), as a PNG data URL */
+  sketch: (b?: number, mode?: RestMode) => { preview(); if (b !== undefined) boil = b; runSketch(mode || 'sketch', true); return sketchStats },
+  renderClassic, classicEngine: () => classic(), get mapBusy() { return mapPrep.busy }, seek: setFrame, loadScene, fetchMap: fetchEmdb, mapForEntry, loadMapBytes, clearMap, mapInfo, loadStack, sceneJson, get frame() { return frame }, get scene() { return sceneDoc },
+  /** the current figure as the headless core's FigureSpec (as the drawing worker or the server gets it) */
+  spec: async (b = 0) => { const via = drawer(); return via ? figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : b, undefined, via) : null },
+  /** the drawing worker's cost for the current frame (quick: as a moving view draws it): its own drawing time and the round trip (for benchmarks) */
+  workerTiming: async (b = 0, quick = false) => { if (!local || !localInputs) return null; const t0 = performance.now(); const via = { d: local, inputs: localInputs };
+    const bmp = await local.render(await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : b, undefined, via), { quick }); const t1 = performance.now();
+    skCtx.drawImage(bmp, 0, 0); bmp.close(); return { draw: local.lastMs, roundTrip: t1 - t0, show: performance.now() - t1 } },
+  /** the current frame drawn by the drawing worker (as the rested app draws it), as a PNG data URL */
   workerPng: async (b = 0) => { if (!local || !localInputs) return null; const via = { d: local, inputs: localInputs };
     const bmp = await local.render(await figureSpec(R.w / dpr, R.h / dpr, dpr, sceneDoc ? frame : b, undefined, via)); const c = document.createElement('canvas'); c.width = bmp.width; c.height = bmp.height; c.getContext('2d')!.drawImage(bmp, 0, 0); bmp.close(); return c.toDataURL('image/png') },
-  classic: (b?: number) => { R.render(style); if (b !== undefined) boil = b; runSketch('classic', true); return sketchStats.drawMs },
+  classic: (b?: number) => { if (rebuildDue) rebuild(); if (geomStale) { geomStale = false; R.rebuild(style) } if (b !== undefined) boil = b; runSketch('classic', true); return sketchStats.drawMs },   // (the geometry: the drawing is framed on it; not the preview's pixels)
+  /** the page's own loop stops drawing: a script that draws every frame itself (the CLI) has the thread to itself */
+  hold: (v: boolean) => { held = v; if (!v) invalidate() },
   setSketch: (v: boolean) => { sketchOn = v; invalidate() }, setRest: (m: RestMode) => { restMode = m; sketchOn = m !== 'preview'; invalidate() },
   fitFrame, screenBox: (what: 'all' | 'frame' = 'all') => R.camera.screenBox(R.w, R.h, framePoints(what)), framePresets: FRAME_PRESETS, renderCommand,
   history, lint: () => lintItems, suggest, adoptView, renderToFile, drawFrameTo, keyframes, setKeyView, setKeyTiming, duplicateKey, deleteKey, moveKey, setAuthorMode, authorClick, arrowsOf, editArrow, keyDiff: (i: number) => sceneDoc ? keyDiff(sceneDoc, i) : null, setPreviewAspect, projectNow,

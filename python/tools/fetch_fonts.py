@@ -12,8 +12,8 @@ def get(url):
     return subprocess.run(["curl", "-sfL", "-A", UA, url], check=True, capture_output=True).stdout   # curl: the system's certificates
 
 def main():
-    html = (HERE.parent / "app" / "index.html").read_text()
-    url = re.search(r'https://fonts\.googleapis\.com/css2[^"]*', html).group(0).replace("&amp;", "&")
+    html = (HERE.parent / "app" / "index.html").read_text()   # the request the app's fonts come from, noted in its head
+    url = re.search(r'https://fonts\.googleapis\.com/css2[^"\s,]*(?:,[^"\s,]*)*[^"\s,]', html).group(0).replace("&amp;", "&")
     css = get(url).decode()
     faces, files = [], {}
     for block in re.findall(r"@font-face\s*{([^}]*)}", css):

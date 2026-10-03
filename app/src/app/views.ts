@@ -48,9 +48,19 @@ interface Scored { yaw: number; pitch: number; roll: number; parts: Record<strin
 /** Score every candidate; returns the best `count`, distinct in direction. `frames` are the frames to project (one per
     keyframe, in their holds). Runs synchronously; a few hundred ms for a mechanism. */
 export function suggestViews(E: Classic, doc: { keyframes: any[] }, W: number, H: number, frames: number[], count = 12, targetAspect = 1.4): ViewSuggestion[] {
+  const g = suggesting(E, doc, W, H, frames, count, targetAspect); let r = g.next(); while (!r.done) r = g.next(); return r.value;
+}
+/** suggestViews a little at a time: `pause` is awaited every 30 ms or so (the engine is as it was meanwhile), so a page
+    that asks stays responsive */
+export async function suggestViewsAsync(E: Classic, doc: { keyframes: any[] }, W: number, H: number, frames: number[], count = 12, targetAspect = 1.4, pause: () => Promise<void>): Promise<ViewSuggestion[]> {
+  const g = suggesting(E, doc, W, H, frames, count, targetAspect); let t = performance.now(), r = g.next();
+  while (!r.done) { if (performance.now() - t > 30) { await pause(); t = performance.now() } r = g.next() }
+  return r.value;
+}
+function* suggesting(E: Classic, doc: { keyframes: any[] }, W: number, H: number, frames: number[], count: number, targetAspect: number): Generator<void, ViewSuggestion[]> {
   const { score, flatRoll, total, restore } = makeScorer(E, doc, W, H, frames, targetAspect);
   const cands: Scored[] = [];
-  for (let pitch = -60; pitch <= 60; pitch += 30) for (let yaw = 0; yaw < 360; yaw += 30) { const r0 = flatRoll(yaw, pitch); for (const roll of [r0, r0 + 180]) cands.push(score(yaw, pitch, ((Math.round(roll) + 180) % 360 + 360) % 360 - 180)) }
+  for (let pitch = -60; pitch <= 60; pitch += 30) for (let yaw = 0; yaw < 360; yaw += 30) { const r0 = flatRoll(yaw, pitch); for (const roll of [r0, r0 + 180]) cands.push(score(yaw, pitch, ((Math.round(roll) + 180) % 360 + 360) % 360 - 180)); restore(); yield }
   restore();
   cands.sort((a, b) => total(b) - total(a));
   const dirOf = (c: Scored) => { const y = c.yaw * Math.PI / 180, p = c.pitch * Math.PI / 180; return [Math.sin(y) * Math.cos(p), Math.sin(p), Math.cos(y) * Math.cos(p)] };
@@ -82,7 +92,10 @@ function makeScorer(E: Classic, doc: { keyframes: any[] }, W: number, H: number,
       // reacting atoms unoccluded: nothing within 0.8 Å on screen and nearer the eye
       const ids = [...react].filter(id => P[id]); let clear = 0;
       const nb = new Set<string>(); for (const bd of st.bonds) { nb.add(bd.a + '|' + bd.b); nb.add(bd.b + '|' + bd.a) }   // bonded neighbours do not hide an atom, they are its drawing
-      for (const id of ids) { const p = P[id]; let blocked = 0; for (const o of st.atoms) { if (o.id === id || !P[o.id] || nb.has(id + '|' + o.id)) continue; const q = P[o.id]; if (q.z > p.z + 0.4 && Math.hypot(q.x - p.x, q.y - p.y) / pxA < 0.8) blocked++ } clear += blocked ? 0 : 1 }
+      const Q = st.atoms.map(o => P[o.id]);   // each atom where it is drawn (none: not drawn), looked up once, not per reacting atom
+      for (const id of ids) { const p = P[id]; let blocked = false;   // (the cheap tests first; one atom in front is enough)
+        for (let i = 0; i < Q.length && !blocked; i++) { const q = Q[i]; if (!q || !(q.z > p.z + 0.4) || !(Math.hypot(q.x - p.x, q.y - p.y) / pxA < 0.8)) continue; const o = st.atoms[i]; if (o.id !== id && !nb.has(id + '|' + o.id)) blocked = true }
+        clear += blocked ? 0 : 1 }
       parts.clear += ids.length ? clear / ids.length : 1;
       // reacting atoms apart from each other
       let sp = 0, sc = 0; for (let i = 0; i < ids.length; i++) for (let j = i + 1; j < ids.length; j++) { const p = P[ids[i]], q = P[ids[j]]; sp += Math.min(Math.hypot(p.x - q.x, p.y - q.y) / pxA, 2.5) / 2.5; sc++ }

@@ -344,22 +344,26 @@ as PNG images at `size` × `scale` pixels, so use `scale=2` or more for print. B
 `mix-blend-mode`, which browsers, Inkscape and Affinity honour; Illustrator flattens them. A protein is a few MB; a
 144 000-atom ribosome about 30 MB.
 
-#### `fig.save_frames(directory, frames="drawn", size=(1920, 1440), *, scale=1)`
+#### `fig.save_frames(directory, frames="drawn", size=(1920, 1440), *, scale=1, workers=None)`
 
 Save frames as numbered PNG files (`frame_0000.png`, `frame_0001.png` …) in `directory`, and return their paths.
-`frames` is anything [`frames()`](#figframeswhichdrawn) accepts, or a list of frame numbers.
+`frames` is anything [`frames()`](#figframeswhichdrawn) accepts, or a list of frame numbers. `workers` processes
+draw the frames at once, each with its own engine: by default the processor's cores, at most 4 (and at most one per
+four frames); `workers=1` draws them all in this process. Every frame is the same as drawn alone; a 32-frame scene
+takes about a third of the time on four cores.
 
-#### `fig.animate(path, frames="drawn", size=(1920, 1440), *, fps=12, scale=1, crf=18)`
+#### `fig.animate(path, frames="drawn", size=(1920, 1440), *, fps=12, scale=1, crf=18, workers=None)`
 
 Make a video of a scene: `.mp4`, `.webm` or `.gif`. Needs `ffmpeg` on your `PATH`. The default, every drawn frame
 at 12 fps, plays the scene at its real speed. `crf` sets the video quality: lower is better and larger (18 is
-visually lossless for MP4).
+visually lossless for MP4). `workers` is as in `save_frames`.
 
-#### `fig.turntable(path, n=72, size=(1920, 1440), *, swing=0, fps=24, scale=1, crf=18)`
+#### `fig.turntable(path, n=72, size=(1920, 1440), *, swing=0, fps=24, scale=1, crf=18, workers=None)`
 
 Make a turntable: the molecule turns once around the vertical axis in `n` frames. `path` is a video (`.mp4`,
 `.webm`, `.gif`; needs `ffmpeg`) or, with no extension, a folder that receives PNG frames. `swing` tilts the molecule
-up and down by that many degrees during the turn. The figure's own camera is left as it was.
+up and down by that many degrees during the turn. The figure's own camera is left as it was. `workers` is as in
+`save_frames`.
 
 #### `fig.scene()`
 
@@ -548,5 +552,7 @@ The server draws one figure at a time. It listens on 127.0.0.1 only, unless you 
 
 | variable | effect |
 |---|---|
-| `MOLSKETCH_CACHE` | where `fetch` keeps downloaded files (default `~/.cache/molsketch`) |
+| `MOLSKETCH_CACHE` | where `fetch` keeps downloaded files, and the drawing keeps its paper and chalk textures (default `~/.cache/molsketch`) |
+| `MOLSKETCH_WORKERS` | how many processes draw a video's frames (`save_frames`, `animate`, `turntable`) when `workers` is not given; `1` draws them in the calling process |
+| `MOLSKETCH_TEXTURE_CACHE_MB` | how much the kept textures may take (default 300); `0` keeps none, and every process draws them afresh |
 | `MOLSKETCH_V8_SINGLE_THREADED=1` | run the embedded JavaScript engine on one thread. Set it if your program forks processes after drawing (for example `multiprocessing` with the `fork` start method); it makes large figures slower |

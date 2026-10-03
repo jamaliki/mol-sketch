@@ -37,7 +37,14 @@ class _Face:
             self._vp = skia.FontArguments.VariationPosition(self._coordv); self._args = skia.FontArguments(); self._args.setVariationDesignPosition(self._vp)
             typeface = typeface.makeClone(self._args)
         self.tf = typeface
-        face = hb.Face(data) if data is not None else hb.Face.create_for_tables(lambda _f, tag, _u: bytes(self.tf.getTableData(_tag(tag) if isinstance(tag, str) else tag)), None)
+        # a system face's tables come from Skia, kept here for as long as the face: HarfBuzz holds on to the bytes it is
+        # handed, and a table freed under it shaped digits and letters as missing glyphs, varying from run to run
+        self._tables: dict = {}
+        def table(_f, tag, _u):
+            t = self._tables.get(tag)
+            if t is None: t = self._tables[tag] = bytes(self.tf.getTableData(_tag(tag) if isinstance(tag, str) else tag))
+            return t
+        face = hb.Face(data) if data is not None else hb.Face.create_for_tables(table, None)
         self.upem = face.upem
         self.hb = hb.Font(face)
         if variations: self.hb.set_variations({k: float(v) for k, v in variations.items()})

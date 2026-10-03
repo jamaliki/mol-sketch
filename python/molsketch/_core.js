@@ -336,6 +336,35 @@
   var SPECS = [];
   var nextPaint = 1;
   var EPOCH = 0;
+  var PLAIN = /* @__PURE__ */ new Map();
+  var HB = new Float64Array(1);
+  var HW = new Int32Array(HB.buffer);
+  var STRH = /* @__PURE__ */ new Map();
+  var hashOf = (f2) => {
+    let h = f2.length;
+    for (const x of f2) {
+      let a, b;
+      if (typeof x === "number") {
+        HB[0] = x === 0 ? 0 : x;
+        a = HW[0];
+        b = HW[1];
+      } else {
+        let k = STRH.get(x);
+        if (k === void 0) {
+          k = 0;
+          for (let i = 0; i < x.length; i++) k = Math.imul(k ^ x.charCodeAt(i), 16777619);
+          if (STRH.size > 1024) STRH.clear();
+          STRH.set(x, k);
+        }
+        a = k;
+        b = 1540483477;
+      }
+      h = Math.imul(h ^ a, 2654435761);
+      h = Math.imul(h ^ b, 2246822519);
+      h ^= h >>> 15;
+    }
+    return h & 1073741823;
+  };
   var RecCanvas = class {
     constructor() {
       __publicField(this, "id");
@@ -577,15 +606,44 @@
       if (butt) {
         if (s.bidE === EPOCH) return s.bid;
       } else if (stroke ? s.sidE === EPOCH : s.fidE === EPOCH) return stroke ? s.sid : s.fid;
-      const v = stroke ? s.strokeV : s.fillV, common = [s.globalAlpha, s.globalCompositeOperation, s.filter];
-      const spec = Array.isArray(v) ? [stroke ? 1 : 0, ...v, ...common] : [stroke ? 3 : 2, v.pat, v.snap, v.rep, v.m, s.imageSmoothingEnabled, ...common];
-      if (stroke) spec.push(s.lineWidth, butt ? "butt" : s.lineCap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
-      const key = JSON.stringify(spec);
-      let id = PAINTS.get(key);
-      if (id === void 0) {
-        id = nextPaint++;
-        PAINTS.set(key, id);
-        SPECS.push(id, spec);
+      const v = stroke ? s.strokeV : s.fillV, cap = butt ? "butt" : s.lineCap;
+      const spec = () => {
+        const common = [s.globalAlpha, s.globalCompositeOperation, s.filter];
+        const o = Array.isArray(v) ? [stroke ? 1 : 0, ...v, ...common] : [stroke ? 3 : 2, v.pat, v.snap, v.rep, v.m, s.imageSmoothingEnabled, ...common];
+        if (stroke) o.push(s.lineWidth, cap, s.lineJoin, s.miterLimit, s.lineDash.length ? s.lineDash : null, s.lineDashOffset);
+        return o;
+      };
+      let id;
+      if (Array.isArray(v) && !s.lineDash.length) {
+        const f2 = stroke ? [1, v[0], v[1], v[2], v[3], s.globalAlpha, s.globalCompositeOperation, s.filter, s.lineWidth, cap, s.lineJoin, s.miterLimit, s.lineDashOffset] : [0, v[0], v[1], v[2], v[3], s.globalAlpha, s.globalCompositeOperation, s.filter];
+        const h = hashOf(f2);
+        let bucket = PLAIN.get(h);
+        if (bucket) for (const e of bucket) {
+          let same = true;
+          for (let i = 0; i < f2.length; i++) if (e[i] !== f2[i]) {
+            same = false;
+            break;
+          }
+          if (same) {
+            id = e[f2.length];
+            break;
+          }
+        }
+        if (id === void 0) {
+          id = nextPaint++;
+          f2.push(id);
+          if (bucket) bucket.push(f2);
+          else PLAIN.set(h, [f2]);
+          SPECS.push(id, spec());
+        }
+      } else {
+        const key = JSON.stringify(spec());
+        id = PAINTS.get(key);
+        if (id === void 0) {
+          id = nextPaint++;
+          PAINTS.set(key, id);
+          SPECS.push(id, spec());
+        }
       }
       if (butt) {
         s.bid = id;
@@ -1072,6 +1130,7 @@
   function endRender() {
     emit();
     PAINTS = /* @__PURE__ */ new Map();
+    PLAIN = /* @__PURE__ */ new Map();
     EPOCH++;
     return held.splice(0);
   }
@@ -1085,6 +1144,25 @@
     if (tag !== "canvas") throw new Error("headless: only canvases");
     return new RecCanvas();
   } };
+  var hostTextures = null;
+  function setHostTextures(keys) {
+    hostTextures = keys ? new Set(keys) : null;
+  }
+  var textureHost = {
+    take(key, w, h) {
+      if (!hostTextures || !hostTextures.has(key)) return null;
+      const c = new RecCanvas();
+      c.width = w;
+      c.height = h;
+      c.push(["ext", key]);
+      return c;
+    },
+    keep(key, c) {
+      if (!hostTextures || !(c instanceof RecCanvas)) return;
+      c.settle();
+      c.push(["keep", key]);
+    }
+  };
 
   // src/headless/core.ts
   var core_exports = {};
@@ -1093,6 +1171,7 @@
     catalog: () => catalog,
     drawOn: () => drawOn,
     drop: () => drop,
+    dropTextures: () => dropTextures,
     engineConfig: () => engineConfig,
     fitFrame: () => fitFrame,
     frameTheSite: () => frameTheSite,
@@ -1322,34 +1401,88 @@
       const cell = 2.2;
       const X = this.x, Y = this.y, Z = this.z;
       const el = this.element;
-      const grid = /* @__PURE__ */ new Map();
-      const K = (x, y, z) => ((x + 512) * 1024 + (y + 512)) * 1024 + (z + 512);
+      const gx = new Int32Array(n), gy = new Int32Array(n), gz = new Int32Array(n);
+      let x0 = Infinity, y0 = Infinity, z0 = Infinity, x1 = -Infinity, y1 = -Infinity, z1 = -Infinity;
       for (let i = 0; i < n; i++) {
-        const k = K(Math.floor(X[i] / cell), Math.floor(Y[i] / cell), Math.floor(Z[i] / cell));
-        let g2 = grid.get(k);
-        if (!g2) {
-          g2 = [];
-          grid.set(k, g2);
-        }
-        g2.push(i);
+        const a = gx[i] = Math.floor(X[i] / cell), b = gy[i] = Math.floor(Y[i] / cell), c = gz[i] = Math.floor(Z[i] / cell);
+        if (a < x0) x0 = a;
+        if (a > x1) x1 = a;
+        if (b < y0) y0 = b;
+        if (b > y1) y1 = b;
+        if (c < z0) z0 = c;
+        if (c > z1) z1 = c;
       }
-      const out = [];
+      const nx = x1 - x0 + 1, ny = y1 - y0 + 1, nz = z1 - z0 + 1, dense = n > 0 && nx * ny * nz <= Math.max(1 << 20, 32 * n);
+      let cellOf;
+      let start, list;
+      if (dense) {
+        const nc = nx * ny * nz;
+        start = new Int32Array(nc + 1);
+        const at = new Int32Array(n);
+        for (let i = 0; i < n; i++) {
+          const k = at[i] = gx[i] - x0 + nx * (gy[i] - y0 + ny * (gz[i] - z0));
+          start[k + 1]++;
+        }
+        for (let k = 0; k < nc; k++) start[k + 1] += start[k];
+        const fill = start.slice(0, nc);
+        list = new Int32Array(n);
+        for (let i = 0; i < n; i++) list[fill[at[i]]++] = i;
+        cellOf = (a, b, c) => a < x0 || a > x1 || b < y0 || b > y1 || c < z0 || c > z1 ? -1 : a - x0 + nx * (b - y0 + ny * (c - z0));
+      } else {
+        const K = (x, y, z) => ((x + 512) * 1024 + (y + 512)) * 1024 + (z + 512);
+        const ids = /* @__PURE__ */ new Map(), cnt = [], at = new Int32Array(n);
+        for (let i = 0; i < n; i++) {
+          const key = K(gx[i], gy[i], gz[i]);
+          let k = ids.get(key);
+          if (k === void 0) {
+            k = cnt.length;
+            ids.set(key, k);
+            cnt.push(0);
+          }
+          at[i] = k;
+          cnt[k]++;
+        }
+        start = new Int32Array(cnt.length + 1);
+        for (let k = 0; k < cnt.length; k++) start[k + 1] = start[k] + cnt[k];
+        const fill = start.slice(0, cnt.length);
+        list = new Int32Array(n);
+        for (let i = 0; i < n; i++) list[fill[at[i]]++] = i;
+        cellOf = (a, b, c) => ids.get(K(a, b, c)) ?? -1;
+      }
+      const rad = new Float64Array(n), isH = new Uint8Array(n);
       for (let i = 0; i < n; i++) {
-        const gx = Math.floor(X[i] / cell), gy = Math.floor(Y[i] / cell), gz = Math.floor(Z[i] / cell);
-        const ri = COV_R[el[i]] ?? 0.76;
+        rad[i] = COV_R[el[i]] ?? 0.76;
+        isH[i] = el[i] === "H" ? 1 : 0;
+      }
+      let out = new Int32Array(Math.max(16, n * 3)), m = 0;
+      const LO = 1 - 1e-9, HI = 1 + 1e-9;
+      for (let i = 0; i < n; i++) {
+        const ri = rad[i], hi = isH[i], xi = X[i], yi = Y[i], zi = Z[i];
         for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (let dz = -1; dz <= 1; dz++) {
-          const g2 = grid.get(K(gx + dx, gy + dy, gz + dz));
-          if (!g2) continue;
-          for (const j of g2) {
+          const k = cellOf(gx[i] + dx, gy[i] + dy, gz[i] + dz);
+          if (k < 0) continue;
+          for (let q = start[k], qe = start[k + 1]; q < qe; q++) {
+            const j = list[q];
             if (j <= i) continue;
-            if (el[i] === "H" && el[j] === "H") continue;
-            const d = Math.hypot(X[i] - X[j], Y[i] - Y[j], Z[i] - Z[j]);
-            const rs = ri + (COV_R[el[j]] ?? 0.76);
-            if (d < rs * 1.15 && d > 0.4) out.push(i, j);
+            if (hi && isH[j]) continue;
+            const ex = xi - X[j], ey = yi - Y[j], ez = zi - Z[j], d2 = ex * ex + ey * ey + ez * ez;
+            const lim = (ri + rad[j]) * 1.15, L2 = lim * lim;
+            if (d2 > L2 * HI) continue;
+            if (!(d2 < L2 * LO && d2 > 0.16 * HI)) {
+              const d = Math.hypot(ex, ey, ez);
+              if (!(d < lim && d > 0.4)) continue;
+            }
+            if (m + 2 > out.length) {
+              const b = new Int32Array(out.length * 2);
+              b.set(out);
+              out = b;
+            }
+            out[m++] = i;
+            out[m++] = j;
           }
         }
       }
-      this.bonds = Int32Array.from(out);
+      this.bonds = out.slice(0, m);
     }
   };
 
@@ -2684,32 +2817,74 @@
       sketchLine(ctx, [l1, e], { seed: o.seed + 3, width: o.width, color: o.color, alpha: o.alpha, ampScale: 0.5, overshoot: false, passes: 1 });
       sketchLine(ctx, [l2, e], { seed: o.seed + 5, width: o.width, color: o.color, alpha: o.alpha, ampScale: 0.5, overshoot: false, passes: 1 });
     }
-    const paperCache = { key: "", canvas: null };
-    const baseCache = { key: "", canvas: null };
+    function canvasCache() {
+      const E = [];
+      const SMALL = 5e5;
+      const small = (c) => c.width * c.height <= SMALL;
+      return {
+        get(key) {
+          for (let i = 0; i < E.length; i++) if (E[i].key === key) {
+            const e = E[i];
+            if (i) {
+              E.splice(i, 1);
+              E.unshift(e);
+            }
+            return e.canvas;
+          }
+          return null;
+        },
+        put(key, canvas) {
+          E.unshift({ key, canvas });
+          let big = !small(canvas), n = 0;
+          for (let i = 1; i < E.length; i++) {
+            const s = small(E[i].canvas);
+            if (s ? n++ < 4 : !big) big = big || !s;
+            else E.splice(i--, 1);
+          }
+          return canvas;
+        },
+        clear() {
+          E.length = 0;
+        }
+      };
+    }
+    const paperCache = canvasCache(), baseCache = canvasCache();
+    let TEXHOST = null;
+    const TEXV = "t1";
+    function hostTexture(key, W, H, dpr, make) {
+      const k = TEXV + "|" + key;
+      if (TEXHOST) {
+        const c2 = TEXHOST.take(k, W * dpr, H * dpr);
+        if (c2) return c2;
+      }
+      const c = make();
+      if (TEXHOST) TEXHOST.keep(k, c);
+      return c;
+    }
     function paper(W, H, dpr, boil) {
       const life = cfg.style.wash > 0 ? cfg.style.washLife : 0;
       const wb = life > 0 ? boil | 0 : 0;
-      const key = [W, H, dpr, cfg.palette.paper, cfg.style.grain, cfg.style.wash, cfg.style.washSeed, cfg.palette.wash, life, wb].join("|");
-      if (paperCache.key === key) return paperCache.canvas;
-      const bkey2 = [W, H, dpr, cfg.palette.paper, cfg.style.grain].join("|");
-      let base = baseCache.canvas;
-      if (baseCache.key !== bkey2) {
-        base = paperBase(W, H, dpr);
-        baseCache.key = bkey2;
-        baseCache.canvas = base;
-      }
-      const c = document.createElement("canvas");
-      c.width = W * dpr;
-      c.height = H * dpr;
-      const x = c.getContext("2d", { willReadFrequently: true });
-      x.scale(dpr, dpr);
-      x.drawImage(base, 0, 0, W, H);
-      if (cfg.style.wash > 0) watercolourWash(x, W, H, wb, life);
-      paperCache.key = key;
-      paperCache.canvas = c;
-      return c;
+      const key = [W, H, dpr, cfg.palette.paper, cfg.style.grain, cfg.style.wash, cfg.style.washSeed, cfg.palette.wash, life, wb, cfg.style.wash > 0 ? shadeInk() : ""].join("|");
+      const hit = paperCache.get(key);
+      if (hit) return hit;
+      const make = () => {
+        const bkey2 = [W, H, dpr, cfg.palette.paper, cfg.style.grain].join("|");
+        const base = baseCache.get(bkey2) || baseCache.put(bkey2, paperBase(W, H, dpr));
+        const c = document.createElement("canvas");
+        c.width = W * dpr;
+        c.height = H * dpr;
+        const x = c.getContext("2d", { willReadFrequently: true });
+        x.scale(dpr, dpr);
+        x.drawImage(base, 0, 0, W, H);
+        if (cfg.style.wash > 0) watercolourWash(x, W, H, wb, life);
+        return c;
+      };
+      return paperCache.put(key, wb ? make() : hostTexture("paper|" + key, W, H, dpr, make));
     }
     function paperBase(W, H, dpr) {
+      return hostTexture("base|" + [W, H, dpr, cfg.palette.paper, cfg.style.grain].join("|"), W, H, dpr, () => paperBaseOnce(W, H, dpr));
+    }
+    function paperBaseOnce(W, H, dpr) {
       const c = document.createElement("canvas");
       c.width = W * dpr;
       c.height = H * dpr;
@@ -3341,6 +3516,58 @@
       }
       return p;
     }
+    function wcDeformF(P, depth, variance, rng) {
+      let p = P;
+      for (let d = 0; d < depth; d++) {
+        const m = p.length >> 1, out = new Float64Array(m * 4);
+        for (let i = 0; i < m; i++) {
+          const j = i + 1 === m ? 0 : i + 1;
+          const ax = p[2 * i], ay = p[2 * i + 1], bx = p[2 * j], by = p[2 * j + 1];
+          const mx = (ax + bx) / 2, my = (ay + by) / 2;
+          const ex = bx - ax, ey = by - ay;
+          const len = Math.hypot(ex, ey) || 1;
+          const nx = -ey / len, ny = ex / len;
+          const dn = wcGauss(rng) * variance * len, dt = wcGauss(rng) * variance * len * 0.35;
+          const o = 4 * i;
+          out[o] = ax;
+          out[o + 1] = ay;
+          out[o + 2] = mx + nx * dn + ex / len * dt;
+          out[o + 3] = my + ny * dn + ey / len * dt;
+        }
+        p = out;
+      }
+      return p;
+    }
+    let WCA = new Float64Array(4096), WCB = new Float64Array(4096);
+    function wcDeformS(P, n, depth, variance, rng) {
+      let p = P;
+      for (let d = 0; d < depth; d++) {
+        const m = n >> 1;
+        let out = d & 1 ? WCB : WCA;
+        if (out.length < m * 4) {
+          out = new Float64Array(m * 8);
+          if (d & 1) WCB = out;
+          else WCA = out;
+        }
+        for (let i = 0; i < m; i++) {
+          const j = i + 1 === m ? 0 : i + 1;
+          const ax = p[2 * i], ay = p[2 * i + 1], bx = p[2 * j], by = p[2 * j + 1];
+          const mx = (ax + bx) / 2, my = (ay + by) / 2;
+          const ex = bx - ax, ey = by - ay;
+          const len = Math.hypot(ex, ey) || 1;
+          const nx = -ey / len, ny = ex / len;
+          const dn = wcGauss(rng) * variance * len, dt = wcGauss(rng) * variance * len * 0.35;
+          const o = 4 * i;
+          out[o] = ax;
+          out[o + 1] = ay;
+          out[o + 2] = mx + nx * dn + ex / len * dt;
+          out[o + 3] = my + ny * dn + ey / len * dt;
+        }
+        p = out;
+        n = m * 4;
+      }
+      return p;
+    }
     function watercolourShape(ctx, pts, col, seed, o) {
       o = o || {};
       const rng = mulberry32(seed + 4242);
@@ -3355,12 +3582,18 @@
       }
       cx /= pts.length;
       cy /= pts.length;
-      const path = (q) => {
+      const path = (q, n = q.length) => {
         ctx.beginPath();
-        q.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        ctx.moveTo(q[0], q[1]);
+        for (let i = 2; i < n; i += 2) ctx.lineTo(q[i], q[i + 1]);
         ctx.closePath();
       };
-      const shape = wcDeform(pts, 1, 0.06, rng);
+      const P = new Float64Array(pts.length * 2);
+      for (let i = 0; i < pts.length; i++) {
+        P[2 * i] = pts[i][0];
+        P[2 * i + 1] = pts[i][1];
+      }
+      const shape = wcDeformF(P, 1, 0.06, rng), sn = shape.length >> 1;
       ctx.save();
       if (!light && !o.offscreen) {
         path(shape);
@@ -3368,41 +3601,52 @@
         ctx.fill();
       }
       ctx.globalCompositeOperation = o.offscreen ? "source-over" : light ? "multiply" : "screen";
-      const aFill = (o.strength || 0.75) / layers * 1.15;
+      const aFill = (o.strength || 0.75) / layers * 1.15, fill = rgba(col, aFill), N = shape.length;
+      const scaled = new Float64Array(N);
       for (let L = 0; L < layers; L++) {
         const sc = o.noScale ? 1 : 0.9 + rng() * 0.16;
-        const lay = wcDeform(sc === 1 ? shape : shape.map((p) => [cx + (p[0] - cx) * sc, cy + (p[1] - cy) * sc]), 2, (0.08 + rng() * 0.1) * (o.noScale ? 1.6 : 1), rng);
-        path(lay);
-        ctx.fillStyle = rgba(col, aFill);
+        let q = shape;
+        if (sc !== 1) {
+          for (let i = 0; i < N; i += 2) {
+            scaled[i] = cx + (shape[i] - cx) * sc;
+            scaled[i + 1] = cy + (shape[i + 1] - cy) * sc;
+          }
+          q = scaled;
+        }
+        path(wcDeformS(q, N, 2, (0.08 + rng() * 0.1) * (o.noScale ? 1.6 : 1), rng), N * 4);
+        ctx.fillStyle = fill;
         ctx.fill();
       }
-      if (!o.noRing) for (let e = 0; e < 2; e++) {
-        const lay = wcDeform(shape, 1, 0.03, rng);
-        path(lay);
-        ctx.lineWidth = 0.7 + rng() * 0.5;
-        ctx.strokeStyle = rgba(mix(col, shadeInk(), 0.25), 0.16 * (o.strength || 0.75) / 0.75);
-        ctx.stroke();
+      if (!o.noRing) {
+        const ring = rgba(mix(col, shadeInk(), 0.25), 0.16 * (o.strength || 0.75) / 0.75);
+        for (let e = 0; e < 2; e++) {
+          path(wcDeformS(shape, N, 1, 0.03, rng), N * 2);
+          ctx.lineWidth = 0.7 + rng() * 0.5;
+          ctx.strokeStyle = ring;
+          ctx.stroke();
+        }
       }
       if (o.granulate !== false) {
         ctx.save();
         path(shape);
         ctx.clip();
         let area = 0;
-        for (let i = 0; i < shape.length; i++) {
-          const a = shape[i], b = shape[(i + 1) % shape.length];
-          area += a[0] * b[1] - b[0] * a[1];
+        for (let i = 0; i < sn; i++) {
+          const j = i + 1 === sn ? 0 : i + 1;
+          area += shape[2 * i] * shape[2 * j + 1] - shape[2 * j] * shape[2 * i + 1];
         }
         area = Math.abs(area) / 2;
         const g2 = Math.round(area * 4e-3);
         let xs = 1e9, ys = 1e9, xe = -1e9, ye = -1e9;
-        for (const p of shape) {
-          xs = Math.min(xs, p[0]);
-          ys = Math.min(ys, p[1]);
-          xe = Math.max(xe, p[0]);
-          ye = Math.max(ye, p[1]);
+        for (let i = 0; i < shape.length; i += 2) {
+          xs = Math.min(xs, shape[i]);
+          ys = Math.min(ys, shape[i + 1]);
+          xe = Math.max(xe, shape[i]);
+          ye = Math.max(ye, shape[i + 1]);
         }
+        const gc = mix(col, shadeInk(), 0.4);
         for (let i = 0; i < g2; i++) {
-          ctx.fillStyle = rgba(mix(col, shadeInk(), 0.4), 0.12 + rng() * 0.2);
+          ctx.fillStyle = rgba(gc, 0.12 + rng() * 0.2);
           ctx.fillRect(xs + rng() * (xe - xs), ys + rng() * (ye - ys), 1, 1);
         }
         ctx.restore();
@@ -5296,36 +5540,46 @@
       }
       if (ds.length < 64) return ds;
       const gw = Math.ceil((x1 - x0) / cs) + 1, gh = Math.ceil((y1 - y0) / cs) + 1, cnt = new Uint16Array(gw * gh);
-      const full = (d, f2) => {
+      const add = (d, k) => {
         const r = d.r - shrink, r2 = r * r;
         const i0 = Math.max(0, Math.floor((d.x - r - x0) / cs)), i1 = Math.min(gw - 1, Math.floor((d.x + r - x0) / cs)), j0 = Math.max(0, Math.floor((d.y - r - y0) / cs)), j1 = Math.min(gh - 1, Math.floor((d.y + r - y0) / cs));
         for (let j = j0; j <= j1; j++) {
           const ya = y0 + j * cs - d.y, yb = ya + cs, yy = Math.max(ya * ya, yb * yb);
           for (let i = i0; i <= i1; i++) {
             const xa = x0 + i * cs - d.x, xb = xa + cs;
-            if (Math.max(xa * xa, xb * xb) + yy <= r2) f2(j * gw + i, true);
-            else if (f2.length > 2) f2(j * gw + i, false, xa, xb, ya, yb, r2);
+            if (Math.max(xa * xa, xb * xb) + yy <= r2) {
+              const c = j * gw + i;
+              if (k > 0) {
+                if (cnt[c] < 65535) cnt[c]++;
+              } else cnt[c]--;
+            }
           }
         }
       };
-      for (const d of ds) full(d, (c) => {
-        if (cnt[c] < 65535) cnt[c]++;
-      });
+      const needs = (d) => {
+        const r = d.r - shrink, r2 = r * r;
+        const i0 = Math.max(0, Math.floor((d.x - r - x0) / cs)), i1 = Math.min(gw - 1, Math.floor((d.x + r - x0) / cs)), j0 = Math.max(0, Math.floor((d.y - r - y0) / cs)), j1 = Math.min(gh - 1, Math.floor((d.y + r - y0) / cs));
+        for (let j = j0; j <= j1; j++) {
+          const ya = y0 + j * cs - d.y, yb = ya + cs, yy = Math.max(ya * ya, yb * yb);
+          for (let i = i0; i <= i1; i++) {
+            const xa = x0 + i * cs - d.x, xb = xa + cs;
+            const c = j * gw + i;
+            if (Math.max(xa * xa, xb * xb) + yy <= r2) {
+              if (cnt[c] - 1 <= 0) return true;
+              continue;
+            }
+            const nx = Math.max(xa, Math.min(0, xb)), ny = Math.max(ya, Math.min(0, yb));
+            if (nx * nx + ny * ny >= r2) continue;
+            if (cnt[c] <= 0) return true;
+          }
+        }
+        return false;
+      };
+      for (const d of ds) add(d, 1);
       const keep2 = [];
       for (const d of ds) {
-        let needed = false;
-        full(d, function(c, inside, xa, xb, ya, yb, r2) {
-          if (needed) return;
-          if (!inside) {
-            const nx = Math.max(xa, Math.min(0, xb)), ny = Math.max(ya, Math.min(0, yb));
-            if (nx * nx + ny * ny >= r2) return;
-          }
-          if (cnt[c] - (inside ? 1 : 0) <= 0) needed = true;
-        });
-        if (needed) keep2.push(d);
-        else full(d, (c) => {
-          cnt[c]--;
-        });
+        if (needs(d)) keep2.push(d);
+        else add(d, -1);
       }
       return keep2;
     }
@@ -5499,7 +5753,7 @@
         const q = proj.proj(p);
         return [q.x, q.y, q.z, q.d, q.fog];
       };
-      const HA = 32 * Math.PI / 180, HB = -11 * Math.PI / 180, HH = 4.7;
+      const HA = 32 * Math.PI / 180, HB2 = -11 * Math.PI / 180, HH = 4.7;
       const ssCol = (t) => t === "H" ? P.helix : t === "E" ? P.sheet : t === "N" ? P.nucleic || "#e0a23a" : P.loop;
       const hsv = (h, s, v) => {
         const f2 = (k) => {
@@ -5642,7 +5896,7 @@
               const c = norm3(sub3(p[i + 1], p[i - 1]));
               const r = norm3(cross3(sub3(p[i], p[i - 1]), sub3(p[i + 1], p[i])));
               ax[i] = add(scl(r, Math.cos(HA)), c, Math.sin(HA));
-              tg[i] = scl(add(scl(c, Math.cos(HB)), r, Math.sin(HB)), HH);
+              tg[i] = scl(add(scl(c, Math.cos(HB2)), r, Math.sin(HB2)), HH);
             }
             ax[0] = ax[1];
             ax[m - 1] = ax[m - 2];
@@ -6474,11 +6728,15 @@
       ctx.restore();
       return st;
     }
-    const grainCache = { key: "", canvas: null };
-    const pitCache = { key: "", canvas: null };
+    const grainCache = canvasCache();
+    const pitCache = canvasCache();
     function pitOverlay(W, H, dpr) {
       const key = [W, H, dpr].join("|");
-      if (pitCache.key === key) return pitCache.canvas;
+      const hit = pitCache.get(key);
+      if (hit) return hit;
+      return pitCache.put(key, hostTexture("pit|" + key, W, H, dpr, () => pitOnce(W, H, dpr)));
+    }
+    function pitOnce(W, H, dpr) {
       const c = document.createElement("canvas");
       c.width = W * dpr;
       c.height = H * dpr;
@@ -6494,13 +6752,15 @@
         const s = rng() < 0.8 ? 1 : 1.6;
         x.fillRect(rng() * W, rng() * H, s, s);
       }
-      pitCache.key = key;
-      pitCache.canvas = c;
       return c;
     }
     function grainOverlay(W, H, dpr, light) {
       const key = [W, H, dpr, light].join("|");
-      if (grainCache.key === key) return grainCache.canvas;
+      const hit = grainCache.get(key);
+      if (hit) return hit;
+      return grainCache.put(key, hostTexture("grain|" + key, W, H, dpr, () => grainOnce(W, H, dpr, light)));
+    }
+    function grainOnce(W, H, dpr, light) {
       const c = document.createElement("canvas");
       c.width = W * dpr;
       c.height = H * dpr;
@@ -6525,8 +6785,6 @@
         x.lineTo(px + Math.cos(an) * l, py + Math.sin(an) * l);
         x.stroke();
       }
-      grainCache.key = key;
-      grainCache.canvas = c;
       return c;
     }
     let textGate = null;
@@ -6597,12 +6855,21 @@
       GROUP_PALETTE,
       SUBUNIT_COLS,
       invalidatePaper() {
-        paperCache.key = "";
-        baseCache.key = "";
-        grainCache.key = "";
+        paperCache.clear();
+        baseCache.clear();
+        grainCache.clear();
       },
       setTextGate(f2) {
         textGate = f2 || null;
+      },
+      setTextureHost(h) {
+        TEXHOST = h || null;
+      },
+      dropTextures() {
+        paperCache.clear();
+        baseCache.clear();
+        grainCache.clear();
+        pitCache.clear();
       }
     };
   }
@@ -6620,15 +6887,27 @@
     const mean = s / data.length;
     return { mean, rms: Math.sqrt(Math.max(0, s2 / data.length - mean * mean)), min: mn, max: mx };
   }
-  function downsample(m, maxDim) {
+  function downsample(m, maxDim, above2) {
     const f2 = Math.ceil(Math.max(m.nx, m.ny, m.nz) / maxDim);
-    if (f2 <= 1) return m;
-    const nx = Math.floor(m.nx / f2), ny = Math.floor(m.ny / f2), nz = Math.floor(m.nz / f2), out = new Float32Array(nx * ny * nz), w = 1 / (f2 * f2 * f2);
+    if (f2 <= 1) {
+      if (above2 === void 0) return m;
+      const d2 = m.data, a = new Float32Array(d2.length);
+      for (let i = 0; i < d2.length; i++) {
+        const v = d2[i];
+        a[i] = v >= above2 ? v : 0;
+      }
+      return { ...m, data: a };
+    }
+    const nx = Math.floor(m.nx / f2), ny = Math.floor(m.ny / f2), nz = Math.floor(m.nz / f2), out = new Float32Array(nx * ny * nz), w = 1 / (f2 * f2 * f2), d = m.data;
     for (let k = 0; k < nz; k++) for (let j = 0; j < ny; j++) for (let i = 0; i < nx; i++) {
       let s = 0;
       for (let c = 0; c < f2; c++) for (let b = 0; b < f2; b++) {
         const o = (k * f2 + c) * m.nx * m.ny + (j * f2 + b) * m.nx + i * f2;
-        for (let a = 0; a < f2; a++) s += m.data[o + a];
+        if (above2 === void 0) for (let a = 0; a < f2; a++) s += d[o + a];
+        else for (let a = 0; a < f2; a++) {
+          const v = d[o + a];
+          s += v >= above2 ? v : 0;
+        }
       }
       out[k * nx * ny + j * nx + i] = s * w;
     }
@@ -6683,15 +6962,28 @@
       const kk = Z.c[k], w = Z.u[k];
       for (let j = 0; j < ny; j++) {
         const jj = Y.c[j], v = Y.u[j];
+        let at = -1, a0 = 0, a1 = 0, a2 = 0, a3 = 0, a4 = 0, a5 = 0, a6 = 0, a7 = 0;
         for (let i = 0; i < nx; i++, q++) {
           const ii = X.c[i];
           if (ii < 0 || jj < 0 || kk < 0) {
             out[q] = d0;
             continue;
           }
-          const u = X.u[i], o = kk * sz + jj * sy + ii;
-          const c00 = d[o] * (1 - u) + d[o + 1] * u, c10 = d[o + sy] * (1 - u) + d[o + sy + 1] * u;
-          const c01 = d[o + sz] * (1 - u) + d[o + sz + 1] * u, c11 = d[o + sz + sy] * (1 - u) + d[o + sz + sy + 1] * u;
+          const u = X.u[i];
+          if (ii !== at) {
+            const o = kk * sz + jj * sy + ii;
+            at = ii;
+            a0 = d[o];
+            a1 = d[o + 1];
+            a2 = d[o + sy];
+            a3 = d[o + sy + 1];
+            a4 = d[o + sz];
+            a5 = d[o + sz + 1];
+            a6 = d[o + sz + sy];
+            a7 = d[o + sz + sy + 1];
+          }
+          const c00 = a0 * (1 - u) + a1 * u, c10 = a2 * (1 - u) + a3 * u;
+          const c01 = a4 * (1 - u) + a5 * u, c11 = a6 * (1 - u) + a7 * u;
           out[q] = (c00 * (1 - v) + c10 * v) * (1 - w) + (c01 * (1 - v) + c11 * v) * w;
         }
       }
@@ -6701,45 +6993,60 @@
   function smoothSurface(iso, iterations) {
     const n = iso.positions.length / 3, tri = iso.triangles;
     if (!iterations || !n) return iso;
-    const nb = Array.from({ length: n }, () => []);
+    const deg = new Int32Array(n + 1);
+    for (let t = 0; t < tri.length; t += 3) {
+      deg[tri[t] + 1] += 2;
+      deg[tri[t + 1] + 1] += 2;
+      deg[tri[t + 2] + 1] += 2;
+    }
+    for (let v = 0; v < n; v++) deg[v + 1] += deg[v];
+    const at = deg.slice(0, n), nb = new Int32Array(deg[n]);
     for (let t = 0; t < tri.length; t += 3) for (let e = 0; e < 3; e++) {
       const a = tri[t + e], b = tri[t + (e + 1) % 3];
-      nb[a].push(b);
-      nb[b].push(a);
+      nb[at[a]++] = b;
+      nb[at[b]++] = a;
     }
-    let p = Float32Array.from(iso.positions);
-    const q = new Float32Array(p.length);
+    let p = Float32Array.from(iso.positions), q = new Float32Array(p.length);
     for (let it = 0; it < iterations * 2; it++) {
       const w = it % 2 ? -0.53 : 0.5;
       for (let v = 0; v < n; v++) {
-        const l = nb[v];
-        if (!l.length) {
-          q[v * 3] = p[v * 3];
-          q[v * 3 + 1] = p[v * 3 + 1];
-          q[v * 3 + 2] = p[v * 3 + 2];
+        const l0 = deg[v], l1 = deg[v + 1], o = v * 3;
+        if (l0 === l1) {
+          q[o] = p[o];
+          q[o + 1] = p[o + 1];
+          q[o + 2] = p[o + 2];
           continue;
         }
         let sx = 0, sy = 0, sz = 0;
-        for (const u of l) {
-          sx += p[u * 3];
-          sy += p[u * 3 + 1];
-          sz += p[u * 3 + 2];
+        for (let j = l0; j < l1; j++) {
+          const u = nb[j] * 3;
+          sx += p[u];
+          sy += p[u + 1];
+          sz += p[u + 2];
         }
-        const k = 1 / l.length;
-        for (let c = 0; c < 3; c++) q[v * 3 + c] = p[v * 3 + c] + w * ((c === 0 ? sx : c === 1 ? sy : sz) * k - p[v * 3 + c]);
+        const k = 1 / (l1 - l0);
+        q[o] = p[o] + w * (sx * k - p[o]);
+        q[o + 1] = p[o + 1] + w * (sy * k - p[o + 1]);
+        q[o + 2] = p[o + 2] + w * (sz * k - p[o + 2]);
       }
-      p.set(q);
+      const t = p;
+      p = q;
+      q = t;
     }
     const nor = new Float32Array(p.length);
     for (let t = 0; t < tri.length; t += 3) {
       const a = tri[t] * 3, b = tri[t + 1] * 3, c = tri[t + 2] * 3;
       const ux = p[b] - p[a], uy = p[b + 1] - p[a + 1], uz = p[b + 2] - p[a + 2], vx = p[c] - p[a], vy = p[c + 1] - p[a + 1], vz = p[c + 2] - p[a + 2];
       const nx = uy * vz - uz * vy, ny = uz * vx - ux * vz, nz = ux * vy - uy * vx;
-      for (const o of [a, b, c]) {
-        nor[o] += nx;
-        nor[o + 1] += ny;
-        nor[o + 2] += nz;
-      }
+      nor[a] += nx;
+      nor[a + 1] += ny;
+      nor[a + 2] += nz;
+      nor[b] += nx;
+      nor[b + 1] += ny;
+      nor[b + 2] += nz;
+      nor[c] += nx;
+      nor[c + 1] += ny;
+      nor[c + 2] += nz;
     }
     let agree = 0;
     for (let v = 0; v < n; v++) agree += nor[v * 3] * iso.normals[v * 3] + nor[v * 3 + 1] * iso.normals[v * 3 + 1] + nor[v * 3 + 2] * iso.normals[v * 3 + 2];
@@ -6807,137 +7114,212 @@
     const c01 = d[o + sz] * (1 - u) + d[o + sz + sx] * u, c11 = d[o + sz + sy] * (1 - u) + d[o + sz + sy + sx] * u;
     return (c00 * (1 - v) + c10 * v) * (1 - w) + (c01 * (1 - v) + c11 * v) * w;
   }
+  var EDGE_A = [0, 2, 4, 6, 0, 1, 4, 5, 0, 1, 2, 3];
+  var EDGE_B = [1, 3, 5, 7, 2, 3, 6, 7, 4, 5, 6, 7];
   function isosurface(m, level) {
     const { nx, ny, nz, data: d } = m, sy = nx, sz = nx * ny;
-    const cx = nx - 1, cy = ny - 1, cellIndex = new Int32Array(cx * cy * (nz - 1)).fill(-1);
-    const pos = [], nor = [], tri = [];
-    const corner = [[0, 0, 0], [1, 0, 0], [0, 1, 0], [1, 1, 0], [0, 0, 1], [1, 0, 1], [0, 1, 1], [1, 1, 1]];
-    const edges = [[0, 1], [2, 3], [4, 5], [6, 7], [0, 2], [1, 3], [4, 6], [5, 7], [0, 4], [1, 5], [2, 6], [3, 7]];
-    const v = new Float64Array(8);
-    for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 0, o = k * sz + j * sy; i < nx - 1; i++, o++) {
-      const v0 = d[o], v1 = d[o + 1], v2 = d[o + sy], v3 = d[o + sy + 1], v4 = d[o + sz], v5 = d[o + sz + 1], v6 = d[o + sz + sy], v7 = d[o + sz + sy + 1];
-      const mask = (v0 >= level ? 1 : 0) | (v1 >= level ? 2 : 0) | (v2 >= level ? 4 : 0) | (v3 >= level ? 8 : 0) | (v4 >= level ? 16 : 0) | (v5 >= level ? 32 : 0) | (v6 >= level ? 64 : 0) | (v7 >= level ? 128 : 0);
-      if (mask === 0 || mask === 255) continue;
-      v[0] = v0;
-      v[1] = v1;
-      v[2] = v2;
-      v[3] = v3;
-      v[4] = v4;
-      v[5] = v5;
-      v[6] = v6;
-      v[7] = v7;
-      let px = 0, py = 0, pz = 0, n = 0;
-      for (const [a, b] of edges) {
-        const ia = mask >> a & 1, ib = mask >> b & 1;
-        if (ia === ib) continue;
-        const t = (level - v[a]) / (v[b] - v[a]), qa = corner[a], qb = corner[b];
-        px += qa[0] + (qb[0] - qa[0]) * t;
-        py += qa[1] + (qb[1] - qa[1]) * t;
-        pz += qa[2] + (qb[2] - qa[2]) * t;
-        n++;
+    const cx = nx - 1, cy = ny - 1, cxy = cx * cy, cellIndex = new Int32Array(cx * cy * (nz - 1)).fill(-1);
+    let pos = new Float32Array(1 << 12), nor = new Float32Array(1 << 12), nv = 0;
+    let cells = new Int32Array(1 << 10), masks = new Uint8Array(1 << 10);
+    const v = new Float64Array(8), o0 = m.origin[0], o1 = m.origin[1], o2 = m.origin[2], s0 = m.step[0], s1 = m.step[1], s2 = m.step[2];
+    for (let k = 0; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) {
+      let o = k * sz + j * sy, v0 = d[o], v2 = d[o + sy], v4 = d[o + sz], v6 = d[o + sz + sy];
+      let left = (v0 >= level ? 1 : 0) | (v2 >= level ? 4 : 0) | (v4 >= level ? 16 : 0) | (v6 >= level ? 64 : 0);
+      for (let i = 0; i < nx - 1; i++, o++) {
+        const v1 = d[o + 1], v3 = d[o + sy + 1], v5 = d[o + sz + 1], v7 = d[o + sz + sy + 1];
+        const right = (v1 >= level ? 1 : 0) | (v3 >= level ? 4 : 0) | (v5 >= level ? 16 : 0) | (v7 >= level ? 64 : 0), mask = left | right << 1;
+        if (mask !== 0 && mask !== 255) {
+          v[0] = v0;
+          v[1] = v1;
+          v[2] = v2;
+          v[3] = v3;
+          v[4] = v4;
+          v[5] = v5;
+          v[6] = v6;
+          v[7] = v7;
+          let px = 0, py = 0, pz = 0, n = 0;
+          for (let e = 0; e < 12; e++) {
+            const a = EDGE_A[e], b = EDGE_B[e];
+            if ((mask >> a & 1) === (mask >> b & 1)) continue;
+            const t = (level - v[a]) / (v[b] - v[a]), ax = a & 1, ay = a >> 1 & 1, az = a >> 2;
+            px += ax + ((b & 1) - ax) * t;
+            py += ay + ((b >> 1 & 1) - ay) * t;
+            pz += az + ((b >> 2) - az) * t;
+            n++;
+          }
+          px = i + px / n;
+          py = j + py / n;
+          pz = k + pz / n;
+          const fx = px - i, fy = py - j, fz = pz - k;
+          const gx = ((v[1] - v[0]) * (1 - fy) + (v[3] - v[2]) * fy) * (1 - fz) + ((v[5] - v[4]) * (1 - fy) + (v[7] - v[6]) * fy) * fz;
+          const gy = ((v[2] - v[0]) * (1 - fx) + (v[3] - v[1]) * fx) * (1 - fz) + ((v[6] - v[4]) * (1 - fx) + (v[7] - v[5]) * fx) * fz;
+          const gz = ((v[4] - v[0]) * (1 - fx) + (v[5] - v[1]) * fx) * (1 - fy) + ((v[6] - v[2]) * (1 - fx) + (v[7] - v[3]) * fx) * fy;
+          const ux = -gx / s0, uy = -gy / s1, uz = -gz / s2, L = Math.hypot(ux, uy, uz) || 1;
+          const c = k * cxy + j * cx + i;
+          cellIndex[c] = nv;
+          if (nv * 3 + 3 > pos.length) {
+            const P = new Float32Array(pos.length * 2), N = new Float32Array(pos.length * 2);
+            P.set(pos);
+            N.set(nor);
+            pos = P;
+            nor = N;
+          }
+          if (nv === cells.length) {
+            const C = new Int32Array(nv * 2), M = new Uint8Array(nv * 2);
+            C.set(cells);
+            M.set(masks);
+            cells = C;
+            masks = M;
+          }
+          const w = nv * 3;
+          pos[w] = o0 + px * s0;
+          pos[w + 1] = o1 + py * s1;
+          pos[w + 2] = o2 + pz * s2;
+          nor[w] = ux / L;
+          nor[w + 1] = uy / L;
+          nor[w + 2] = uz / L;
+          cells[nv] = c;
+          masks[nv] = mask;
+          nv++;
+        }
+        v0 = v1;
+        v2 = v3;
+        v4 = v5;
+        v6 = v7;
+        left = right;
       }
-      px = i + px / n;
-      py = j + py / n;
-      pz = k + pz / n;
-      const fx = px - i, fy = py - j, fz = pz - k;
-      const gx = ((v[1] - v[0]) * (1 - fy) + (v[3] - v[2]) * fy) * (1 - fz) + ((v[5] - v[4]) * (1 - fy) + (v[7] - v[6]) * fy) * fz;
-      const gy = ((v[2] - v[0]) * (1 - fx) + (v[3] - v[1]) * fx) * (1 - fz) + ((v[6] - v[4]) * (1 - fx) + (v[7] - v[5]) * fx) * fz;
-      const gz = ((v[4] - v[0]) * (1 - fx) + (v[5] - v[1]) * fx) * (1 - fy) + ((v[6] - v[2]) * (1 - fx) + (v[7] - v[3]) * fx) * fy;
-      const ux = -gx / m.step[0], uy = -gy / m.step[1], uz = -gz / m.step[2], L = Math.hypot(ux, uy, uz) || 1;
-      cellIndex[k * cx * cy + j * cx + i] = pos.length / 3;
-      pos.push(m.origin[0] + px * m.step[0], m.origin[1] + py * m.step[1], m.origin[2] + pz * m.step[2]);
-      nor.push(ux / L, uy / L, uz / L);
     }
-    const cell = (i, j, k) => cellIndex[k * cx * cy + j * cx + i];
+    let tri = new Uint32Array(1 << 12), nt = 0;
     const quad = (a, b, c, e, flip) => {
       if (a < 0 || b < 0 || c < 0 || e < 0) return;
-      if (flip) tri.push(a, c, b, b, c, e);
-      else tri.push(a, b, c, b, e, c);
+      if (nt + 6 > tri.length) {
+        const T = new Uint32Array(tri.length * 2);
+        T.set(tri);
+        tri = T;
+      }
+      if (flip) {
+        tri[nt] = a;
+        tri[nt + 1] = c;
+        tri[nt + 2] = b;
+        tri[nt + 3] = b;
+        tri[nt + 4] = c;
+        tri[nt + 5] = e;
+      } else {
+        tri[nt] = a;
+        tri[nt + 1] = b;
+        tri[nt + 2] = c;
+        tri[nt + 3] = b;
+        tri[nt + 4] = e;
+        tri[nt + 5] = c;
+      }
+      nt += 6;
     };
-    for (let k = 1; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 0; i < nx - 1; i++) {
-      const o = k * sz + j * sy + i, a = d[o] >= level, b = d[o + 1] >= level;
-      if (a === b) continue;
-      quad(cell(i, j - 1, k - 1), cell(i, j, k - 1), cell(i, j - 1, k), cell(i, j, k), a);
+    for (let q = 0; q < nv; q++) {
+      const c = cells[q], mask = masks[q], j = (c / cx | 0) % cy, k = c / cxy | 0;
+      if (j < 1 || k < 1 || ((mask ^ mask >> 1) & 1) === 0) continue;
+      quad(cellIndex[c - cxy - cx], cellIndex[c - cxy], cellIndex[c - cx], q, (mask & 1) === 1);
     }
-    for (let k = 1; k < nz - 1; k++) for (let j = 0; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
-      const o = k * sz + j * sy + i, a = d[o] >= level, b = d[o + sy] >= level;
-      if (a === b) continue;
-      quad(cell(i - 1, j, k - 1), cell(i - 1, j, k), cell(i, j, k - 1), cell(i, j, k), a);
+    for (let q = 0; q < nv; q++) {
+      const c = cells[q], mask = masks[q], i = c % cx, k = c / cxy | 0;
+      if (i < 1 || k < 1 || ((mask ^ mask >> 2) & 1) === 0) continue;
+      quad(cellIndex[c - cxy - 1], cellIndex[c - 1], cellIndex[c - cxy], q, (mask & 1) === 1);
     }
-    for (let k = 0; k < nz - 1; k++) for (let j = 1; j < ny - 1; j++) for (let i = 1; i < nx - 1; i++) {
-      const o = k * sz + j * sy + i, a = d[o] >= level, b = d[o + sz] >= level;
-      if (a === b) continue;
-      quad(cell(i - 1, j - 1, k), cell(i, j - 1, k), cell(i - 1, j, k), cell(i, j, k), a);
+    for (let q = 0; q < nv; q++) {
+      const c = cells[q], mask = masks[q], i = c % cx, j = (c / cx | 0) % cy;
+      if (i < 1 || j < 1 || ((mask ^ mask >> 4) & 1) === 0) continue;
+      quad(cellIndex[c - cx - 1], cellIndex[c - cx], cellIndex[c - 1], q, (mask & 1) === 1);
     }
-    return { level, positions: new Float32Array(pos), normals: new Float32Array(nor), triangles: new Uint32Array(tri) };
+    return { level, positions: pos.slice(0, nv * 3), normals: nor.slice(0, nv * 3), triangles: tri.slice(0, nt) };
   }
   function sliceContours(m, axis, index, level) {
     const dims = [m.nx, m.ny, m.nz], [ua, va] = axis === 0 ? [1, 2] : axis === 1 ? [0, 2] : [0, 1];
-    const nu = dims[ua], nv = dims[va], sy = m.nx, sz = m.nx * m.ny;
+    const nu = dims[ua], nv = dims[va], stride = [1, m.nx, m.nx * m.ny], su = stride[ua], sw = stride[va], d = m.data, base = index * stride[axis];
+    const oU = m.origin[ua], hU = m.step[ua], oW = m.origin[va], hW = m.step[va], fixed = m.origin[axis] + index * m.step[axis];
+    const segs = [], pts = new Float64Array(8);
+    let np = 0;
     const at = (u, w) => {
-      const q = [0, 0, 0];
-      q[axis] = index;
-      q[ua] = u;
-      q[va] = w;
-      return m.data[q[2] * sz + q[1] * sy + q[0]];
+      pts[np++] = u;
+      pts[np++] = w;
     };
-    const P = (u, w) => {
-      const q = [0, 0, 0];
-      q[axis] = index;
-      q[ua] = u;
-      q[va] = w;
-      return [m.origin[0] + q[0] * m.step[0], m.origin[1] + q[1] * m.step[1], m.origin[2] + q[2] * m.step[2]];
+    const cross = (x0, y0, v0, x1, y1, v1) => {
+      const t = (level - v0) / (v1 - v0);
+      at(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
     };
-    const segs = [];
+    const xyz = (o, out, k) => {
+      out[k + axis] = fixed;
+      out[k + ua] = oU + pts[o] * hU;
+      out[k + va] = oW + pts[o + 1] * hW;
+    };
     for (let w = 0; w < nv - 1; w++) for (let u = 0; u < nu - 1; u++) {
-      const a = at(u, w), b = at(u + 1, w), c = at(u + 1, w + 1), e = at(u, w + 1);
+      const q = base + u * su + w * sw, a = d[q], b = d[q + su], c = d[q + su + sw], e = d[q + sw];
       const idx = (a >= level ? 1 : 0) | (b >= level ? 2 : 0) | (c >= level ? 4 : 0) | (e >= level ? 8 : 0);
       if (idx === 0 || idx === 15) continue;
-      const cross = (x0, y0, v0, x1, y1, v1) => {
-        const t = (level - v0) / (v1 - v0);
-        return P(x0 + (x1 - x0) * t, y0 + (y1 - y0) * t);
-      };
-      const pts = [];
-      if ((idx & 1) !== (idx >> 1 & 1)) pts.push(cross(u, w, a, u + 1, w, b));
-      if ((idx >> 1 & 1) !== (idx >> 2 & 1)) pts.push(cross(u + 1, w, b, u + 1, w + 1, c));
-      if ((idx >> 2 & 1) !== (idx >> 3 & 1)) pts.push(cross(u + 1, w + 1, c, u, w + 1, e));
-      if ((idx >> 3 & 1) !== (idx & 1)) pts.push(cross(u, w + 1, e, u, w, a));
-      for (let s = 0; s + 1 < pts.length; s += 2) segs.push([...pts[s], ...pts[s + 1]]);
+      np = 0;
+      if ((idx & 1) !== (idx >> 1 & 1)) cross(u, w, a, u + 1, w, b);
+      if ((idx >> 1 & 1) !== (idx >> 2 & 1)) cross(u + 1, w, b, u + 1, w + 1, c);
+      if ((idx >> 2 & 1) !== (idx >> 3 & 1)) cross(u + 1, w + 1, c, u, w + 1, e);
+      if ((idx >> 3 & 1) !== (idx & 1)) cross(u, w + 1, e, u, w, a);
+      for (let s = 0; s + 3 < np; s += 4) {
+        const seg = [0, 0, 0, 0, 0, 0];
+        xyz(s, seg, 0);
+        xyz(s + 2, seg, 3);
+        segs.push(seg);
+      }
     }
     return segs;
   }
   function joinSegments(segs, tol = 1e-4) {
     const key = (x, y, z) => `${Math.round(x / tol)},${Math.round(y / tol)},${Math.round(z / tol)}`;
+    const n = segs.length, ka = new Array(n), kb = new Array(n);
     const ends = /* @__PURE__ */ new Map();
-    const used = new Uint8Array(segs.length);
-    segs.forEach((s, i) => {
-      for (const e of [key(s[0], s[1], s[2]), key(s[3], s[4], s[5])]) {
+    const used = new Uint8Array(n);
+    for (let i = 0; i < n; i++) {
+      const s = segs[i];
+      ka[i] = key(s[0], s[1], s[2]);
+      kb[i] = key(s[3], s[4], s[5]);
+      for (const e of [ka[i], kb[i]]) {
         let l = ends.get(e);
         if (!l) ends.set(e, l = []);
         l.push(i);
       }
-    });
+    }
+    const next = (k) => {
+      const cand = ends.get(k);
+      if (cand) {
+        for (const c of cand) if (!used[c]) return c;
+      }
+      return -1;
+    };
     const lines2 = [];
-    for (let i = 0; i < segs.length; i++) {
+    for (let i = 0; i < n; i++) {
       if (used[i]) continue;
       used[i] = 1;
       const s = segs[i];
       const line = [[s[0], s[1], s[2]], [s[3], s[4], s[5]]];
-      for (const dir of [1, 0]) {
-        for (; ; ) {
-          const p = dir ? line[line.length - 1] : line[0];
-          const cand = ends.get(key(p[0], p[1], p[2])) || [];
-          const nx = cand.find((c) => !used[c]);
-          if (nx === void 0) break;
-          used[nx] = 1;
-          const t = segs[nx];
-          const a = [t[0], t[1], t[2]], b = [t[3], t[4], t[5]];
-          const far = key(a[0], a[1], a[2]) === key(p[0], p[1], p[2]) ? b : a;
-          if (dir) line.push(far);
-          else line.unshift(far);
+      for (let k = kb[i], c = next(k); c >= 0; c = next(k)) {
+        used[c] = 1;
+        const t = segs[c];
+        if (ka[c] === k) {
+          line.push([t[3], t[4], t[5]]);
+          k = kb[c];
+        } else {
+          line.push([t[0], t[1], t[2]]);
+          k = ka[c];
         }
       }
-      lines2.push(line);
+      const head = [];
+      for (let k = ka[i], c = next(k); c >= 0; c = next(k)) {
+        used[c] = 1;
+        const t = segs[c];
+        if (ka[c] === k) {
+          head.push([t[3], t[4], t[5]]);
+          k = kb[c];
+        } else {
+          head.push([t[0], t[1], t[2]]);
+          k = ka[c];
+        }
+      }
+      lines2.push(head.length ? head.reverse().concat(line) : line);
     }
     return lines2;
   }
@@ -7240,8 +7622,7 @@
       extent = Math.max(hi[0] - lo[0], hi[1] - lo[1], hi[2] - lo[2]);
     }
     const R = o.smooth === "auto" ? zoneSel ? 0 : (m.resolution ?? 2 * m.step[0]) < Math.max(4, extent / 20) * 0.8 ? Math.round(Math.max(4, extent / 20)) : 0 : Math.max(0, +o.smooth || 0);
-    const above2 = R > 0 ? { ...m, data: m.data.map((v) => v >= level ? v : 0) } : m;
-    let g0 = downsample(above2, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels);
+    let g0 = downsample(m, R > 0 ? Math.min(o.maxVoxels, Math.ceil(extent / (R / 3))) : o.maxVoxels, R > 0 ? level : void 0);
     const zoned = R > 0 && !!s && s.count > 0 && o.finish !== "sketch" && o.context !== "show";
     const keepR = o.unexplained ? 10 : 5;
     if (zoned) {
@@ -7265,9 +7646,11 @@
     if (R > 0 && massFrom === "the model") zone = stampAtoms(g2, s, 6);
     let massTooBig = false;
     if (R > 0 && mass > 0) {
-      const n = mass * 1.21 / (g2.step[0] * g2.step[1] * g2.step[2]);
+      const n = mass * 1.21 / (g2.step[0] * g2.step[1] * g2.step[2]), d = g2.data;
       let support = 0;
-      for (let i = 0; i < g2.data.length; i++) if (g2.data[i] > 0 && (!zone || zone[i])) support++;
+      if (zone) {
+        for (let i = 0; i < d.length; i++) if (d[i] > 0 && zone[i]) support++;
+      } else for (let i = 0; i < d.length; i++) if (d[i] > 0) support++;
       massTooBig = n > 0.6 * support;
     }
     let vAtLevel = 0;
@@ -7277,14 +7660,12 @@
       vAtLevel = c * m.step[0] * m.step[1] * m.step[2];
     }
     const byVolume = R > 0, vLevel = !byVolume ? 0 : mass > 0 && !massTooBig ? levelEnclosing(g2, mass * 1.21, zone) : vAtLevel > 0 ? levelEnclosing(g2, 2 * vAtLevel, zone) : g2.mean + 2 * g2.rms;
-    let sorted = null;
     const same = (lv) => {
       if (byVolume) return vLevel * lv / level;
       if (g1 === m) return lv;
       let n = 0;
       for (let i = 0; i < m.data.length; i++) if (m.data[i] >= lv) n++;
-      sorted ?? (sorted = Float32Array.from(g1.data).sort());
-      return sorted[Math.max(0, Math.min(sorted.length - 1, Math.floor((1 - n / m.data.length) * sorted.length)))];
+      return sortedAt(g1.data, Math.max(0, Math.min(g1.data.length - 1, Math.floor((1 - n / m.data.length) * g1.data.length))));
     };
     const turn = (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
     const atoms = [];
@@ -7322,15 +7703,20 @@
           par[b] = a;
           par[find(c)] = a;
         }
-        const size = /* @__PURE__ */ new Map();
+        const size = new Int32Array(nv);
+        let most = 0;
         for (let v = 0; v < nv; v++) {
           const r = find(v);
-          size.set(r, (size.get(r) || 0) + 1);
+          if (++size[r] > most) most = size[r];
         }
-        const big = zoneSel ? 12 : Math.max(0, ...size.values()) * 0.02, keep2 = [];
-        for (let t = 0; t < tri.length; t += 3) if (size.get(find(tri[t])) >= big) keep2.push(tri[t], tri[t + 1], tri[t + 2]);
-        else dust++;
-        tri = new Uint32Array(keep2);
+        const big = zoneSel ? 12 : most * 0.02, keep2 = new Uint32Array(tri.length);
+        let n = 0;
+        for (let t = 0; t < tri.length; t += 3) if (size[find(tri[t])] >= big) {
+          keep2[n++] = tri[t];
+          keep2[n++] = tri[t + 1];
+          keep2[n++] = tri[t + 2];
+        } else dust++;
+        tri = keep2.slice(0, n);
       }
       if (!zoneSel && carve <= 0 && atoms.length && o.context === "show" && o.crop > 0) {
         const r = Math.min(o.crop, 7.99), k2 = [];
@@ -7459,6 +7845,17 @@
     keep(per, key, out);
     return out;
   }
+  function sortedAt(a, k) {
+    let neg = 0, negZero = 0;
+    for (let i = 0; i < a.length; i++) {
+      const v2 = a[i];
+      if (v2 !== v2) return Float32Array.from(a).sort()[k];
+      if (v2 < 0) neg++;
+      else if (v2 === 0 && 1 / v2 < 0) negZero++;
+    }
+    const v = kthOf(Float32Array.from(a), k);
+    return v === 0 ? k < neg + negZero ? -0 : 0 : v;
+  }
   function keep(per, key, em) {
     per.set(key, em);
     if (per.size > 6) per.delete(per.keys().next().value);
@@ -7496,25 +7893,41 @@
       az[k] = s.z[i];
     }
     return (x, y, z) => {
-      let best = -1, bd = 64;
-      const ci = Math.floor((x - x0) / cell), cj = Math.floor((y - y0) / cell), ck = Math.floor((z - z0) / cell);
-      for (let c = Math.max(0, ck - 2); c <= Math.min(nz - 1, ck + 2); c++) for (let b = Math.max(0, cj - 2); b <= Math.min(ny - 1, cj + 2); b++) {
-        const row = (c * ny + b) * nx, a0 = Math.max(0, ci - 2), a1 = Math.min(nx - 1, ci + 2);
-        if (a0 > a1) continue;
-        for (let a = a0; a <= a1; a++) for (let k = start[row + a], e = start[row + a + 1]; k < e; k++) {
-          const d = (ax[k] - x) ** 2 + (ay[k] - y) ** 2 + (az[k] - z) ** 2;
-          if (d < bd) {
-            bd = d;
-            best = list[k];
+      const fx = (x - x0) / cell, fy = (y - y0) / cell, fz = (z - z0) / cell, ci = Math.floor(fx), cj = Math.floor(fy), ck = Math.floor(fz);
+      let best = -1, bd = 64, bk = -1;
+      const scan = (r) => {
+        for (let c = Math.max(0, ck - r); c <= Math.min(nz - 1, ck + r); c++) for (let b = Math.max(0, cj - r); b <= Math.min(ny - 1, cj + r); b++) {
+          const row = (c * ny + b) * nx, a0 = Math.max(0, ci - r), a1 = Math.min(nx - 1, ci + r), mid2 = r === 2 && Math.abs(c - ck) < 2 && Math.abs(b - cj) < 2;
+          for (let a = a0; a <= a1; a++) {
+            if (mid2 && Math.abs(a - ci) < 2) continue;
+            for (let k = start[row + a], e = start[row + a + 1]; k < e; k++) {
+              const d = (ax[k] - x) ** 2 + (ay[k] - y) ** 2 + (az[k] - z) ** 2;
+              if (d < bd || d === bd && k < bk) {
+                bd = d;
+                best = list[k];
+                bk = k;
+              }
+            }
           }
         }
-      }
+      };
+      scan(1);
+      const ring = Math.min(fx - ci + 1, ci + 2 - fx, fy - cj + 1, cj + 2 - fy, fz - ck + 1, ck + 2 - fz) * cell - 1e-6;
+      if (!(bd < ring * ring)) scan(2);
       return [best, Math.sqrt(bd)];
     };
   }
+  var closeUps = /* @__PURE__ */ new WeakMap();
   function closeUpFit(em, base, atoms, s = null) {
     const L = em.levels[em.primary] || em.levels[0];
     if (!em.closeUp || !L) return atoms;
+    const hit = closeUps.get(em);
+    if (hit && hit.base === base && hit.atoms === atoms && hit.s === s) return hit.out;
+    const out = closeUpFitOnce(em, L, base, atoms, s);
+    closeUps.set(em, { base, atoms, s, out });
+    return out;
+  }
+  function closeUpFitOnce(em, L, base, atoms, s) {
     if (s && em.opts.zone) {
       const sel = selectAtoms(s, em.opts.zone), z = [];
       for (let i = 0; i < s.count; i++) if (sel[i]) z.push(s.x[i], s.y[i], s.z[i]);
@@ -7546,7 +7959,15 @@
         if (dz > rv2) continue;
         for (let y = y0; y <= y1; y++) {
           const dy = (y - c1) ** 2, row = (z * ny + y) * nx;
-          for (let x = x0; x <= x1; x++) if ((x - c0) ** 2 + dy + dz <= rv2) out[row + x] = 1;
+          const h = rv2 - dy - dz;
+          if (h < -1) continue;
+          const w = Math.sqrt(Math.max(0, h));
+          let a = Math.max(x0, Math.ceil(c0 - w)), b = Math.min(x1, Math.floor(c0 + w));
+          while (a > x0 && (a - 1 - c0) ** 2 + dy + dz <= rv2) a--;
+          while (a <= b && !((a - c0) ** 2 + dy + dz <= rv2)) a++;
+          while (b < x1 && (b + 1 - c0) ** 2 + dy + dz <= rv2) b++;
+          while (b >= a && !((b - c0) ** 2 + dy + dz <= rv2)) b--;
+          for (let x = row + a, e = row + b; x <= e; x++) out[x] = 1;
         }
       }
     }
@@ -7695,15 +8116,20 @@
       keyframes.set(s, hit);
     }
     sceneFromStructure.lastIds = hit.ids;
-    const fp = new Float32Array(fitPoints.length);
-    for (let i = 0; i < fitPoints.length; i += 3) {
-      const r = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]);
-      fp[i] = r[0];
-      fp[i + 1] = r[1];
-      fp[i + 2] = r[2];
+    let r = rotated.get(fitPoints);
+    if (!r || r.base !== bk) {
+      const fp = new Float32Array(fitPoints.length);
+      for (let i = 0; i < fitPoints.length; i += 3) {
+        const q = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]);
+        fp[i] = q[0];
+        fp[i + 1] = q[1];
+        fp[i + 2] = q[2];
+      }
+      rotated.set(fitPoints, r = { base: bk, fp });
     }
-    return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: fp, keyframes: [hit.kf] };
+    return { name: s.name, fromPdb: true, reps: { ...style.reps }, groupColors: { ...overrides }, labels, fitPoints: r.fp, keyframes: [hit.kf] };
   }
+  var rotated = /* @__PURE__ */ new WeakMap();
   function freshKeyframe(s, base) {
     return keyframeOf(s, (x, y, z) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z]).kf;
   }
@@ -7748,7 +8174,9 @@
     E.cfg = cfgFromStyle(style, R.camera, false);
     if (em?.closeUp && s && !E.cfg.rep.siteSel.trim()) E.cfg.rep = { ...E.cfg.rep, siteSel: style.map.zone, siteCutaway: true, siteScale: 1 };
     if (s) {
-      E.scene = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints, s) : R.fitPoints, R.labels);
+      const sc = sceneFromStructure(s, style, R.overrides, R.camera.base, em ? closeUpFit(em, R.camera.base, R.fitPoints, s) : R.fitPoints, R.labels), prev = E.scene;
+      if (prev && prev._src === s && prev.fitPoints === sc.fitPoints && prev.keyframes?.[0] === sc.keyframes[0] && prev.keyframes.length === 1) Object.assign(prev, sc);
+      else E.scene = sc;
       if (em?.closeUp && style.map.zone.trim()) E.scene.reps.sticks = withZone(E.scene.reps.sticks, style.map.zone);
       E.scene._src = s;
       E.scene.atomIds = sceneFromStructure.lastIds;
@@ -8200,10 +8628,14 @@
     if (!L.style.reps) s.reps = keep2;
     return s;
   }
+  var fits = /* @__PURE__ */ new WeakMap();
   function fitPointsOf(s, style) {
-    const shown = new Uint8Array(s.count);
     const siteSel = style.site?.sel?.trim();
     const stickSel = siteSel ? style.reps.sticks.trim() ? `(${style.reps.sticks}) or (${siteSel})` : siteSel : style.reps.sticks;
+    const key = [stickSel, style.reps.cartoon, style.reps.surface].join("\0");
+    const hit = fits.get(s);
+    if (hit && hit.key === key) return hit.pts;
+    const shown = new Uint8Array(s.count);
     for (const sel of [stickSel, style.reps.cartoon, style.reps.surface]) if (sel && sel.trim()) {
       const m = selectAtoms(s, sel);
       for (let i = 0; i < s.count; i++) shown[i] |= m[i];
@@ -8217,9 +8649,32 @@
       pts[k++] = s.y[i];
       pts[k++] = s.z[i];
     }
+    fits.set(s, { key, pts });
     return pts;
   }
-  function stackScene(files, style) {
+  var bases0 = /* @__PURE__ */ new WeakMap();
+  function pcaOf(s) {
+    let b = bases0.get(s);
+    if (!b) bases0.set(s, b = pcaBasis(s));
+    return b;
+  }
+  var docs = /* @__PURE__ */ new WeakMap();
+  var OWN = ["reps", "groupColors", "labels"];
+  function sceneDocOf(inp) {
+    let c = docs.get(inp);
+    if (!c) {
+      const doc = inp.scene ? JSON.parse(JSON.stringify(inp.scene)) : stackScene(inp.stack);
+      const orig = {};
+      for (const k of OWN) orig[k] = doc[k] === void 0 ? void 0 : JSON.stringify(doc[k]);
+      docs.set(inp, c = { doc, orig });
+    } else for (const k of OWN) {
+      const v = c.orig[k];
+      if (v === void 0) delete c.doc[k];
+      else c.doc[k] = JSON.parse(v);
+    }
+    return c.doc;
+  }
+  function stackScene(files) {
     files = [...files].sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
     const structs = files.map((f2) => structureOf(f2.text, f2.name));
     const base = pcaBasis(structs[0]);
@@ -8249,7 +8704,7 @@
     if (inp.map !== void 0) {
       map = mapOf(inp.map);
     } else if (inp.scene || inp.stack) {
-      const doc = inp.scene ? JSON.parse(JSON.stringify(inp.scene)) : stackScene(inp.stack, style);
+      const doc = sceneDocOf(inp);
       scene = doc;
       if (doc.look && LOOKS[doc.look]) {
         style = withLook(style, doc.look);
@@ -8267,7 +8722,7 @@
       }
     } else {
       structure = structureOf(inp.text, inp.name);
-      cam.base = pcaBasis(structure);
+      cam.base = pcaOf(structure);
       if (!structure.residues.some((r) => !r.het)) style.reps = { sticks: "all", cartoon: "", surface: "" };
     }
     if (spec.look) {
@@ -8356,6 +8811,7 @@
   }
   function render(spec, measure, gate) {
     if (measure) setMeasure(measure);
+    classic().setTextureHost(textureHost);
     classic().setTextGate(gate || null);
     const f2 = settle(spec);
     const c = new RecCanvas();
@@ -8381,10 +8837,15 @@
     const chunks = endRender();
     return { canvas: c.id, width: c.width, height: c.height, ms: Date.now() - t0, chunks };
   }
+  function dropTextures() {
+    classic().dropTextures();
+    return 0;
+  }
   function drawOn(spec, make) {
+    classic().setTextureHost(null);
     const f2 = settle(spec);
     const c = make(Math.round(f2.W * f2.dpr), Math.round(f2.H * f2.dpr));
-    const ctx = c.getContext("2d");
+    const ctx = c.getContext("2d", { willReadFrequently: true });
     const R = { structure: f2.structure, camera: f2.camera, overrides: f2.overrides, fitPoints: f2.fitPoints, labels: f2.labels, w: Math.round(f2.W * f2.dpr), h: Math.round(f2.H * f2.dpr), map: f2.map, localRes: f2.localRes };
     const t0 = Date.now();
     if (f2.scene) {
@@ -8545,5 +9006,5 @@
     const log = [];
     g.console = { log: (...a) => log.push(a.join(" ")), warn: (...a) => log.push(a.join(" ")), error: (...a) => log.push(a.join(" ")), _log: log };
   }
-  g.MolSketchCore = { ...core_exports, flush, setStream, version: "0.1.0" };
+  g.MolSketchCore = { ...core_exports, flush, setStream, setHostTextures, version: "0.1.0" };
 })();

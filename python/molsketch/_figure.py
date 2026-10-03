@@ -34,6 +34,7 @@ class Figure:
 
     def __init__(self, _input: dict, name: str):
         self._ref = engine().put(_input)
+        self._input = _input   # (for the processes that draw a video's frames: each puts it in its own engine)
         self._input_kind = next(iter(_input))
         self.name = name
         self._look: str | None = None
@@ -291,35 +292,49 @@ class Figure:
         return self.render(size, scale=scale, frame=frame).save(path)
 
     def save_frames(self, directory: str | os.PathLike, frames: str | int | Iterable[int] = "drawn", size: Size = DEFAULT_SIZE, *,
-                    scale: float = 1) -> list[pathlib.Path]:
+                    scale: float = 1, workers: int | None = None) -> list[pathlib.Path]:
         """Save frames as numbered PNG files (``frame_0000.png``, ``frame_0001.png`` …) in ``directory`` and return their
-        paths. ``frames`` is anything ``frames()`` accepts, or a list of frame numbers."""
+        paths. ``frames`` is anything ``frames()`` accepts, or a list of frame numbers. ``workers`` processes draw
+        them at once (by default the processor's cores, at most 4; ``workers=1`` draws them all in this one); each
+        frame is the same as drawn alone."""
         d = pathlib.Path(directory); d.mkdir(parents=True, exist_ok=True)
         todo = self.frames(frames) if isinstance(frames, (str, int)) else list(frames)
-        return [self.render(size, scale=scale, frame=f).save(d / f"frame_{f:04d}.png") for f in todo]
+        return self._draw_jobs([(d / f"frame_{f:04d}.png", self._spec(size, scale, f)) for f in todo], workers)
+
+    def _draw_jobs(self, jobs: list[tuple[pathlib.Path, dict]], workers: int | None) -> list[pathlib.Path]:
+        """draw each (path, spec) into its file: here, or shared among a few processes (_frames.py)"""
+        from ._frames import workers_for, draw
+        jobs = [(p, json.loads(json.dumps(spec))) for p, spec in jobs]   # (each its own: a spec holds the figure's camera, which a turntable turns)
+        n = workers_for(len(jobs), workers)
+        if n <= 1: return [Image(engine().render(spec)).save(p) for p, spec in jobs]
+        known = {ref: m for m, ref in engine()._maps.values()}
+        used = ({self._input["map"]} if "map" in self._input else set()) | {v for k, v in (self._map or {}).items() if k in ("ref", "localResolution")}
+        draw(self._input, {r: known[r] for r in used}, [(str(p), spec) for p, spec in jobs], n)
+        return [p for p, _ in jobs]
 
     def animate(self, path: str | os.PathLike, frames: str | int | Iterable[int] = "drawn", size: Size = DEFAULT_SIZE, *,
-                fps: float = 12, scale: float = 1, crf: int = 18) -> pathlib.Path:
+                fps: float = 12, scale: float = 1, crf: int = 18, workers: int | None = None) -> pathlib.Path:
         """Make a video of a scene: ``.mp4``, ``.webm`` or ``.gif``. Needs ``ffmpeg`` installed. ``frames`` is as in
         ``save_frames``. The default, every drawn frame at 12 fps, plays the scene at its real speed. ``crf`` sets
-        the video quality (lower is better and larger)."""
-        return _encode(pathlib.Path(path), lambda d: self.save_frames(d, frames, size, scale=scale), fps, crf)
+        the video quality (lower is better and larger). ``workers`` is as in ``save_frames``."""
+        return _encode(pathlib.Path(path), lambda d: self.save_frames(d, frames, size, scale=scale, workers=workers), fps, crf)
 
     def turntable(self, path: str | os.PathLike, n: int = 72, size: Size = DEFAULT_SIZE, *, swing: float = 0, fps: float = 24,
-                  scale: float = 1, crf: int = 18) -> pathlib.Path:
+                  scale: float = 1, crf: int = 18, workers: int | None = None) -> pathlib.Path:
         """Make a turntable: the molecule turns once around the vertical axis in ``n`` frames. ``path`` is a video
         (``.mp4``, ``.webm``, ``.gif``; needs ``ffmpeg``) or, with no extension, a folder of PNG frames. ``swing`` tilts
-        the molecule up and down by that many degrees during the turn. ``fps`` is the video's frame rate."""
+        the molecule up and down by that many degrees during the turn. ``fps`` is the video's frame rate. ``workers``
+        is as in ``save_frames``."""
         import math
         yaw0 = self._camera.get("yaw", self._info()["camera"]["yaw"]); pitch0 = self._camera.get("pitch", self._info()["camera"]["pitch"])
         def _write(d):
-            out = []; saved = dict(self._camera)
+            jobs = []; saved = dict(self._camera)
             try:
                 for f in range(n):
                     self._camera.update(yaw=yaw0 + 360 * f / n, pitch=pitch0 + swing * math.sin(2 * math.pi * f / n))
-                    out.append(self.render(size, scale=scale, frame=f).save(pathlib.Path(d) / f"frame_{f:04d}.png"))
+                    jobs.append((pathlib.Path(d) / f"frame_{f:04d}.png", self._spec(size, scale, f)))
             finally: self._camera = saved
-            return out
+            return self._draw_jobs(jobs, workers)
         p = pathlib.Path(path)
         if not p.suffix: p.mkdir(parents=True, exist_ok=True); _write(p); return p
         return _encode(p, _write, fps, crf)

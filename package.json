@@ -1,0 +1,11 @@
+{
+  "name": "mol-sketch",
+  "private": true,
+  "license": "Apache-2.0",
+  "description": "Hand-drawn molecular illustration. The app lives in app/, the Python package in python/.",
+  "scripts": {
+    "start": "npm --prefix app install --no-audit --no-fund && npm --prefix app run dev -- --open",
+    "build": "npm --prefix app install --no-audit --no-fund && npm --prefix app run build",
+    "serve": "npm run build && npm --prefix app run preview -- --open"
+  }
+}

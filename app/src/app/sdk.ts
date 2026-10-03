@@ -9,7 +9,8 @@ export interface SDK {
   /** keep an input (a structure's text, a scene, a stack) on the server; returns its ref */
   put(input: any): Promise<string>;
   drop(ref: string): void;
-  render(spec: FigureSpec): Promise<ImageBitmap>;
+  /** `quick`: a frame of a moving view, which may be drawn faster at a cost nobody sees while it moves */
+  render(spec: FigureSpec, o?: { quick?: boolean }): Promise<ImageBitmap>;
   /** the figure as SVG (vector lines, fills and letters; textures embedded) */
   svg(spec: FigureSpec): Promise<string>;
   call<T = any>(name: string, ...args: any[]): Promise<T>;

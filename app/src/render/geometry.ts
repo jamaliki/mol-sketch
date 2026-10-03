@@ -48,6 +48,13 @@ export function buildSurface(s: Structure, mask: Uint8Array, scheme: ColorScheme
 }
 
 /* ---------------- cartoon ---------------- */
+/** a typed array grown as values arrive (a JS array grown a push at a time, then copied, cost more than the geometry) */
+class Grow<T extends Float32Array | Uint32Array> {
+  n = 0;
+  constructor(public a: T) { }
+  room(k: number) { if (this.n + k > this.a.length) { let c = this.a.length * 2; while (c < this.n + k) c *= 2; const b = new (this.a.constructor as any)(c); b.set(this.a); this.a = b } }
+  take(): T { return (this.a.length - this.n > this.a.length / 4 ? this.a.slice(0, this.n) : this.a.subarray(0, this.n)) as T }   // a copy only when much of the room is unused
+}
 export interface Sample { p: number[]; t: number[]; n: number[]; w: number; th: number; flat: number; color: [number, number, number]; id: number; ss: string; nucleic: boolean }
 export interface CartoonRun { id: number; samples: Sample[]; colorHex: string; ss: string }
 
@@ -72,7 +79,7 @@ function catmull(p0: number[], p1: number[], p2: number[], p3: number[], t: numb
 export function buildCartoon(s: Structure, mask: Uint8Array, scheme: ColorScheme, style: Style, detail = 1) {
   const X = s.x, Y = s.y, Z = s.z; const sc = style.cartoonScale;
   const pos = (i: number) => [X[i], Y[i], Z[i]];
-  const verts: number[] = []; const idx: number[] = []; let runId = 0; const runs: CartoonRun[] = [];
+  const verts = new Grow(new Float32Array(1 << 14)), idx = new Grow(new Uint32Array(1 << 13)); let runId = 0; const runs: CartoonRun[] = [];
   const big = s.count > 60000;
   const perRes = Math.max(2, Math.round((big ? 3 : 6) * detail));
 
@@ -110,6 +117,7 @@ export function buildCartoon(s: Structure, mask: Uint8Array, scheme: ColorScheme
       const rid = seg.map((r, i) => { runLen++; if (i === 0 || r.ss !== seg[i - 1].ss || runLen > (r.nucleic ? 10 : r.ss === 'L' ? 16 : 40)) { runId++; runLen = 1 } return runId });
       const samples: Sample[] = [];
       let prevN: number[] | null = null;
+      const colours = new Map<Residue, [number, number, number]>(), colourOf = (r: Residue) => { let c = colours.get(r); if (!c) colours.set(r, c = hexToRgb(scheme.cartoon(r))); return c };   // (once per residue, not per sample)
       for (let i = 0; i < n - 1; i++) {
         const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[i + 1], p3 = P[Math.min(n - 1, i + 2)];
         const isArrow = seg[i].ss === 'E' && (i === n - 2 || seg[i + 1].ss !== 'E');
@@ -127,7 +135,7 @@ export function buildCartoon(s: Structure, mask: Uint8Array, scheme: ColorScheme
           let w = a.w + (b.w - a.w) * t, th = a.th + (b.th - a.th) * t, flat = a.flat + (b.flat - a.flat) * t;
           if (isArrow) { w = 2.4 * a.w * (1 - t) + 0.08; th = a.th; flat = 1 }
           const near = t < 0.5 ? i : i + 1;
-          samples.push({ p, t: T, n: N, w, th, flat, color: hexToRgb(scheme.cartoon(seg[near])), id: rid[near], ss: seg[near].ss, nucleic: seg[near].nucleic });
+          samples.push({ p, t: T, n: N, w, th, flat, color: colourOf(seg[near]), id: rid[near], ss: seg[near].ss, nucleic: seg[near].nucleic });
         }
       }
       // split the samples into runs (one per SS stretch) so each run is one region family for the sketch pass
@@ -137,41 +145,66 @@ export function buildCartoon(s: Structure, mask: Uint8Array, scheme: ColorScheme
       emitRibbon(samples, verts, idx);
     }
   }
-  return { verts: Float32Array.from(verts), idx: Uint32Array.from(idx), runs };
+  return { verts: verts.take(), idx: idx.take(), runs };
 }
 
 /** 8-point superellipse rings swept along the samples; n=8 is a flat ribbon, n=2 a tube.
     Vertices are duplicated per quad so each quad carries a face id: id = run*4 + face, where face 0 is the +B side,
     1 the −B side, 2 and 3 the two edges; tubes have a single face. The sketch pass turns face boundaries into ribbon edge lines. */
-function emitRibbon(S: Sample[], verts: number[], idx: number[]) {
+function emitRibbon(S: Sample[], verts: Grow<Float32Array>, idx: Grow<Uint32Array>) {
   const RING = 8;
   const FACE = [0, 0, 0, 0, 1, 1, 1, 0];   // quad j (between ring points j and j+1) → face: 0 the +B side (with both thin edges), 1 the −B side
-  const ring = (s: Sample) => {
-    const B = v3.norm(v3.cross(s.t, s.n)); const N = s.n; const a = s.w / 2, b = s.th / 2; const nExp = 2 + 6 * s.flat; const e = 2 / nExp;
-    const out: { p: number[]; n: number[] }[] = [];
+  // a sample's ring, into r: per point its position and normal (six numbers), in the arithmetic of the cross-section below
+  // the cross-section (a superellipse's points and normals) depends only on the width, thickness and flatness, which
+  // stay the same along most of a ribbon: worked out again only when they change
+  const PX = new Float64Array(RING), PY = new Float64Array(RING), NX = new Float64Array(RING), NY = new Float64Array(RING); let lastA = NaN, lastB = NaN, lastF = NaN;
+  const section = (a: number, b: number, flat: number) => {
+    if (a === lastA && b === lastB && flat === lastF) return; lastA = a; lastB = b; lastF = flat;
+    const nExp = 2 + 6 * flat; const e = 2 / nExp;
     for (let j = 0; j < RING; j++) {
       const ang = (j + 0.5) / RING * Math.PI * 2; const c = Math.cos(ang), sn = Math.sin(ang);
       const x = Math.sign(c) * Math.pow(Math.abs(c), e), y = Math.sign(sn) * Math.pow(Math.abs(sn), e);
       const gx = nExp * Math.pow(Math.abs(x), nExp - 1) * Math.sign(x) / a, gy = nExp * Math.pow(Math.abs(y), nExp - 1) * Math.sign(y) / b;
-      const gl = Math.hypot(gx, gy) || 1; const nx = gx / gl, ny = gy / gl;
-      out.push({ p: [s.p[0] + N[0] * x * a + B[0] * y * b, s.p[1] + N[1] * x * a + B[1] * y * b, s.p[2] + N[2] * x * a + B[2] * y * b], n: v3.norm([N[0] * nx + B[0] * ny, N[1] * nx + B[1] * ny, N[2] * nx + B[2] * ny]) });
+      const gl = Math.hypot(gx, gy) || 1; PX[j] = x; PY[j] = y; NX[j] = gx / gl; NY[j] = gy / gl;
     }
-    return out;
   };
-  let prev = S.length ? ring(S[0]) : [];
-  const push = (s: Sample, r: { p: number[]; n: number[] }, id: number) => { verts.push(r.p[0], r.p[1], r.p[2], r.n[0], r.n[1], r.n[2], s.color[0], s.color[1], s.color[2], id, CLS_CARTOON); return verts.length / MESH_STRIDE - 1 };
+  const ring = (s: Sample, r: Float64Array) => {
+    const B = v3.norm(v3.cross(s.t, s.n)); const N = s.n; const a = s.w / 2, b = s.th / 2; section(a, b, s.flat);
+    for (let j = 0; j < RING; j++) {
+      const x = PX[j], y = PY[j], nx = NX[j], ny = NY[j];
+      const o = j * 6;
+      r[o] = s.p[0] + N[0] * x * a + B[0] * y * b; r[o + 1] = s.p[1] + N[1] * x * a + B[1] * y * b; r[o + 2] = s.p[2] + N[2] * x * a + B[2] * y * b;
+      const m0 = N[0] * nx + B[0] * ny, m1 = N[1] * nx + B[1] * ny, m2 = N[2] * nx + B[2] * ny; const l = Math.hypot(m0, m1, m2) || 1;
+      r[o + 3] = m0 / l; r[o + 4] = m1 / l; r[o + 5] = m2 / l;
+    }
+  };
+  const vert = (s: Sample, r: Float64Array, o: number, id: number) => { if (verts.n + MESH_STRIDE > verts.a.length) verts.room(MESH_STRIDE); const A = verts.a, q = verts.n;
+    A[q] = r[o]; A[q + 1] = r[o + 1]; A[q + 2] = r[o + 2]; A[q + 3] = r[o + 3]; A[q + 4] = r[o + 4]; A[q + 5] = r[o + 5]; A[q + 6] = s.color[0]; A[q + 7] = s.color[1]; A[q + 8] = s.color[2]; A[q + 9] = id; A[q + 10] = CLS_CARTOON;
+    verts.n = q + MESH_STRIDE; return verts.n / MESH_STRIDE - 1 };
+  const tri = (a: number, b: number, c: number) => { if (idx.n + 3 > idx.a.length) idx.room(3); const I = idx.a, o = idx.n; I[o] = a; I[o + 1] = b; I[o + 2] = c; idx.n = o + 3 };
+  // a ring point's vertex is shared by the quads that give it the same face id (the same position, normal, colour and
+  // id, so every triangle is what it was with a vertex of its own): per point and face, the vertex made and its id
+  let prev = new Float64Array(RING * 6), cur = new Float64Array(RING * 6);
+  let prevV = new Int32Array(RING * 2).fill(-1), curV = new Int32Array(RING * 2), prevId = new Float64Array(RING * 2), curId = new Float64Array(RING * 2);
+  const shared = (s: Sample, r: Float64Array, V: Int32Array, I: Float64Array, j: number, id: number) => { const k = j * 2 + (id & 3); if (V[k] >= 0 && I[k] === id) return V[k]; I[k] = id; return V[k] = vert(s, r, j * 6, id) };
+  if (S.length) ring(S[0], prev);
   for (let k = 1; k < S.length; k++) {
-    const cur = ring(S[k]); const s0 = S[k - 1], s1 = S[k];
+    ring(S[k], cur); curV.fill(-1); const s0 = S[k - 1], s1 = S[k];
+    verts.room(RING * 4 * MESH_STRIDE); idx.room(RING * 6);
     for (let j = 0; j < RING; j++) {
       const j1 = (j + 1) % RING; const face = (s1.flat > 0.5 || s0.flat > 0.5) ? FACE[j] : 0; const id = s1.id * 4 + face;
-      const a = push(s0, prev[j], id), b = push(s1, cur[j], id), c = push(s1, cur[j1], id), d = push(s0, prev[j1], id);
-      idx.push(a, b, c, a, c, d);
+      const a = shared(s0, prev, prevV, prevId, j, id), b = shared(s1, cur, curV, curId, j, id), c = shared(s1, cur, curV, curId, j1, id), d = shared(s0, prev, prevV, prevId, j1, id);
+      tri(a, b, c); tri(a, c, d);
     }
-    prev = cur;
+    let t = prev; prev = cur; cur = t; const tv = prevV; prevV = curV; curV = tv; const ti = prevId; prevId = curId; curId = ti;
   }
   // end caps
-  const cap = (k: number, flip: boolean) => { const s = S[k]; const r = ring(s); const id = s.id * 4; const c = push(s, { p: s.p, n: [-s.t[0] * (flip ? -1 : 1), -s.t[1] * (flip ? -1 : 1), -s.t[2] * (flip ? -1 : 1)] }, id);
-    const vi = r.map(q => push(s, q, id)); for (let j = 0; j < RING; j++) { const j1 = (j + 1) % RING; if (flip) idx.push(c, vi[j1], vi[j]); else idx.push(c, vi[j], vi[j1]) } };
+  const cr = new Float64Array(6);
+  const cap = (k: number, flip: boolean) => { const s = S[k]; ring(s, cur); const id = s.id * 4;
+    cr[0] = s.p[0]; cr[1] = s.p[1]; cr[2] = s.p[2]; cr[3] = -s.t[0] * (flip ? -1 : 1); cr[4] = -s.t[1] * (flip ? -1 : 1); cr[5] = -s.t[2] * (flip ? -1 : 1);
+    const c = vert(s, cr, 0, id);
+    const vi: number[] = []; for (let j = 0; j < RING; j++) vi.push(vert(s, cur, j * 6, id));
+    for (let j = 0; j < RING; j++) { const j1 = (j + 1) % RING; if (flip) tri(c, vi[j1], vi[j]); else tri(c, vi[j], vi[j1]) } };
   if (S.length > 1) { cap(0, false); cap(S.length - 1, true) }
 }
 

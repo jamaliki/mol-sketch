@@ -31,6 +31,9 @@ export class Renderer {
   batches: { spheres: SphereBatch[]; cyls: CylinderBatch[]; meshes: MeshBatch[] } = { spheres: [], cyls: [], meshes: [] };
   /** what the sketch pass needs besides the pixels: the selections and the cartoon runs */
   geom: { stickMask: Uint8Array | null; surfaceMask: Uint8Array | null; runs: CartoonRun[]; scheme: ColorScheme | null } = { stickMask: null, surfaceMask: null, runs: [], scheme: null };
+  /** the cartoon as last built, kept while what it is built from stays the same (a change to the sticks, the surface or
+      the paper rebuilds the rest, not the ribbons of a large assembly) */
+  private cartoonKept: { s: Structure; key: string; batch: MeshBatch; runs: CartoonRun[]; tris: number } | null = null;
   lastView: Float32Array | null = null; lastProj: Float32Array | null = null;
   fitPoints: Float32Array = new Float32Array(0);
   /** what is drawn of the structure (fitPoints, before a close-up's density is added) */
@@ -68,9 +71,9 @@ export class Renderer {
   /** Rebuild all GPU geometry for the current style (call when selections, colours or radii change). */
   rebuild(style: Style) {
     const gl = this.gl; const t0 = performance.now();
-    for (const b of this.batches.spheres) b.dispose(gl); for (const b of this.batches.cyls) b.dispose(gl); for (const b of this.batches.meshes) b.dispose(gl);
+    for (const b of this.batches.spheres) b.dispose(gl); for (const b of this.batches.cyls) b.dispose(gl); for (const b of this.batches.meshes) if (b !== this.cartoonKept?.batch) b.dispose(gl);
     this.batches = { spheres: [], cyls: [], meshes: [] };
-    const s = this.structure; if (!s) { this.rebuildMap(style, null); return }
+    const s = this.structure; if (!s) { this.dropCartoon(); this.rebuildMap(style, null); return }
     const scheme = new ColorScheme(s, style, this.overrides);
     let inst = 0, tris = 0;
     const shown = new Uint8Array(s.count);
@@ -83,9 +86,16 @@ export class Renderer {
       inst += g.spheres.length / 9 + g.cylinders.length / 12;
     }
     if (style.reps.cartoon.trim()) {
-      const m = selectAtoms(s, style.reps.cartoon); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildCartoon(s, m, scheme, style); this.geom.runs = g.runs;
-      this.batches.meshes.push(new MeshBatch(gl, this.progs.mesh, g.verts, g.idx, REP_CARTOON)); tris += g.idx.length / 3;
-    }
+      const m = selectAtoms(s, style.reps.cartoon); for (let i = 0; i < s.count; i++) shown[i] |= m[i];
+      // what buildCartoon reads: the structure, the selection, the scale, and each residue's structure and colour
+      const key = style.cartoonScale + '|' + style.reps.cartoon + '|' + s.residues.map(r => r.ss + scheme.cartoon(r)).join(',');
+      let k = this.cartoonKept;
+      if (!k || k.s !== s || k.key !== key) {
+        this.dropCartoon(); const g = buildCartoon(s, m, scheme, style);
+        k = this.cartoonKept = { s, key, batch: new MeshBatch(gl, this.progs.mesh, g.verts, g.idx, REP_CARTOON), runs: g.runs, tris: g.idx.length / 3 };
+      }
+      this.geom.runs = k.runs; this.batches.meshes.push(k.batch); tris += k.tris;
+    } else this.dropCartoon();
     if (style.reps.surface.trim()) {
       const m = selectAtoms(s, style.reps.surface); for (let i = 0; i < s.count; i++) shown[i] |= m[i]; const g = buildSurface(s, m, scheme, style); this.geom.surfaceMask = m;
       this.batches.spheres.push(new SphereBatch(gl, this.progs.sphere, g, REP_SURFACE)); inst += g.length / 9;
@@ -98,6 +108,8 @@ export class Renderer {
     this.rebuildMap(style, s);
     this.stats.atoms = s.count; this.stats.instances = inst; this.stats.triangles = tris; this.stats.buildMs = performance.now() - t0;
   }
+
+  private dropCartoon() { if (this.cartoonKept) { this.cartoonKept.batch.dispose(this.gl); this.cartoonKept = null } }
 
   /** the map's isosurface as the drawing prepares it (the same surface, from the same cache), back in the structure's
       frame; with a model it is drawn behind it, as the drawing does by default; on its own the camera fits it */
@@ -126,11 +138,11 @@ export class Renderer {
     }
   }
 
-  /** a map setting changed since the last rebuild (the level, say, which only redraws): take up the surface the
-      drawing prepared, once it has (the preview never waits for a map to be prepared) */
+  /** a map setting changed since the last rebuild (the level, say, which only redraws): take up the surface once it is
+      prepared, asking for it (the drawing may be made elsewhere, in a worker of its own); the preview never waits */
   private refreshMap(style: Style) {
     if (!this.map || style.map.visible === false) { if (this.mapBatch) this.rebuildMap(style, this.structure); return }
-    const em = preparedMap(this.map, style, this.structure, this.camera.base, this.localRes), L = em ? em.levels[em.primary] || em.levels[0] : null;
+    const em = this.mapSource ? this.mapSource(this.map, style, this.structure, this.camera.base, this.localRes) : preparedMap(this.map, style, this.structure, this.camera.base, this.localRes), L = em ? em.levels[em.primary] || em.levels[0] : null;
     if (L ? L !== this.mapDrawn || this.mapCol !== style.palette.surface + style.palette.paper : this.mapBatch && !this.map) this.rebuildMap(style, this.structure);
   }
 

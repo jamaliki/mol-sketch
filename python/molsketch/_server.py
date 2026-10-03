@@ -27,12 +27,22 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from urllib.parse import parse_qs, urlparse
 
-import skia
-
 from . import __version__
 from ._engine import CoreError, engine
+from ._image import png_of
 
-APP = pathlib.Path(__file__).resolve().parent / "app"
+HERE = pathlib.Path(__file__).resolve().parent
+FONTS = HERE / "fonts"   # the app's fonts: the package's own copies (the bundled app leaves them out)
+
+
+def _app_dir() -> pathlib.Path:
+    """the app's built files: bundled in the package, or (an install from a clone) the clone's app/dist"""
+    for d in (HERE / "app", HERE.parent.parent / "app" / "dist"):
+        if (d / "index.html").exists(): return d
+    return HERE / "app"
+
+
+APP = _app_dir()
 CALLS = {"frames", "info", "pocket", "frameTheSite", "fitFrame", "labelTheSite", "atomId", "sceneJson", "catalog", "ribbons", "engineConfig"}
 DEV_ORIGINS = ("http://localhost:5173", "http://127.0.0.1:5173")
 
@@ -61,8 +71,12 @@ class _Handler(BaseHTTPRequestHandler):
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/api/health": return self._json({"molsketch": __version__})
+        if path.startswith("/fonts/") and path.endswith(".ttf"):   # a font: from the package's fonts
+            f = (FONTS / path.rsplit("/", 1)[1]).resolve()
+            if f.parent != FONTS or not f.is_file(): return self._send(404, b"not found", "text/plain")
+            return self._send(200, f.read_bytes(), "font/ttf")
         f = (APP / path.lstrip("/")).resolve() if path != "/" else APP / "index.html"
-        if not str(f).startswith(str(APP)) or not f.is_file(): f = APP / "index.html" if not path.startswith(("/assets/", "/examples/")) else None
+        if not str(f).startswith(str(APP)) or not f.is_file(): f = APP / "index.html" if not path.startswith(("/assets/", "/examples/", "/fonts/")) else None
         if f is None or not f.is_file(): return self._send(404, b"not found", "text/plain")
         self._send(200, f.read_bytes(), mimetypes.guess_type(f.name)[0] or "application/octet-stream")
 
@@ -96,7 +110,7 @@ class _Handler(BaseHTTPRequestHandler):
             if path == "/api/render":
                 if body.pop("format", "png") == "svg": return self._send(200, E.render_svg(body).encode(), "image/svg+xml")
                 img = E.render(body)
-                return self._send(200, bytes(img.encodeToData(skia.kPNG, 100)), "image/png")
+                return self._send(200, png_of(img, 1), "image/png")   # a frame for the app on this machine: the fastest deflate
             if path == "/api/call":
                 if body.get("name") not in CALLS: return self._json({"error": f"no call {body.get('name')!r}"}, 400)
                 return self._json(E.call(body["name"], *body.get("args", [])))
@@ -109,7 +123,9 @@ class _Handler(BaseHTTPRequestHandler):
 
 def serve(port: int = 8471, host: str = "127.0.0.1", open_browser: bool = True, verbose: bool = False):
     """Run the app with its figures drawn by molsketch, at http://host:port (Ctrl-C stops it)."""
-    if not (APP / "index.html").exists(): raise RuntimeError("the app is not bundled in this install (run app/scripts/build-python.mjs)")
+    if not (APP / "index.html").exists():
+        raise RuntimeError("the app is not bundled in this install. From a clone of the repository: cd app && npm install && npm run build "
+                           "(then molsketch serve finds app/dist), or node scripts/build-python.mjs to bundle it into the package")
     engine()   # load the engine before the first request
     for p in range(port, port + 20):   # the next free port if this one is taken
         try: httpd = ThreadingHTTPServer((host, p), _Handler); port = p; break

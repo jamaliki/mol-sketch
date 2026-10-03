@@ -26,7 +26,11 @@ In a notebook, a figure shows itself. Every method returns the figure, so calls 
 pip install ./python            # from a clone of the repository (Python 3.10+)
 ```
 
-For `molsketch serve`, bundle the app into the package first: `cd app && npm install && node scripts/build-python.mjs`.
+On a Linux server without a desktop, Skia needs the EGL library: `sudo apt install libegl1` (Debian, Ubuntu) if
+`import molsketch` reports `libEGL.so.1` missing.
+
+For `molsketch serve`, build the app once: `cd app && npm install && npm run build` (the server finds `app/dist` in the
+clone), or `node scripts/build-python.mjs` to bundle it into the package itself.
 
 No browser, Node or GPU: the engine runs in an embedded V8 (mini-racer) and draws with Skia, the rasteriser behind
 Chrome's canvas. The fonts the app uses ship with the package.
@@ -121,6 +125,12 @@ The engine records its drawing as it goes and hands it over in pieces, so Skia d
 144 000-atom ribosome at 900 × 900 takes about 0.9 s as a cartoon and 2.4 s as a watercolour surface once the engine
 is warm (the app in Chrome: 0.65 s and 2.7 s); a single protein takes a few tens of milliseconds. V8 runs with its
 background threads; set `MOLSKETCH_V8_SINGLE_THREADED=1` if your process forks after drawing.
+
+The paper, its grain and the chalkboard's tooth are hundreds of thousands of marks each, and drawing them was most of
+a fresh process's first figure. They are kept as files (`~/.cache/molsketch/textures`, at most 300 MB, least recently
+used first out), so a later run starts from their pixels: a 1920 × 1440 watercolour's first render falls from 2.8 s
+to 0.5 s, a chalkboard's from 5.7 s to 0.7 s, with the same pixels. `MOLSKETCH_TEXTURE_CACHE_MB` sets the limit; 0
+turns the cache off.
 
 ## Development
 

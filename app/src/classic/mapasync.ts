@@ -7,11 +7,15 @@ import type { DensityMap } from '../model/map';
 import type { Structure } from '../model/structure';
 import type { Style } from '../style';
 
+type Ask = { key: string; map: DensityMap; style: Style; s: Structure | null; base: Float32Array; lr: DensityMap | null; t0: number; msg: any };
 export class MapPrep {
   private worker: Worker;
   private ids = new WeakMap<object, number>(); private next = 1;
-  private waiting = new Map<number, { key: string; map: DensityMap; style: Style; s: Structure | null; base: Float32Array; lr: DensityMap | null; t0: number }>();
+  private waiting = new Map<number, Ask>();
   private pending = new Set<string>();
+  /* one preparation of a map at a time: what is asked meanwhile waits, and a later ask for the same map (the level
+     dragged on) takes its place, so the worker never prepares a level the slider has already left */
+  private busyMaps = new Set<number>(); private queued = new Map<number, number>();
   /** a map in preparation (for the status line) */
   get busy() { return this.pending.size > 0 }
   lastMs = 0;
@@ -28,13 +32,19 @@ export class MapPrep {
     const hit = preparedMap(map, style, s, base, lr); if (hit) return hit;
     const key = mapKey(map, style, s, base, lr) + '|' + this.idOf(map, 'map') + '|' + (s ? this.idOf(s, 'structure') : 0) + '|' + (lr ? this.idOf(lr, 'map') : 0);
     if (this.pending.has(key)) return null;
-    const id = this.next++, st = { map: JSON.parse(JSON.stringify(style.map)) } as Style; this.pending.add(key);
-    this.waiting.set(id, { key, map, style: st, s, base: Float32Array.from(base), lr, t0: performance.now() });
-    this.worker.postMessage({ type: 'prep', id, map: this.ids.get(map), structure: s ? this.ids.get(s) : null, localRes: lr ? this.ids.get(lr) : null, opts: st.map, base: Float32Array.from(base) });
+    const id = this.next++, st = { map: JSON.parse(JSON.stringify(style.map)) } as Style, mid = this.ids.get(map)!; this.pending.add(key);
+    const msg = { type: 'prep', id, map: mid, structure: s ? this.ids.get(s) : null, localRes: lr ? this.ids.get(lr) : null, opts: st.map, base: Float32Array.from(base) };
+    this.waiting.set(id, { key, map, style: st, s, base: Float32Array.from(base), lr, t0: performance.now(), msg });
+    if (!this.busyMaps.has(mid)) { this.busyMaps.add(mid); this.worker.postMessage(msg); return null }
+    const old = this.queued.get(mid); if (old !== undefined) { const w = this.waiting.get(old); if (w) { this.pending.delete(w.key); this.waiting.delete(old) } }
+    this.queued.set(mid, id);
     return null;
   }
   private done(r: { id: number; em?: any; error?: string }) {
     const w = this.waiting.get(r.id); if (!w) return; this.waiting.delete(r.id); this.pending.delete(w.key);
+    const mid = w.msg.map, q = this.queued.get(mid);
+    if (q !== undefined) { this.queued.delete(mid); const n = this.waiting.get(q); if (n) { n.t0 = performance.now(); this.worker.postMessage(n.msg) } else this.busyMaps.delete(mid) }
+    else this.busyMaps.delete(mid);
     if (r.em) { adoptPrepared(w.map, w.style, w.s, w.base, w.lr, r.em); this.lastMs = performance.now() - w.t0 }
     this.onReady(r.error);
   }

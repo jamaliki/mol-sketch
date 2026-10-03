@@ -102,6 +102,14 @@ def test_save_frames(tmp_path):
     assert [f.name for f in files] == ["frame_0000.png", "frame_0001.png", "frame_0002.png", "frame_0003.png"]
 
 
+def test_frames_drawn_by_other_processes_are_the_same(tmp_path):
+    fig = ms.load(EX / "mechanism.json").look("chalkboard")
+    here = fig.save_frames(tmp_path / "here", list(range(0, 16, 2)), SMALL, workers=1)
+    there = fig.save_frames(tmp_path / "there", list(range(0, 16, 2)), SMALL, workers=2)
+    assert [f.name for f in here] == [f.name for f in there]
+    assert all(a.read_bytes() == b.read_bytes() for a, b in zip(here, there))
+
+
 def test_stack_of_structures(tmp_path):
     fig = ms.load([EX / "1A8O.pdb", EX / "1A8O.pdb"])
     assert "keyframe" in repr(fig) and fig.frames("keyframes")
@@ -243,3 +251,38 @@ def test_modified_residues_stay_in_the_chain():
     atoms = engine().call("sceneJson", fig._spec())["keyframes"][0]["atoms"]
     het = {a["resn"]: a["het"] for a in atoms.values()}
     assert het["MSE"] is False and het["ALA"] is False and het["LIG"] is True
+
+
+def test_system_font_text_keeps_every_glyph():
+    """text in a system font (the α/β labels' serif, any character the web fonts lack) is shaped from tables HarfBuzz
+    must be able to keep: a table freed under it gave missing glyphs ("α3" drawn as "α"), varying from run to run"""
+    import gc
+    import uharfbuzz as hb
+    from molsketch._text import TextEngine
+    face = TextEngine()._system_face("Times New Roman", 400, "italic")
+    for _ in range(50):
+        _churn = [bytes(1000) for _ in range(200)]; gc.collect()
+        for s in ("α3", "β12", "a3", "α 3"):
+            buf = hb.Buffer(); buf.add_str(s); buf.guess_segment_properties(); hb.shape(face.hb, buf)
+            assert 0 not in [g.codepoint for g in buf.glyph_infos], s
+
+
+def test_kept_textures_draw_the_same(tmp_path, monkeypatch):
+    """the paper and chalk textures kept as files: a later engine takes them and draws the same pixels, and one whose
+    files went after it started draws them again"""
+    from molsketch._engine import Engine
+    monkeypatch.setenv("MOLSKETCH_CACHE", str(tmp_path))
+    text = (EX / "1A8O.pdb").read_text()
+
+    def draw(e, look):
+        spec = {"input": {"ref": e.put({"text": text, "name": "1A8O.pdb"})}, "size": list(SMALL), "scale": 1, "frame": 0, "look": look}
+        return e.render(spec).toarray()
+
+    first = {look: draw(Engine(), look) for look in ("chalkboard", "watercolour")}
+    kept = list((tmp_path / "textures").glob("*.tex")); assert kept
+    for look, px in first.items(): assert np.array_equal(draw(Engine(), look), px)
+    e = Engine()
+    for f in kept: f.unlink()
+    assert np.array_equal(draw(e, "chalkboard"), first["chalkboard"])
+    (tmp_path / "textures" / "x.tex").write_bytes(b"MSTX1\n")   # a broken file is passed over
+    assert np.array_equal(draw(Engine(), "watercolour"), first["watercolour"])

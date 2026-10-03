@@ -1,7 +1,7 @@
 /* Maps prepared off the main thread: the app sends each map and structure once, then asks for maps prepared for a
    style; the answer is the prepared map without its sampler (a function does not cross), which the app rebuilds
    (mapasync.ts). The same prepareMap as everywhere, so the drawing does not depend on where it was prepared. */
-import { prepareMap } from './mapprep';
+import { prepareMap, forgetPrepared } from './mapprep';
 import type { DensityMap } from '../model/map';
 import type { Structure } from '../model/structure';
 
@@ -16,7 +16,12 @@ self.onmessage = (e: MessageEvent) => {
       const map = maps.get(m.map), s = m.structure != null ? structures.get(m.structure) ?? null : null, lr = m.localRes != null ? maps.get(m.localRes) ?? null : null;
       if (!map) throw new Error('the map was not sent');
       const { sample, ...em } = prepareMap(map, { map: m.opts } as any, s, m.base, lr) as any;
-      (self as any).postMessage({ id: m.id, em });
+      // its arrays handed over, not copied (the app keeps the prepared map; this side keeps only the inputs, whose
+      // arrays the grid may be)
+      forgetPrepared(map); const mine = new Set([map.data.buffer, lr?.data.buffer]), give = new Set<ArrayBuffer>();
+      for (const L of em.levels) for (const a of [L.pos, L.nor, L.tri, L.near, L.dist, L.hand]) if (a && !mine.has(a.buffer)) give.add(a.buffer);
+      if (!mine.has(em.grid.data.buffer)) give.add(em.grid.data.buffer);
+      (self as any).postMessage({ id: m.id, em }, [...give]);
     } catch (err: any) { (self as any).postMessage({ id: m.id, error: String(err?.message || err) }) }
   }
 };

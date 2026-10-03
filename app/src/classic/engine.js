@@ -398,20 +398,33 @@ function drawArrow(ctx,p0,p1,o){
 }
 
 /* paper */
-const paperCache={key:'',canvas:null};const baseCache={key:'',canvas:null};
+/* canvases made once and kept by key: the newest, the newest large one, and a few small ones besides (a look's
+   thumbnail drawn between two frames of the figure must not cost the figure its paper, nor keep a second large one) */
+function canvasCache(){const E=[];const SMALL=500000;const small=c=>c.width*c.height<=SMALL;
+  return{get(key){for(let i=0;i<E.length;i++)if(E[i].key===key){const e=E[i];if(i){E.splice(i,1);E.unshift(e)}return e.canvas}return null},
+    put(key,canvas){E.unshift({key,canvas});let big=!small(canvas),n=0;for(let i=1;i<E.length;i++){const s=small(E[i].canvas);if(s?n++<4:!big)big=big||!s;else E.splice(i--,1)}return canvas},
+    clear(){E.length=0}}}
+const paperCache=canvasCache(),baseCache=canvasCache();
+/* textures a host may keep between runs (the Python package keeps the paper, its grain and the chalk's tooth as files,
+   so a fresh process does not draw them again): made here unless the host has the one with this key, and then offered
+   to it. The key names everything the texture depends on; TEXV changes whenever the way they are drawn does */
+let TEXHOST=null;const TEXV='t1';
+function hostTexture(key,W,H,dpr,make){const k=TEXV+'|'+key;if(TEXHOST){const c=TEXHOST.take(k,W*dpr,H*dpr);if(c)return c}const c=make();if(TEXHOST)TEXHOST.keep(k,c);return c}
 function paper(W,H,dpr,boil){
   const life=cfg.style.wash>0?cfg.style.washLife:0;const wb=life>0?(boil|0):0; // the wash breathes with every drawing
-  const key=[W,H,dpr,cfg.palette.paper,cfg.style.grain,cfg.style.wash,cfg.style.washSeed,cfg.palette.wash,life,wb].join('|');
-  if(paperCache.key===key)return paperCache.canvas;
-  const bkey=[W,H,dpr,cfg.palette.paper,cfg.style.grain].join('|');
-  let base=baseCache.canvas;
-  if(baseCache.key!==bkey){base=paperBase(W,H,dpr);baseCache.key=bkey;baseCache.canvas=base}
-  const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
-  x.drawImage(base,0,0,W,H);
-  if(cfg.style.wash>0)watercolourWash(x,W,H,wb,life);
-  paperCache.key=key;paperCache.canvas=c;return c;
+  const key=[W,H,dpr,cfg.palette.paper,cfg.style.grain,cfg.style.wash,cfg.style.washSeed,cfg.palette.wash,life,wb,cfg.style.wash>0?shadeInk():''].join('|');   // (the wash's drying rings are shaded with the ink)
+  const hit=paperCache.get(key);if(hit)return hit;
+  const make=()=>{
+    const bkey=[W,H,dpr,cfg.palette.paper,cfg.style.grain].join('|');
+    const base=baseCache.get(bkey)||baseCache.put(bkey,paperBase(W,H,dpr));
+    const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
+    x.drawImage(base,0,0,W,H);
+    if(cfg.style.wash>0)watercolourWash(x,W,H,wb,life);
+    return c};
+  return paperCache.put(key,wb?make():hostTexture('paper|'+key,W,H,dpr,make));   // (a breathing wash's later steps are a video's, each drawn once: not kept)
 }
-function paperBase(W,H,dpr){
+function paperBase(W,H,dpr){return hostTexture('base|'+[W,H,dpr,cfg.palette.paper,cfg.style.grain].join('|'),W,H,dpr,()=>paperBaseOnce(W,H,dpr))}
+function paperBaseOnce(W,H,dpr){
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
   x.fillStyle=cfg.palette.paper;x.fillRect(0,0,W,H);
   const rng=mulberry32(1234);const dark=luminance(cfg.palette.paper)>0.5;const g=cfg.style.grain;
@@ -603,22 +616,36 @@ let RF={W:960,H:720,dpr:1};
    When `target` is a transparent offscreen, layers stack with source-over and the caller multiplies the result once. */
 function wcGauss(rng){const u=1-rng(),v=rng();return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v)}
 function wcDeform(pts,depth,variance,rng){let p=pts;for(let d=0;d<depth;d++){const out=[];for(let i=0;i<p.length;i++){const a=p[i],b=p[(i+1)%p.length];const mx=(a[0]+b[0])/2,my=(a[1]+b[1])/2;const ex=b[0]-a[0],ey=b[1]-a[1];const len=Math.hypot(ex,ey)||1;const nx=-ey/len,ny=ex/len;const dn=wcGauss(rng)*variance*len,dt=wcGauss(rng)*variance*len*0.35;out.push(a,[mx+nx*dn+ex/len*dt,my+ny*dn+ey/len*dt])}p=out}return p}
+/* wcDeform on a flat list (x, y, x, y …): the same points from the same random numbers in the same arithmetic, without
+   an array for every point (a watercolour shape deforms thousands of points per layer) */
+function wcDeformF(P,depth,variance,rng){let p=P;for(let d=0;d<depth;d++){const m=p.length>>1,out=new Float64Array(m*4);
+  for(let i=0;i<m;i++){const j=i+1===m?0:i+1;const ax=p[2*i],ay=p[2*i+1],bx=p[2*j],by=p[2*j+1];const mx=(ax+bx)/2,my=(ay+by)/2;const ex=bx-ax,ey=by-ay;const len=Math.hypot(ex,ey)||1;const nx=-ey/len,ny=ex/len;const dn=wcGauss(rng)*variance*len,dt=wcGauss(rng)*variance*len*0.35;
+    const o=4*i;out[o]=ax;out[o+1]=ay;out[o+2]=mx+nx*dn+ex/len*dt;out[o+3]=my+ny*dn+ey/len*dt}p=out}return p}
+/* wcDeformF of the first n numbers of P into scratch arrays the next call reuses (a layer drawn at once and dropped):
+   its first n·2^depth numbers */
+let WCA=new Float64Array(4096),WCB=new Float64Array(4096);
+function wcDeformS(P,n,depth,variance,rng){let p=P;for(let d=0;d<depth;d++){const m=n>>1;let out=d&1?WCB:WCA;if(out.length<m*4){out=new Float64Array(m*8);if(d&1)WCB=out;else WCA=out}
+  for(let i=0;i<m;i++){const j=i+1===m?0:i+1;const ax=p[2*i],ay=p[2*i+1],bx=p[2*j],by=p[2*j+1];const mx=(ax+bx)/2,my=(ay+by)/2;const ex=bx-ax,ey=by-ay;const len=Math.hypot(ex,ey)||1;const nx=-ey/len,ny=ex/len;const dn=wcGauss(rng)*variance*len,dt=wcGauss(rng)*variance*len*0.35;
+    const o=4*i;out[o]=ax;out[o+1]=ay;out[o+2]=mx+nx*dn+ex/len*dt;out[o+3]=my+ny*dn+ey/len*dt}p=out;n=m*4}return p}
 function watercolourShape(ctx,pts,col,seed,o){
   o=o||{};const rng=mulberry32(seed+4242);const layers=o.layers||9;const fog=o.fog||0;
   col=fogged(col,fog);const light=luminance(cfg.palette.paper)>0.5;
   let cx=0,cy=0;for(const p of pts){cx+=p[0];cy+=p[1]}cx/=pts.length;cy/=pts.length;
-  const path=q=>{ctx.beginPath();q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath()};
-  const shape=wcDeform(pts,1,0.06,rng);
+  const path=(q,n=q.length)=>{ctx.beginPath();ctx.moveTo(q[0],q[1]);for(let i=2;i<n;i+=2)ctx.lineTo(q[i],q[i+1]);ctx.closePath()};
+  const P=new Float64Array(pts.length*2);for(let i=0;i<pts.length;i++){P[2*i]=pts[i][0];P[2*i+1]=pts[i][1]}
+  const shape=wcDeformF(P,1,0.06,rng),sn=shape.length>>1;
   ctx.save();
   // on dark paper, screened layers alone never reach the pigment: lay the colour down first, then let the layers glow over it
   if(!light&&!o.offscreen){path(shape);ctx.fillStyle=rgba(col,0.7*(o.strength||0.75)/0.75);ctx.fill()}
   ctx.globalCompositeOperation=o.offscreen?'source-over':(light?'multiply':'screen');
-  const aFill=(o.strength||0.75)/layers*1.15;
-  for(let L=0;L<layers;L++){const sc=o.noScale?1:0.9+rng()*0.16;const lay=wcDeform(sc===1?shape:shape.map(p=>[cx+(p[0]-cx)*sc,cy+(p[1]-cy)*sc]),2,(0.08+rng()*0.1)*(o.noScale?1.6:1),rng);path(lay);ctx.fillStyle=rgba(col,aFill);ctx.fill()}
-  if(!o.noRing)for(let e=0;e<2;e++){const lay=wcDeform(shape,1,0.03,rng);path(lay);ctx.lineWidth=0.7+rng()*0.5;ctx.strokeStyle=rgba(mix(col,shadeInk(),0.25),0.16*(o.strength||0.75)/0.75);ctx.stroke()}
-  if(o.granulate!==false){ctx.save();path(shape);ctx.clip();let area=0;for(let i=0;i<shape.length;i++){const a=shape[i],b=shape[(i+1)%shape.length];area+=a[0]*b[1]-b[0]*a[1]}area=Math.abs(area)/2;
-    const g=Math.round(area*0.004);let xs=1e9,ys=1e9,xe=-1e9,ye=-1e9;for(const p of shape){xs=Math.min(xs,p[0]);ys=Math.min(ys,p[1]);xe=Math.max(xe,p[0]);ye=Math.max(ye,p[1])}
-    for(let i=0;i<g;i++){ctx.fillStyle=rgba(mix(col,shadeInk(),0.4),0.12+rng()*0.2);ctx.fillRect(xs+rng()*(xe-xs),ys+rng()*(ye-ys),1,1)}ctx.restore()}
+  const aFill=(o.strength||0.75)/layers*1.15,fill=rgba(col,aFill),N=shape.length;const scaled=new Float64Array(N);
+  for(let L=0;L<layers;L++){const sc=o.noScale?1:0.9+rng()*0.16;let q=shape;if(sc!==1){for(let i=0;i<N;i+=2){scaled[i]=cx+(shape[i]-cx)*sc;scaled[i+1]=cy+(shape[i+1]-cy)*sc}q=scaled}
+    path(wcDeformS(q,N,2,(0.08+rng()*0.1)*(o.noScale?1.6:1),rng),N*4);ctx.fillStyle=fill;ctx.fill()}
+  if(!o.noRing){const ring=rgba(mix(col,shadeInk(),0.25),0.16*(o.strength||0.75)/0.75);
+    for(let e=0;e<2;e++){path(wcDeformS(shape,N,1,0.03,rng),N*2);ctx.lineWidth=0.7+rng()*0.5;ctx.strokeStyle=ring;ctx.stroke()}}
+  if(o.granulate!==false){ctx.save();path(shape);ctx.clip();let area=0;for(let i=0;i<sn;i++){const j=i+1===sn?0:i+1;area+=shape[2*i]*shape[2*j+1]-shape[2*j]*shape[2*i+1]}area=Math.abs(area)/2;
+    const g=Math.round(area*0.004);let xs=1e9,ys=1e9,xe=-1e9,ye=-1e9;for(let i=0;i<shape.length;i+=2){xs=Math.min(xs,shape[i]);ys=Math.min(ys,shape[i+1]);xe=Math.max(xe,shape[i]);ye=Math.max(ye,shape[i+1])}
+    const gc=mix(col,shadeInk(),0.4);for(let i=0;i<g;i++){ctx.fillStyle=rgba(gc,0.12+rng()*0.2);ctx.fillRect(xs+rng()*(xe-xs),ys+rng()*(ye-ys),1,1)}ctx.restore()}
   ctx.restore();
 }
 /* line hierarchy: silhouettes heavier, interior marks lighter */
@@ -1302,14 +1329,19 @@ function unionDiscs(discs,shrink){
   for(const d of discs){const r=d.r-shrink;if(r<=0)continue;ds.push(d);if(d.x-r<x0)x0=d.x-r;if(d.y-r<y0)y0=d.y-r;if(d.x+r>x1)x1=d.x+r;if(d.y+r>y1)y1=d.y+r}
   if(ds.length<64)return ds;
   const gw=Math.ceil((x1-x0)/cs)+1,gh=Math.ceil((y1-y0)/cs)+1,cnt=new Uint16Array(gw*gh);
-  const full=(d,f)=>{const r=d.r-shrink,r2=r*r;const i0=Math.max(0,Math.floor((d.x-r-x0)/cs)),i1=Math.min(gw-1,Math.floor((d.x+r-x0)/cs)),j0=Math.max(0,Math.floor((d.y-r-y0)/cs)),j1=Math.min(gh-1,Math.floor((d.y+r-y0)/cs));
-    for(let j=j0;j<=j1;j++){const ya=y0+j*cs-d.y,yb=ya+cs,yy=Math.max(ya*ya,yb*yb);for(let i=i0;i<=i1;i++){const xa=x0+i*cs-d.x,xb=xa+cs;if(Math.max(xa*xa,xb*xb)+yy<=r2)f(j*gw+i,true);else if(f.length>2)f(j*gw+i,false,xa,xb,ya,yb,r2)}}};
-  for(const d of ds)full(d,(c)=>{if(cnt[c]<65535)cnt[c]++});
+  // the cells a disc covers wholly, counted, then each disc tested and, if it adds nothing, taken out (plain loops: a
+  // callback per cell cost most of the time)
+  const add=(d,k)=>{const r=d.r-shrink,r2=r*r;const i0=Math.max(0,Math.floor((d.x-r-x0)/cs)),i1=Math.min(gw-1,Math.floor((d.x+r-x0)/cs)),j0=Math.max(0,Math.floor((d.y-r-y0)/cs)),j1=Math.min(gh-1,Math.floor((d.y+r-y0)/cs));
+    for(let j=j0;j<=j1;j++){const ya=y0+j*cs-d.y,yb=ya+cs,yy=Math.max(ya*ya,yb*yb);for(let i=i0;i<=i1;i++){const xa=x0+i*cs-d.x,xb=xa+cs;if(Math.max(xa*xa,xb*xb)+yy<=r2){const c=j*gw+i;if(k>0){if(cnt[c]<65535)cnt[c]++}else cnt[c]--}}}};
+  const needs=d=>{const r=d.r-shrink,r2=r*r;const i0=Math.max(0,Math.floor((d.x-r-x0)/cs)),i1=Math.min(gw-1,Math.floor((d.x+r-x0)/cs)),j0=Math.max(0,Math.floor((d.y-r-y0)/cs)),j1=Math.min(gh-1,Math.floor((d.y+r-y0)/cs));
+    for(let j=j0;j<=j1;j++){const ya=y0+j*cs-d.y,yb=ya+cs,yy=Math.max(ya*ya,yb*yb);for(let i=i0;i<=i1;i++){const xa=x0+i*cs-d.x,xb=xa+cs;const c=j*gw+i;
+      if(Math.max(xa*xa,xb*xb)+yy<=r2){if(cnt[c]-1<=0)return true;continue}
+      const nx=Math.max(xa,Math.min(0,xb)),ny=Math.max(ya,Math.min(0,yb));if(nx*nx+ny*ny>=r2)continue;   // a cell the disc does not reach
+      if(cnt[c]<=0)return true}}
+    return false};
+  for(const d of ds)add(d,1);
   const keep=[];
-  for(const d of ds){let needed=false;
-    full(d,function(c,inside,xa,xb,ya,yb,r2){if(needed)return;if(!inside){const nx=Math.max(xa,Math.min(0,xb)),ny=Math.max(ya,Math.min(0,yb));if(nx*nx+ny*ny>=r2)return}   // a cell the disc does not reach
-      if(cnt[c]-(inside?1:0)<=0)needed=true});
-    if(needed)keep.push(d);else full(d,(c)=>{cnt[c]--})}
+  for(const d of ds){if(needs(d))keep.push(d);else add(d,-1)}
   return keep}
 function softenCovered(v,tb,W,H,r){   // v is 0 where nothing is covered: only the covered box is walked (the same sums, in the same order)
   let X0=W,X1=-1,Y0=H,Y1=-1;for(let y=0;y<H;y++){const o=y*W;for(let x=0;x<W;x++)if(tb[o+x]>=0){if(x<X0)X0=x;if(x>X1)X1=x;if(y<Y0)Y0=y;Y1=y}}
@@ -1753,22 +1785,26 @@ function renderFrame(ctx,W,H,frame,dpr){
   ctx.restore();
   return st;
 }
-const grainCache={key:'',canvas:null};
+const grainCache=canvasCache();
 /* the tooth of a chalkboard: dark pits that break every stroke, multiplied over the drawing */
-const pitCache={key:'',canvas:null};
-function pitOverlay(W,H,dpr){const key=[W,H,dpr].join('|');if(pitCache.key===key)return pitCache.canvas;
+const pitCache=canvasCache();
+function pitOverlay(W,H,dpr){const key=[W,H,dpr].join('|');const hit=pitCache.get(key);if(hit)return hit;
+  return pitCache.put(key,hostTexture('pit|'+key,W,H,dpr,()=>pitOnce(W,H,dpr)))}
+function pitOnce(W,H,dpr){
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
   x.fillStyle='#ffffff';x.fillRect(0,0,W,H);const rng=mulberry32(8765);const n=Math.round(W*H/9);
   for(let i=0;i<n;i++){const a=rng();x.fillStyle=`rgba(0,0,0,${0.25+a*0.55})`;const s=rng()<0.8?1:1.6;x.fillRect(rng()*W,rng()*H,s,s)}
-  pitCache.key=key;pitCache.canvas=c;return c}
+  return c}
 function grainOverlay(W,H,dpr,light){
-  const key=[W,H,dpr,light].join('|');if(grainCache.key===key)return grainCache.canvas;
+  const key=[W,H,dpr,light].join('|');const hit=grainCache.get(key);if(hit)return hit;
+  return grainCache.put(key,hostTexture('grain|'+key,W,H,dpr,()=>grainOnce(W,H,dpr,light)))}
+function grainOnce(W,H,dpr,light){
   const c=document.createElement('canvas');c.width=W*dpr;c.height=H*dpr;const x=c.getContext('2d',{willReadFrequently:true});x.scale(dpr,dpr);
   x.fillStyle=light?'#ffffff':'#000000';x.fillRect(0,0,W,H);const rng=mulberry32(4321);
   const n=Math.round(W*H/26);
   for(let i=0;i<n;i++){const a=rng();x.fillStyle=light?`rgba(60,45,25,${0.05+a*0.13})`:`rgba(255,245,225,${0.04+a*0.1})`;const sz=rng()<0.8?1:1.5;x.fillRect(rng()*W,rng()*H,sz,sz)}
   x.lineWidth=0.7;for(let i=0;i<260;i++){const px=rng()*W,py=rng()*H,an=rng()*Math.PI,l=8+rng()*30;x.strokeStyle=light?`rgba(70,55,35,${0.05+rng()*0.08})`:`rgba(255,245,225,${0.04+rng()*0.07})`;x.beginPath();x.moveTo(px,py);x.lineTo(px+Math.cos(an)*l,py+Math.sin(an)*l);x.stroke()}
-  grainCache.key=key;grainCache.canvas=c;return c;
+  return c;
 }
 let textGate=null;   // () => true when the host has words to learn (see renderFrame)
 /* the texts a frame measures (the map's caption, figure labels, the scene's captions), in their fonts, whole: the host
@@ -1792,7 +1828,9 @@ return {
   get TL(){return TL},
   renderFrame, sampleState, locate, buildTimeline, demoScene, compileSel, projectFrame, figLabelBoxes, viewAt,
   DEFAULT_CFG, PRESETS, GROUP_PALETTE, SUBUNIT_COLS,
-  invalidatePaper(){paperCache.key='';baseCache.key='';grainCache.key=''},
+  invalidatePaper(){paperCache.clear();baseCache.clear();grainCache.clear()},
   setTextGate(f){textGate=f||null},
+  setTextureHost(h){TEXHOST=h||null},
+  dropTextures(){paperCache.clear();baseCache.clear();grainCache.clear();pitCache.clear()},
 };
 }

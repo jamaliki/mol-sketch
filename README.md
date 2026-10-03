@@ -32,13 +32,18 @@ of MOLSCRIPT, on paper, with lines that boil from frame to frame so an animation
 ## Quick start
 
 ```bash
-git clone git@github.com:jamaliki/mol-sketch.git && cd mol-sketch/app
-npm install
-npm run dev            # open http://localhost:5173
+git clone https://github.com/jamaliki/mol-sketch.git && cd mol-sketch
+npm start              # installs the app's dependencies (once) and opens it at http://localhost:5173
 ```
 
-Type a PDB ID in the top bar (`5P21`, say) and press *Fetch*, pick a look, turn the molecule, and *Save PNG*. Drop a
-PDB, mmCIF or scene JSON file on the drawing to open your own; drop several structure files to animate between them.
+Node 18 or later is all it needs; the app's fonts come with it, so it works offline. Type a PDB ID in the top bar
+(`5P21`, say) and press *Fetch*, pick a look, turn the molecule, and *Save PNG*. Drop a PDB, mmCIF or scene JSON file on
+the drawing to open your own; drop several structure files to animate between them.
+
+The app is a static site: `npm run build` writes it to `app/dist`, which any web server can host, from any folder
+(`npm run serve` builds it and serves it locally). [`.github/workflows/pages.yml`](.github/workflows/pages.yml)
+publishes it to GitHub Pages on every push to `main`, once Pages is enabled for the repository with *GitHub Actions* as
+its source.
 
 ## Python
 
@@ -61,8 +66,10 @@ figure drawn by the package.
 ![The app: TRPV1 with its cryo-EM map, the density map selected in the layers](docs/img/app.png)
 
 While you drag, a WebGL2 preview follows the mouse in a few milliseconds; when the view rests, the stroke engine
-redraws the exact frame with real strokes, hatching and watercolour. Cost follows the visible outline rather than the
-atom count, so a 144 000-atom ribosome settles in about a second.
+redraws the exact frame with real strokes, hatching and watercolour. It draws in a worker, never on the page's own
+thread, so the app answers at once whatever it is drawing, and a figure it draws quickly follows the view live, in its
+finished look. Cost follows the visible outline rather than the atom count, so a 144 000-atom ribosome settles in about
+a second.
 
 - **Top bar**: *Open* (a file, a PDB ID, an EMDB map ID, the examples), undo / redo, `?` for every shortcut, and
   *Export*.
