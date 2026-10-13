@@ -9,7 +9,7 @@ import molsketch as ms
 ```
 
 Contents: [Making a figure](#making-a-figure) · [The Figure](#the-figure) · [Images](#images) ·
-[Lists and defaults](#lists-and-defaults) · [Selections](#selections) · [Errors](#errors) ·
+[Lists and defaults](#lists-and-defaults) · [Selections](#selections) · [Geometry for scenes](#geometry-for-scenes) · [Errors](#errors) ·
 [The command line](#the-command-line) · [The HTTP server](#the-http-server) · [Environment variables](#environment-variables)
 
 ---
@@ -454,6 +454,35 @@ Combine them with `and`, `or`, `not` and parentheses: `hetatm and not water`, `c
 `polymer and not hydro`, `(resn HIS and chain A) or resi 195`.
 
 ---
+
+## Geometry for scenes
+
+`molsketch.geometry` places atoms by internal coordinates, for building mechanism scenes by hand (a scene is a dict;
+see [scene-format.md](../../docs/scene-format.md)). Distances are in Å, angles in degrees.
+
+```python
+from molsketch import geometry as g
+```
+
+| function | what it gives |
+|---|---|
+| `g.place(a, b, c, dist, ang, tors)` | the point D with \|CD\| = `dist`, ∠BCD = `ang`, dihedral A–B–C–D = `tors` (one Z-matrix row). `a` may be `None` or collinear with b–c: the torsion is then from a fixed reference |
+| `g.relative_pose(frame_a, partner, frame_b, *, d, alpha_a, alpha_b=None, tau_a=0, tau_ab=0, tau_b=0)` | `partner` (id → position) moved rigidly so that, with (A1, A2, A3) = `frame_a` (positions) and (B1, B2, B3) = `frame_b` (ids in `partner`): d = \|A1 − B1\|, αA = ∠(A2, A1, B1), αB = ∠(A1, B1, B2), τA = dih(A3, A2, A1, B1), τAB = dih(A2, A1, B1, B2), τB = dih(A1, B1, B2, B3). A missing frame atom (`None`) or a collinear frame leaves the coordinates that need it free |
+| `g.internal_pose(frame_a, frame_b)` | the six coordinates read back from positions (`None` where undefined) |
+| `g.distance(a, b)`, `g.angle(a, b, c)`, `g.torsion(a, b, c, d)` | measurements; the torsion is IUPAC-signed, in (−180, 180] |
+| `g.lone_pairs(center, bonded, n, *, toward=None)` | `n` lone-pair directions for an atom's `lp`: tetrahedral or trigonal round its bonds; with `toward`, the first is the pair nearest that point, the set turned about a single bond to face it |
+| `g.rotate(points, axis, deg, about=(0, 0, 0))`, `g.superpose(mobile, target)` | a turn of a set of atoms; the Kabsch fit (R, t) of one set of points onto another |
+
+```python
+c, br = [0, 0, 0], [1.94, 0, 0]
+h1 = g.place([1.94, 1, 0], br, c, 1.09, 107.8, 90)
+oh = g.relative_pose((c, br, h1), {"O": [0, 0, 0], "H": [0.97, 0, 0]}, ("O", "H"),
+                     d=3.10, alpha_a=180, alpha_b=109.5, tau_ab=180)     # hydroxide behind C, its lone pair on C
+lp = g.lone_pairs(oh["O"], [oh["H"]], 3, toward=c)                         # lp[0] points at C
+```
+
+[`tools/reaction_figures.py`](../../tools/reaction_figures.py) builds the five reaction figures of
+[docs/reaction-figures.md](../../docs/reaction-figures.md) this way.
 
 ## Errors
 

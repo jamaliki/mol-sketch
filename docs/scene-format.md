@@ -58,6 +58,8 @@ timing, and where atoms enter from and leave to.
 | `atoms` | map of atom id → atom |
 | `bonds` | list of `[a, b, order]` or `{a, b, order}`; order `0` is a hydrogen bond (dotted), `2`/`3` draw valence sticks |
 | `arrows` | curly arrows shown while leaving this keyframe |
+| `orbitals` | orbitals drawn as lobes (below); they fade out over the first half of the motion to the next keyframe and the next keyframe's fade in over the second |
+| `measures` | distances, angles and torsions measured from the atoms and drawn with their values (below); they fade as orbitals do |
 | `path` | optional list of intermediate poses, each a map of atom id → `[x, y, z]`, walked in order on the way to the next keyframe (a computed trajectory instead of a straight line; atoms missing from a pose move straight) |
 | `leave` | groups or ids that exit during the transition instead of matching same-named atoms in the next keyframe (products going out while an identical substrate comes in); their bonds fade whole |
 | `asNext` | map id → id: an atom that matches a differently named atom in the next keyframe (the proton now on Ser that is next cycle's HG) |
@@ -101,8 +103,81 @@ Each arrow has a `from` and `to` anchor, an optional `bulge` (curvature, fractio
 default 0.4), `side` (+1 / −1, which way it bows) and `curl` (a floor on the bow in Å, so that a short arrow — a π bond to its own oxygen — still curls; default 0).
 
 Anchors: `{"atom": id}` (the atom's edge, facing the other end), `{"bond": [a, b]}` (the bond midpoint),
-`{"lp": id, "i": n}` (the n-th lone pair's dots). Arrows draw with a growing stroke during the hold, stay
+`{"lp": id, "i": n}` (the n-th lone pair's dots, wherever they are drawn: beside the atom, or inside an orbital that
+took that pair), `{"orbital": k}` (the middle of the k-th orbital's main lobe, counting from 0; `"lobe": j` picks
+another of its lobes). Arrows draw with a growing stroke during the hold, stay
 until the motion begins, then fade.
+
+## Orbitals
+
+Each entry of a keyframe's `orbitals` draws one orbital as lobes about its atoms. The lobes are solids, projected with
+the camera and sorted in depth with the sticks, so a lobe pointing at the viewer reads as a round blob and one behind an
+atom is hidden by it; their geometry is recomputed from the atoms in every frame, so they ride along through a
+transition. One phase is shaded and the other left blank. The colour says whether the orbital holds electrons:
+`palette.filled` (a lone pair, a σ or π bond) or `palette.empty` (σ*, π*, an empty p), and a filled orbital shows its
+pair of electrons as two bold dots in its main lobe.
+
+```jsonc
+"orbitals": [
+  { "type": "n", "atom": "O", "lp": 0, "label": "n(O)" },              // the lone pair O's lp[0] points along
+  { "type": "sigma*", "bond": ["C", "Br"], "label": "σ*(C–Br)" },      // the large lobe behind C
+  { "type": "pi*", "bond": ["C", "O"], "toward": "Nu" },               // its shaded C lobe faces the nucleophile
+  { "type": "p", "atom": "B", "toward": "N", "label": "p(B), empty" }
+]
+```
+
+| `type` | what it draws |
+|---|---|
+| `n` (also `lp`) | a lone pair: one lobe on `atom`, along `dir` (Å), along the atom's lone pair `lp` (its index), toward the atom `toward`, or else away from the atom's bonds. Tying it to `lp` moves that pair's dots into the lobe, and arrows from `{"lp": atom, "i": n}` then start there |
+| `p` | two lobes of opposite phase along `axis`, the normal of the plane through `plane` (three atom ids), or the normal of the plane the atom makes with its neighbours; `toward` turns it so the shaded lobe faces that atom. Empty by default; `"electrons": 2` for a carbanion |
+| `pi`, `pi*` | p lobes on both atoms of `bond`, in phase (π) or out of phase (π*); the axis as for `p`, from the first atom's plane. In π* the first atom carries the larger coefficient (list the C of a C=O first) |
+| `sigma` | the bonding orbital of `bond`: one lobe enclosing the bond, its electrons either side of the stick |
+| `sigma*` | the antibonding orbital of `bond`: a large lobe behind the first atom (where a nucleophile attacks), small lobes of opposite phase facing each other across the node, and a lobe behind the second atom |
+| `lobe` | one lobe on `atom` along `dir`, `length` and `width` in Å |
+
+Every orbital also takes `size` (scales its lobes; 1 is a 1.1–1.35 Å main lobe), `phase` (−1 swaps which lobes are
+shaded), `electrons` (overrides the type's: 0 draws it as empty), `dots: false` (no electrons drawn), `color` (a hex
+colour or palette key, instead of filled/empty), `opacity`, `label` (placed beside its main lobe, clear of atoms, bonds
+and other labels), and `id` (an orbital with the same id in the next keyframe stays instead of fading out and in).
+
+How lobes are drawn follows the look: in the engraved looks they are inked solids with a ruled tint in the orbital's
+colour (filled and empty orbitals ruled at right angles to each other) and the other phase white, and what lies behind
+a lobe is knocked back; in the other looks the shaded phase is a wash, scribble or hatching in the look's medium. The
+style's `orbitalStyle` (`auto`, `engraved`, `sketch`) chooses, and `show.orbitals` hides them all.
+
+## Measures
+
+A measure draws a piece of geometry with the value read from the drawn atoms, so the number is the picture's own:
+
+```jsonc
+"measures": [
+  { "distance": ["Nu", "C"], "window": [2.95, 0.45] },               // dashed line, "2.95 Å", the window as a band
+  { "angle": ["Nu", "C", "O"], "window": [105, 10], "radius": 0.5 }, // arc at C, "105°", the window as a wedge
+  { "torsion": ["H1", "O", "C", "Nu"], "label": "τ(H–O=C···O) {v}" }
+]
+```
+
+| key | meaning |
+|---|---|
+| `distance`, `angle`, `torsion` | 2, 3 or 4 atom ids; an angle is at its middle atom, a torsion is the dihedral of the four (IUPAC sign) |
+| `window` | `[target, tolerance]`: the positions the value may take, drawn behind everything as a band along the distance (from its first atom) or a wedge at the angle's vertex (measured from the second arm toward the first), stippled in a line medium and washed otherwise |
+| `label` | the text: `{v}` is the measured value with its unit, `{target}`, `{tol}` and `{window}` (`105 ± 10°`) come from `window`; default `{v}` (`τ {v}` for a torsion) |
+| `radius` | an angle's arc, in Å (default 0.5) |
+| `reach` | how far a window's wedge reaches, in Å (default the smaller of 1.6 and half the first arm) |
+| `side` | `1` / `-1`: which side of a distance or torsion its label goes, or above / below a straight angle's axis |
+| `id`, `opacity` | as for orbitals |
+
+A distance between two bonded atoms draws no line, only its value. `show.measures` hides them all.
+
+## Lone pairs
+
+An atom's `lp` directions draw as two dots each. The style's `lonePairStyle` sets how: `dots` (small, beside the atom),
+`bold` (larger dots set off from the atom, spread so that pairs, bonds and the charge do not collide; the Textbook
+look's), or `lobes` (each pair as a small lobe holding its electrons). A pair an `n` orbital took (its `lp`) is drawn in
+that orbital's lobe instead.
+
+`python/molsketch/geometry.py` builds atoms from internal coordinates and lone-pair directions for them; see
+[the reaction figures](reaction-figures.md).
 
 ## Timing
 

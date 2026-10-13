@@ -113,6 +113,7 @@ are the same set (the files are what *Export › Save style* writes, and *Load s
 | Chalkboard | chalk on the same navy: dusty fills, soft pitted lines | `looks/chalkboard.json` |
 | Engraved | line-shaded ribbons, black on white, after MOLSCRIPT (Kraulis 1991) | `looks/engraved.json` |
 | Engraved colour | the engraved ribbons with colour only in the lines | `looks/engraved-colour.json` |
+| Textbook | engraved colour as a 1960s text draws a mechanism: ruled orbital lobes, bold lone pairs, lettered labels | `looks/textbook.json` |
 | Assembly surface | watercolour surface coloured by subunit, for large complexes | `looks/assembly-surface.json` |
 | Assembly cartoon | tubes and ribbons by subunit, thin pen, heavy fog | `looks/assembly-cartoon.json` |
 
@@ -180,15 +181,21 @@ model, close-ups): [docs/maps.md](docs/maps.md).
 
 ## Mechanisms and animation
 
-A scene is a list of keyframes, each with atoms, bonds, curly arrows, lone pairs, charges and a caption; MolSketch
-interpolates between them, draws bonds forming and breaking, and times the arrows ahead of the atoms. The example
+A scene is a list of keyframes, each with atoms, bonds, curly arrows, lone pairs, charges, orbitals, measured
+distances and angles, and a caption; MolSketch interpolates between them, draws bonds forming and breaking, and times
+the arrows ahead of the atoms. The example
 `examples/mechanism.json` is the serine hydrolase mechanism at the top of this page.
 
 - [docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): from your own coordinates to a mechanism figure: load a
   PDB stack as keyframes, cut the view down, add arrows, charges and captions by clicking, render.
 - [docs/hero-workflow.md](docs/hero-workflow.md): from computed states to a looping video, as for the lab website's
   front page ([`hero/`](hero), [`tools/mech2scene.py`](tools/mech2scene.py)).
-- [docs/scene-format.md](docs/scene-format.md): the scene JSON, field by field.
+- [docs/reaction-figures.md](docs/reaction-figures.md): orbitals, lone pairs and approach geometry: the five base
+  reaction rules (proton transfer, σ*, π* and empty-p attack, concerted elimination) as figures in the Textbook look,
+  built from internal coordinates with `molsketch.geometry` ([`tools/reaction_figures.py`](tools/reaction_figures.py)).
+- [docs/scene-format.md](docs/scene-format.md): the scene JSON, field by field, including orbitals and measures.
+
+![π* attack in the Textbook look](docs/img/reactions/pi_star.png)
 
 ## The command line
 
@@ -236,7 +243,7 @@ for example `hetatm and not water`, `chain A and resi 50-120`, `subunit L`.
 | [`looks/`](looks) | the looks as style files |
 | [`examples/`](examples) | a mechanism scene, test structures, a synthetic 12k-atom assembly |
 | [`hero/`](hero) | the lab website's animated hero, scenes and render script |
-| [`tools/`](tools) | `make_images.py`: every image in this README; `mech2scene.py`: a scene from computed reaction states |
+| [`tools/`](tools) | `make_images.py`: every image in this README; `mech2scene.py`: a scene from computed reaction states; `reaction_figures.py`: the orbital figures of the base reaction rules |
 | [`docs/`](docs) | the guides below, and the images in this README |
 
 ## Reproducing the images
@@ -259,6 +266,7 @@ It also writes the style files in `looks/`. Each group is a short function in
 - [docs/scene-format.md](docs/scene-format.md): the scene JSON
 - [docs/maps.md](docs/maps.md): cryo-EM density maps, how they are drawn and why
 - [docs/mechanism-from-pdbs.md](docs/mechanism-from-pdbs.md): a mechanism figure from your own structures
+- [docs/reaction-figures.md](docs/reaction-figures.md): orbitals, lone pairs and approach geometry for reaction rules
 - [docs/hero-workflow.md](docs/hero-workflow.md): computed states to a looping video
 - [python/README.md](python/README.md), [python/docs/api.md](python/docs/api.md) and
   [python/docs/style.md](python/docs/style.md): the Python package, its whole API, and every style field

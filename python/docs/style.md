@@ -100,6 +100,8 @@ To colour one residue, chain, subunit or entity yourself, use [`fig.color`](api.
 | `X` | any other element |
 | `helix`, `sheet`, `loop`, `nucleic` | secondary structure, with `cartoon_color="ss"` |
 | `surface` | the surface, with `surface_color="single"` |
+| `filled`, `empty` | orbitals that hold electrons (a lone pair, a σ or π bond) and empty ones (σ*, π*, an empty p); chosen from the paper when unset |
+| `window`, `measure` | a measure's window and its lines and labels; chosen from the ink and paper when unset |
 
 ```python
 fig.set(palette={"paper": "#fbf7ee", "helix": "#de9151"})
@@ -125,6 +127,10 @@ is the easier way to set them.
 | `show.hbonds` | `true` | hydrogen bonds, as dotted lines |
 | `show.charges` | `true` | charge signs (scenes) |
 | `show.lone_pairs` | `true` | lone-pair dots (scenes) |
+| `show.orbitals` | `true` | a scene's orbitals, drawn as lobes |
+| `show.measures` | `true` | a scene's distances, angles and torsions, with their values and windows |
+| `lone_pair_style` | `"dots"` | lone pairs as small `"dots"` beside the atom, `"bold"` dots set off from it, or `"lobes"` each holding its pair |
+| `orbital_style` | `"auto"` | orbital lobes `"engraved"` (inked solids with a ruled tint; what `"auto"` gives beside engraved sticks or ribbons in a line fill) or `"sketch"` (in the look's own medium) |
 | `show.arrows` | `true` | curly arrows (scenes) |
 | `show.caption` | `true` | a scene's caption |
 | `show.step_label` | `true` | a scene's step title, top left (only with more than one keyframe) |

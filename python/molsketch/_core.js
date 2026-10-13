@@ -1703,7 +1703,9 @@
     fill: "watercolour",
     mode: "sticks",
     sphereScale: 0.4,
-    show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, resLabels: false, hbonds: true, caption: true, stepLabel: true, valence: true, figLabels: true, noLabels: false },
+    show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, resLabels: false, hbonds: true, caption: true, stepLabel: true, valence: true, figLabels: true, noLabels: false, orbitals: true, measures: true },
+    lonePairStyle: "dots",
+    orbitalStyle: "auto",
     font: "Caveat",
     labelSize: 19,
     captionSize: 24,
@@ -1842,6 +1844,45 @@
         cartoonScale: 1,
         palette: { ...PALETTES["PyMOL flat"], paper: "#ffffff", ink: "#000000", hatch: "#000000", label: "#000000", charge: "#000000", helix: "#d6453d", sheet: "#2f6fb5", loop: "#1e1e1e" },
         ...pen(0.08, { hierarchy: 0.3, alpha: 1 }),
+        shading: 0,
+        construction: false,
+        paper: { grain: 0, wash: 0 },
+        view: { fog: 0, fov: 0 }
+      }
+    },
+    textbook: {
+      name: "Textbook",
+      note: "a 1960s text: ruled ink, colour only in the lines, bold lone pairs, orbitals as ruled lobes, lettered labels",
+      style: {
+        fill: "ink colour",
+        cartoonStyle: "engraved",
+        stickStyle: "engraved",
+        lonePairStyle: "bold",
+        orbitalStyle: "engraved",
+        ...lines(5, 1.1),
+        cartoonScale: 1,
+        palette: {
+          ...PALETTES["PyMOL flat"],
+          paper: "#ffffff",
+          ink: "#000000",
+          hatch: "#000000",
+          label: "#000000",
+          charge: "#000000",
+          arrow: "#000000",
+          helix: "#d6453d",
+          sheet: "#2f6fb5",
+          loop: "#1e1e1e",
+          C: "#5f5f5f",
+          N: "#2f5fc4",
+          O: "#d23b2f",
+          filled: "#d23b2f",
+          empty: "#2f6fb5"
+        },
+        font: "Plain sans",
+        labelSize: 22,
+        captionSize: 22,
+        stickRadius: 0.17,
+        ...pen(0.05, { hierarchy: 0.3, alpha: 1 }),
         shading: 0,
         construction: false,
         paper: { grain: 0, wash: 0 },
@@ -2035,9 +2076,9 @@
       arrowLead: 0.2,
       view: { yaw: -18, pitch: 14, zoom: 1, panX: 0, panY: 0, fov: 20, fog: 0.5, fogStart: 0.45, spin: 0, pitchSwing: 0 },
       style: { rough: 1.1, passes: 2, pressure: 0.55, fillWobble: 1, hatchDensity: 1.4, hierarchy: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, inkWidth: 1.5, ballScale: 1, bondWidth: 2.1, hatchSpacing: 5, hatchAngle: -40, lightAngle: -125, shading: 0.65, pencilFill: 0.55, grain: 0.6, font: "Caveat", labelSize: 19, captionSize: 24, contextAlpha: 0.5, annot: 1 },
-      show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, hbonds: true, context: false, caption: true, stepLabel: true, colorBonds: false, resLabels: false, valence: true, construction: false },
+      show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, hbonds: true, context: false, caption: true, stepLabel: true, colorBonds: false, resLabels: false, valence: true, construction: false, orbitals: true, measures: true },
       palette: { ...PRESETS["PyMOL flat"] },
-      rep: { detail: "auto", textureScale: "screen", mode: "sticks", fill: "flat", colorBy: "group", stickRadius: 0.2, sphereScale: 0.4, sideChainHelper: true, cartoonScale: 1, cartoonColor: "ss", cartoonStyle: "sketch", engraveLines: 8, engraveWidth: 0.45, strandThickness: 0.6, coilWidth: 1.25, ssLabels: false, probe: 1.4, surfaceScale: 1, surfaceOpacity: 1, surfaceColor: "carbon", surfEdges: 1, surfPool: 1, surfFade: 1 },
+      rep: { detail: "auto", textureScale: "screen", mode: "sticks", fill: "flat", lonePairStyle: "dots", orbitalStyle: "auto", colorBy: "group", stickRadius: 0.2, sphereScale: 0.4, sideChainHelper: true, cartoonScale: 1, cartoonColor: "ss", cartoonStyle: "sketch", engraveLines: 8, engraveWidth: 0.45, strandThickness: 0.6, coilWidth: 1.25, ssLabels: false, probe: 1.4, surfaceScale: 1, surfaceOpacity: 1, surfaceColor: "carbon", surfEdges: 1, surfPool: 1, surfFade: 1 },
       pdbFrames: 2
     };
     let cfg = JSON.parse(JSON.stringify(DEFAULT_CFG));
@@ -2433,7 +2474,23 @@
         capB = Kj.caption || "";
         capBa = smooth((t - 0.76) / 0.22);
       }
-      return { atoms, A, bonds, arrows: Ki.arrows || [], arrowProg, arrowAlpha, kf: seg.kf, t, isTrans, captions: [{ text: capA, alpha: capAa }, { text: capB, alpha: capBa }], stepIdx: seg.kf, stepName: Ki.name || "step " + (seg.kf + 1) };
+      const same = (id) => id, fadeOut = isTrans ? 1 - smooth(tm / 0.5) : 1, fadeIn = isTrans ? smooth((tm - 0.5) / 0.5) : 0;
+      const carry = (li, lj) => {
+        const out = [], kept = /* @__PURE__ */ new Set();
+        (li || []).forEach((o, k) => {
+          const twin = isTrans && o.id !== void 0 ? (lj || []).find((q) => q.id === o.id) : null;
+          if (twin) {
+            kept.add(o.id);
+            out.push(tm < 0.5 ? { o, alpha: 1, k, map: same } : { o: twin, alpha: 1, k, map: inKey });
+          } else out.push({ o, alpha: fadeOut, k, map: same });
+        });
+        if (isTrans) (lj || []).forEach((o) => {
+          if (o.id === void 0 || !kept.has(o.id)) out.push({ o, alpha: fadeIn, k: -1, map: inKey });
+        });
+        return out.filter((e) => e.alpha > 4e-3);
+      };
+      const orbs = carry(Ki.orbitals, Kj.orbitals), meas = carry(Ki.measures, Kj.measures);
+      return { atoms, A, bonds, orbs, meas, arrows: Ki.arrows || [], arrowProg, arrowAlpha, kf: seg.kf, t, isTrans, captions: [{ text: capA, alpha: capAa }, { text: capB, alpha: capBa }], stepIdx: seg.kf, stepName: Ki.name || "step " + (seg.kf + 1) };
     }
     let FIT = { cx: 0, cy: 0, cz: 0, rx: 0, ry: 0, spanX: 10, spanY: 10, zspan: 4, key: "" };
     function rot3(p, cy, sy, cp, sp) {
@@ -3387,6 +3444,13 @@
         const p = proj.proj(a.pos), q = proj.proj(b.pos);
         return [(p.x + q.x) / 2, (p.y + q.y) / 2];
       }
+      if (an.orbital !== void 0) {
+        const L = st._orb && st._orb[an.orbital];
+        if (!L || !L.length) return null;
+        const lb = an.lobe !== void 0 ? L[Math.min(an.lobe | 0, L.length - 1)] : L.find((l) => l.main) || L[0];
+        return [lb.cx, lb.cy];
+      }
+      if (an.lp && st._lpAt && st._lpAt[an.lp] && st._lpAt[an.lp][an.i || 0]) return st._lpAt[an.lp][an.i || 0].slice();
       if (an.lp) {
         const a = st.A[an.lp];
         if (!a || !a.lps.length) return null;
@@ -6434,6 +6498,721 @@
       }
       ctx.restore();
     }
+    const add3 = (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]], scl3 = (a, s) => [a[0] * s, a[1] * s, a[2] * s], len3 = (a) => Math.hypot(a[0], a[1], a[2]);
+    const ORB_ALIAS = { "\u03C0": "pi", "\u03C0*": "pi*", "\u03C3": "sigma", "\u03C3*": "sigma*", lp: "n", lone: "n", "lone pair": "n", sp3: "n", "empty p": "p" };
+    const ORB_ELECTRONS = { n: 2, lobe: 2, sigma: 2, pi: 2, p: 0, "sigma*": 0, "pi*": 0 };
+    function orbType(o) {
+      const t = String(o.type || "n");
+      return ORB_ALIAS[t] || t;
+    }
+    function orbColour(o) {
+      if (o.color) return cfg.palette[o.color] || o.color;
+      const P = cfg.palette, light = luminance(P.paper) > 0.5;
+      const filled = (o.electrons ?? ORB_ELECTRONS[orbType(o)] ?? 2) > 0;
+      return filled ? P.filled || (light ? "#d9783a" : "#ffb27a") : P.empty || (light ? "#3f84c4" : "#8cc5ff");
+    }
+    function neighbours(st) {
+      const nb = {};
+      for (const b of st.bonds) {
+        if (!(b.order > 0) || b.alpha < 0.3 || b.partial > 0 && b.partial < 0.5) continue;
+        (nb[b.a] = nb[b.a] || []).push(b.b);
+        (nb[b.b] = nb[b.b] || []).push(b.a);
+      }
+      return nb;
+    }
+    function planeAxis(id, st, nb) {
+      const a = st.A[id];
+      if (!a) return null;
+      const ns = (nb[id] || []).map((j) => st.A[j]).filter(Boolean);
+      for (let i = 0; i < ns.length; i++) for (let j = i + 1; j < ns.length; j++) {
+        const n = cross3(sub3(ns[i].pos, a.pos), sub3(ns[j].pos, a.pos));
+        if (len3(n) > 1e-3) return norm3(n);
+      }
+      if (ns.length === 1) {
+        const b = ns[0];
+        for (const k of nb[b.id] || []) {
+          if (k === id || !st.A[k]) continue;
+          const n = cross3(sub3(a.pos, b.pos), sub3(st.A[k].pos, b.pos));
+          if (len3(n) > 1e-3) return norm3(n);
+        }
+      }
+      return null;
+    }
+    function awayAxis(id, st, nb) {
+      const a = st.A[id];
+      let s = [0, 0, 0];
+      for (const j of nb[id] || []) if (st.A[j]) s = add3(s, norm3(sub3(st.A[j].pos, a.pos)));
+      return len3(s) > 1e-3 ? norm3(scl3(s, -1)) : null;
+    }
+    function orbitalLobes(o, st, nb, map) {
+      const T = orbType(o), k = o.size ?? 1, ph = (o.phase ?? 1) < 0 ? -1 : 1;
+      const A = (id) => id === void 0 ? null : st.A[map(id)];
+      const lobe = (at, u2, L, w, phase, main, shape) => ({ base: at.pos, u: u2, L: L * k, w: w * k, shape: shape || "tear", phase: phase * ph, main: !!main });
+      const vec = (v) => Array.isArray(v) && v.length === 3 && len3(v) > 1e-6 ? norm3(v) : null;
+      const toward = (a2, u2) => {
+        const t = A(o.toward);
+        if (!t || !u2) return u2;
+        return dot3(u2, sub3(t.pos, a2.pos)) < 0 ? scl3(u2, -1) : u2;
+      };
+      const plane = () => {
+        if (Array.isArray(o.plane) && o.plane.length === 3) {
+          const [p, q, r] = o.plane.map(A);
+          if (p && q && r) {
+            const n = cross3(sub3(q.pos, p.pos), sub3(r.pos, p.pos));
+            if (len3(n) > 1e-6) return norm3(n);
+          }
+        }
+        return null;
+      };
+      if (T === "sigma" || T === "sigma*" || T === "pi" || T === "pi*") {
+        const ids = o.bond || [];
+        const a2 = A(ids[0]), b = A(ids[1]);
+        if (!a2 || !b) return null;
+        const ab = sub3(b.pos, a2.pos), d = len3(ab);
+        if (d < 1e-6) return null;
+        const u2 = scl3(ab, 1 / d);
+        if (T === "sigma") return [{ base: sub3(a2.pos, scl3(u2, 0.32 * k)), u: u2, L: d + 0.64 * k, w: 0.4 * k, shape: "ellipse", phase: ph, main: true }];
+        if (T === "sigma*") return [lobe(a2, scl3(u2, -1), 1.35, 0.62, 1, true), lobe(a2, u2, 0.55, 0.3, -1), lobe(b, scl3(u2, -1), 0.5, 0.28, 1), lobe(b, u2, 0.95, 0.45, -1)];
+        let n = vec(o.axis) || plane() || planeAxis(map(ids[0]), st, nb) || planeAxis(map(ids[1]), st, nb);
+        if (!n) return null;
+        n = norm3(sub3(n, scl3(u2, dot3(n, u2))));
+        n = toward(a2, n);
+        const anti = T === "pi*", ca = anti ? 1.18 : 1, cb = anti ? 0.8 : 1;
+        return [lobe(a2, n, 1.1 * ca, 0.48 * ca, 1, true), lobe(a2, scl3(n, -1), 1.1 * ca, 0.48 * ca, -1), lobe(b, n, 1.1 * cb, 0.48 * cb, anti ? -1 : 1), lobe(b, scl3(n, -1), 1.1 * cb, 0.48 * cb, anti ? 1 : -1)];
+      }
+      const a = A(o.atom);
+      if (!a) return null;
+      if (T === "p") {
+        let n = vec(o.axis) || plane() || planeAxis(map(o.atom), st, nb);
+        if (!n) return null;
+        n = toward(a, n);
+        return [lobe(a, n, 1.15, 0.5, 1, true), lobe(a, scl3(n, -1), 1.15, 0.5, -1)];
+      }
+      let u = vec(o.dir);
+      if (!u && o.lp !== void 0 && a.lps.length) {
+        const lp = a.lps[Math.min(o.lp | 0, a.lps.length - 1)];
+        u = vec(lp.dir);
+      }
+      if (!u && A(o.toward)) u = vec(sub3(A(o.toward).pos, a.pos));
+      if (!u) u = awayAxis(map(o.atom), st, nb);
+      if (!u) return null;
+      return [lobe(a, u, o.length ?? 1.25, o.width ?? 0.56, 1, true)];
+    }
+    function lobeOutline(lb, proj) {
+      const u = norm3(lb.u);
+      const e1 = norm3(cross3(u, Math.abs(u[0]) < 0.85 ? [1, 0, 0] : [0, 1, 0])), e2 = cross3(u, e1);
+      const pts = [], NT = 14, NP = 18;
+      for (let i = 0; i <= NT; i++) {
+        const t = i / NT;
+        const r = lb.w * (lb.shape === "ellipse" ? Math.sqrt(Math.max(0, 1 - (2 * t - 1) * (2 * t - 1))) : t * Math.sqrt(1 - t) / 0.3849);
+        const c = add3(lb.base, scl3(u, t * lb.L));
+        if (r < 1e-4) {
+          const p = proj.proj(c);
+          pts.push([p.x, p.y]);
+          continue;
+        }
+        for (let j = 0; j < NP; j++) {
+          const f2 = j / NP * Math.PI * 2;
+          const p = proj.proj(add3(c, add3(scl3(e1, r * Math.cos(f2)), scl3(e2, r * Math.sin(f2)))));
+          pts.push([p.x, p.y]);
+        }
+      }
+      const h = hull(pts);
+      return h.length >= 3 ? chaikin(h, 2) : null;
+    }
+    function hatchBox(ctx, x0, y0, x1, y1, ang, sp, col, alpha, width, seed) {
+      const dx = Math.cos(ang), dy = Math.sin(ang), nx = -dy, ny = dx;
+      const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, R = Math.hypot(x1 - x0, y1 - y0) / 2 + 2;
+      const rng = mulberry32(seed);
+      for (let d = -R + sp * (0.3 + 0.4 * rng()); d < R; d += sp * (0.85 + 0.3 * rng())) sketchLine(ctx, [[cx + nx * d - dx * R, cy + ny * d - dy * R], [cx + nx * d + dx * R, cy + ny * d + dy * R]], { seed: seed + Math.round(d * 11), passes: 1, width, color: col, alpha, ampScale: 0.5, step: 5, overshoot: false });
+    }
+    function drawLobe(ctx, pts, col, o) {
+      const P = cfg.palette, S = cfg.style;
+      const fog = o.fog || 0, d = (o.d || 1) * TEX, dw = (o.d || 1) * Math.max(TEX, 0.75);
+      const c = fogged(col, fog);
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const p of pts) {
+        x0 = Math.min(x0, p[0]);
+        y0 = Math.min(y0, p[1]);
+        x1 = Math.max(x1, p[0]);
+        y1 = Math.max(y1, p[1]);
+      }
+      const path = () => {
+        ctx.beginPath();
+        pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        ctx.closePath();
+      };
+      const plus = o.phase > 0, big = Math.max(x1 - x0, y1 - y0);
+      ctx.save();
+      ctx.globalAlpha = o.alpha;
+      if (plus) {
+        if (isWC()) watercolourShape(ctx, pts, c, o.seed, { fog: 0, layers: 6, strength: 0.62 });
+        else if (isPencil()) {
+          ctx.save();
+          path();
+          ctx.clip();
+          scribbleFill(ctx, x0, y0, x1, y1, c, o.seed, { fog: 0, d });
+          ctx.restore();
+        } else if (isInk()) {
+          ctx.save();
+          path();
+          ctx.clip();
+          const mono = cfg.rep.fill === "ink";
+          const hc = mono ? fogged(P.hatch, fog) : c;
+          hatchBox(ctx, x0, y0, x1, y1, S.hatchAngle * Math.PI / 180 + 0.75, Math.max(2.2, S.hatchSpacing * 0.62 * Math.max(0.7, d)), hc, mono ? 0.6 : 0.75, 0.9 * dw, o.seed + 5);
+          if (big > 40) hatchBox(ctx, x0, y0, x1, y1, S.hatchAngle * Math.PI / 180 - 0.6, S.hatchSpacing * 1.1 * Math.max(0.7, d), hc, mono ? 0.35 : 0.45, 0.8 * dw, o.seed + 9);
+          ctx.restore();
+        } else {
+          path();
+          ctx.fillStyle = rgba(cfg.rep.fill === "wash" ? mix(c, P.paper, 0.35) : c, 0.42);
+          ctx.fill();
+        }
+      } else {
+        if (isWC()) watercolourShape(ctx, pts, c, o.seed, { fog: 0, layers: 3, strength: 0.14, noRing: true, granulate: false });
+        else if (!isInk()) {
+          path();
+          ctx.fillStyle = rgba(c, 0.08);
+          ctx.fill();
+        }
+      }
+      const light = luminance(P.paper) > 0.5;
+      const line = light ? mix(c, P.ink, 0.5) : mix(c, P.ink, 0.2);
+      sketchLine(ctx, [...pts, pts[0], pts[1]], { seed: o.seed + 7, width: S.inkWidth * 0.8 * LW.outer * Math.min(1.2, o.d || 1), color: line, alpha: plus ? 0.9 : 0.75, ampScale: 0.55, overshoot: false, step: 4, passes: isPencil() ? 2 : void 0 });
+      ctx.restore();
+    }
+    const engravedOrbitals = () => {
+      const s = cfg.rep.orbitalStyle || "auto";
+      if (s !== "auto") return s === "engraved";
+      const m = cfg.rep.fill;
+      return engravedSticks() || cfg.rep.stickStyle === "engraved" || cfg.rep.cartoonStyle === "engraved" && (m === "ink" || m === "ink colour" || m === "chalk");
+    };
+    function drawEngravedLobe(ctx, lb, pts, col, o) {
+      const P = cfg.palette, S = cfg.style, proj = o.proj;
+      const d = o.d || 1;
+      let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+      for (const p of pts) {
+        x0 = Math.min(x0, p[0]);
+        y0 = Math.min(y0, p[1]);
+        x1 = Math.max(x1, p[0]);
+        y1 = Math.max(y1, p[1]);
+      }
+      const path = () => {
+        ctx.beginPath();
+        pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1]));
+        ctx.closePath();
+      };
+      const holes = () => {
+        ctx.beginPath();
+        ctx.rect(x0 - 4, y0 - 4, x1 - x0 + 8, y1 - y0 + 8);
+        for (const h of o.holes || []) {
+          ctx.moveTo(h[0] + h[2], h[1]);
+          ctx.arc(h[0], h[1], h[2], 0, Math.PI * 2, true);
+        }
+      };
+      ctx.save();
+      ctx.globalAlpha = o.alpha;
+      ctx.save();
+      path();
+      ctx.clip();
+      if (o.holes && o.holes.length) {
+        holes();
+        ctx.clip("evenodd");
+      }
+      ctx.fillStyle = rgba(P.paper, o.knock ?? 0.8);
+      ctx.fillRect(x0 - 4, y0 - 4, x1 - x0 + 8, y1 - y0 + 8);
+      if (o.phase > 0 && !o.bare) {
+        const a = (o.tint ?? -45) * Math.PI / 180, dx = Math.cos(a), dy = Math.sin(a), nx = -dy, ny = dx;
+        const sp = clamp(proj.pxPerA * 0.07, 3.2, 6.5);
+        let lo = 1e9, hi = -1e9;
+        for (const p of pts) {
+          const t = p[0] * nx + p[1] * ny;
+          lo = Math.min(lo, t);
+          hi = Math.max(hi, t);
+        }
+        const R = Math.hypot(x1 - x0, y1 - y0) + 8, cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, c0 = cx * dx + cy * dy;
+        ctx.lineWidth = Math.max(0.7, (cfg.rep.engraveWidth ?? 0.45) * 0.85);
+        ctx.strokeStyle = col;
+        ctx.lineCap = "butt";
+        ctx.beginPath();
+        for (let t = Math.ceil(lo / sp) * sp; t <= hi; t += sp) {
+          ctx.moveTo(nx * t + dx * (c0 - R), ny * t + dy * (c0 - R));
+          ctx.lineTo(nx * t + dx * (c0 + R), ny * t + dy * (c0 + R));
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+      sketchLine(ctx, [...pts, pts[0], pts[1]], { seed: o.seed + 7, width: S.inkWidth * (o.thin ? 0.6 : 0.85) * LW.outer * Math.min(1.2, d), color: o.line || P.ink, alpha: 1, ampScale: 0.5, overshoot: false, step: 4, passes: 1 });
+      ctx.restore();
+    }
+    let DOTK = 1;
+    function electronDots(ctx, x, y, dx, dy, n, s, col, alpha, gap) {
+      const L = Math.hypot(dx, dy);
+      let px = 0, py = 1;
+      if (L > 1e-3) {
+        px = -dy / L;
+        py = dx / L;
+      }
+      const r = 2.6 * s * DOTK, g2 = gap ?? 3.8 * s * DOTK;
+      const at = n >= 2 ? [-g2, g2] : [0];
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      for (const o of at) {
+        ctx.beginPath();
+        ctx.arc(x + px * o, y + py * o, r + 1.1, 0, Math.PI * 2);
+        ctx.fillStyle = cfg.palette.paper;
+        ctx.fill();
+      }
+      for (const o of at) {
+        ctx.beginPath();
+        ctx.arc(x + px * o, y + py * o, r, 0, Math.PI * 2);
+        ctx.fillStyle = col;
+        ctx.fill();
+      }
+      ctx.restore();
+    }
+    function buildLonePairLobes(items, st, stickAtoms, proj, seedBase) {
+      const P = cfg.palette, an = cfg.style.annot || 1;
+      const R0 = cfg.rep.stickRadius * proj.pxPerA;
+      for (const a of stickAtoms) {
+        if (!a.lps.length || a.alpha < 0.02) continue;
+        const taken = st._lpTaken[a.id];
+        a.lps.forEach((lp, i) => {
+          if (taken && taken.has(i)) return;
+          const u = norm3(lp.dir);
+          const lb = { base: a.pos, u, L: 0.72 * an, w: 0.32 * an, shape: "tear" };
+          const pts = lobeOutline(lb, proj);
+          if (!pts) return;
+          const mid2 = proj.proj(add3(a.pos, scl3(u, lb.L * 0.52)));
+          const ap = proj.proj(a.pos);
+          (st._lpAt[a.id] = st._lpAt[a.id] || [])[i] = [mid2.x, mid2.y];
+          const alpha = a.alpha * lp.alpha;
+          const seed = seedBase + strHash(a.id + "lp" + i);
+          items.push({ z: mid2.z, draw: (ctx) => {
+            if (engravedOrbitals()) drawEngravedLobe(ctx, lb, pts, P.ink, { phase: -1, alpha, proj, d: mid2.d, seed, holes: [[ap.x, ap.y, R0 * ap.d + 2]], thin: true, knock: 0.85 });
+            else {
+              ctx.save();
+              ctx.globalAlpha = alpha;
+              sketchLine(ctx, [...pts, pts[0], pts[1]], { seed, width: cfg.style.inkWidth * 0.6, color: P.ink, alpha: 0.8, ampScale: 0.5, overshoot: false, step: 4 });
+              ctx.restore();
+            }
+            electronDots(ctx, mid2.x, mid2.y, mid2.x - ap.x, mid2.y - ap.y, 2, an * mid2.d, P.ink, alpha);
+          } });
+        });
+      }
+    }
+    function buildOrbitals(items, st, proj, seedBase) {
+      const nb = neighbours(st);
+      st.orbs.forEach((e, i) => {
+        const o = e.o;
+        const lobes = orbitalLobes(o, st, nb, e.map);
+        if (!lobes) return;
+        const ids = [o.atom, o.toward, ...o.bond || []].filter((x) => x !== void 0).map(e.map).filter((id) => st.A[id]);
+        const atomAlpha = ids.length ? Math.min(...ids.map((id) => st.A[id].alpha)) : 1;
+        const alpha = e.alpha * atomAlpha * (o.opacity ?? 1);
+        if (alpha < 0.01) return;
+        const col = orbColour(o);
+        const seed0 = seedBase + strHash("orb" + i + orbType(o));
+        const shown = [];
+        const T = orbType(o);
+        const electrons = o.electrons ?? ORB_ELECTRONS[T] ?? 2;
+        const R0 = cfg.rep.stickRadius * proj.pxPerA, an = cfg.style.annot || 1;
+        const own = ids.filter((id) => id !== (o.toward === void 0 ? null : e.map(o.toward))).map((id) => {
+          const p = proj.proj(st.A[id].pos);
+          return [p.x, p.y, R0 * p.d + 2.5];
+        });
+        if (T === "n" && o.lp !== void 0 && o.atom !== void 0) {
+          const id = e.map(o.atom);
+          (st._lpTaken[id] = st._lpTaken[id] || /* @__PURE__ */ new Set()).add(o.lp | 0);
+        }
+        lobes.forEach((lb, j) => {
+          const pts = lobeOutline(lb, proj);
+          if (!pts) return;
+          const mid2 = proj.proj(add3(lb.base, scl3(lb.u, lb.L * 0.5))), tip = proj.proj(add3(lb.base, scl3(lb.u, lb.L * 1.08)));
+          let cx = 0, cy = 0;
+          for (const p of pts) {
+            cx += p[0];
+            cy += p[1];
+          }
+          cx /= pts.length;
+          cy /= pts.length;
+          shown.push({ pts, cx, cy, tip: [tip.x, tip.y], main: lb.main });
+          let dots = null;
+          if (lb.main && electrons > 0 && o.dots !== false) {
+            const ap = proj.proj(lb.base);
+            if (T === "sigma") {
+              const b = proj.proj(add3(lb.base, scl3(lb.u, lb.L)));
+              dots = { x: (ap.x + b.x) / 2, y: (ap.y + b.y) / 2, dx: b.x - ap.x, dy: b.y - ap.y, gap: R0 * mid2.d + 4.5 * an };
+            } else {
+              const q = proj.proj(add3(lb.base, scl3(lb.u, lb.L * (T === "n" ? 0.56 : 0.6))));
+              dots = { x: q.x, y: q.y, dx: q.x - ap.x, dy: q.y - ap.y };
+            }
+            if (T === "n" && o.lp !== void 0) {
+              const id = e.map(o.atom);
+              (st._lpAt[id] = st._lpAt[id] || [])[o.lp | 0] = [dots.x, dots.y];
+            }
+          }
+          const eng = engravedOrbitals();
+          items.push({ z: mid2.z, draw: (ctx) => {
+            if (eng) drawEngravedLobe(ctx, lb, pts, col, { phase: lb.phase, alpha, proj, d: mid2.d, seed: seed0 + j * 37, holes: own, tint: electrons > 0 ? -45 : 45 });
+            else drawLobe(ctx, pts, col, { phase: lb.phase, alpha, fog: mid2.fog, d: mid2.d, seed: seed0 + j * 37 });
+            if (dots) electronDots(ctx, dots.x, dots.y, dots.dx, dots.dy, electrons, an * mid2.d, cfg.palette.ink, alpha, dots.gap);
+          } });
+        });
+        if (e.k >= 0) st._orb[e.k] = shown;
+        if (o.label && shown.length) {
+          const m = shown.find((s) => s.main) || shown[0];
+          let ax = m.tip[0] - m.cx, ay = m.tip[1] - m.cy;
+          const L = Math.hypot(ax, ay) || 1;
+          ax /= L;
+          ay /= L;
+          let ox = 0, oy = 0;
+          for (const a of st.atoms) {
+            const p = proj.proj(a.pos);
+            ox += p.x;
+            oy += p.y;
+          }
+          ox /= st.atoms.length || 1;
+          oy /= st.atoms.length || 1;
+          let nx = -ay, ny = ax;
+          if (nx * (m.cx - ox) + ny * (m.cy - oy) < 0) {
+            nx = -nx;
+            ny = -ny;
+          }
+          if (o.labelSide !== void 0 && o.labelSide < 0) {
+            nx = -nx;
+            ny = -ny;
+          }
+          let far = 0;
+          for (const p of m.pts) far = Math.max(far, (p[0] - m.cx) * nx + (p[1] - m.cy) * ny);
+          const light = luminance(cfg.palette.paper) > 0.5;
+          st._orbLabels.push({ text: String(o.label), x: m.cx + nx * (far + 14), y: m.cy + ny * (far + 14), dx: nx, dy: ny, ax: m.cx + nx * far * 0.6, ay: m.cy + ny * far * 0.6, col: light ? mix(col, cfg.palette.ink, 0.45) : col, alpha, font: annotFont(1), prio: 1 });
+        }
+      });
+    }
+    function measureOf(m, st, map) {
+      const kind = m.distance ? "distance" : m.angle ? "angle" : m.torsion ? "torsion" : null;
+      if (!kind) return null;
+      const at = (m[kind] || []).map((id) => st.A[map(id)]);
+      if (at.length !== { distance: 2, angle: 3, torsion: 4 }[kind] || at.some((a) => !a)) return null;
+      const p = at.map((a) => a.pos);
+      let v;
+      if (kind === "distance") v = len3(sub3(p[1], p[0]));
+      else if (kind === "angle") {
+        const u = norm3(sub3(p[0], p[1])), w = norm3(sub3(p[2], p[1]));
+        v = Math.acos(clamp(dot3(u, w), -1, 1)) * 180 / Math.PI;
+      } else {
+        const b0 = sub3(p[0], p[1]), b1 = norm3(sub3(p[2], p[1])), b2 = sub3(p[3], p[2]);
+        const v1 = sub3(b0, scl3(b1, dot3(b0, b1))), w1 = sub3(b2, scl3(b1, dot3(b2, b1)));
+        v = Math.atan2(dot3(cross3(b1, v1), w1), dot3(v1, w1)) * 180 / Math.PI;
+      }
+      return { kind, atoms: at, p, v };
+    }
+    function fmtMeasure(kind, v) {
+      return kind === "distance" ? v.toFixed(2) + " \xC5" : Math.round(v) + "\xB0";
+    }
+    function measureText(m, r) {
+      const w = Array.isArray(m.window) ? m.window : null;
+      const unit = r.kind === "distance" ? " \xC5" : "\xB0";
+      const fmt = (x) => r.kind === "distance" ? (+x).toFixed(2) : String(Math.round(+x));
+      const t = m.label ?? (r.kind === "torsion" ? "\u03C4 {v}" : "{v}");
+      return String(t).replace("{v}", fmtMeasure(r.kind, r.v)).replace("{target}", w ? fmt(w[0]) + unit : "").replace("{tol}", w ? fmt(w[1]) + unit : "").replace("{window}", w ? `${fmt(w[0])} \xB1 ${fmt(w[1])}${unit}` : "");
+    }
+    function annotFont(scale) {
+      const S = cfg.style;
+      const fam = S.font === "Plain sans" ? '"IBM Plex Sans", system-ui, sans-serif' : `"${S.font}", "Caveat", cursive`;
+      return `${S.font === "Plain sans" ? "600" : "500"} ${Math.max(8, Math.round(S.labelSize * scale))}px ${fam}`;
+    }
+    function haloText(ctx, text, x, y, col, alpha, font) {
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      ctx.font = font;
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      if (ctx.strokeText) {
+        ctx.lineJoin = "round";
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = cfg.palette.paper;
+        ctx.strokeText(text, x, y);
+      }
+      ctx.fillStyle = col;
+      ctx.fillText(text, x, y);
+      ctx.restore();
+    }
+    function buildMeasureWindows(items, st, proj) {
+      const P = cfg.palette;
+      const light = luminance(P.paper) > 0.5;
+      const lineMedium = isInk() && !isWC() && !isPencil();
+      const wc = P.window || (lineMedium ? mix(P.ink, P.paper, 0.45) : light ? "#7a9a5a" : "#b5d69a");
+      const an = cfg.style.annot || 1;
+      const hatched = (ctx, poly, seed) => {
+        let x0 = 1e9, y0 = 1e9, x1 = -1e9, y1 = -1e9;
+        for (const p of poly) {
+          x0 = Math.min(x0, p.x);
+          y0 = Math.min(y0, p.y);
+          x1 = Math.max(x1, p.x);
+          y1 = Math.max(y1, p.y);
+        }
+        ctx.save();
+        ctx.beginPath();
+        poly.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+        ctx.closePath();
+        ctx.clip();
+        const inside = (x, y) => {
+          let c = false;
+          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const a = poly[i], b = poly[j];
+            if (a.y > y !== b.y > y && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) c = !c;
+          }
+          return c;
+        };
+        const sp = 4 * an;
+        ctx.fillStyle = rgba(wc, 0.75);
+        ctx.beginPath();
+        for (let y = Math.floor(y0 / sp) * sp; y <= y1; y += sp) for (let x = Math.floor(x0 / sp) * sp + (Math.round(y / sp) & 1 ? sp / 2 : 0); x <= x1; x += sp) {
+          if (!inside(x, y)) continue;
+          ctx.moveTo(x + 0.75, y);
+          ctx.arc(x, y, 0.75, 0, Math.PI * 2);
+        }
+        ctx.fill();
+        ctx.restore();
+      };
+      st.meas.forEach((e, i) => {
+        const m = e.o;
+        const W = Array.isArray(m.window) ? m.window : null;
+        if (!W) return;
+        const r = measureOf(m, st, e.map);
+        if (!r || r.kind === "torsion") return;
+        const alpha = e.alpha * Math.min(...r.atoms.map((a) => a.alpha)) * (m.opacity ?? 1);
+        if (alpha < 0.01) return;
+        if (r.kind === "distance") {
+          const u = norm3(sub3(r.p[1], r.p[0]));
+          const q0 = proj.proj(add3(r.p[0], scl3(u, W[0] - W[1]))), q1 = proj.proj(add3(r.p[0], scl3(u, W[0] + W[1])));
+          items.push({ z: -1e9 + i, draw: (ctx) => {
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            if (lineMedium) {
+              const dx = q1.x - q0.x, dy = q1.y - q0.y, L = Math.hypot(dx, dy) || 1, nx = -dy / L * 5 * an, ny = dx / L * 5 * an;
+              hatched(ctx, [{ x: q0.x + nx, y: q0.y + ny }, { x: q1.x + nx, y: q1.y + ny }, { x: q1.x - nx, y: q1.y - ny }, { x: q0.x - nx, y: q0.y - ny }]);
+            } else {
+              ctx.lineCap = "round";
+              ctx.strokeStyle = rgba(wc, light ? 0.3 : 0.34);
+              ctx.lineWidth = 10 * an;
+              ctx.beginPath();
+              ctx.moveTo(q0.x, q0.y);
+              ctx.lineTo(q1.x, q1.y);
+              ctx.stroke();
+            }
+            ctx.restore();
+          } });
+          return;
+        }
+        const { e1, e2 } = angleBasis(m, r, proj);
+        const pb = r.p[1];
+        const reach = m.reach ?? Math.min(len3(sub3(r.p[0], pb)) * 0.55, 1.6);
+        const t0 = (W[0] - W[1]) * Math.PI / 180, t1 = (W[0] + W[1]) * Math.PI / 180;
+        const q = [proj.proj(pb)];
+        for (let k = 0; k <= 32; k++) {
+          const t = t0 + (t1 - t0) * k / 32;
+          q.push(proj.proj(add3(pb, add3(scl3(e1, reach * Math.cos(t)), scl3(e2, reach * Math.sin(t))))));
+        }
+        items.push({ z: -1e9 + i, draw: (ctx) => {
+          ctx.save();
+          ctx.globalAlpha = alpha;
+          if (lineMedium) hatched(ctx, q);
+          else {
+            ctx.beginPath();
+            q.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
+            ctx.closePath();
+            ctx.fillStyle = rgba(wc, light ? 0.22 : 0.26);
+            ctx.fill();
+          }
+          for (const p of [q[1], q[q.length - 1]]) sketchLine(ctx, [[q[0].x, q[0].y], [p.x, p.y]], { seed: strHash("win" + i) + Math.round(p.x), passes: 1, width: 0.9, color: mix(wc, P.ink, 0.25), alpha: 0.5, ampScale: 0.4, overshoot: false, step: 5 });
+          ctx.restore();
+        } });
+      });
+    }
+    function angleBasis(m, r, proj) {
+      const [pa, pb, pc] = r.p;
+      const e1 = norm3(sub3(pc, pb));
+      let e2 = sub3(sub3(pa, pb), scl3(e1, dot3(sub3(pa, pb), e1)));
+      if (len3(e2) < 1e-3) {
+        const s = proj.proj(pb);
+        const v = norm3(sub3(proj.unproj(s.x, s.y, 1), proj.unproj(s.x, s.y, 0)));
+        e2 = cross3(e1, v);
+        if (len3(e2) < 1e-3) e2 = cross3(e1, [0, 0, 1]);
+        e2 = norm3(e2);
+        const up = proj.dir2(e2);
+        if ((m.side ?? 1) * up[1] > 0) e2 = scl3(e2, -1);
+      }
+      return { e1, e2: norm3(e2) };
+    }
+    function drawMeasures(ctx, st, proj, seedBase, labels) {
+      const P = cfg.palette, S = cfg.style;
+      const light = luminance(P.paper) > 0.5;
+      const mc = P.measure || mix(P.ink, P.paper, light ? 0.25 : 0.15);
+      const wc = P.window || (light ? "#7a9a5a" : "#b5d69a");
+      const bonded = /* @__PURE__ */ new Set();
+      for (const b of st.bonds) if (b.order > 0 && b.alpha > 0.5 && !(b.partial > 0 && b.partial < 1)) bonded.add(bkey(b.a, b.b));
+      let ox = 0, oy = 0, n = 0;
+      for (const a of st.atoms) {
+        const p = proj.proj(a.pos);
+        ox += p.x;
+        oy += p.y;
+        n++;
+      }
+      ox /= n || 1;
+      oy /= n || 1;
+      const font = annotFont(0.92), an = S.annot || 1;
+      st.meas.forEach((e, i) => {
+        const m = e.o;
+        const r = measureOf(m, st, e.map);
+        if (!r) return;
+        const alpha = e.alpha * Math.min(...r.atoms.map((a) => a.alpha)) * (m.opacity ?? 1);
+        if (alpha < 0.01) return;
+        const seed = seedBase + strHash("meas" + i);
+        const text = measureText(m, r);
+        const W = Array.isArray(m.window) ? m.window : null;
+        const S2 = r.atoms.map((a) => proj.proj(a.pos));
+        ctx.save();
+        ctx.globalAlpha = alpha;
+        if (r.kind === "distance") {
+          const [a, b] = S2;
+          const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
+          if (W) {
+            const u = norm3(sub3(r.p[1], r.p[0]));
+            for (const [k, dd] of [[0, W[0] - W[1]], [1, W[0] + W[1]], [2, W[0]]]) {
+              const q = proj.proj(add3(r.p[0], scl3(u, dd)));
+              sketchLine(ctx, [[q.x - uy * 6 * an, q.y + ux * 6 * an], [q.x + uy * 6 * an, q.y - ux * 6 * an]], { seed: seed + k * 7, passes: 1, width: k === 2 ? 1.3 : 0.9, color: mix(wc, P.ink, 0.35), alpha: 0.85, ampScale: 0.3, overshoot: false, step: 3 });
+            }
+          }
+          for (let k = 1, n2 = Math.max(2, Math.round(L / 6)); k < n2; k++) labels.obst.push([a.x + dx * k / n2, a.y + dy * k / n2, 5]);
+          if (!bonded.has(bkey(r.atoms[0].id, r.atoms[1].id))) {
+            const ra = atomDrawR(r.atoms[0], proj) * a.d + 3, rb = atomDrawR(r.atoms[1], proj) * b.d + 3;
+            let s = ra, k = 0;
+            while (s < L - rb) {
+              const t = Math.min(L - rb, s + 5);
+              sketchLine(ctx, [[a.x + ux * s, a.y + uy * s], [a.x + ux * t, a.y + uy * t]], { seed: seed + k * 13, passes: 1, width: 1.1, color: mc, alpha: 0.85, ampScale: 0.35, overshoot: false, step: 0 });
+              s += 9;
+              k++;
+            }
+          }
+          let nx = -uy, ny = ux;
+          const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2;
+          if (m.side !== void 0 ? m.side < 0 : nx * (mx - ox) + ny * (my - oy) < 0) {
+            nx = -nx;
+            ny = -ny;
+          }
+          labels.push({ text, x: mx + nx * 18 * an, y: my + ny * 18 * an, dx: nx, dy: ny, ax: mx, ay: my, col: mc, alpha, font, prio: 2 });
+        } else if (r.kind === "angle") {
+          const pb = r.p[1];
+          const { e1, e2 } = angleBasis(m, r, proj);
+          const rad = (m.radius ?? 0.5) * an, th = r.v * Math.PI / 180;
+          const ray = (t, R) => add3(pb, add3(scl3(e1, R * Math.cos(t)), scl3(e2, R * Math.sin(t))));
+          const arc = [];
+          for (let k = 0; k <= 28; k++) {
+            const p = proj.proj(ray(th * k / 28, rad));
+            arc.push([p.x, p.y]);
+          }
+          sketchLine(ctx, arc, { seed: seed + 3, passes: 1, width: 1.2, color: mc, alpha: 0.9, ampScale: 0.4, overshoot: false, step: 3 });
+          for (let k = 2; k < arc.length; k += 3) labels.obst.push([arc[k][0], arc[k][1], 4]);
+          const am = proj.proj(ray(th / 2, rad)), o0 = proj.proj(pb);
+          let lx = am.x - o0.x, ly = am.y - o0.y;
+          const ll = Math.hypot(lx, ly) || 1;
+          lx /= ll;
+          ly /= ll;
+          labels.push({ text, x: am.x + lx * 16 * an, y: am.y + ly * 16 * an, dx: lx, dy: ly, ax: am.x, ay: am.y, col: mc, alpha, font, prio: 2 });
+        } else {
+          const [, b, c] = S2;
+          const mx = (b.x + c.x) / 2, my = (b.y + c.y) / 2;
+          const dx = c.x - b.x, dy = c.y - b.y, L = Math.hypot(dx, dy) || 1;
+          let nx = -dy / L, ny = dx / L;
+          if (m.side !== void 0 ? m.side < 0 : nx * (mx - ox) + ny * (my - oy) < 0) {
+            nx = -nx;
+            ny = -ny;
+          }
+          labels.push({ text, x: mx + nx * 30 * an, y: my + ny * 30 * an, dx: nx, dy: ny, ax: mx, ay: my, col: mc, alpha, font, prio: 3, leader: true });
+        }
+        ctx.restore();
+      });
+    }
+    function placeLabels(ctx, labels, st, pos, proj, W, H) {
+      const obst = (labels.obst || []).slice();
+      const R0 = cfg.rep.stickRadius * proj.pxPerA;
+      for (const a of st.atoms) {
+        if (a.alpha < 0.3) continue;
+        const p = pos[a.id];
+        if (p) obst.push([p.x, p.y, atomDrawR(a, proj) * p.d + 5]);
+      }
+      for (const b of st.bonds) {
+        if (b.alpha < 0.3 || !pos[b.a] || !pos[b.b]) continue;
+        const p = pos[b.a], q = pos[b.b];
+        const L = Math.hypot(q.x - p.x, q.y - p.y);
+        const n = Math.max(1, Math.round(L / 6));
+        for (let k = 1; k < n; k++) obst.push([p.x + (q.x - p.x) * k / n, p.y + (q.y - p.y) * k / n, R0 * (b.order === 0 ? 0.6 : 1.4) + 4]);
+      }
+      const bottom = H - (cfg.show.caption ? H * 0.13 : 0) - 6, top = cfg.show.stepLabel ? H * 0.06 : 6;
+      const placed = [];
+      const hits = (x, y, w, h) => {
+        if (x - w / 2 < 6 || x + w / 2 > W - 6 || y - h / 2 < top || y + h / 2 > bottom) return 1e6;
+        let c = 0;
+        for (const o of obst) {
+          const cx = clamp(o[0], x - w / 2, x + w / 2), cy = clamp(o[1], y - h / 2, y + h / 2);
+          const d = Math.hypot(o[0] - cx, o[1] - cy);
+          if (d < o[2]) c += o[2] - d;
+        }
+        for (const p of placed) {
+          const ox = Math.min(x + w / 2, p.x + p.w / 2) - Math.max(x - w / 2, p.x - p.w / 2), oy = Math.min(y + h / 2, p.y + p.h / 2) - Math.max(y - h / 2, p.y - p.h / 2);
+          if (ox > -3 && oy > -3) c += 1e3 + (ox + 3) * (oy + 3);
+        }
+        return c;
+      };
+      labels.sort((u, v) => (u.prio || 0) - (v.prio || 0));
+      for (const l of labels) {
+        ctx.font = l.font;
+        const w = ctx.measureText(l.text).width + 8, h = parseFloat(/(\d+)px/.exec(l.font)[1]) * 1.1;
+        const a0 = Math.atan2(l.dy || 0, l.dx || 0);
+        let best = null;
+        for (let ring = 0; ring <= 14 && !(best && best.c === 0); ring++) {
+          const R = ring * 9;
+          const steps = ring ? 16 : 1;
+          for (let k = 0; k < steps; k++) {
+            const off = (k % 2 ? 1 : -1) * Math.ceil(k / 2) * Math.PI * 2 / steps;
+            const x = l.x + Math.cos(a0 + off) * R, y = l.y + Math.sin(a0 + off) * R;
+            const c = hits(x, y, w, h) + R * 0.02;
+            if (!best || c < best.c - 1e-6) best = { x, y, c: c < 0.5 ? 0 : c };
+            if (best.c === 0) break;
+          }
+        }
+        l.px = best.x;
+        l.py = best.y;
+        l.w = w;
+        l.h = h;
+        placed.push({ x: best.x, y: best.y, w, h });
+      }
+      const P = cfg.palette;
+      for (const l of labels) {
+        if (l.leader || Math.hypot(l.px - l.x, l.py - l.y) > 22) {
+          const vx = l.ax - l.px, vy = l.ay - l.py, L = Math.hypot(vx, vy);
+          const t = Math.min(l.w / 2 / Math.max(Math.abs(vx), 1e-6), l.h / 2 / Math.max(Math.abs(vy), 1e-6));
+          if (L * (1 - t) > 10) {
+            const k = Math.max(0, (L - 5) / L);
+            ctx.save();
+            ctx.globalAlpha = l.alpha;
+            sketchLine(ctx, [[l.px + vx * t * 1.05, l.py + vy * t * 1.05], [l.px + vx * k, l.py + vy * k]], { seed: strHash(l.text), passes: 1, width: 0.8, color: l.col, alpha: 0.7, ampScale: 0.4, overshoot: false, step: 4 });
+            ctx.restore();
+          }
+        }
+        haloText(ctx, l.text, l.px, l.py, l.col, l.alpha, l.font);
+      }
+    }
+    function annotTexts(st) {
+      const out = [];
+      for (const e of st.meas || []) {
+        const r = measureOf(e.o, st, e.map);
+        if (r) out.push(measureText(e.o, r));
+      }
+      return out;
+    }
     let PAPER_FILL = null;
     function paperFill() {
       return isInk() && PAPER_FILL ? PAPER_FILL : cfg.palette.paper;
@@ -6556,6 +7335,7 @@
       computeFit();
       const proj = makeProjector(W, H);
       TEX = cfg.rep.textureScale === "object" ? clamp(proj.pxPerA / 48, 0.35, 6) : 1;
+      DOTK = clamp(proj.pxPerA / 90, 0.8, 1.8);
       const P = cfg.palette, S = cfg.style, SH = cfg.show;
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
@@ -6621,6 +7401,14 @@
       if (cartoonOn) buildCartoon(items, st, pos, st.atoms, selC, proj, seedBase, lowDetail);
       if (surfAtoms.length) buildSurface(items, st, pos, surfAtoms, proj, seedBase, lowDetail);
       if (scene.map) buildMap(items, st, pos, proj, seedBase);
+      st._orb = {};
+      st._orbLabels = [];
+      st._lpTaken = {};
+      st._lpAt = {};
+      if (SH.orbitals !== false && st.orbs && st.orbs.length) buildOrbitals(items, st, proj, seedBase);
+      const lpLobes = SH.lonePairs && cfg.rep.lonePairStyle === "lobes";
+      if (lpLobes) buildLonePairLobes(items, st, stickAtoms, proj, seedBase);
+      if (SH.measures !== false && st.meas && st.meas.length) buildMeasureWindows(items, st, proj);
       items.sort((u, v) => u.z - v.z);
       for (const it of items) it.draw(ctx);
       drawMapCaption(ctx, W, H);
@@ -6629,11 +7417,47 @@
         const p = pos[a.id];
         const r = atomDrawR(a, proj) * p.d;
         const seed = seedBase + strHash(a.id);
-        if (SH.lonePairs && a.lps.length) {
+        if (SH.lonePairs && !lpLobes && a.lps.length && cfg.rep.lonePairStyle === "bold") {
+          const taken = st._lpTaken[a.id];
+          const an = S.annot || 1;
+          const NB = st._nb || (st._nb = neighbours(st));
+          const fixed = (NB[a.id] || []).filter((j) => pos[j]).map((j) => Math.atan2(pos[j].y - p.y, pos[j].x - p.x));
+          if (a.charges.length) fixed.push(-Math.PI / 4);
+          const dif = (u, v) => {
+            let x = u - v;
+            while (x > Math.PI) x -= 2 * Math.PI;
+            while (x < -Math.PI) x += 2 * Math.PI;
+            return x;
+          };
+          const ps = a.lps.map((lp, i) => ({ i, lp, ang: Math.atan2(proj.dir2(lp.dir)[1], proj.dir2(lp.dir)[0]) })).filter((q) => !(taken && taken.has(q.i)));
+          for (let it = 0; it < 24; it++) {
+            for (const q of ps) for (const f2 of fixed) {
+              const x = dif(q.ang, f2);
+              if (Math.abs(x) < 0.6) q.ang += (x >= 0 ? 1 : -1) * (0.6 - Math.abs(x)) * 0.5;
+            }
+            for (let m = 0; m < ps.length; m++) for (let n = m + 1; n < ps.length; n++) {
+              const x = dif(ps[m].ang, ps[n].ang);
+              if (Math.abs(x) < 0.95) {
+                const k = (0.95 - Math.abs(x)) * 0.5 * (x >= 0 ? 1 : -1);
+                ps[m].ang += k;
+                ps[n].ang -= k;
+              }
+            }
+          }
+          for (const q of ps) {
+            const ux = Math.cos(q.ang), uy = Math.sin(q.ang);
+            const off = r + (4.5 + 2.6 * DOTK) * an;
+            const x = p.x + ux * off, y = p.y + uy * off;
+            (st._lpAt[a.id] = st._lpAt[a.id] || [])[q.i] = [x, y];
+            electronDots(ctx, x, y, ux, uy, 2, an, P.ink, a.alpha * q.lp.alpha);
+          }
+        } else if (SH.lonePairs && !lpLobes && a.lps.length) {
           ctx.save();
           ctx.globalAlpha = a.alpha;
+          const taken = st._lpTaken[a.id];
           const an = S.annot || 1;
           a.lps.forEach((lp, i) => {
+            if (taken && taken.has(i)) return;
             const d = proj.dir2(lp.dir);
             const L = Math.hypot(d[0], d[1]) || 1;
             const ux = d[0] / L, uy = d[1] / L;
@@ -6676,6 +7500,13 @@
           ctx.fillText(a.label, p.x + d[0] / L * (r + 9), p.y + d[1] / L * (r + 9));
           ctx.restore();
         }
+      }
+      {
+        const notes = [];
+        notes.obst = [];
+        if (SH.measures !== false && st.meas && st.meas.length) drawMeasures(ctx, st, proj, seedBase, notes);
+        if (SH.labels && !SH.noLabels) for (const l of st._orbLabels || []) notes.push(l);
+        if (notes.length) placeLabels(ctx, notes, st, pos, proj, W, H);
       }
       if (SH.arrows && st.arrowAlpha > 0 && st.arrowProg > 0) {
         st.arrows.forEach((ar, i) => {
@@ -6804,6 +7635,14 @@
       if (SH.caption) {
         ctx.font = `500 ${S.captionSize}px ${fontFam}`;
         for (const c of st.captions || []) if (c.text) ctx.measureText(c.text);
+      }
+      for (const [t, k] of annotTexts(st).map((t2) => [t2, 0.92])) {
+        ctx.font = annotFont(k);
+        ctx.measureText(t);
+      }
+      for (const e of st.orbs || []) if (e.o.label) {
+        ctx.font = annotFont(1);
+        ctx.measureText(String(e.o.label));
       }
       ctx.restore();
     }
@@ -8089,6 +8928,8 @@
         cartoonColor: style.cartoonColor,
         cartoonStyle: style.cartoonStyle || "sketch",
         stickStyle: style.stickStyle || "auto",
+        lonePairStyle: style.lonePairStyle || "dots",
+        orbitalStyle: style.orbitalStyle || "auto",
         engraveLines: style.engrave?.lines ?? 8,
         engraveWidth: style.engrave?.width ?? 0.45,
         strandThickness: style.engrave?.strandThickness ?? 0.6,

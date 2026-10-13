@@ -1,0 +1,315 @@
+{
+ "name": "Proton transfer",
+ "view": {
+  "yaw": -8,
+  "pitch": 18,
+  "roll": 0,
+  "zoom": 1.44,
+  "panX": -0.0,
+  "panY": 0.01
+ },
+ "look": "textbook",
+ "reps": {
+  "sticks": "all",
+  "cartoon": "",
+  "surface": ""
+ },
+ "keyframes": [
+  {
+   "name": "Proton transfer: precursor",
+   "hold": 40,
+   "transition": 56,
+   "caption": "N's lone pair (n, filled) points along O–H into σ*(O–H), largest on H: the proton moves along the acceptor's axis.",
+   "atoms": {
+    "N": {
+     "el": "N",
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "lp": [
+      [
+       1.0,
+       -0.0,
+       0.0
+      ]
+     ]
+    },
+    "HN1": {
+     "el": "H",
+     "pos": [
+      -0.381,
+      0.0,
+      0.938
+     ]
+    },
+    "HN2": {
+     "el": "H",
+     "pos": [
+      -0.381,
+      0.812,
+      -0.469
+     ]
+    },
+    "HN3": {
+     "el": "H",
+     "pos": [
+      -0.381,
+      -0.812,
+      -0.469
+     ]
+    },
+    "H": {
+     "el": "H",
+     "pos": [
+      2.05,
+      0.0,
+      0.0
+     ]
+    },
+    "O": {
+     "el": "O",
+     "pos": [
+      3.02,
+      0.0,
+      0.0
+     ],
+     "lp": [
+      [
+       0.353,
+       0.804,
+       0.479
+      ],
+      [
+       0.353,
+       -0.013,
+       -0.935
+      ]
+     ]
+    },
+    "HW": {
+     "el": "H",
+     "pos": [
+      3.263,
+      -0.813,
+      0.47
+     ]
+    }
+   },
+   "bonds": [
+    [
+     "N",
+     "HN1",
+     1
+    ],
+    [
+     "N",
+     "HN2",
+     1
+    ],
+    [
+     "N",
+     "HN3",
+     1
+    ],
+    [
+     "O",
+     "H",
+     1
+    ],
+    [
+     "O",
+     "HW",
+     1
+    ]
+   ],
+   "orbitals": [
+    {
+     "type": "n",
+     "atom": "N",
+     "lp": 0,
+     "size": 0.8,
+     "label": "n(N)"
+    },
+    {
+     "type": "sigma*",
+     "bond": [
+      "H",
+      "O"
+     ],
+     "size": 0.7,
+     "label": "σ*(O–H)"
+    }
+   ],
+   "measures": [
+    {
+     "distance": [
+      "N",
+      "H"
+     ],
+     "window": [
+      2.05,
+      0.55
+     ],
+     "label": "H···N {v}"
+    },
+    {
+     "angle": [
+      "N",
+      "H",
+      "O"
+     ],
+     "window": [
+      180,
+      35
+     ],
+     "radius": 0.45,
+     "label": "{v}"
+    }
+   ],
+   "arrows": [
+    {
+     "from": {
+      "lp": "N",
+      "i": 0
+     },
+     "to": {
+      "atom": "H"
+     },
+     "bulge": 0.35,
+     "side": 1
+    },
+    {
+     "from": {
+      "bond": [
+       "O",
+       "H"
+      ]
+     },
+     "to": {
+      "atom": "O"
+     },
+     "bulge": 0.5,
+     "side": 1,
+     "curl": 0.5
+    }
+   ]
+  },
+  {
+   "name": "Ammonium and hydroxide",
+   "hold": 40,
+   "transition": 56,
+   "caption": "The proton has moved to N: an ion pair, NH₄⁺ hydrogen-bonded to ⁻OH.",
+   "atoms": {
+    "N": {
+     "el": "N",
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "charge": 1
+    },
+    "HN1": {
+     "el": "H",
+     "pos": [
+      -0.381,
+      0.0,
+      0.938
+     ]
+    },
+    "HN2": {
+     "el": "H",
+     "pos": [
+      -0.381,
+      0.812,
+      -0.469
+     ]
+    },
+    "HN3": {
+     "el": "H",
+     "pos": [
+      -0.381,
+      -0.812,
+      -0.469
+     ]
+    },
+    "H": {
+     "el": "H",
+     "pos": [
+      1.03,
+      0.0,
+      0.0
+     ]
+    },
+    "O": {
+     "el": "O",
+     "pos": [
+      2.73,
+      0.0,
+      0.0
+     ],
+     "charge": -1,
+     "lp": [
+      [
+       -0.996,
+       0.073,
+       -0.047
+      ],
+      [
+       0.37,
+       0.79,
+       0.489
+      ],
+      [
+       0.376,
+       -0.025,
+       -0.926
+      ]
+     ]
+    },
+    "HW": {
+     "el": "H",
+     "pos": [
+      2.973,
+      -0.813,
+      0.47
+     ]
+    }
+   },
+   "bonds": [
+    [
+     "N",
+     "HN1",
+     1
+    ],
+    [
+     "N",
+     "HN2",
+     1
+    ],
+    [
+     "N",
+     "HN3",
+     1
+    ],
+    [
+     "N",
+     "H",
+     1
+    ],
+    [
+     "O",
+     "HW",
+     1
+    ],
+    [
+     "H",
+     "O",
+     0
+    ]
+   ]
+  }
+ ]
+}
