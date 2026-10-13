@@ -370,8 +370,10 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     control(g, { t: 'range', label: 'shading', path: 'shading', min: 0, max: 1, step: 0.05 });
   }
   {
-    const g = sec(PD, 'Details', { open: false, keys: 'annotations hydrogens lone pairs charges arrows caption h-bonds valence' });
-    for (const [k, label] of [['H', 'hydrogens'], ['hbonds', 'hydrogen bonds'], ['arrows', 'curly arrows'], ['lonePairs', 'lone pairs'], ['charges', 'charges'], ['valence', 'valence'], ['caption', 'caption'], ['stepLabel', 'step label']]) control(g, { t: 'check', label, path: 'show.' + k });
+    const g = sec(PD, 'Details', { open: false, keys: 'annotations hydrogens lone pairs orbitals measurements charges arrows caption h-bonds valence' });
+    for (const [k, label] of [['H', 'hydrogens'], ['hbonds', 'hydrogen bonds'], ['arrows', 'curly arrows'], ['lonePairs', 'lone pairs'], ['orbitals', 'orbitals'], ['measures', 'measurements'], ['charges', 'charges'], ['valence', 'valence'], ['caption', 'caption'], ['stepLabel', 'step label']]) control(g, { t: 'check', label, path: 'show.' + k });
+    control(g, { t: 'select', label: 'lone pairs as', path: 'lonePairStyle', options: [['dots', 'dots'], ['bold', 'bold dots'], ['lobes', 'lobes with electrons']], when: () => !!S().show.lonePairs });
+    control(g, { t: 'select', label: 'orbitals', path: 'orbitalStyle', options: [['auto', 'auto'], ['engraved', 'engraved'], ['sketch', 'in the look']], when: () => S().show.orbitals !== false });
     control(g, { t: 'range', label: 'caption size', path: 'captionSize', min: 12, max: 48, step: 1, when: () => !!S().show.caption });
   }
   {

@@ -28,6 +28,26 @@ export function lintScene(doc: { keyframes: any[] }): LintItem[] {
       if (d > lim) push('warn', i, `bond ${b.a}–${b.b} is ${d.toFixed(2)} Å long (a ${ea}–${eb} bond is under ${lim.toFixed(2)}): a wrong pair, or a bond meant to be breaking?`);
       if (d < 0.6) push('warn', i, `bond ${b.a}–${b.b} is ${d.toFixed(2)} Å: two atoms on top of each other`);
     }
+    // orbitals and measures: the atoms they name must be in this keyframe
+    const TYPES = new Set(['n', 'lp', 'lone', 'lone pair', 'sp3', 'lobe', 'p', 'empty p', 'pi', 'π', 'pi*', 'π*', 'sigma', 'σ', 'sigma*', 'σ*']);
+    (k.orbitals || []).forEach((o: any, j: number) => {
+      const t = String(o.type || 'n'); const what = `orbital ${j + 1} (${t})`;
+      if (!TYPES.has(t)) push('error', i, `${what}: unknown type; the types are n, p, pi, pi*, sigma, sigma*, lobe`);
+      const bondType = /^(pi|π|sigma|σ)/.test(t);
+      if (bondType) { if (!Array.isArray(o.bond) || o.bond.length !== 2) push('error', i, `${what} needs "bond": [a, b]`); else for (const id of o.bond) if (!atoms[id]) push('error', i, `${what}: atom ${id} is not in this keyframe`) }
+      else if (!atoms[o.atom]) push('error', i, `${what}: ${o.atom === undefined ? 'needs "atom"' : `atom ${o.atom} is not in this keyframe`}`);
+      if (o.toward !== undefined && !atoms[o.toward]) push('warn', i, `${what}: toward ${o.toward}, which is not in this keyframe (ignored)`);
+      if (Array.isArray(o.plane)) for (const id of o.plane) if (!atoms[id]) push('warn', i, `${what}: plane atom ${id} is not in this keyframe (ignored)`);
+      if (o.lp !== undefined && atoms[o.atom] && !(atoms[o.atom].lp && atoms[o.atom].lp.length > (o.lp | 0))) push('warn', i, `${what}: ${o.atom} has no lone pair #${(o.lp | 0) + 1}; the lobe points away from its bonds instead`);
+    });
+    (k.measures || []).forEach((m: any, j: number) => {
+      const kind = ['distance', 'angle', 'torsion'].find(x => m[x]); const need: Record<string, number> = { distance: 2, angle: 3, torsion: 4 };
+      if (!kind) { push('error', i, `measure ${j + 1} needs "distance", "angle" or "torsion"`); return }
+      const ids = m[kind]; if (!Array.isArray(ids) || ids.length !== need[kind]) { push('error', i, `measure ${j + 1}: a ${kind} takes ${need[kind]} atoms`); return }
+      for (const id of ids) if (!atoms[id]) push('error', i, `measure ${j + 1} (${kind}): atom ${id} is not in this keyframe`);
+      if (m.window !== undefined && !(Array.isArray(m.window) && m.window.length === 2)) push('warn', i, `measure ${j + 1}: window is [target, tolerance]`);
+    });
+    (k.arrows || []).forEach((ar: any, j: number) => { for (const end of ['from', 'to'] as const) { const an = ar[end]; if (an && an.orbital !== undefined && !(k.orbitals && k.orbitals[an.orbital])) push('error', i, `arrow ${j + 1} ${end}: there is no orbital #${an.orbital} in this keyframe (orbitals count from 0)`) } });
     // atoms without bonds (a lone ion or a water oxygen without hydrogens are fine; a carbon is not)
     for (const id of ids) if (!deg[id]) { const el = String(atoms[id].el || 'C').toUpperCase(); if (el === 'C' || el === 'N' || el === 'H') push('warn', i, `${id} (${el}) has no bond`) }
     // arrows: anchors must exist; a lone-pair tail needs a lone pair

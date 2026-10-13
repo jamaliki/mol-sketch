@@ -14,8 +14,12 @@
   "stepLabel": true,
   "valence": true,
   "figLabels": true,
-  "noLabels": false
+  "noLabels": false,
+  "orbitals": true,
+  "measures": true
  },
+ "lonePairStyle": "dots",
+ "orbitalStyle": "auto",
  "font": "Caveat",
  "labelSize": 19,
  "captionSize": 24,

@@ -268,6 +268,34 @@ picks the three ribbon colours too.
 The other fills colour the engraved faces too: `"flat"` fills them with the colour and darkens the lines, `"wash"`
 tints them.
 
+## 10. Textbook
+
+![](img/reactions/pi_star.png)
+
+Engraved colour as a 1960s chemistry text draws a mechanism: ruled ink, colour only in the lines, labels in a plain
+lettering-guide sans, curly arrows in black. It is made for scenes with orbitals and measures
+([scene-format.md](scene-format.md#orbitals)). Sticks take the engraved grammar even without ribbons. Orbitals are inked
+solids that knock back what lies behind them: the shaded phase is a flat ruled tint in the orbital's colour (red for a
+filled orbital, blue for an empty one, ruled at right angles to each other so they stay apart in greyscale), the other
+phase is white, and a filled orbital holds its electrons as two bold dots. Lone pairs are bold dot pairs set off from
+the atom. A measure's window is stippled, so it never reads as an orbital.
+
+```python
+ms.scene("examples/reactions/pi_star.json").look("textbook").save("pi_star.png", (1200, 900), frame=38)
+```
+
+| field | value | why |
+|---|---|---|
+| `fill` | `"ink colour"` | colour only in the lines |
+| `stick_style` | `"engraved"` | the engraved sticks with no ribbons in the picture |
+| `orbital_style` | `"engraved"` | inked lobes with a ruled tint |
+| `lone_pair_style` | `"bold"` | lone pairs as bold dots, spread clear of bonds and charges |
+| `palette.filled`, `.empty` | `#d23b2f`, `#2f6fb5` | orbitals that hold electrons, and empty ones |
+| `palette.arrow` | `#000000` | curly arrows in ink |
+| `font`, `label_size`, `caption_size` | `"Plain sans"`, `22`, `22` | lettered labels, large enough to read at print size |
+| `stick_radius` | `0.17` | thinner sticks, so the lobes have room |
+| hand | 0.05 | a ruling pen |
+
 ## Turntables
 
 ![](img/ribosome_turntable.gif)

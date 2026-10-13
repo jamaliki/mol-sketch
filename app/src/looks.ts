@@ -50,6 +50,15 @@ export const LOOKS: Record<string, Look> = {
       ...pen(0.08, { hierarchy: 0.3, alpha: 1 }), shading: 0, construction: false,
       paper: { grain: 0, wash: 0 } as any, view: { fog: 0, fov: 0 } as any },
   },
+  textbook: {
+    name: 'Textbook', note: 'a 1960s text: ruled ink, colour only in the lines, bold lone pairs, orbitals as ruled lobes, lettered labels',
+    style: { fill: 'ink colour', cartoonStyle: 'engraved', stickStyle: 'engraved', lonePairStyle: 'bold', orbitalStyle: 'engraved', ...lines(5, 1.1), cartoonScale: 1,
+      palette: { ...PALETTES['PyMOL flat'], paper: '#ffffff', ink: '#000000', hatch: '#000000', label: '#000000', charge: '#000000', arrow: '#000000', helix: '#d6453d', sheet: '#2f6fb5', loop: '#1e1e1e',
+        C: '#5f5f5f', N: '#2f5fc4', O: '#d23b2f', filled: '#d23b2f', empty: '#2f6fb5' },
+      font: 'Plain sans', labelSize: 22, captionSize: 22, stickRadius: 0.17,
+      ...pen(0.05, { hierarchy: 0.3, alpha: 1 }), shading: 0, construction: false,
+      paper: { grain: 0, wash: 0 } as any, view: { fog: 0, fov: 0 } as any },
+  },
   'assembly-surface': {
     name: 'Assembly surface', note: 'watercolour surface by subunit',
     style: { fill: 'watercolour', palette: { ...PALETTES['Colored pencil'] }, surfaceColor: 'subunit', reps: { sticks: '', cartoon: '', surface: 'polymer' }, ...pen(0.6) },
