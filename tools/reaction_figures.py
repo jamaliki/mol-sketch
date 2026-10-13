@@ -8,6 +8,7 @@ constrains drawn as measured values with their windows; then the product. The ge
     python tools/reaction_figures.py                 # scenes → examples/reactions/, figures → docs/img/reactions/
     python tools/reaction_figures.py --look ink-colour --size 1600x1200
     python tools/reaction_figures.py --scenes-only
+    python tools/reaction_figures.py --svg                # also as SVG, every line, lobe and tint a path
 
 The windows are the registry's (rules/registry/v1/windows.toml in the chemistry engine); the report marks these rules
 as provisional, so change RULES below when the registry changes.
@@ -275,6 +276,7 @@ def main(argv=None):
     ap.add_argument("--look", default="textbook"); ap.add_argument("--size", default=None, help="WxH for every figure (default: a canvas shaped to each)")
     ap.add_argument("--scenes", default=str(ROOT / "examples" / "reactions")); ap.add_argument("--out", default=str(ROOT / "docs" / "img" / "reactions"))
     ap.add_argument("--scenes-only", action="store_true"); ap.add_argument("--no-fit", dest="fit", action="store_false"); ap.add_argument("--animate", action="store_true", help="also write each scene as an mp4")
+    ap.add_argument("--svg", action="store_true", help="also write each figure as an SVG, to edit in Illustrator, Inkscape or Affinity")
     a = ap.parse_args(argv)
     W0, H0 = (int(x) for x in (a.size or "1200x900").split("x"))
     sd, od = pathlib.Path(a.scenes), pathlib.Path(a.out); sd.mkdir(parents=True, exist_ok=True); od.mkdir(parents=True, exist_ok=True)
@@ -290,6 +292,7 @@ def main(argv=None):
             scene["view"].update(zoom=round(c["zoom"], 3), panX=round(c["pan_x"], 4), panY=round(c["pan_y"], 4))
             (sd / f"{name}.json").write_text(json.dumps(scene, indent=1, ensure_ascii=False) + "\n")
         fig.save(od / f"{name}.png", (w, h), frame=HOLD - 2)
+        if a.svg: fig.save(od / f"{name}.svg", (w, h), frame=HOLD - 2)
         if a.animate: fig.animate(od / f"{name}.mp4", size=(w, h))
     return 0
 

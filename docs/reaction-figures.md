@@ -11,6 +11,11 @@ python tools/reaction_figures.py pi_star --animate    # one rule, and its animat
 python tools/reaction_figures.py --look watercolour   # any look; the scenes default to Textbook
 ```
 
+`--svg` writes each figure as an SVG too. Every line, lobe outline, tint and dot is its own vector path, so it opens
+in Illustrator, Inkscape or Affinity for recolouring or nudging. Two things to know: labels are glyph outlines (the
+file looks the same without the fonts, but to reword a label change the scene and render again), and the white paper
+is an embedded image at the bottom of the stack (delete it for a transparent background).
+
 The script prints each precursor's measures against the windows, read back from the coordinates it built. The
 windows live in `RULES` at the top of [`tools/reaction_figures.py`](../tools/reaction_figures.py); the report marks
 these rules provisional, so change them there when the registry changes.
