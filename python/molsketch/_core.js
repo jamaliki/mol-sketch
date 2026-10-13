@@ -6957,10 +6957,19 @@
         poly.forEach((p, k) => k ? ctx.lineTo(p.x, p.y) : ctx.moveTo(p.x, p.y));
         ctx.closePath();
         ctx.clip();
+        const inside = (x, y) => {
+          let c = false;
+          for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+            const a = poly[i], b = poly[j];
+            if (a.y > y !== b.y > y && x < (b.x - a.x) * (y - a.y) / (b.y - a.y) + a.x) c = !c;
+          }
+          return c;
+        };
         const sp = 4 * an;
         ctx.fillStyle = rgba(wc, 0.75);
         ctx.beginPath();
         for (let y = Math.floor(y0 / sp) * sp; y <= y1; y += sp) for (let x = Math.floor(x0 / sp) * sp + (Math.round(y / sp) & 1 ? sp / 2 : 0); x <= x1; x += sp) {
+          if (!inside(x, y)) continue;
           ctx.moveTo(x + 0.75, y);
           ctx.arc(x, y, 0.75, 0, Math.PI * 2);
         }

@@ -1847,7 +1847,8 @@ function buildMeasureWindows(items,st,proj){
   const hatched=(ctx,poly,seed)=>{let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const p of poly){x0=Math.min(x0,p.x);y0=Math.min(y0,p.y);x1=Math.max(x1,p.x);y1=Math.max(y1,p.y)}
     ctx.save();ctx.beginPath();poly.forEach((p,k)=>k?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y));ctx.closePath();ctx.clip();
     // a regular stipple, so a window never reads as an orbital's ruled tint
-    const sp=4*an;ctx.fillStyle=rgba(wc,0.75);ctx.beginPath();for(let y=Math.floor(y0/sp)*sp;y<=y1;y+=sp)for(let x=Math.floor(x0/sp)*sp+((Math.round(y/sp)&1)?sp/2:0);x<=x1;x+=sp){ctx.moveTo(x+0.75,y);ctx.arc(x,y,0.75,0,Math.PI*2)}ctx.fill();ctx.restore()};
+    const inside=(x,y)=>{let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if((a.y>y)!==(b.y>y)&&x<(b.x-a.x)*(y-a.y)/(b.y-a.y)+a.x)c=!c}return c};   // dots only inside: a light path in an SVG
+    const sp=4*an;ctx.fillStyle=rgba(wc,0.75);ctx.beginPath();for(let y=Math.floor(y0/sp)*sp;y<=y1;y+=sp)for(let x=Math.floor(x0/sp)*sp+((Math.round(y/sp)&1)?sp/2:0);x<=x1;x+=sp){if(!inside(x,y))continue;ctx.moveTo(x+0.75,y);ctx.arc(x,y,0.75,0,Math.PI*2)}ctx.fill();ctx.restore()};
   st.meas.forEach((e,i)=>{const m=e.o;const W=Array.isArray(m.window)?m.window:null;if(!W)return;const r=measureOf(m,st,e.map);if(!r||r.kind==='torsion')return;
     const alpha=e.alpha*Math.min(...r.atoms.map(a=>a.alpha))*(m.opacity??1);if(alpha<0.01)return;
     if(r.kind==='distance'){const u=norm3(sub3(r.p[1],r.p[0]));const q0=proj.proj(add3(r.p[0],scl3(u,W[0]-W[1]))),q1=proj.proj(add3(r.p[0],scl3(u,W[0]+W[1])));
