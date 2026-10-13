@@ -7,13 +7,23 @@ export interface Palette {
   paper: string; ink: string; hatch: string; wash: string; arrow: string; charge: string; label: string; context: string; accent: string;
   C: string; N: string; O: string; H: string; S: string; P: string; X: string;
   helix: string; sheet: string; loop: string; nucleic: string; surface: string;
+  /** orbitals: those holding electrons (a lone pair, a σ or π bond) and empty ones (σ*, π*, an empty p); the window of
+      positions a measure allows, and the measures' own lines. Optional: the engine picks from the paper when unset */
+  filled?: string; empty?: string; window?: string; measure?: string;
 }
 
 export interface Style {
   fill: Fill;
   mode: 'sticks' | 'ballstick';
   sphereScale: number;       // cut-point spheres in sticks mode
+  /** lone pairs as two small dots beside the atom, as two bold dots set off from it, or as small lobes each holding its pair */
+  lonePairStyle: 'dots' | 'bold' | 'lobes';
+  /** orbital lobes: engraved (inked solids, colour in lines along the surface) with engraved sticks or ribbons in a line
+      medium (auto), always, or in the look's own medium (sketch) */
+  orbitalStyle: 'auto' | 'engraved' | 'sketch';
   show: { H: boolean; lonePairs: boolean; charges: boolean; arrows: boolean; labels: boolean; resLabels: boolean; hbonds: boolean; caption: boolean; stepLabel: boolean; valence: boolean;
+    /** a scene's orbitals (lobes) and measures (distances, angles, torsions and their windows) */
+    orbitals: boolean; measures: boolean;
     /** figLabels: the labels placed by hand · noLabels: every label off at once (atom, residue, α/β and placed ones) */
     figLabels: boolean; noLabels: boolean };
   font: 'Caveat' | 'Patrick Hand' | 'Kalam' | 'Plain sans'; labelSize: number; captionSize: number; annot: number;
@@ -74,7 +84,8 @@ export const PALETTES: Record<string, Palette> = {
 export const DEFAULT_STYLE: Style = {
   fill: 'watercolour',
   mode: 'sticks', sphereScale: 0.4,
-  show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, resLabels: false, hbonds: true, caption: true, stepLabel: true, valence: true, figLabels: true, noLabels: false },
+  show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, resLabels: false, hbonds: true, caption: true, stepLabel: true, valence: true, figLabels: true, noLabels: false, orbitals: true, measures: true },
+  lonePairStyle: 'dots', orbitalStyle: 'auto',
   font: 'Caveat', labelSize: 19, captionSize: 24, annot: 1,
   palette: { ...PALETTES['Colored pencil'] },
   colorBy: 'residue',

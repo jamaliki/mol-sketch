@@ -1,0 +1,394 @@
+{
+ "name": "Concerted elimination (E2)",
+ "view": {
+  "yaw": -12,
+  "pitch": 12,
+  "roll": 55,
+  "zoom": 1.16,
+  "panX": -0.0,
+  "panY": 0.005
+ },
+ "look": "textbook",
+ "reps": {
+  "sticks": "all",
+  "cartoon": "",
+  "surface": ""
+ },
+ "keyframes": [
+  {
+   "name": "Concerted elimination: precursor",
+   "hold": 40,
+   "transition": 56,
+   "caption": "Anti-periplanar: σ(C–H) and σ*(C–Br) share a plane. The base takes H; the C–H pair becomes the π bond and Br leaves.",
+   "atoms": {
+    "O": {
+     "el": "O",
+     "pos": [
+      -1.074,
+      2.951,
+      0.0
+     ],
+     "charge": -1,
+     "lp": [
+      [
+       0.339,
+       -0.941,
+       -0.005
+      ],
+      [
+       0.044,
+       0.366,
+       0.93
+      ],
+      [
+       -0.948,
+       0.015,
+       -0.319
+      ]
+     ]
+    },
+    "HO": {
+     "el": "H",
+     "pos": [
+      -0.526,
+      3.494,
+      -0.588
+     ]
+    },
+    "Hb": {
+     "el": "H",
+     "pos": [
+      -0.373,
+      1.024,
+      0.0
+     ]
+    },
+    "Cb": {
+     "el": "C",
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "color": "C"
+    },
+    "Ca": {
+     "el": "C",
+     "pos": [
+      1.53,
+      0.0,
+      0.0
+     ],
+     "color": "C"
+    },
+    "Br": {
+     "el": "Br",
+     "pos": [
+      2.197,
+      -1.832,
+      0.0
+     ],
+     "color": "#a0522d"
+    },
+    "Ha1": {
+     "el": "H",
+     "pos": [
+      1.903,
+      0.512,
+      0.887
+     ]
+    },
+    "Ha2": {
+     "el": "H",
+     "pos": [
+      1.903,
+      0.512,
+      -0.887
+     ]
+    },
+    "Hb2": {
+     "el": "H",
+     "pos": [
+      -0.373,
+      -0.512,
+      0.887
+     ]
+    },
+    "Hb3": {
+     "el": "H",
+     "pos": [
+      -0.373,
+      -0.512,
+      -0.887
+     ]
+    }
+   },
+   "bonds": [
+    [
+     "O",
+     "HO",
+     1
+    ],
+    [
+     "Cb",
+     "Hb",
+     1
+    ],
+    [
+     "Cb",
+     "Ca",
+     1
+    ],
+    [
+     "Ca",
+     "Br",
+     1
+    ],
+    [
+     "Ca",
+     "Ha1",
+     1
+    ],
+    [
+     "Ca",
+     "Ha2",
+     1
+    ],
+    [
+     "Cb",
+     "Hb2",
+     1
+    ],
+    [
+     "Cb",
+     "Hb3",
+     1
+    ]
+   ],
+   "orbitals": [
+    {
+     "type": "n",
+     "atom": "O",
+     "lp": 0
+    },
+    {
+     "type": "sigma",
+     "bond": [
+      "Cb",
+      "Hb"
+     ],
+     "label": "σ(C–H)"
+    },
+    {
+     "type": "sigma*",
+     "bond": [
+      "Ca",
+      "Br"
+     ],
+     "size": 0.85,
+     "label": "σ*(C–Br)"
+    }
+   ],
+   "measures": [
+    {
+     "torsion": [
+      "Hb",
+      "Cb",
+      "Ca",
+      "Br"
+     ],
+     "label": "τ(H–C–C–Br) {v}",
+     "window": [
+      180,
+      40
+     ],
+     "side": -1
+    }
+   ],
+   "arrows": [
+    {
+     "from": {
+      "lp": "O",
+      "i": 0
+     },
+     "to": {
+      "atom": "Hb"
+     },
+     "bulge": 0.3,
+     "side": 1
+    },
+    {
+     "from": {
+      "bond": [
+       "Cb",
+       "Hb"
+      ]
+     },
+     "to": {
+      "bond": [
+       "Cb",
+       "Ca"
+      ]
+     },
+     "bulge": 0.45,
+     "side": 1
+    },
+    {
+     "from": {
+      "bond": [
+       "Ca",
+       "Br"
+      ]
+     },
+     "to": {
+      "atom": "Br"
+     },
+     "bulge": 0.5,
+     "side": 1,
+     "curl": 0.5
+    }
+   ]
+  },
+  {
+   "name": "Alkene, water, bromide",
+   "hold": 40,
+   "transition": 56,
+   "caption": "One step: C–H and C–Br broken, O–H and the C=C π bond formed.",
+   "atoms": {
+    "O": {
+     "el": "O",
+     "pos": [
+      -1.074,
+      2.951,
+      0.0
+     ],
+     "lp": [
+      [
+       -0.947,
+       0.01,
+       -0.322
+      ],
+      [
+       0.04,
+       0.369,
+       0.929
+      ]
+     ]
+    },
+    "HO": {
+     "el": "H",
+     "pos": [
+      -0.526,
+      3.494,
+      -0.588
+     ]
+    },
+    "Hb": {
+     "el": "H",
+     "pos": [
+      -0.742,
+      2.039,
+      0.0
+     ]
+    },
+    "Cb": {
+     "el": "C",
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "color": "C"
+    },
+    "Ca": {
+     "el": "C",
+     "pos": [
+      1.34,
+      0.0,
+      0.0
+     ],
+     "color": "C"
+    },
+    "Br": {
+     "el": "Br",
+     "pos": [
+      2.693,
+      -3.195,
+      0.0
+     ],
+     "color": "#a0522d",
+     "charge": -1
+    },
+    "Ha1": {
+     "el": "H",
+     "pos": [
+      1.91,
+      0.0,
+      0.929
+     ]
+    },
+    "Ha2": {
+     "el": "H",
+     "pos": [
+      1.91,
+      0.0,
+      -0.929
+     ]
+    },
+    "Hb2": {
+     "el": "H",
+     "pos": [
+      -0.57,
+      0.0,
+      0.929
+     ]
+    },
+    "Hb3": {
+     "el": "H",
+     "pos": [
+      -0.57,
+      0.0,
+      -0.929
+     ]
+    }
+   },
+   "bonds": [
+    [
+     "O",
+     "HO",
+     1
+    ],
+    [
+     "O",
+     "Hb",
+     1
+    ],
+    [
+     "Cb",
+     "Ca",
+     2
+    ],
+    [
+     "Ca",
+     "Ha1",
+     1
+    ],
+    [
+     "Ca",
+     "Ha2",
+     1
+    ],
+    [
+     "Cb",
+     "Hb2",
+     1
+    ],
+    [
+     "Cb",
+     "Hb3",
+     1
+    ]
+   ]
+  }
+ ]
+}

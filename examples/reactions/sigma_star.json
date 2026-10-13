@@ -1,0 +1,303 @@
+{
+ "name": "σ* attack (SN2)",
+ "view": {
+  "yaw": -14,
+  "pitch": 16,
+  "roll": 0,
+  "zoom": 1.266,
+  "panX": 0.0,
+  "panY": 0.005
+ },
+ "look": "textbook",
+ "reps": {
+  "sticks": "all",
+  "cartoon": "",
+  "surface": ""
+ },
+ "keyframes": [
+  {
+   "name": "σ* attack: precursor",
+   "hold": 40,
+   "transition": 56,
+   "caption": "Hydroxide's lone pair (n, filled) meets σ*(C–Br) at its large back lobe: attack from behind, along the C–Br axis.",
+   "atoms": {
+    "O": {
+     "el": "O",
+     "pos": [
+      -3.1,
+      -0.0,
+      -0.0
+     ],
+     "charge": -1,
+     "lp": [
+      [
+       1.0,
+       0.001,
+       -0.0
+      ],
+      [
+       -0.333,
+       -0.472,
+       0.817
+      ],
+      [
+       -0.333,
+       -0.472,
+       -0.817
+      ]
+     ]
+    },
+    "HO": {
+     "el": "H",
+     "pos": [
+      -3.424,
+      0.914,
+      -0.0
+     ]
+    },
+    "C": {
+     "el": "C",
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "color": "C"
+    },
+    "H1": {
+     "el": "H",
+     "pos": [
+      -0.333,
+      0.0,
+      -1.038
+     ]
+    },
+    "H2": {
+     "el": "H",
+     "pos": [
+      -0.333,
+      -0.899,
+      0.519
+     ]
+    },
+    "H3": {
+     "el": "H",
+     "pos": [
+      -0.333,
+      0.899,
+      0.519
+     ]
+    },
+    "Br": {
+     "el": "Br",
+     "pos": [
+      1.94,
+      0.0,
+      0.0
+     ],
+     "color": "#a0522d"
+    }
+   },
+   "bonds": [
+    [
+     "O",
+     "HO",
+     1
+    ],
+    [
+     "C",
+     "H1",
+     1
+    ],
+    [
+     "C",
+     "H2",
+     1
+    ],
+    [
+     "C",
+     "H3",
+     1
+    ],
+    [
+     "C",
+     "Br",
+     1
+    ]
+   ],
+   "orbitals": [
+    {
+     "type": "n",
+     "atom": "O",
+     "lp": 0,
+     "label": "n(O)"
+    },
+    {
+     "type": "sigma*",
+     "bond": [
+      "C",
+      "Br"
+     ],
+     "label": "σ*(C–Br)"
+    }
+   ],
+   "measures": [
+    {
+     "distance": [
+      "O",
+      "C"
+     ],
+     "window": [
+      3.1,
+      0.45
+     ]
+    },
+    {
+     "angle": [
+      "O",
+      "C",
+      "Br"
+     ],
+     "window": [
+      180,
+      18
+     ],
+     "radius": 0.5
+    }
+   ],
+   "arrows": [
+    {
+     "from": {
+      "lp": "O",
+      "i": 0
+     },
+     "to": {
+      "atom": "C"
+     },
+     "bulge": 0.3,
+     "side": 1
+    },
+    {
+     "from": {
+      "bond": [
+       "C",
+       "Br"
+      ]
+     },
+     "to": {
+      "atom": "Br"
+     },
+     "bulge": 0.55,
+     "side": 1,
+     "curl": 0.5
+    }
+   ]
+  },
+  {
+   "name": "Methanol and bromide",
+   "hold": 40,
+   "transition": 56,
+   "caption": "C–O formed, C–Br broken; the methyl turned inside out (Walden inversion).",
+   "atoms": {
+    "O": {
+     "el": "O",
+     "pos": [
+      -1.43,
+      -0.0,
+      -0.0
+     ],
+     "lp": [
+      [
+       -0.333,
+       -0.471,
+       0.816
+      ],
+      [
+       -0.333,
+       -0.471,
+       -0.816
+      ]
+     ]
+    },
+    "HO": {
+     "el": "H",
+     "pos": [
+      -1.754,
+      0.914,
+      -0.0
+     ]
+    },
+    "C": {
+     "el": "C",
+     "pos": [
+      0.0,
+      0.0,
+      0.0
+     ],
+     "color": "C"
+    },
+    "H1": {
+     "el": "H",
+     "pos": [
+      0.364,
+      0.0,
+      -1.027
+     ]
+    },
+    "H2": {
+     "el": "H",
+     "pos": [
+      0.364,
+      -0.89,
+      0.514
+     ]
+    },
+    "H3": {
+     "el": "H",
+     "pos": [
+      0.364,
+      0.89,
+      0.514
+     ]
+    },
+    "Br": {
+     "el": "Br",
+     "pos": [
+      3.6,
+      0.0,
+      0.0
+     ],
+     "color": "#a0522d",
+     "charge": -1
+    }
+   },
+   "bonds": [
+    [
+     "O",
+     "HO",
+     1
+    ],
+    [
+     "C",
+     "H1",
+     1
+    ],
+    [
+     "C",
+     "H2",
+     1
+    ],
+    [
+     "C",
+     "H3",
+     1
+    ],
+    [
+     "O",
+     "C",
+     1
+    ]
+   ]
+  }
+ ]
+}
