@@ -5944,6 +5944,53 @@
       }
       return traces.filter((t) => t.atoms.length >= 2);
     }
+    function ribbonElements(A) {
+      const n = A.length;
+      const ss = A.map((a) => a.nucleic ? "L" : a.ss === "H" || a.ss === "E" ? a.ss : "L");
+      const runs = [];
+      for (let i = 0; i < n; ) {
+        let j = i;
+        while (j + 1 < n && ss[j + 1] === ss[i]) j++;
+        runs.push({ t: ss[i], s: i, e: j });
+        i = j + 1;
+      }
+      for (const r of runs) if (r.t === "H" && r.e - r.s < 2 || r.t === "E" && r.e - r.s < 1) r.t = "L";
+      const el = [];
+      for (const r of runs) {
+        const last = el[el.length - 1];
+        if (last && last.t === "L" && r.t === "L") last.e = r.e;
+        else el.push({ ...r });
+      }
+      for (let k = 0; k < el.length - 1; k++) el[k].e = el[k + 1].s;
+      return el;
+    }
+    function priestle(pts, steps) {
+      for (let s = 0; s < steps; s++) {
+        const tmp = pts.map((p) => p.slice());
+        for (let i = 1; i < pts.length - 1; i++) {
+          const a = pts[i - 1], b = pts[i + 1], c = pts[i];
+          tmp[i] = [((a[0] + b[0]) / 2 + c[0]) / 2, ((a[1] + b[1]) / 2 + c[1]) / 2, ((a[2] + b[2]) / 2 + c[2]) / 2];
+        }
+        for (let i = 1; i < pts.length - 1; i++) pts[i] = tmp[i];
+      }
+    }
+    function ribbonAnchors(atoms, sel) {
+      const out = /* @__PURE__ */ new Map();
+      for (const tr of backboneTraces(atoms, sel)) {
+        const A = tr.atoms, n = A.length;
+        if (cfg.rep.cartoonStyle === "engraved") {
+          for (const e of ribbonElements(A)) {
+            const len = e.e - e.s + 1;
+            if (len < 2 || e.t === "H" && len >= 3) continue;
+            const p = [];
+            for (let i = e.s; i <= e.e; i++) p.push(A[i].pos.slice());
+            priestle(p, 2);
+            for (let k = 1; k < len - 1; k++) out.set(A[e.s + k].id, p[k]);
+          }
+        } else for (let i = 1; i < n - 1; i++) if (A[i].ss === "E") out.set(A[i].id, [0, 1, 2].map((k) => 0.25 * A[i - 1].pos[k] + 0.5 * A[i].pos[k] + 0.25 * A[i + 1].pos[k]));
+      }
+      return out;
+    }
     function catmull(P, i, t) {
       const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[Math.min(P.length - 1, i + 1)], p3 = P[Math.min(P.length - 1, i + 2)];
       const t2 = t * t, t3 = t2 * t;
@@ -5996,13 +6043,6 @@
         const t2 = t * t;
         const h1 = 6 * t2 - 6 * t, h2 = 3 * t2 - 4 * t + 1, h3 = -6 * t2 + 6 * t, h4 = 3 * t2 - 2 * t;
         return [0, 1, 2].map((k) => h1 * p0[k] + h2 * v0[k] + h3 * p1[k] + h4 * v1[k]);
-      };
-      const priestle = (pts, steps) => {
-        for (let s = 0; s < steps; s++) {
-          const tmp = pts.map((p) => p.slice());
-          for (let i = 1; i < pts.length - 1; i++) tmp[i] = mid2(mid2(pts[i - 1], pts[i + 1]), pts[i]);
-          for (let i = 1; i < pts.length - 1; i++) pts[i] = tmp[i];
-        }
       };
       const nz = (n) => proj.rot([n[0] + FIT.cx, n[1] + FIT.cy, n[2] + FIT.cz])[2];
       const P2 = (p) => {
@@ -6064,11 +6104,15 @@
             hl = { lw, ks };
           }
           if (T.flat) {
-            const ext = (a, b) => {
-              const L = Math.hypot(b[0] - a[0], b[1] - a[1]), e = Math.min(3, 0.5 * L);
-              return L > 1e-6 ? [b[0] + (b[0] - a[0]) / L * e, b[1] + (b[1] - a[1]) / L * e] : b;
-            };
-            const f2 = edges[1] || last || alpha < 1 || Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1]) < 1 ? q : [q[0], ext(q[0], q[1]), ext(q[3], q[2]), q[3]];
+            let f2 = q;
+            const W = Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1]), inset = 0.5 * wInk + 0.25;
+            const La = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]), Lb = Math.hypot(q[2][0] - q[3][0], q[2][1] - q[3][1]);
+            if (!(edges[1] || last || alpha < 1) && W > 2 * inset + 0.5 && La > 1e-6 && Lb > 1e-6) {
+              const e = Math.min(3, 0.5 * Math.min(La, Lb));
+              const ia = [q[1][0] + (q[2][0] - q[1][0]) / W * inset, q[1][1] + (q[2][1] - q[1][1]) / W * inset], ib = [q[2][0] + (q[1][0] - q[2][0]) / W * inset, q[2][1] + (q[1][1] - q[2][1]) / W * inset];
+              const ua = [(q[1][0] - q[0][0]) / La * e, (q[1][1] - q[0][1]) / La * e], ub = [(q[2][0] - q[3][0]) / Lb * e, (q[2][1] - q[3][1]) / Lb * e];
+              f2 = [q[0], q[1], ia, [ia[0] + ua[0], ia[1] + ua[1]], [ib[0] + ub[0], ib[1] + ub[1]], ib, q[2], q[3]];
+            }
             poly(ctx, f2);
             ctx.fillStyle = kind === "side" ? side : fillC;
             ctx.fill();
@@ -6138,22 +6182,7 @@
         const A = tr.atoms, n = A.length;
         const pts = A.map((a) => a.pos.slice());
         const rc = (i, t) => ownColor(A[i]) || (colourMode === "rainbow" ? mode === "ink colour" ? hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.9, 0.8) : hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.75, 0.95) : colourMode === "carbon" ? carbonColor(A[i]) : colourMode === "chain" ? chainColor(A[i]) : ssCol(t));
-        const ss = A.map((a) => a.nucleic ? "L" : a.ss === "H" || a.ss === "E" ? a.ss : "L");
-        const runs = [];
-        for (let i = 0; i < n; ) {
-          let j = i;
-          while (j + 1 < n && ss[j + 1] === ss[i]) j++;
-          runs.push({ t: ss[i], s: i, e: j });
-          i = j + 1;
-        }
-        for (const r of runs) if (r.t === "H" && r.e - r.s < 2 || r.t === "E" && r.e - r.s < 1) r.t = "L";
-        const el = [];
-        for (const r of runs) {
-          const last = el[el.length - 1];
-          if (last && last.t === "L" && r.t === "L") last.e = r.e;
-          else el.push({ ...r });
-        }
-        for (let k = 0; k < el.length - 1; k++) el[k].e = el[k + 1].s;
+        const el = ribbonElements(A);
         for (const e of el) {
           const idx = [];
           for (let i = e.s; i <= e.e; i++) idx.push(i);
@@ -7606,6 +7635,14 @@
         if (cfg.rep.sideChainHelper && cartoonRes.has((a.chain || "") + "/" + a.resi) && (a.name === "N" || a.name === "C" || a.name === "O" || a.name === "OXT")) return false;
         return true;
       });
+      if (cartoonOn && cfg.rep.sideChainHelper && stickAtoms.some((a) => a.name === "CA" && !a.nucleic && cartoonRes.has((a.chain || "") + "/" + a.resi))) {
+        const anchors = ribbonAnchors(st.atoms, selC);
+        for (const a of stickAtoms) {
+          if (a.name !== "CA" || a.nucleic) continue;
+          const q = anchors.get(a.id);
+          if (q) pos[a.id] = proj.proj(q);
+        }
+      }
       const stickIds = new Set(stickAtoms.map((a) => a.id));
       const stickBonds = st.bonds.filter((b) => stickIds.has(b.a) && stickIds.has(b.b));
       const surfAtoms = reps.surface && reps.surface.trim() ? st.atoms.filter((a) => selF(a) && (SH.H || a.el !== "H")) : [];

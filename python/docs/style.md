@@ -38,7 +38,7 @@ Contents: [Fill and representation](#fill-and-representation) · [Depth in a sur
 | `cartoon_style` | `"engraved"` | `"engraved"`: white ribbons shaded with lines along their length, after MOLSCRIPT. `"sketch"`: ribbons filled in the style of `fill` |
 | `stick_style` | `"auto"` | whether sticks follow the engraved style too: `"auto"` (when the ribbons are engraved), `"engraved"` (always) or `"sketch"` (never); or `"flat"`: PyMOL's sticks under flat light, solid colour split at each bond's middle, round joints |
 | `stick_outline` | `"auto"` | with flat sticks, an ink line round their silhouette (never across a joint or where a bond changes colour), as PyMOL's `ray_trace_mode 1`: `"on"`, `"off"`, or `"auto"` (when ribbons are drawn, so side chains match the ribbons' outlines and a mechanism in sticks alone stays plain) |
-| `side_chain_helper` | `true` | where a residue is drawn as cartoon, leave its backbone atoms out of the sticks, so only the side chain sticks out of the ribbon |
+| `side_chain_helper` | `true` | where a residue is drawn as cartoon, leave its backbone atoms out of the sticks, so only the side chain sticks out of the ribbon; its Cα is drawn where the ribbon passes (strands and loops are smoothed through their Cα, up to an ångström off them), so the side chain grows out of the ribbon rather than beside it |
 | `probe` | `1.4` | the surface is drawn as each residue's atom discs, enlarged by this probe radius (Å); larger values give a smoother, fatter surface |
 
 The fills:

@@ -1444,6 +1444,28 @@ function backboneTraces(atoms,sel){
     if(!cur){cur={atoms:[]};traces.push(cur)}cur.atoms.push(a)}
   return traces.filter(t=>t.atoms.length>=2);
 }
+/* the elements a chain's engraved ribbon is made of, as MolAuto writes them: runs of H (≥3 residues) and E (≥2), the
+   rest coil; neighbours share their end residue */
+function ribbonElements(A){const n=A.length;
+  const ss=A.map(a=>a.nucleic?'L':(a.ss==='H'||a.ss==='E'?a.ss:'L'));
+  const runs=[];for(let i=0;i<n;){let j=i;while(j+1<n&&ss[j+1]===ss[i])j++;runs.push({t:ss[i],s:i,e:j});i=j+1}
+  for(const r of runs)if((r.t==='H'&&r.e-r.s<2)||(r.t==='E'&&r.e-r.s<1))r.t='L';
+  const el=[];for(const r of runs){const last=el[el.length-1];if(last&&last.t==='L'&&r.t==='L')last.e=r.e;else el.push({...r})}
+  for(let k=0;k<el.length-1;k++)el[k].e=el[k+1].s;   // each element ends on the residue where the next begins
+  return el}
+/* Priestle's smoothing of a strand or coil (as MOLSCRIPT): each inner point halfway to the middle of its neighbours */
+function priestle(pts,steps){for(let s=0;s<steps;s++){const tmp=pts.map(p=>p.slice());
+  for(let i=1;i<pts.length-1;i++){const a=pts[i-1],b=pts[i+1],c=pts[i];tmp[i]=[((a[0]+b[0])/2+c[0])/2,((a[1]+b[1])/2+c[1])/2,((a[2]+b[2])/2+c[2])/2]}
+  for(let i=1;i<pts.length-1;i++)pts[i]=tmp[i]}}
+/* where the drawn ribbon passes each residue whose Cα it does not go through, by the Cα's id: strands and coils are
+   smoothed (and the sketched ribbon flattens its sheets), so their Cα lie up to an ångström off the ribbon. A side
+   chain whose backbone is left to the cartoon is drawn from here, so it grows out of the ribbon, not beside it */
+function ribbonAnchors(atoms,sel){const out=new Map();
+  for(const tr of backboneTraces(atoms,sel)){const A=tr.atoms,n=A.length;
+    if(cfg.rep.cartoonStyle==='engraved'){for(const e of ribbonElements(A)){const len=e.e-e.s+1;if(len<2||(e.t==='H'&&len>=3))continue;
+        const p=[];for(let i=e.s;i<=e.e;i++)p.push(A[i].pos.slice());priestle(p,2);for(let k=1;k<len-1;k++)out.set(A[e.s+k].id,p[k])}}
+    else for(let i=1;i<n-1;i++)if(A[i].ss==='E')out.set(A[i].id,[0,1,2].map(k=>0.25*A[i-1].pos[k]+0.5*A[i].pos[k]+0.25*A[i+1].pos[k]))}
+  return out}
 function catmull(P,i,t){const p0=P[Math.max(0,i-1)],p1=P[i],p2=P[Math.min(P.length-1,i+1)],p3=P[Math.min(P.length-1,i+2)];const t2=t*t,t3=t2*t;
   return[0,1,2].map(k=>0.5*((2*p1[k])+(-p0[k]+p2[k])*t+(2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*t2+(-p0[k]+3*p1[k]-3*p2[k]+p3[k])*t3))}
 function sketchOffsets(pts,seed,passes){ // jittered copies of a polyline (no resampling), one per pass
@@ -1470,7 +1492,6 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
   const add=(a,b,f=1)=>[a[0]+b[0]*f,a[1]+b[1]*f,a[2]+b[2]*f],mid=(a,b)=>[(a[0]+b[0])/2,(a[1]+b[1])/2,(a[2]+b[2])/2],scl=(a,f)=>[a[0]*f,a[1]*f,a[2]*f];
   const herm=(p0,p1,v0,v1,t)=>{const t2=t*t,t3=t2*t;const h1=2*t3-3*t2+1,h2=t3-2*t2+t,h3=-2*t3+3*t2,h4=t3-t2;return[0,1,2].map(k=>h1*p0[k]+h2*v0[k]+h3*p1[k]+h4*v1[k])};
   const hermT=(p0,p1,v0,v1,t)=>{const t2=t*t;const h1=6*t2-6*t,h2=3*t2-4*t+1,h3=-6*t2+6*t,h4=3*t2-2*t;return[0,1,2].map(k=>h1*p0[k]+h2*v0[k]+h3*p1[k]+h4*v1[k])};
-  const priestle=(pts,steps)=>{for(let s=0;s<steps;s++){const tmp=pts.map(p=>p.slice());for(let i=1;i<pts.length-1;i++)tmp[i]=mid(mid(pts[i-1],pts[i+1]),pts[i]);for(let i=1;i<pts.length-1;i++)pts[i]=tmp[i]}};
   const nz=n=>proj.rot([n[0]+FIT.cx,n[1]+FIT.cy,n[2]+FIT.cz])[2]; // z of a direction in view space (+ toward the viewer)
   const P2=p=>{const q=proj.proj(p);return[q.x,q.y,q.z,q.d,q.fog]};
   const HA=32*Math.PI/180,HB=-11*Math.PI/180,HH=4.7;
@@ -1506,11 +1527,18 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
         if(lost>0.02&&!fl)fillC=fogged(mix(P.paper,T.coilLine?col:T.hatch,(T.coilLine?0.55:0.3)*lost),fog);
         hl={lw,ks}}
       if(T.flat){ /* solid faces meet edge to edge, and two antialiased edges let the paper through as a hairline: each face runs
-          on under the next one of its ribbon, so the colour is unbroken and each face is one shape. 3 px (or half the face):
-          enough for a pixel's corner (0.7 px from its centre) when the drawing is shrunk to a fifth, as an SVG placed in a
-          slide is. Not past an inked end, an arrow's point or the ribbon's last face (the next element is another colour) */
-        const ext=(a,b)=>{const L=Math.hypot(b[0]-a[0],b[1]-a[1]),e=Math.min(3,0.5*L);return L>1e-6?[b[0]+(b[0]-a[0])/L*e,b[1]+(b[1]-a[1])/L*e]:b};
-        const f=edges[1]||last||alpha<1||Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1])<1?q:[q[0],ext(q[0],q[1]),ext(q[3],q[2]),q[3]];poly(ctx,f);ctx.fillStyle=kind==='side'?side:fillC;ctx.fill()}
+          on under the next one of its ribbon in a tab, so the colour is unbroken and each face is one shape. 3 px (or half
+          the face): enough for a pixel's corner (0.7 px from its centre) when the drawing is shrunk to a fifth, as an SVG
+          placed in a slide is. The tab keeps half an outline clear of the ribbon's edges, where the outlines cover the seam:
+          drawn after the next face, it must not cover the inner half of that face's outline (the outline came out dashed).
+          Not past an inked end, an arrow's point or the ribbon's last face (the next element is another colour) */
+        let f=q;const W=Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1]),inset=0.5*wInk+0.25;
+        const La=Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1]),Lb=Math.hypot(q[2][0]-q[3][0],q[2][1]-q[3][1]);
+        if(!(edges[1]||last||alpha<1)&&W>2*inset+0.5&&La>1e-6&&Lb>1e-6){const e=Math.min(3,0.5*Math.min(La,Lb));
+          const ia=[q[1][0]+(q[2][0]-q[1][0])/W*inset,q[1][1]+(q[2][1]-q[1][1])/W*inset],ib=[q[2][0]+(q[1][0]-q[2][0])/W*inset,q[2][1]+(q[1][1]-q[2][1])/W*inset];
+          const ua=[(q[1][0]-q[0][0])/La*e,(q[1][1]-q[0][1])/La*e],ub=[(q[2][0]-q[3][0])/Lb*e,(q[2][1]-q[3][1])/Lb*e];
+          f=[q[0],q[1],ia,[ia[0]+ua[0],ia[1]+ua[1]],[ib[0]+ub[0],ib[1]+ub[1]],ib,q[2],q[3]]}
+        poly(ctx,f);ctx.fillStyle=kind==='side'?side:fillC;ctx.fill()}
       else{poly(ctx,q);if(kind==='side'){ctx.fillStyle=side;ctx.fill();ctx.lineWidth=0.5;ctx.strokeStyle=side;ctx.stroke()}else{ctx.fillStyle=fillC;ctx.fill();ctx.lineWidth=0.6;ctx.strokeStyle=fillC;ctx.stroke()}}
       const la=Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[3][0],q[2][1]-q[3][1]);
       if(kind==='plain'&&T.coilLine&&la>0.05){ctx.lineWidth=lw0*1.6;ctx.strokeStyle=hatch;ctx.beginPath();ctx.moveTo((q[0][0]+q[3][0])/2,(q[0][1]+q[3][1])/2);ctx.lineTo((q[1][0]+q[2][0])/2,(q[1][1]+q[2][1])/2);ctx.stroke()}
@@ -1534,11 +1562,7 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
     const A=tr.atoms,n=A.length;const pts=A.map(a=>a.pos.slice());
     const rc=(i,t)=>ownColor(A[i])||(colourMode==='rainbow'?(mode==='ink colour'?hsv(0.6667*(1-i/Math.max(1,n-1)),0.9,0.8):hsv(0.6667*(1-i/Math.max(1,n-1)),0.75,0.95)):colourMode==='carbon'?carbonColor(A[i]):colourMode==='chain'?chainColor(A[i]):ssCol(t));
     // elements: runs of H (≥3 residues) and E (≥2), the rest coil; neighbours share their end residue, as MolAuto writes them
-    const ss=A.map(a=>a.nucleic?'L':(a.ss==='H'||a.ss==='E'?a.ss:'L'));
-    const runs=[];for(let i=0;i<n;){let j=i;while(j+1<n&&ss[j+1]===ss[i])j++;runs.push({t:ss[i],s:i,e:j});i=j+1}
-    for(const r of runs)if((r.t==='H'&&r.e-r.s<2)||(r.t==='E'&&r.e-r.s<1))r.t='L';
-    const el=[];for(const r of runs){const last=el[el.length-1];if(last&&last.t==='L'&&r.t==='L')last.e=r.e;else el.push({...r})}
-    for(let k=0;k<el.length-1;k++)el[k].e=el[k+1].s;   // each element ends on the residue where the next begins
+    const el=ribbonElements(A);
     for(const e of el){
       const idx=[];for(let i=e.s;i<=e.e;i++)idx.push(i);if(idx.length<2)continue;
       const alpha=A[idx[0]].alpha??1;
@@ -2070,6 +2094,11 @@ function renderFrame(ctx,W,H,frame,dpr){
       SITE={x:sx,y:sy,z:sz,zmin,r:r+2.5*proj.pxPerA,quiet:clamp(cfg.rep.siteQuiet??0.35,0,1),cut:cfg.rep.siteCutaway!==false}}}
   const stickAtoms=st.atoms.filter(a=>{if(!selS(a)&&!a._site)return false;if(a.el==='H'&&!SH.H)return false;
     if(cfg.rep.sideChainHelper&&cartoonRes.has((a.chain||'')+'/'+a.resi)&&(a.name==='N'||a.name==='C'||a.name==='O'||a.name==='OXT'))return false;return true});
+  // where the backbone is left to the cartoon, a side chain grows out of the ribbon: its Cα is drawn where the ribbon
+  // passes (ribbonAnchors), not where the smoothing left it
+  if(cartoonOn&&cfg.rep.sideChainHelper&&stickAtoms.some(a=>a.name==='CA'&&!a.nucleic&&cartoonRes.has((a.chain||'')+'/'+a.resi))){
+    const anchors=ribbonAnchors(st.atoms,selC);
+    for(const a of stickAtoms){if(a.name!=='CA'||a.nucleic)continue;const q=anchors.get(a.id);if(q)pos[a.id]=proj.proj(q)}}
   const stickIds=new Set(stickAtoms.map(a=>a.id));
   const stickBonds=st.bonds.filter(b=>stickIds.has(b.a)&&stickIds.has(b.b));
   const surfAtoms=reps.surface&&reps.surface.trim()?st.atoms.filter(a=>selF(a)&&(SH.H||a.el!=='H')):[];
