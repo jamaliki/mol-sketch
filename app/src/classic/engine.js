@@ -1914,8 +1914,9 @@ function drawEngravedLobe(ctx,lb,pts,col,o){
   ctx.restore()}
 let DOTK=1;   // the electrons' size with the drawing's scale (renderFrame sets it)
 /* a pair of electrons: two bold dots across the axis (dx, dy) at (x, y), with a paper ring so they read on any line */
-function electronDots(ctx,x,y,dx,dy,n,s,col,alpha,gap){const L=Math.hypot(dx,dy);let px=0,py=1;if(L>1e-3){px=-dy/L;py=dx/L}
-  const r=2.6*s*DOTK,g=gap??3.8*s*DOTK;const at=n>=2?[-g,g]:[0];ctx.save();ctx.globalAlpha=alpha;
+/* rad, gap: a dot's radius and half the pair's spread, when the caller sizes them */
+function electronDots(ctx,x,y,dx,dy,n,s,col,alpha,gap,rad){const L=Math.hypot(dx,dy);let px=0,py=1;if(L>1e-3){px=-dy/L;py=dx/L}
+  const r=rad??2.6*s*DOTK,g=gap??3.8*s*DOTK;const at=n>=2?[-g,g]:[0];ctx.save();ctx.globalAlpha=alpha;
   for(const o of at){ctx.beginPath();ctx.arc(x+px*o,y+py*o,r+1.1,0,Math.PI*2);ctx.fillStyle=cfg.palette.paper;ctx.fill()}
   for(const o of at){ctx.beginPath();ctx.arc(x+px*o,y+py*o,r,0,Math.PI*2);ctx.fillStyle=col;ctx.fill()}ctx.restore()}
 /** the lone pairs of a frame as small lobes, each with its pair of electrons (style lonePairStyle 'lobes'): the pairs an
@@ -2160,12 +2161,18 @@ function renderFrame(ctx,W,H,frame,dpr){
     if(SH.lonePairs&&!lpLobes&&a.lps.length&&cfg.rep.lonePairStyle==='bold'){const taken=st._lpTaken[a.id];const an=S.annot||1;
       // where each pair sits round the atom on screen: its own direction, spread from the other pairs, the bonds and the charge
       const NB=st._nb||(st._nb=neighbours(st));const fixed=(NB[a.id]||[]).filter(j=>pos[j]).map(j=>Math.atan2(pos[j].y-p.y,pos[j].x-p.x));if(a.charges.length)fixed.push(badge??-Math.PI/4);
+      // with flat sticks, the pairs are as large as a hydrogen bond's dots: they keep clear of those too, and a little further
+      const flatLp=flatSticks();if(flatLp)for(const b of st.bonds){if(b.order!==0||!(b.alpha>0.3))continue;const j=b.a===a.id?b.b:b.b===a.id?b.a:null;if(j!==null&&pos[j])fixed.push(Math.atan2(pos[j].y-p.y,pos[j].x-p.x))}
+      const clear=flatLp?0.85:0.6;
       const dif=(u,v)=>{let x=u-v;while(x>Math.PI)x-=2*Math.PI;while(x<-Math.PI)x+=2*Math.PI;return x};
       const ps=a.lps.map((lp,i)=>({i,lp,ang:Math.atan2(proj.dir2(lp.dir)[1],proj.dir2(lp.dir)[0])})).filter(q=>!(taken&&taken.has(q.i)));
-      for(let it=0;it<24;it++){for(const q of ps)for(const f of fixed){const x=dif(q.ang,f);if(Math.abs(x)<0.6)q.ang+=(x>=0?1:-1)*(0.6-Math.abs(x))*0.5}
+      for(let it=0;it<24;it++){for(const q of ps)for(const f of fixed){const x=dif(q.ang,f);if(Math.abs(x)<clear)q.ang+=(x>=0?1:-1)*(clear-Math.abs(x))*0.5}
         for(let m=0;m<ps.length;m++)for(let n=m+1;n<ps.length;n++){const x=dif(ps[m].ang,ps[n].ang);if(Math.abs(x)<0.95){const k=(0.95-Math.abs(x))*0.5*(x>=0?1:-1);ps[m].ang+=k;ps[n].ang-=k}}}
-      for(const q of ps){const ux=Math.cos(q.ang),uy=Math.sin(q.ang);const off=r+(4.5+2.6*DOTK)*an;const x=p.x+ux*off,y=p.y+uy*off;
-        (st._lpAt[a.id]=st._lpAt[a.id]||[])[q.i]=[x,y];electronDots(ctx,x,y,ux,uy,2,an,P.ink,a.alpha*q.lp.alpha)}}
+      // with flat sticks the pair is sized from the stick, as the charge's badge is: each dot two fifths of its radius, so
+      // a pair reads at the molecule's own scale, not at a few pixels whatever the sticks are
+      const fs=flatSticks()?cfg.rep.stickRadius*proj.pxPerA*p.d*an:0,dot=fs?Math.max(2,0.4*fs):null,spread=fs?Math.max(3,0.55*fs):null;
+      for(const q of ps){const ux=Math.cos(q.ang),uy=Math.sin(q.ang);const off=fs?r+0.5*fs+dot:r+(4.5+2.6*DOTK)*an;const x=p.x+ux*off,y=p.y+uy*off;
+        (st._lpAt[a.id]=st._lpAt[a.id]||[])[q.i]=[x,y];electronDots(ctx,x,y,ux,uy,2,an,P.ink,a.alpha*q.lp.alpha,spread,dot)}}
     else if(SH.lonePairs&&!lpLobes&&a.lps.length){ctx.save();ctx.globalAlpha=a.alpha;const taken=st._lpTaken[a.id];
       const an=S.annot||1;a.lps.forEach((lp,i)=>{if(taken&&taken.has(i))return;const d=proj.dir2(lp.dir);const L=Math.hypot(d[0],d[1])||1;const ux=d[0]/L,uy=d[1]/L;const cx=p.x+ux*(r+5*an),cy=p.y+uy*(r+5*an);
         ctx.fillStyle=rgba(P.ink,0.9*lp.alpha);const rng=mulberry32(seed+i*3);

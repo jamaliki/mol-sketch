@@ -7093,14 +7093,14 @@
       ctx.restore();
     }
     let DOTK = 1;
-    function electronDots(ctx, x, y, dx, dy, n, s, col, alpha, gap) {
+    function electronDots(ctx, x, y, dx, dy, n, s, col, alpha, gap, rad) {
       const L = Math.hypot(dx, dy);
       let px = 0, py = 1;
       if (L > 1e-3) {
         px = -dy / L;
         py = dx / L;
       }
-      const r = 2.6 * s * DOTK, g2 = gap ?? 3.8 * s * DOTK;
+      const r = rad ?? 2.6 * s * DOTK, g2 = gap ?? 3.8 * s * DOTK;
       const at = n >= 2 ? [-g2, g2] : [0];
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -7788,6 +7788,13 @@
           const NB = st._nb || (st._nb = neighbours(st));
           const fixed = (NB[a.id] || []).filter((j) => pos[j]).map((j) => Math.atan2(pos[j].y - p.y, pos[j].x - p.x));
           if (a.charges.length) fixed.push(badge ?? -Math.PI / 4);
+          const flatLp = flatSticks();
+          if (flatLp) for (const b of st.bonds) {
+            if (b.order !== 0 || !(b.alpha > 0.3)) continue;
+            const j = b.a === a.id ? b.b : b.b === a.id ? b.a : null;
+            if (j !== null && pos[j]) fixed.push(Math.atan2(pos[j].y - p.y, pos[j].x - p.x));
+          }
+          const clear = flatLp ? 0.85 : 0.6;
           const dif = (u, v) => {
             let x = u - v;
             while (x > Math.PI) x -= 2 * Math.PI;
@@ -7798,7 +7805,7 @@
           for (let it = 0; it < 24; it++) {
             for (const q of ps) for (const f2 of fixed) {
               const x = dif(q.ang, f2);
-              if (Math.abs(x) < 0.6) q.ang += (x >= 0 ? 1 : -1) * (0.6 - Math.abs(x)) * 0.5;
+              if (Math.abs(x) < clear) q.ang += (x >= 0 ? 1 : -1) * (clear - Math.abs(x)) * 0.5;
             }
             for (let m = 0; m < ps.length; m++) for (let n = m + 1; n < ps.length; n++) {
               const x = dif(ps[m].ang, ps[n].ang);
@@ -7809,12 +7816,13 @@
               }
             }
           }
+          const fs = flatSticks() ? cfg.rep.stickRadius * proj.pxPerA * p.d * an : 0, dot = fs ? Math.max(2, 0.4 * fs) : null, spread = fs ? Math.max(3, 0.55 * fs) : null;
           for (const q of ps) {
             const ux = Math.cos(q.ang), uy = Math.sin(q.ang);
-            const off = r + (4.5 + 2.6 * DOTK) * an;
+            const off = fs ? r + 0.5 * fs + dot : r + (4.5 + 2.6 * DOTK) * an;
             const x = p.x + ux * off, y = p.y + uy * off;
             (st._lpAt[a.id] = st._lpAt[a.id] || [])[q.i] = [x, y];
-            electronDots(ctx, x, y, ux, uy, 2, an, P.ink, a.alpha * q.lp.alpha);
+            electronDots(ctx, x, y, ux, uy, 2, an, P.ink, a.alpha * q.lp.alpha, spread, dot);
           }
         } else if (SH.lonePairs && !lpLobes && a.lps.length) {
           ctx.save();
