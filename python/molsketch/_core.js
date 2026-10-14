@@ -6037,7 +6037,7 @@
         ctx.moveTo(a[0], a[1]);
         ctx.lineTo(b[0], b[1]);
       };
-      const face = (q, kind, znorm, back, edges, alpha, col) => {
+      const face = (q, kind, znorm, back, edges, alpha, col, last) => {
         const T = tone(col || P.loop);
         const z = Math.max(q[0][2], q[1][2], q[2][2], q[3][2]);
         const sf = siteFade((q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4, z);
@@ -6065,10 +6065,10 @@
           }
           if (T.flat) {
             const ext = (a, b) => {
-              const L = Math.hypot(b[0] - a[0], b[1] - a[1]);
-              return L > 1e-6 ? [b[0] + (b[0] - a[0]) / L, b[1] + (b[1] - a[1]) / L] : b;
+              const L = Math.hypot(b[0] - a[0], b[1] - a[1]), e = Math.min(3, 0.5 * L);
+              return L > 1e-6 ? [b[0] + (b[0] - a[0]) / L * e, b[1] + (b[1] - a[1]) / L * e] : b;
             };
-            const f2 = edges[1] || alpha < 1 || Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1]) < 1 ? q : [q[0], ext(q[0], q[1]), ext(q[3], q[2]), q[3]];
+            const f2 = edges[1] || last || alpha < 1 || Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1]) < 1 ? q : [q[0], ext(q[0], q[1]), ext(q[3], q[2]), q[3]];
             poly(ctx, f2);
             ctx.fillStyle = kind === "side" ? side : fillC;
             ctx.fill();
@@ -6208,7 +6208,7 @@
             const fold = (j) => j > 0 && j < zs.length && zs[j - 1] < 0 !== zs[j] < 0;
             for (let j = 0; j < zs.length; j++) {
               const zn = zs[j];
-              face([q[j][0], q[j + 1][0], q[j + 1][1], q[j][1]], "hatch", zn, zn < 0, [1, fold(j + 1), 1, fold(j)], alpha, rc(secs[j].r, "H"));
+              face([q[j][0], q[j + 1][0], q[j + 1][1], q[j][1]], "hatch", zn, zn < 0, [1, fold(j + 1), 1, fold(j)], alpha, rc(secs[j].r, "H"), j === zs.length - 1 || rc(secs[j + 1].r, "H") !== rc(secs[j].r, "H"));
             }
             nH++;
             labels.push({ pos: p[Math.floor(m / 2)], txt: "\u03B1" + nH, alpha });
@@ -6270,10 +6270,11 @@
               const nT = norm3(add(c0.n, c1.n)), nS = norm3(add(c0.s, c1.s));
               const zT = nz(nT), zS = nz(nS);
               const fc = rc(c0.r, "E");
-              if (zT >= 0) face([q0[0], q1[0], q1[3], q0[3]], isStep ? "bare" : "hatch", zT, false, [1, 0, 1, j === 0], alpha, fc);
-              else face([q0[1], q1[1], q1[2], q0[2]], isStep ? "bare" : "hatch", -zT, false, [1, 0, 1, j === 0], alpha, fc);
-              if (zS >= 0) face([q0[0], q1[0], q1[1], q0[1]], "side", zS, false, [1, 0, 1, j === 0], alpha, fc);
-              else face([q0[3], q1[3], q1[2], q0[2]], "side", -zS, false, [1, 0, 1, j === 0], alpha, fc);
+              const end = j === secs.length - 2 || rc(c1.r, "E") !== fc;
+              if (zT >= 0) face([q0[0], q1[0], q1[3], q0[3]], isStep ? "bare" : "hatch", zT, false, [1, 0, 1, j === 0], alpha, fc, end);
+              else face([q0[1], q1[1], q1[2], q0[2]], isStep ? "bare" : "hatch", -zT, false, [1, 0, 1, j === 0], alpha, fc, end);
+              if (zS >= 0) face([q0[0], q1[0], q1[1], q0[1]], "side", zS, false, [1, 0, 1, j === 0], alpha, fc, end);
+              else face([q0[3], q1[3], q1[2], q0[2]], "side", -zS, false, [1, 0, 1, j === 0], alpha, fc, end);
             }
             {
               const c = secs[0], q0 = q[0];
@@ -6310,7 +6311,7 @@
               Rr.push([pr[j][0] + ty / l * hw, pr[j][1] - tx / l * hw, pr[j][2], pr[j][3], pr[j][4]]);
             }
             const atEnd = (j, end) => end === 0 ? j === 0 && !first : j === pr.length - 2 && !last;
-            for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], ct));
+            for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], ct), j === pr.length - 2 || rc(pr_i[j + 1], ct) !== rc(pr_i[j], ct));
             if (ct === "N" && rungs) for (let k = 0; k < m; k++) {
               const a = A[idx[k]], e2 = baseEnd(a.group);
               if (!e2 || rungDone.has(a.group)) continue;

@@ -1484,7 +1484,7 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
   const poly=(ctx,q)=>{ctx.beginPath();q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath()};
   const seg=(ctx,a,b)=>{ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1])};
   /* one face: q = [a0,a1,b1,b0] projected (a = one long edge, b = the other); kind hatch|side|plain; edges = [a0a1,a1b1,b1b0,b0a0] */
-  const face=(q,kind,znorm,back,edges,alpha,col)=>{const T=tone(col||P.loop);
+  const face=(q,kind,znorm,back,edges,alpha,col,last)=>{const T=tone(col||P.loop);   // last: the face its ribbon's next one is not like (another colour, or none)
     const z=Math.max(q[0][2],q[1][2],q[2][2],q[3][2]);const sf=siteFade((q[0][0]+q[1][0]+q[2][0]+q[3][0])/4,(q[0][1]+q[1][1]+q[2][1]+q[3][1])/4,z);const d=(q[0][3]+q[1][3]+q[2][3]+q[3][3])/4,fog=(q[0][4]+q[2][4])/2,fk=1-fog*cfg.view.fog;
     /* flat faces stay opaque where the protein is only quieted round an active site: their colours go toward the paper
        instead (faces seen through one another would double where they meet, and mix colours the palette never had);
@@ -1506,9 +1506,11 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
         if(lost>0.02&&!fl)fillC=fogged(mix(P.paper,T.coilLine?col:T.hatch,(T.coilLine?0.55:0.3)*lost),fog);
         hl={lw,ks}}
       if(T.flat){ /* solid faces meet edge to edge, and two antialiased edges let the paper through as a hairline: each face runs
-          on a little under the next one (not past an inked end), so the colour is unbroken and each face is one shape */
-        const ext=(a,b)=>{const L=Math.hypot(b[0]-a[0],b[1]-a[1]);return L>1e-6?[b[0]+(b[0]-a[0])/L,b[1]+(b[1]-a[1])/L]:b};   /* a pixel: its corner is 0.7 px from its centre */
-        const f=edges[1]||alpha<1||Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1])<1?q:[q[0],ext(q[0],q[1]),ext(q[3],q[2]),q[3]];   /* (nor past an arrow's point) */poly(ctx,f);ctx.fillStyle=kind==='side'?side:fillC;ctx.fill()}
+          on under the next one of its ribbon, so the colour is unbroken and each face is one shape. 3 px (or half the face):
+          enough for a pixel's corner (0.7 px from its centre) when the drawing is shrunk to a fifth, as an SVG placed in a
+          slide is. Not past an inked end, an arrow's point or the ribbon's last face (the next element is another colour) */
+        const ext=(a,b)=>{const L=Math.hypot(b[0]-a[0],b[1]-a[1]),e=Math.min(3,0.5*L);return L>1e-6?[b[0]+(b[0]-a[0])/L*e,b[1]+(b[1]-a[1])/L*e]:b};
+        const f=edges[1]||last||alpha<1||Math.hypot(q[2][0]-q[1][0],q[2][1]-q[1][1])<1?q:[q[0],ext(q[0],q[1]),ext(q[3],q[2]),q[3]];poly(ctx,f);ctx.fillStyle=kind==='side'?side:fillC;ctx.fill()}
       else{poly(ctx,q);if(kind==='side'){ctx.fillStyle=side;ctx.fill();ctx.lineWidth=0.5;ctx.strokeStyle=side;ctx.stroke()}else{ctx.fillStyle=fillC;ctx.fill();ctx.lineWidth=0.6;ctx.strokeStyle=fillC;ctx.stroke()}}
       const la=Math.hypot(q[1][0]-q[0][0],q[1][1]-q[0][1])+Math.hypot(q[2][0]-q[3][0],q[2][1]-q[3][1]);
       if(kind==='plain'&&T.coilLine&&la>0.05){ctx.lineWidth=lw0*1.6;ctx.strokeStyle=hatch;ctx.beginPath();ctx.moveTo((q[0][0]+q[3][0])/2,(q[0][1]+q[3][1])/2);ctx.lineTo((q[1][0]+q[2][0])/2,(q[1][1]+q[2][1])/2);ctx.stroke()}
@@ -1556,7 +1558,7 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
         const zs=[];for(let j=0;j<secs.length-1;j++)zs.push(nz(norm3(add(secs[j].nrm,secs[j+1].nrm))));
         const fold=j=>j>0&&j<zs.length&&(zs[j-1]<0)!==(zs[j]<0); // the section where the ribbon turns over: its silhouette, inked
         for(let j=0;j<zs.length;j++){const zn=zs[j];
-          face([q[j][0],q[j+1][0],q[j+1][1],q[j][1]],'hatch',zn,zn<0,[1,fold(j+1),1,fold(j)],alpha,rc(secs[j].r,'H'))}
+          face([q[j][0],q[j+1][0],q[j+1][1],q[j][1]],'hatch',zn,zn<0,[1,fold(j+1),1,fold(j)],alpha,rc(secs[j].r,'H'),j===zs.length-1||rc(secs[j+1].r,'H')!==rc(secs[j].r,'H'))}
         nH++;labels.push({pos:p[Math.floor(m/2)],txt:'α'+nH,alpha});
       }else if(e.t==='E'&&idx.length>=3){ /* ---- strand ---- */
         const p=idx.map(i=>pts[i].slice()),m=p.length;const nm=new Array(m);
@@ -1577,11 +1579,12 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
         for(let j=0;j<secs.length-1;j++){const c0=secs[j],c1=secs[j+1];const q0=q[j],q1=q[j+1];const isStep=!!c1.step;
           const nT=norm3(add(c0.n,c1.n)),nS=norm3(add(c0.s,c1.s));const zT=nz(nT),zS=nz(nS);const fc=rc(c0.r,'E');
           // top (p1,p4 edge) and bottom (p2,p3); only the face toward the viewer, as MOLSCRIPT culls
-          if(zT>=0)face([q0[0],q1[0],q1[3],q0[3]],isStep?'bare':'hatch',zT,false,[1,0,1,j===0],alpha,fc);
-          else face([q0[1],q1[1],q1[2],q0[2]],isStep?'bare':'hatch',-zT,false,[1,0,1,j===0],alpha,fc);
+          const end=j===secs.length-2||rc(c1.r,'E')!==fc;
+          if(zT>=0)face([q0[0],q1[0],q1[3],q0[3]],isStep?'bare':'hatch',zT,false,[1,0,1,j===0],alpha,fc,end);
+          else face([q0[1],q1[1],q1[2],q0[2]],isStep?'bare':'hatch',-zT,false,[1,0,1,j===0],alpha,fc,end);
           // sides: p1–p2 (+side) and p4–p3 (−side)
-          if(zS>=0)face([q0[0],q1[0],q1[1],q0[1]],'side',zS,false,[1,0,1,j===0],alpha,fc);
-          else face([q0[3],q1[3],q1[2],q0[2]],'side',-zS,false,[1,0,1,j===0],alpha,fc)}
+          if(zS>=0)face([q0[0],q1[0],q1[1],q0[1]],'side',zS,false,[1,0,1,j===0],alpha,fc,end);
+          else face([q0[3],q1[3],q1[2],q0[2]],'side',-zS,false,[1,0,1,j===0],alpha,fc,end)}
         {const c=secs[0],q0=q[0];const nb=scl(norm3(sub3(secs[1].p1,c.p1)),-1);if(nz(nb)>=0)face([q0[0],q0[1],q0[2],q0[3]],'side',1,false,[1,1,1,1],alpha,rc(idx[0],'E'))} // butt end
         nE++;labels.push({pos:p[Math.floor((m-1)/2)],txt:'β'+nE,alpha});
       }else{ /* ---- coil: smoothed spline, drawn as a paper band of constant width with an ink outline ---- */
@@ -1597,7 +1600,7 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
         for(let j=0;j<pr.length;j++){const a=pr[Math.max(0,j-1)],b=pr[Math.min(pr.length-1,j+1)];let tx=b[0]-a[0],ty=b[1]-a[1];const l=Math.hypot(tx,ty)||1;const hw=Math.max(cw*proj.pxPerA*pr[j][3],hwMin);
           L.push([pr[j][0]-ty/l*hw,pr[j][1]+tx/l*hw,pr[j][2],pr[j][3],pr[j][4]]);Rr.push([pr[j][0]+ty/l*hw,pr[j][1]-tx/l*hw,pr[j][2],pr[j][3],pr[j][4]])}
         const atEnd=(j,end)=>end===0?(j===0&&!first):(j===pr.length-2&&!last);
-        for(let j=0;j<pr.length-1;j++)face([L[j],L[j+1],Rr[j+1],Rr[j]],'plain',1,false,[1,atEnd(j,1),1,atEnd(j,0)],alpha,rc(pr_i[j],ct));
+        for(let j=0;j<pr.length-1;j++)face([L[j],L[j+1],Rr[j+1],Rr[j]],'plain',1,false,[1,atEnd(j,1),1,atEnd(j,0)],alpha,rc(pr_i[j],ct),j===pr.length-2||rc(pr_i[j+1],ct)!==rc(pr_i[j],ct));
         if(ct==='N'&&rungs)for(let k=0;k<m;k++){const a=A[idx[k]],e=baseEnd(a.group);if(!e||rungDone.has(a.group))continue;rungDone.add(a.group);
           const q0=P2(p[k]),q1=P2(e.pos);let tx=q1[0]-q0[0],ty=q1[1]-q0[1];const l=Math.hypot(tx,ty);if(l<1)continue;tx/=l;ty/=l;
           const w0=Math.max(cw*0.8*proj.pxPerA*q0[3],hwMin*0.9),w1=Math.max(cw*0.8*proj.pxPerA*q1[3],hwMin*0.9),nx=-ty,ny=tx;
