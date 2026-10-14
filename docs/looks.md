@@ -312,6 +312,12 @@ outlined as the ribbons are; on their own (a mechanism) they are plain (`stick_o
 site's sticks need no paper halo to stand off the ribbons behind them, and have none. Hydrogen bonds are evenly
 spaced round dots in a colour of their own.
 
+A mechanism's chemistry is drawn in the same terms. A bond to a hydrogen is thinner (`stick_h_scale`), so a proton
+reads lighter than the bonds it moves between. A double or triple bond is two or three lanes in the one stick, as
+PyMOL draws valence, the gap between them closing before each atom so the lanes run into it. A formal charge is a
+badge as wide as a stick, its sign drawn, set off the atom in whichever direction is clearest of its bonds, hydrogen
+bonds and lone pairs (the upper right when that is as clear); lone pairs are bold pairs of dots, kept clear of it.
+
 The look keeps every colour as it is given: no grain, wash, fog or translucency, and a site is not faded into the
 protein, so a figure is in exactly the colours it was handed, each in two tones. As an SVG it is shapes only: one path
 per ribbon face, half-bond and outline, and the paper one rectangle (or nothing, with `paper.transparent`), so it can be
@@ -334,6 +340,8 @@ fig.set(palette={"helix": "#4c78a8", "sheet": "#f2c14e", "loop": "#eeeeee"}, **{
 | `palette.ink` | `#000000` | black outlines |
 | `palette.helix`, `.sheet`, `.loop` | `#e8796b`, `#f6c85f`, `#eeeeee` | coral helices, amber strands, near-white loops |
 | `palette.hbond`, `palette.H` | `#2b8ea3`, `#d4d4d4` | teal hydrogen bonds; hydrogens grey, as white vanishes on white |
+| `stick_h_scale` | `0.55` | bonds to hydrogens thinner |
+| `lone_pair_style` | `"bold"` | lone pairs as bold dots, clear of bonds and the charge |
 | `stick_radius`, `sphere_scale` | `0.25`, `0.25` | PyMOL's stick, and a Cα ball twice as wide |
 | `site.quiet`, `site.cutaway` | `0`, `false` | nothing faded or seen through: the site reads by its sticks |
 | `font`, `label_size` | `"Plain sans"`, `22` | lettered labels |

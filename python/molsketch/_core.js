@@ -1752,6 +1752,7 @@
     },
     reps: { sticks: "hetatm and not water", cartoon: "polymer", surface: "" },
     stickRadius: 0.2,
+    stickHScale: 1,
     cartoonScale: 1,
     probe: 1.4,
     line: { width: 1.5, rough: 1.1, passes: 2, hierarchy: 0.6, pressure: 0.55, alpha: 0.85 },
@@ -1919,6 +1920,8 @@
         captionSize: 22,
         stickRadius: 0.25,
         sphereScale: 0.25,
+        stickHScale: 0.55,
+        lonePairStyle: "bold",
         ...pen(0, { width: 1.1, hierarchy: 0, alpha: 1 }),
         shading: 0.55,
         construction: false,
@@ -4022,6 +4025,7 @@
       ctx.restore();
     }
     const flatSticks = () => cfg.rep.stickStyle === "flat";
+    const hScale = (A, B) => A.el === "H" !== (B.el === "H") ? cfg.rep.stickHScale ?? 1 : 1;
     const stickOutlined = () => {
       const s = cfg.rep.stickOutline || "auto";
       return s === "on" || s === "auto" && !!(scene && scene.reps && (scene.reps.cartoon || "").trim());
@@ -4097,7 +4101,7 @@
       }
       return out;
     }
-    function drawFlatJoint(ctx, x, y, R, col, dirs, o) {
+    function drawFlatJoint(ctx, x, y, R, col, legs, o) {
       ctx.save();
       ctx.globalAlpha = o.alpha ?? 1;
       const w = o.outline;
@@ -4105,15 +4109,31 @@
       ctx.arc(x, y, Math.max(0, R - w / 2), 0, Math.PI * 2);
       ctx.fillStyle = fogged(col, o.fog || 0);
       ctx.fill();
-      const th = dirs.map((u) => Math.atan2(u[1], u[0])).sort((p, q) => p - q);
+      const TAU = 2 * Math.PI, cov = legs.map((l) => {
+        const t = Math.atan2(l.u[1], l.u[0]), h = Math.asin(Math.min(1, l.R / R));
+        return [t - h, t + h];
+      }).sort((p, q) => p[0] - q[0]);
+      const merged = [];
+      for (const c of cov) {
+        const m = merged[merged.length - 1];
+        if (m && c[0] <= m[1]) m[1] = Math.max(m[1], c[1]);
+        else merged.push(c.slice());
+      }
+      if (merged.length > 1) {
+        const f2 = merged[0], l = merged[merged.length - 1];
+        if (l[1] - TAU >= f2[0]) {
+          f2[0] = l[0] - TAU;
+          f2[1] = Math.max(f2[1], l[1] - TAU);
+          merged.pop();
+        }
+      }
       ctx.beginPath();
       let any = false;
-      for (let i = 0; i < th.length; i++) {
-        const a = th[i];
-        let b = th[(i + 1) % th.length];
-        if (b <= a) b += Math.PI * 2;
-        if (b - a > Math.PI + 1e-3) {
-          const s0 = a + Math.PI / 2, s1 = b - Math.PI / 2;
+      for (let i = 0; i < merged.length; i++) {
+        const s0 = merged[i][1];
+        let s1 = merged[(i + 1) % merged.length][0] + (i + 1 === merged.length ? TAU : 0);
+        if (merged.length === 1) s1 = merged[0][0] + TAU;
+        if (s1 - s0 > 1e-3) {
           ctx.moveTo(x + Math.cos(s0) * R, y + Math.sin(s0) * R);
           ctx.arc(x, y, R, s0, s1, false);
           any = true;
@@ -4126,6 +4146,97 @@
         ctx.stroke();
       }
       ctx.restore();
+    }
+    function drawValenceGaps(ctx, x0, y0, x1, y1, R, extra, o) {
+      const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy), s0 = R * 1.15;
+      if (L < s0 + 1) return;
+      const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+      const triple = extra > 1.01, g2 = (triple ? 0.34 : 0.42) * R, lane = triple ? (2 * R - 2 * g2) / 3 : 0, offs = triple ? [(lane + g2) / 2, -(lane + g2) / 2] : [0];
+      const w = o.outline || 0;
+      ctx.save();
+      ctx.lineCap = "round";
+      offs.forEach((off, k) => {
+        const al = (o.alpha ?? 1) * (triple ? k ? Math.min(1, extra - 1) : 1 : Math.min(1, extra));
+        if (al <= 0.01) return;
+        ctx.globalAlpha = al;
+        const ax = x0 + ux * s0 + nx * off, ay = y0 + uy * s0 + ny * off, bx = x1 + ux * 0.6 + nx * off, by = y1 + uy * 0.6 + ny * off;
+        if (w > 0) {
+          ctx.lineWidth = g2 + 2 * w;
+          ctx.strokeStyle = fogged(cfg.palette.ink, o.fog || 0);
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+          ctx.stroke();
+        }
+        ctx.lineWidth = g2;
+        ctx.strokeStyle = cfg.palette.paper;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+    function drawChargeBadge(ctx, x, y, rb, text, col, alpha) {
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      ctx.beginPath();
+      ctx.arc(x, y, rb, 0, Math.PI * 2);
+      ctx.fillStyle = cfg.palette.paper;
+      ctx.fill();
+      ctx.lineWidth = Math.max(0.8, cfg.style.inkWidth * LW.outer);
+      ctx.strokeStyle = col;
+      ctx.stroke();
+      if (text === "+" || text === "\u2212" || text === "-") {
+        const s = rb * 0.5;
+        ctx.lineWidth = Math.max(1.1, rb * 0.2);
+        ctx.lineCap = "round";
+        ctx.beginPath();
+        ctx.moveTo(x - s, y);
+        ctx.lineTo(x + s, y);
+        if (text === "+") {
+          ctx.moveTo(x, y - s);
+          ctx.lineTo(x, y + s);
+        }
+        ctx.stroke();
+      } else {
+        ctx.font = `600 ${Math.round(rb * (text.length > 1 ? 0.95 : 1.2))}px "IBM Plex Sans", system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = col;
+        ctx.fillText(text, x, y + 0.5);
+      }
+      ctx.restore();
+    }
+    function chargeAngle(a, st, pos, proj) {
+      const p = pos[a.id], obst = [];
+      for (const b of st.bonds) {
+        if (!(b.alpha > 0.3)) continue;
+        const j = b.a === a.id ? b.b : b.b === a.id ? b.a : null;
+        if (j === null || !pos[j]) continue;
+        obst.push(Math.atan2(pos[j].y - p.y, pos[j].x - p.x));
+      }
+      for (const lp of a.lps || []) {
+        const d = proj.dir2(lp.dir);
+        if (Math.hypot(d[0], d[1]) > 0.2) obst.push(Math.atan2(d[1], d[0]));
+      }
+      const apart = (u, v) => {
+        let x = u - v;
+        while (x > Math.PI) x -= 2 * Math.PI;
+        while (x < -Math.PI) x += 2 * Math.PI;
+        return Math.abs(x);
+      };
+      let best = -Math.PI / 4, score = -Infinity;
+      for (let k = 0; k < 72; k++) {
+        const f2 = -Math.PI + k * Math.PI / 36;
+        const clear = obst.length ? Math.min(...obst.map((o) => apart(f2, o))) : Math.PI;
+        const sc = Math.min(clear, 0.6 * Math.PI) - 0.12 * apart(f2, -Math.PI / 4);
+        if (sc > score) {
+          score = sc;
+          best = f2;
+        }
+      }
+      return best;
     }
     function drawFlatDisc(ctx, x, y, r, col, o) {
       ctx.save();
@@ -4169,7 +4280,7 @@
         const pa = pos[b.a], pb = pos[b.b];
         const L = Math.hypot(pb.x - pa.x, pb.y - pa.y);
         if (L < 1e-6) continue;
-        const ks = A._site && B._site ? cfg.rep.siteScale || 1.9 : 1, u = [(pb.x - pa.x) / L, (pb.y - pa.y) / L];
+        const ks = (A._site && B._site ? cfg.rep.siteScale || 1.9 : 1) * hScale(A, B), u = [(pb.x - pa.x) / L, (pb.y - pa.y) / L];
         (legs[b.a] = legs[b.a] || []).push({ b, u, L: L / 2, R: R0 * pa.d * ks });
         (legs[b.b] = legs[b.b] || []).push({ b, u: [-u[0], -u[1]], L: L / 2, R: R0 * pb.d * ks });
       }
@@ -4230,14 +4341,15 @@
           } });
         }
         for (const [near, far, atom, half] of [[pa, pb, A, 0], [pb, pa, B, 1]]) {
-          const site = !!(A._site && B._site), ks = site ? cfg.rep.siteScale || 1.9 : 1;
+          const site = !!(A._site && B._site), ks = (site ? cfg.rep.siteScale || 1.9 : 1) * hScale(A, B);
           items.push({ z: near.z - 2e-3, draw: (ctx) => {
             const col = atomColor(atom);
             const R = R0 * near.d * ks, Rm = R0 * (near.d + far.d) / 2 * ks;
             if (engravedSticks()) drawEngravedHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha, site, cap: (nb[atom.id] || 0) === 1 && !atom.sphere });
             else if (flatSticks()) drawFlatHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, ...flatEnd(atom, b, R) });
             else drawHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, passes: lowDetail ? 1 : void 0 });
-            if (extra > 0.01 && !(b.partial > 0 && b.partial < 1)) {
+            if (extra > 0.01 && !(b.partial > 0 && b.partial < 1) && flatSticks()) drawValenceGaps(ctx, near.x, near.y, mx, my, R, extra, { alpha: b.alpha, fog: near.fog, outline: OUT });
+            else if (extra > 0.01 && !(b.partial > 0 && b.partial < 1)) {
               const frac = Math.min(1, extra);
               const off = R0 * 1.95 * near.d * side * frac;
               const r2 = R0 * 0.42 * near.d * (0.5 + 0.5 * frac);
@@ -4301,7 +4413,7 @@
           const R = R0 * p.d * (a._site ? cfg.rep.siteScale || 1.9 : 1);
           if (flatSticks()) {
             const lg = legs[a.id] || [];
-            if (OUT && lg.length >= 2) items.push({ z: p.z + 1e-3, draw: (ctx) => drawFlatJoint(ctx, p.x, p.y, R, col, lg.map((l) => l.u), { outline: OUT, fog: p.fog, alpha: a.alpha }) });
+            if (OUT && lg.length >= 2) items.push({ z: p.z + 1e-3, draw: (ctx) => drawFlatJoint(ctx, p.x, p.y, R, col, lg, { outline: OUT, fog: p.fog, alpha: a.alpha }) });
             continue;
           }
           if (engravedSticks()) {
@@ -7669,12 +7781,13 @@
         const p = pos[a.id];
         const r = atomDrawR(a, proj) * p.d;
         const seed = seedBase + strHash(a.id);
+        const badge = SH.charges && a.charges.length && flatSticks() ? chargeAngle(a, st, pos, proj) : null;
         if (SH.lonePairs && !lpLobes && a.lps.length && cfg.rep.lonePairStyle === "bold") {
           const taken = st._lpTaken[a.id];
           const an = S.annot || 1;
           const NB = st._nb || (st._nb = neighbours(st));
           const fixed = (NB[a.id] || []).filter((j) => pos[j]).map((j) => Math.atan2(pos[j].y - p.y, pos[j].x - p.x));
-          if (a.charges.length) fixed.push(-Math.PI / 4);
+          if (a.charges.length) fixed.push(badge ?? -Math.PI / 4);
           const dif = (u, v) => {
             let x = u - v;
             while (x > Math.PI) x -= 2 * Math.PI;
@@ -7724,7 +7837,13 @@
           });
           ctx.restore();
         }
-        if (SH.charges && a.charges.length) {
+        if (badge !== null) {
+          const an = S.annot || 1, rb = Math.max(7, 1.1 * cfg.rep.stickRadius * proj.pxPerA * p.d) * an, off = r + 1.45 * rb, ux = Math.cos(badge), uy = Math.sin(badge);
+          ctx.save();
+          ctx.globalAlpha = a.alpha;
+          for (const c of a.charges) drawChargeBadge(ctx, p.x + ux * off, p.y + uy * off, rb, c.text, P.charge, c.alpha);
+          ctx.restore();
+        } else if (SH.charges && a.charges.length) {
           ctx.save();
           ctx.globalAlpha = a.alpha;
           const an = S.annot || 1;
@@ -9175,6 +9294,7 @@
         fill: style.fill,
         colorBy: style.colorBy,
         stickRadius: style.stickRadius,
+        stickHScale: style.stickHScale ?? 1,
         sphereScale: style.sphereScale,
         sideChainHelper: style.sideChainHelper,
         cartoonScale: style.cartoonScale,

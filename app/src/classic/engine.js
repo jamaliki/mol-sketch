@@ -784,6 +784,9 @@ function drawEngravedHalfStick(ctx,x0,y0,x1,y1,R,col,o){
    from stickTrims), a lone end round its cap; a joint is its own shape (drawFlatJoint) with the arcs of its circle that
    face out. */
 const flatSticks=()=>cfg.rep.stickStyle==='flat';
+/* a bond to a hydrogen is drawn thinner, as PyMOL's stick_h_scale draws it: the proton reads as lighter than the bonds
+   it moves between */
+const hScale=(A,B)=>(A.el==='H')!==(B.el==='H')?(cfg.rep.stickHScale??1):1;
 const stickOutlined=()=>{const s=cfg.rep.stickOutline||'auto';return s==='on'||(s==='auto'&&!!(scene&&scene.reps&&(scene.reps.cartoon||'').trim()))};
 function drawFlatHalfStick(ctx,x0,y0,x1,y1,R,col,o){
   const Rm=o.Rm??R;const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L,nx=-uy,ny=ux;
@@ -810,13 +813,47 @@ function stickTrims(u,R,others){const n=[-u[1],u[0]];const out=[0,0];
     out[k]=t0}
   return out}
 /* a joint of two or more bonds, outlined: a disc of the atom's colour under the ink, and the arcs of its circle that face
-   out (wherever two neighbouring bonds are more than half a turn apart, the circle shows between them) */
-function drawFlatJoint(ctx,x,y,R,col,dirs,o){ctx.save();ctx.globalAlpha=o.alpha??1;const w=o.outline;
+   out. A bond as wide as the atom covers the half of its circle it leaves by; a thinner one (to a hydrogen) only the arc
+   between its edges, asin(its radius / the atom's) either side of it: the circle shows wherever no bond covers it */
+function drawFlatJoint(ctx,x,y,R,col,legs,o){ctx.save();ctx.globalAlpha=o.alpha??1;const w=o.outline;
   ctx.beginPath();ctx.arc(x,y,Math.max(0,R-w/2),0,Math.PI*2);ctx.fillStyle=fogged(col,o.fog||0);ctx.fill();
-  const th=dirs.map(u=>Math.atan2(u[1],u[0])).sort((p,q)=>p-q);ctx.beginPath();let any=false;
-  for(let i=0;i<th.length;i++){const a=th[i];let b=th[(i+1)%th.length];if(b<=a)b+=Math.PI*2;if(b-a>Math.PI+1e-3){const s0=a+Math.PI/2,s1=b-Math.PI/2;ctx.moveTo(x+Math.cos(s0)*R,y+Math.sin(s0)*R);ctx.arc(x,y,R,s0,s1,false);any=true}}
+  const TAU=2*Math.PI,cov=legs.map(l=>{const t=Math.atan2(l.u[1],l.u[0]),h=Math.asin(Math.min(1,l.R/R));return[t-h,t+h]}).sort((p,q)=>p[0]-q[0]);
+  const merged=[];for(const c of cov){const m=merged[merged.length-1];if(m&&c[0]<=m[1])m[1]=Math.max(m[1],c[1]);else merged.push(c.slice())}
+  if(merged.length>1){const f=merged[0],l=merged[merged.length-1];if(l[1]-TAU>=f[0]){f[0]=l[0]-TAU;f[1]=Math.max(f[1],l[1]-TAU);merged.pop()}}   // round the circle
+  ctx.beginPath();let any=false;
+  for(let i=0;i<merged.length;i++){const s0=merged[i][1];let s1=(merged[(i+1)%merged.length][0])+(i+1===merged.length?TAU:0);
+    if(merged.length===1)s1=merged[0][0]+TAU;if(s1-s0>1e-3){ctx.moveTo(x+Math.cos(s0)*R,y+Math.sin(s0)*R);ctx.arc(x,y,R,s0,s1,false);any=true}}
   if(any){ctx.lineWidth=w;ctx.strokeStyle=fogged(cfg.palette.ink,o.fog||0);ctx.lineCap='round';ctx.stroke()}
   ctx.restore()}
+/* a double or triple bond in flat sticks, as PyMOL draws valence: two (or three) lanes in the one stick, the gap between
+   them closing before each atom so the lanes run into its joint. Drawn on each half of the bond, the gap a stroke of the
+   paper's colour, inked either side when the sticks are outlined. extra: the order past one (fractional while a bond forms) */
+function drawValenceGaps(ctx,x0,y0,x1,y1,R,extra,o){
+  const dx=x1-x0,dy=y1-y0,L=Math.hypot(dx,dy),s0=R*1.15;if(L<s0+1)return;const ux=dx/L,uy=dy/L,nx=-uy,ny=ux;
+  const triple=extra>1.01,g=(triple?0.34:0.42)*R,lane=triple?(2*R-2*g)/3:0,offs=triple?[(lane+g)/2,-(lane+g)/2]:[0];
+  const w=o.outline||0;ctx.save();ctx.lineCap='round';
+  offs.forEach((off,k)=>{const al=(o.alpha??1)*(triple?(k?Math.min(1,extra-1):1):Math.min(1,extra));if(al<=0.01)return;ctx.globalAlpha=al;
+    const ax=x0+ux*s0+nx*off,ay=y0+uy*s0+ny*off,bx=x1+ux*0.6+nx*off,by=y1+uy*0.6+ny*off;
+    if(w>0){ctx.lineWidth=g+2*w;ctx.strokeStyle=fogged(cfg.palette.ink,o.fog||0);ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke()}
+    ctx.lineWidth=g;ctx.strokeStyle=cfg.palette.paper;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke()});
+  ctx.restore()}
+/* a formal charge with flat sticks: a badge -- the paper's colour, rimmed in the charge's -- holding a drawn + or − (2+ and
+   the like in letters), as wide as a stick, set off the atom in the direction chargeAngle finds clearest */
+function drawChargeBadge(ctx,x,y,rb,text,col,alpha){ctx.save();ctx.globalAlpha*=alpha;
+  ctx.beginPath();ctx.arc(x,y,rb,0,Math.PI*2);ctx.fillStyle=cfg.palette.paper;ctx.fill();ctx.lineWidth=Math.max(0.8,cfg.style.inkWidth*LW.outer);ctx.strokeStyle=col;ctx.stroke();
+  if(text==='+'||text==='−'||text==='-'){const s=rb*0.5;ctx.lineWidth=Math.max(1.1,rb*0.2);ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x-s,y);ctx.lineTo(x+s,y);if(text==='+'){ctx.moveTo(x,y-s);ctx.lineTo(x,y+s)}ctx.stroke()}
+  else{ctx.font=`600 ${Math.round(rb*(text.length>1?0.95:1.2))}px "IBM Plex Sans", system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=col;ctx.fillText(text,x,y+0.5)}
+  ctx.restore()}
+/* where an atom's charge sits on screen: the direction round it furthest from its bonds (hydrogen bonds too) and its lone
+   pairs, the upper right when that is about as clear */
+function chargeAngle(a,st,pos,proj){const p=pos[a.id],obst=[];
+  for(const b of st.bonds){if(!(b.alpha>0.3))continue;const j=b.a===a.id?b.b:b.b===a.id?b.a:null;if(j===null||!pos[j])continue;obst.push(Math.atan2(pos[j].y-p.y,pos[j].x-p.x))}
+  for(const lp of a.lps||[]){const d=proj.dir2(lp.dir);if(Math.hypot(d[0],d[1])>0.2)obst.push(Math.atan2(d[1],d[0]))}
+  const apart=(u,v)=>{let x=u-v;while(x>Math.PI)x-=2*Math.PI;while(x<-Math.PI)x+=2*Math.PI;return Math.abs(x)};
+  let best=-Math.PI/4,score=-Infinity;
+  for(let k=0;k<72;k++){const f=-Math.PI+k*Math.PI/36;const clear=obst.length?Math.min(...obst.map(o=>apart(f,o))):Math.PI;
+    const sc=Math.min(clear,0.6*Math.PI)-0.12*apart(f,-Math.PI/4);if(sc>score){score=sc;best=f}}
+  return best}
 function drawFlatDisc(ctx,x,y,r,col,o){ctx.save();ctx.globalAlpha=o.alpha??1;ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=fogged(col,o.fog||0);ctx.fill();
   if(o.outline>0){ctx.lineWidth=o.outline;ctx.strokeStyle=fogged(cfg.palette.ink,o.fog||0);ctx.stroke()}ctx.restore()}
 /* the active site (cfg.rep.siteSel): its atoms are always sticks, larger; ribbon faces in front of it fade in a window
@@ -832,7 +869,7 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
   // and shape its joint
   const OUT=flatSticks()&&stickOutlined()?cfg.style.inkWidth*LW.outer:0,legs={};
   if(OUT)for(const b of bonds){const A=inSet[b.a],B=inSet[b.b];if(!A||!B||b.order===0||(b.partial>0&&b.partial<1))continue;const pa=pos[b.a],pb=pos[b.b];const L=Math.hypot(pb.x-pa.x,pb.y-pa.y);if(L<1e-6)continue;
-    const ks=A._site&&B._site?(cfg.rep.siteScale||1.9):1,u=[(pb.x-pa.x)/L,(pb.y-pa.y)/L];
+    const ks=(A._site&&B._site?(cfg.rep.siteScale||1.9):1)*hScale(A,B),u=[(pb.x-pa.x)/L,(pb.y-pa.y)/L];
     (legs[b.a]=legs[b.a]||[]).push({b,u,L:L/2,R:R0*pa.d*ks});(legs[b.b]=legs[b.b]||[]).push({b,u:[-u[0],-u[1]],L:L/2,R:R0*pb.d*ks})}
   const flatEnd=(atom,b,R)=>{if(!OUT)return{};const lg=legs[atom.id]||[],own=lg.find(l=>l.b===b),others=lg.filter(l=>l.b!==b);const cap=!others.length&&!atom.sphere;
     return{outline:OUT,cap,trim:!cap&&own?stickTrims(own.u,R,others):null}};
@@ -853,13 +890,14 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
     if(isInk()&&A.el!==B.el&&!flatSticks()){const zm=(pa.z+pb.z)/2;items.push({z:zm-0.0015,draw:(ctx)=>{const Rm=R0*(pa.d+pb.d)/2;const fog=(pa.fog+pb.fog)/2;
       ctx.save();ctx.globalAlpha=b.alpha;sketchLine(ctx,[[mx-uy*Rm*0.95,my+ux*Rm*0.95],[mx+uy*Rm*0.95,my-ux*Rm*0.95]],{seed:seed+55,passes:1,width:cfg.style.inkWidth*0.7*LW.inner,color:fogged(P.ink,fog),alpha:0.7,ampScale:0.4,step:4,overshoot:false});ctx.restore()}})}
     for(const [near,far,atom,half] of[[pa,pb,A,0],[pb,pa,B,1]]){
-      const site=!!(A._site&&B._site),ks=site?(cfg.rep.siteScale||1.9):1;
+      const site=!!(A._site&&B._site),ks=(site?(cfg.rep.siteScale||1.9):1)*hScale(A,B);
       items.push({z:near.z-0.002,draw:(ctx)=>{const col=atomColor(atom);
         const R=R0*near.d*ks,Rm=R0*(near.d+far.d)/2*ks;
         if(engravedSticks())drawEngravedHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha,site,cap:(nb[atom.id]||0)===1&&!atom.sphere});
         else if(flatSticks())drawFlatHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,seed:seed+half*3,fog:near.fog,d:near.d,alpha:b.alpha,partial:b.partial,...flatEnd(atom,b,R)});
         else drawHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,seed:seed+half*3,fog:near.fog,d:near.d,alpha:b.alpha,partial:b.partial,passes:lowDetail?1:undefined});
-        if(extra>0.01&&!(b.partial>0&&b.partial<1)){ // inner valence stick(s)
+        if(extra>0.01&&!(b.partial>0&&b.partial<1)&&flatSticks())drawValenceGaps(ctx,near.x,near.y,mx,my,R,extra,{alpha:b.alpha,fog:near.fog,outline:OUT});
+        else if(extra>0.01&&!(b.partial>0&&b.partial<1)){ // inner valence stick(s)
           const frac=Math.min(1,extra);const off=R0*1.95*near.d*side*frac;const r2=R0*0.42*near.d*(0.5+0.5*frac);
           const sh=0.18; // shorten toward the atom so it does not poke out of the junction
           const ax=near.x+ux*L*sh*(half?-1:1),ay=near.y+uy*L*sh*(half?-1:1);
@@ -882,7 +920,7 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
       items.push({z:p.z+0.003,draw:(ctx)=>drawFlatBall(ctx,p.x,p.y,r,col,{seed,el:a.el,fog:p.fog,d:p.d,alpha:a.alpha,passes:lowDetail?1:undefined})})}
     else if(cnt>=2){const R=R0*p.d*(a._site?(cfg.rep.siteScale||1.9):1);
       if(flatSticks()){const lg=legs[a.id]||[];   // unoutlined, the bonds' round ends are the joint
-        if(OUT&&lg.length>=2)items.push({z:p.z+0.001,draw:(ctx)=>drawFlatJoint(ctx,p.x,p.y,R,col,lg.map(l=>l.u),{outline:OUT,fog:p.fog,alpha:a.alpha})});continue}
+        if(OUT&&lg.length>=2)items.push({z:p.z+0.001,draw:(ctx)=>drawFlatJoint(ctx,p.x,p.y,R,col,lg,{outline:OUT,fog:p.fog,alpha:a.alpha})});continue}
       if(engravedSticks()){const site=!!a._site;items.push({z:p.z+0.001,draw:(ctx)=>{const P2=cfg.palette;ctx.save();ctx.globalAlpha=a.alpha;const fk=1-p.fog*cfg.view.fog;
         const T=engraveTone(col);ctx.beginPath();ctx.arc(p.x,p.y,R,0,Math.PI*2);ctx.fillStyle=T.fill?fogged(site?mix(T.fill,col,0.35):T.fill,p.fog):site?fogged(mix(P2.paper,col,cfg.rep.fill==='ink'?0.12:0.2),p.fog):paperFill();ctx.fill();
         ctx.lineWidth=cfg.style.inkWidth*LW.outer*(site?1.2:0.85)*(0.8+0.2*fk);ctx.strokeStyle=fogged(P2.ink,p.fog);ctx.stroke();ctx.restore()}});continue}
@@ -2118,9 +2156,10 @@ function renderFrame(ctx,W,H,frame,dpr){
   // annotations on stick atoms
   const fontFam=S.font==='Plain sans'?'"IBM Plex Sans", system-ui, sans-serif':`"${S.font}", "Caveat", cursive`;
   for(const a of stickAtoms){const p=pos[a.id];const r=atomDrawR(a,proj)*p.d;const seed=seedBase+strHash(a.id);
+    const badge=SH.charges&&a.charges.length&&flatSticks()?chargeAngle(a,st,pos,proj):null;   // the charge's direction, as a badge
     if(SH.lonePairs&&!lpLobes&&a.lps.length&&cfg.rep.lonePairStyle==='bold'){const taken=st._lpTaken[a.id];const an=S.annot||1;
       // where each pair sits round the atom on screen: its own direction, spread from the other pairs, the bonds and the charge
-      const NB=st._nb||(st._nb=neighbours(st));const fixed=(NB[a.id]||[]).filter(j=>pos[j]).map(j=>Math.atan2(pos[j].y-p.y,pos[j].x-p.x));if(a.charges.length)fixed.push(-Math.PI/4);
+      const NB=st._nb||(st._nb=neighbours(st));const fixed=(NB[a.id]||[]).filter(j=>pos[j]).map(j=>Math.atan2(pos[j].y-p.y,pos[j].x-p.x));if(a.charges.length)fixed.push(badge??-Math.PI/4);
       const dif=(u,v)=>{let x=u-v;while(x>Math.PI)x-=2*Math.PI;while(x<-Math.PI)x+=2*Math.PI;return x};
       const ps=a.lps.map((lp,i)=>({i,lp,ang:Math.atan2(proj.dir2(lp.dir)[1],proj.dir2(lp.dir)[0])})).filter(q=>!(taken&&taken.has(q.i)));
       for(let it=0;it<24;it++){for(const q of ps)for(const f of fixed){const x=dif(q.ang,f);if(Math.abs(x)<0.6)q.ang+=(x>=0?1:-1)*(0.6-Math.abs(x))*0.5}
@@ -2132,7 +2171,9 @@ function renderFrame(ctx,W,H,frame,dpr){
         ctx.fillStyle=rgba(P.ink,0.9*lp.alpha);const rng=mulberry32(seed+i*3);
         for(const s of[-2.6*an,2.6*an]){ctx.beginPath();ctx.arc(cx-uy*s+(rng()-0.5),cy+ux*s+(rng()-0.5),1.35*p.d*an,0,Math.PI*2);ctx.fill()}});
       ctx.restore()}
-    if(SH.charges&&a.charges.length){ctx.save();ctx.globalAlpha=a.alpha;
+    if(badge!==null){const an=S.annot||1,rb=Math.max(7,1.1*cfg.rep.stickRadius*proj.pxPerA*p.d)*an,off=r+1.45*rb,ux=Math.cos(badge),uy=Math.sin(badge);
+      ctx.save();ctx.globalAlpha=a.alpha;for(const c of a.charges)drawChargeBadge(ctx,p.x+ux*off,p.y+uy*off,rb,c.text,P.charge,c.alpha);ctx.restore()}
+    else if(SH.charges&&a.charges.length){ctx.save();ctx.globalAlpha=a.alpha;
       const an=S.annot||1;a.charges.forEach((c,i)=>{const cx=p.x+r*0.95+7*an,cy=p.y-r*0.95-6*an;const cr=7*p.d*an;
         ctx.font=`600 ${Math.round(15*p.d*an)}px ${fontFam}`;ctx.textAlign='center';ctx.textBaseline='middle';
         ctx.fillStyle=rgba(P.charge,c.alpha);ctx.fillText(c.text,cx,cy+0.5);

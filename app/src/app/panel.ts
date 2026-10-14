@@ -509,6 +509,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     control(g, { t: 'color', label: 'hydrogen bonds', path: 'palette.hbond', unset: () => H.style.palette.hatch });
     control(g, { t: 'select', label: 'carbons by', path: 'colorBy', options: [['residue', 'residue'], ['element', 'element (grey)'], ['chain', 'chain'], ['subunit', 'subunit'], ['entity', 'molecule']], geom: true });
     control(g, { t: 'range', label: 'thickness', path: 'stickRadius', min: 0.08, max: 0.5, step: 0.01, geom: true });
+    control(g, { t: 'range', label: 'to hydrogens', path: 'stickHScale', min: 0.3, max: 1, step: 0.05, geom: true, tip: 'a bond to a hydrogen as a share of the stick, as PyMOL\'s stick_h_scale' });
     control(g, { t: 'range', label: 'atom spheres', path: 'sphereScale', min: 0, max: 1, step: 0.05, geom: true });
     const g2 = el('div'); g.append(g2); swatchRow(g2, 'elements', ['C', 'N', 'O', 'S', 'P', 'H', 'X'], true);
   }

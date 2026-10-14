@@ -392,9 +392,10 @@ class Figure:
 
 # Python names are snake_case (surface_depth, fog_start); the engine's, and the app's style files, are camelCase
 # (surfaceDepth, fogStart). Names are converted at this boundary, both ways, and the engine's own are accepted too.
-# Element symbols (palette.C, show.H) start with a capital and are left alone.
+# Element symbols (palette.C, show.H) start with a capital and are left alone. A one-letter word inside a name is a
+# capital before a capital (stickHScale, stick_h_scale).
 def _snake(k: str) -> str:
-    return re.sub(r"(?<=[a-z0-9])([A-Z])", lambda m: "_" + m.group(1).lower(), k) if k[:1].islower() else k
+    return re.sub(r"(?<=[a-z0-9])([A-Z])|(?<=[A-Z])([A-Z])(?=[a-z])", lambda m: "_" + (m.group(1) or m.group(2)).lower(), k) if k[:1].islower() else k
 
 
 def _camel(k: str) -> str:

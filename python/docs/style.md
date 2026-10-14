@@ -33,6 +33,7 @@ Contents: [Fill and representation](#fill-and-representation) · [Depth in a sur
 | `fill` | `"watercolour"` | how shapes are filled; the outlines are always ink. See the table below |
 | `mode` | `"sticks"` | how the stick atoms are drawn: `"sticks"` (PyMOL-style sticks, with small spheres where bonds meet) or `"ballstick"` (pencil ball-and-stick) |
 | `stick_radius` | `0.2` | stick radius, Å |
+| `stick_h_scale` | `1` | a bond to a hydrogen as a share of the stick radius, as PyMOL's `stick_h_scale`: below 1 the proton reads lighter than the bonds it moves between |
 | `sphere_scale` | `0.4` | in `"sticks"` mode, the size of the balls on atoms marked as spheres (a protein's Cα atoms, and atoms a scene marks); 0 draws them as plain stick ends |
 | `cartoon_scale` | `1` | width of the cartoon ribbons and tubes, relative to normal |
 | `cartoon_style` | `"engraved"` | `"engraved"`: white ribbons shaded with lines along their length, after MOLSCRIPT. `"sketch"`: ribbons filled in the style of `fill` |

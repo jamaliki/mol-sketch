@@ -59,6 +59,9 @@ export interface Style {
     caption: boolean; maxVoxels: number; meshSpacing: number; slice: { offset: number; cut: boolean } };
   reps: { sticks: string; cartoon: string; surface: string };   // selections
   stickRadius: number;       // Å
+  /** a bond to a hydrogen as a share of the stick's radius (PyMOL's stick_h_scale): the proton lighter than the bonds it
+      moves between */
+  stickHScale: number;
   cartoonScale: number;
   probe: number;             // Å added to residue blobs
   line: { width: number; rough: number; passes: number; hierarchy: number; pressure: number; alpha: number };
@@ -105,7 +108,7 @@ export const DEFAULT_STYLE: Style = {
   map: { visible: true, style: 'surface', level: null, sigma: null, speck: 8, smooth: 'auto', crop: 8, levels: [0.7, 1, 1.5], carve: 0, zone: '', finish: 'drawn', marks: 'ink', smoothing: 4, opacity: 0.55, context: 'hide', color: 'single', line: null, lineWidth: 0.9, shade: 0.35, glass: false, unexplained: false, unsupported: true, localResolution: 'none',
     layer: 'auto', caption: true, maxVoxels: 192, meshSpacing: 1, slice: { offset: 0, cut: true } },
   reps: { sticks: 'hetatm and not water', cartoon: 'polymer', surface: '' },
-  stickRadius: 0.2,
+  stickRadius: 0.2, stickHScale: 1,
   cartoonScale: 1,
   probe: 1.4,
   line: { width: 1.5, rough: 1.1, passes: 2, hierarchy: 0.6, pressure: 0.55, alpha: 0.85 },

@@ -201,6 +201,16 @@ def test_flat_sticks_are_outlined_with_ribbons():
     assert ink in protein.show(cartoon="polymer").svg(SMALL)
 
 
+def test_flat_draws_protons_charges_and_valence_its_own_way():
+    """the flat look: bonds to hydrogens thinner, charges as badges, double bonds as lanes -- each a part of the drawing"""
+    fig = lambda **st: ms.load(EX / "mechanism.json").look("flat").set(**st).render(SMALL, frame=100).to_numpy()
+    st = ms.load(EX / "mechanism.json").look("flat").style
+    assert st["stick_h_scale"] == 0.55 and ms.default_style()["stick_h_scale"] == 1
+    plain = fig()
+    for change in ({"stick_h_scale": 1}, {"show.charges": False}, {"show.valence": False}):
+        assert not np.array_equal(fig(**change), plain), change
+
+
 def test_fit_puts_the_drawing_in_the_box():
     """fit(): zoom and pan so the drawing fills the box (its longer side), centred in it"""
     from molsketch._engine import engine
