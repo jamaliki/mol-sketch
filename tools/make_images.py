@@ -1,7 +1,7 @@
 """Regenerate the images in docs/img and the style files in looks/, all with the molsketch Python package.
 
     python tools/make_images.py            everything (the ribosome images take a few minutes)
-    python tools/make_images.py ras looks  only some groups: looks, ras, palettes, protein, ribosome, turntable, styles, maps
+    python tools/make_images.py ras looks  only some groups: looks, ras, palettes, protein, ribosome, turntable, styles, maps, flat
 
 Run it from the repository root with the package installed (pip install ./python). Structures come from the PDB and
 are cached; ffmpeg is needed for the turntable. docs/img/app.png is a screenshot of the app and is not made here.
@@ -18,6 +18,7 @@ from molsketch._engine import engine
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 IMG = ROOT / "docs" / "img"
 MECH = ROOT / "examples" / "mechanism.json"
+TRYPSIN = ROOT / "app" / "public" / "examples" / "trypsin_active_site.json"
 PROTEIN = ROOT / "examples" / "test_protein.pdb"
 IMG.mkdir(parents=True, exist_ok=True)
 
@@ -88,6 +89,15 @@ def maps():
     say(ms.fetch("7A4M", map=True).map(zone=asp, carve=2, sigma=3).show(sticks=asp, cartoon=None).save(IMG / "map_damaged_side_chain.png", (900, 900)))
 
 
+def flat():
+    """the Flat look: trypsin with its catalytic triad, whole and close up (outlined sticks on outlined ribbons), and the
+    mechanism's sticks alone, plain"""
+    fig = ms.load(TRYPSIN).look("flat").site("resi 57+102+195")
+    say(fig.copy().save(IMG / "flat.png", (960, 720)))
+    say(fig.copy().view(zoom=3.4, pan=(-0.03, 0.14)).save(IMG / "flat_site.png", (960, 720)))
+    say(ms.scene(MECH).look("flat").save(IMG / "flat_mechanism.png", (960, 720), frame=28))
+
+
 def styles():
     """looks/*.json: each look as a complete style file, what the app's Export › Save style writes (and its
     Load style, Figure.apply_style and molsketch render --style read)"""
@@ -98,7 +108,7 @@ def styles():
         p = out / f"{look}.json"; p.write_text(json.dumps(style, indent=1, ensure_ascii=False) + "\n"); say(p)
 
 
-GROUPS = {"looks": looks, "ras": ras, "palettes": palettes, "protein": protein, "ribosome": ribosome, "turntable": turntable, "styles": styles, "maps": maps}
+GROUPS = {"looks": looks, "ras": ras, "palettes": palettes, "protein": protein, "ribosome": ribosome, "turntable": turntable, "styles": styles, "maps": maps, "flat": flat}
 
 if __name__ == "__main__":
     for g in sys.argv[1:] or GROUPS:

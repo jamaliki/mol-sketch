@@ -10,6 +10,8 @@ export interface Palette {
   /** orbitals: those holding electrons (a lone pair, a σ or π bond) and empty ones (σ*, π*, an empty p); the window of
       positions a measure allows, and the measures' own lines. Optional: the engine picks from the paper when unset */
   filled?: string; empty?: string; window?: string; measure?: string;
+  /** hydrogen bonds' dots; optional: the hatch colour (on dark paper, the ink) when unset */
+  hbond?: string;
 }
 
 export interface Style {
@@ -33,8 +35,12 @@ export interface Style {
   /** sketch: the hand-drawn ribbons of the fill mode; engraved: line-shaded ribbons in the manner of MOLSCRIPT (Kraulis 1991),
       white faces with lines running along the ribbon, inked strand sides, paper-white coils. Classic engine only. */
   cartoonStyle: 'sketch' | 'engraved';
-  /** sticks drawn as the ribbons are: auto (with engraved ribbons, so a mechanism in sticks alone keeps its hand), always, never */
-  stickStyle: 'auto' | 'sketch' | 'engraved';
+  /** sticks drawn as the ribbons are: auto (with engraved ribbons, so a mechanism in sticks alone keeps its hand), always, never;
+      flat: PyMOL's sticks under flat light, solid colour split at each bond's middle, round joints, no outline */
+  stickStyle: 'auto' | 'sketch' | 'engraved' | 'flat';
+  /** flat sticks inked round their silhouette, never across a joint or where a bond changes colour: on, off, or auto (when
+      ribbons are drawn, so side chains match the ribbons' outlines and a mechanism in sticks alone stays plain) */
+  stickOutline: 'auto' | 'on' | 'off';
   engrave: { lines: number; width: number; strandThickness: number; coilWidth: number; labels: boolean };
   /** the active site: always drawn as sticks, larger; with the engraved cartoon, what lies in front of it fades (cutaway)
       and the rest of the protein can be quieted so the site reads first */
@@ -53,6 +59,9 @@ export interface Style {
     caption: boolean; maxVoxels: number; meshSpacing: number; slice: { offset: number; cut: boolean } };
   reps: { sticks: string; cartoon: string; surface: string };   // selections
   stickRadius: number;       // Å
+  /** a bond to a hydrogen as a share of the stick's radius (PyMOL's stick_h_scale): the proton lighter than the bonds it
+      moves between */
+  stickHScale: number;
   cartoonScale: number;
   probe: number;             // Å added to residue blobs
   line: { width: number; rough: number; passes: number; hierarchy: number; pressure: number; alpha: number };
@@ -62,7 +71,9 @@ export interface Style {
   construction: boolean;     // faint guide geometry
   sideChainHelper: boolean;  // hide backbone atoms of residues drawn as cartoon
   hatch: { spacing: number; angle: number; density: number };
-  paper: { grain: number; wash: number; washSeed: number; washLife: number; washScale: number };
+  /** transparent: the paper is not laid down, so the drawing goes onto whatever is behind it (its colour still sets what
+      the fog fades into and what is knocked out round an active site) */
+  paper: { grain: number; wash: number; washSeed: number; washLife: number; washScale: number; transparent?: boolean };
   water: { layers: number; wobble: number; ring: number; granulation: number; tone: number };
   view: { fov: number; fog: number; fogStart: number; light: number };
   boilEvery: number; boilHold: number;
@@ -90,20 +101,20 @@ export const DEFAULT_STYLE: Style = {
   palette: { ...PALETTES['Colored pencil'] },
   colorBy: 'residue',
   cartoonColor: 'ss',
-  cartoonStyle: 'engraved', stickStyle: 'auto',
+  cartoonStyle: 'engraved', stickStyle: 'auto', stickOutline: 'auto',
   engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: false },
   site: { sel: '', cutaway: true, quiet: 0.35, scale: 1.9 },
   surfaceColor: 'subunit', surfaceDepth: { edges: 1, pooling: 1, fade: 1 },
   map: { visible: true, style: 'surface', level: null, sigma: null, speck: 8, smooth: 'auto', crop: 8, levels: [0.7, 1, 1.5], carve: 0, zone: '', finish: 'drawn', marks: 'ink', smoothing: 4, opacity: 0.55, context: 'hide', color: 'single', line: null, lineWidth: 0.9, shade: 0.35, glass: false, unexplained: false, unsupported: true, localResolution: 'none',
     layer: 'auto', caption: true, maxVoxels: 192, meshSpacing: 1, slice: { offset: 0, cut: true } },
   reps: { sticks: 'hetatm and not water', cartoon: 'polymer', surface: '' },
-  stickRadius: 0.2,
+  stickRadius: 0.2, stickHScale: 1,
   cartoonScale: 1,
   probe: 1.4,
   line: { width: 1.5, rough: 1.1, passes: 2, hierarchy: 0.6, pressure: 0.55, alpha: 0.85 },
   shading: 0.65, pencilFill: 0.55, fillWobble: 1, construction: false, sideChainHelper: true,
   hatch: { spacing: 5, angle: -40, density: 1.4 },
-  paper: { grain: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1 },
+  paper: { grain: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1, transparent: false },
   water: { layers: 3, wobble: 1, ring: 0.6, granulation: 0.5, tone: 0.6 },
   view: { fov: 20, fog: 0.5, fogStart: 0.45, light: -125 },
   boilEvery: 3, boilHold: 1, detail: 'auto', textureScale: 'screen', groupPalette: null, groupPaletteName: 'MolSketch',

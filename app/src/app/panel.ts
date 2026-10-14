@@ -70,7 +70,7 @@ type Ctl = (
   | { t: 'select'; label: string; path: string; options: (string | [string, string])[]; geom?: boolean }
   | { t: 'seg'; label: string; path: string; options: [string, string][]; geom?: boolean }
   | { t: 'text'; label: string; path: string; geom?: boolean; placeholder?: string }
-  | { t: 'color'; label: string; path: string; geom?: boolean }
+  | { t: 'color'; label: string; path: string; geom?: boolean; unset?: () => string }   // unset: what an optional colour shows until it is set
   | { t: 'check'; label: string; path: string; geom?: boolean }) & { when?: () => boolean; tip?: string };
 
 const get = (o: any, path: string) => path.split('.').reduce((a, k) => a?.[k], o);
@@ -136,7 +136,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
       const show = () => { inp.value = get(H.style, c.path) ?? '' }; inp.onchange = () => { H.mark(c.label); set(H.style, c.path, inp.value); after(c.geom) }; refreshers.push(show); show(); row(parent, c.label, inp);
     } else if (c.t === 'color') {
       const inp = el('input', { type: 'color' }) as HTMLInputElement;
-      const show = () => { inp.value = get(H.style, c.path) }; inp.oninput = () => { H.mark(c.label); set(H.style, c.path, inp.value); c.geom ? H.rebuild() : H.redraw() }; refreshers.push(show); show(); row(parent, c.label, inp);
+      const show = () => { inp.value = get(H.style, c.path) ?? (c.unset ? c.unset() : '#000000') }; inp.oninput = () => { H.mark(c.label); set(H.style, c.path, inp.value); c.geom ? H.rebuild() : H.redraw() }; refreshers.push(show); show(); row(parent, c.label, inp);
     } else if (c.t === 'check') {
       const inp = el('input', { type: 'checkbox' }) as HTMLInputElement;
       const show = () => { inp.checked = !!get(H.style, c.path) }; inp.onchange = () => { H.mark(c.label); set(H.style, c.path, inp.checked); after(c.geom) }; refreshers.push(show); show(); row(parent, c.label, inp);
@@ -410,6 +410,7 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
     control(g, { t: 'range', label: 'wash pattern', path: 'paper.washSeed', min: 1, max: 40, step: 1 });
     control(g, { t: 'range', label: 'wash scale', path: 'paper.washScale', min: 0.3, max: 3, step: 0.05 });
     control(g, { t: 'range', label: 'wash life', path: 'paper.washLife', min: 0, max: 2, step: 0.05 });
+    control(g, { t: 'check', label: 'transparent', path: 'paper.transparent', tip: 'leave the paper out of PNG and SVG exports, to lay the drawing on a page of its own; the paper colour still sets what fades into it' });
   }
 
   /* ---- every colour, and the paper-and-ink presets (under Drawing style) ---- */
@@ -503,9 +504,12 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   {
     const g = sec(PS, 'Appearance', { keys: 'ball stick radius engraved sketch carbons colour' }); showWhen(g, sticksOn);
     control(g, { t: 'seg', label: 'drawn as', path: 'mode', options: [['sticks', 'Sticks'], ['ballstick', 'Ball & stick']], geom: true });
-    control(g, { t: 'seg', label: 'line', path: 'stickStyle', options: [['auto', 'Auto'], ['engraved', 'Engraved'], ['sketch', 'Sketched']], geom: true, tip: 'engraved: lines along each bond, like the ribbons · sketched: hand-drawn · auto: engraved when the ribbons are' });
+    control(g, { t: 'seg', label: 'line', path: 'stickStyle', options: [['auto', 'Auto'], ['engraved', 'Engraved'], ['sketch', 'Sketched'], ['flat', 'Flat']], geom: true, tip: 'engraved: lines along each bond, like the ribbons · sketched: hand-drawn · flat: solid colour, round joints, no outline, as PyMOL · auto: engraved when the ribbons are' });
+    control(g, { t: 'seg', label: 'outline', path: 'stickOutline', options: [['auto', 'Auto'], ['on', 'On'], ['off', 'Off']], geom: true, when: () => H.style.stickStyle === 'flat', tip: 'flat sticks inked round their silhouette · auto: when ribbons are drawn, so side chains match them' });
+    control(g, { t: 'color', label: 'hydrogen bonds', path: 'palette.hbond', unset: () => H.style.palette.hatch });
     control(g, { t: 'select', label: 'carbons by', path: 'colorBy', options: [['residue', 'residue'], ['element', 'element (grey)'], ['chain', 'chain'], ['subunit', 'subunit'], ['entity', 'molecule']], geom: true });
     control(g, { t: 'range', label: 'thickness', path: 'stickRadius', min: 0.08, max: 0.5, step: 0.01, geom: true });
+    control(g, { t: 'range', label: 'to hydrogens', path: 'stickHScale', min: 0.3, max: 1, step: 0.05, geom: true, tip: 'a bond to a hydrogen as a share of the stick, as PyMOL\'s stick_h_scale' });
     control(g, { t: 'range', label: 'atom spheres', path: 'sphereScale', min: 0, max: 1, step: 0.05, geom: true });
     const g2 = el('div'); g.append(g2); swatchRow(g2, 'elements', ['C', 'N', 'O', 'S', 'P', 'H', 'X'], true);
   }

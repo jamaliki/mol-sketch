@@ -1715,6 +1715,7 @@
     cartoonColor: "ss",
     cartoonStyle: "engraved",
     stickStyle: "auto",
+    stickOutline: "auto",
     engrave: { lines: 8, width: 0.45, strandThickness: 0.6, coilWidth: 1.25, labels: false },
     site: { sel: "", cutaway: true, quiet: 0.35, scale: 1.9 },
     surfaceColor: "subunit",
@@ -1751,6 +1752,7 @@
     },
     reps: { sticks: "hetatm and not water", cartoon: "polymer", surface: "" },
     stickRadius: 0.2,
+    stickHScale: 1,
     cartoonScale: 1,
     probe: 1.4,
     line: { width: 1.5, rough: 1.1, passes: 2, hierarchy: 0.6, pressure: 0.55, alpha: 0.85 },
@@ -1760,7 +1762,7 @@
     construction: false,
     sideChainHelper: true,
     hatch: { spacing: 5, angle: -40, density: 1.4 },
-    paper: { grain: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1 },
+    paper: { grain: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, washScale: 1, transparent: false },
     water: { layers: 3, wobble: 1, ring: 0.6, granulation: 0.5, tone: 0.6 },
     view: { fov: 20, fog: 0.5, fogStart: 0.45, light: -125 },
     boilEvery: 3,
@@ -1885,6 +1887,46 @@
         ...pen(0.05, { hierarchy: 0.3, alpha: 1 }),
         shading: 0,
         construction: false,
+        paper: { grain: 0, wash: 0 },
+        view: { fog: 0, fov: 0 }
+      }
+    },
+    flat: {
+      name: "Flat",
+      note: "PyMOL under flat light, outlined (ray_trace_mode 1): solid colours, two tones each, thin even outlines, round sticks",
+      style: {
+        fill: "flat",
+        cartoonStyle: "engraved",
+        stickStyle: "flat",
+        ...lines(0, 0.45),
+        cartoonScale: 1,
+        palette: {
+          ...PALETTES["PyMOL flat"],
+          paper: "#ffffff",
+          ink: "#000000",
+          hatch: "#000000",
+          label: "#1a1a1a",
+          charge: "#1a1a1a",
+          arrow: "#1a1a1a",
+          helix: "#e8796b",
+          sheet: "#f6c85f",
+          loop: "#eeeeee",
+          hbond: "#2b8ea3",
+          H: "#d4d4d4"
+        },
+        // (white hydrogens vanish on white paper with no outline)
+        font: "Plain sans",
+        labelSize: 22,
+        captionSize: 22,
+        stickRadius: 0.25,
+        sphereScale: 0.25,
+        stickHScale: 0.55,
+        lonePairStyle: "bold",
+        ...pen(0, { width: 1.1, hierarchy: 0, alpha: 1 }),
+        shading: 0.55,
+        construction: false,
+        site: { cutaway: false, quiet: 0 },
+        // every colour as given, nothing seen through: the site reads by its sticks
         paper: { grain: 0, wash: 0 },
         view: { fog: 0, fov: 0 }
       }
@@ -2075,7 +2117,7 @@
       boilEvery: 2,
       arrowLead: 0.2,
       view: { yaw: -18, pitch: 14, zoom: 1, panX: 0, panY: 0, fov: 20, fog: 0.5, fogStart: 0.45, spin: 0, pitchSwing: 0 },
-      style: { rough: 1.1, passes: 2, pressure: 0.55, fillWobble: 1, hatchDensity: 1.4, hierarchy: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, inkWidth: 1.5, ballScale: 1, bondWidth: 2.1, hatchSpacing: 5, hatchAngle: -40, lightAngle: -125, shading: 0.65, pencilFill: 0.55, grain: 0.6, font: "Caveat", labelSize: 19, captionSize: 24, contextAlpha: 0.5, annot: 1 },
+      style: { rough: 1.1, passes: 2, pressure: 0.55, fillWobble: 1, hatchDensity: 1.4, hierarchy: 0.6, wash: 0.3, washSeed: 1, washLife: 0.6, inkWidth: 1.5, ballScale: 1, bondWidth: 2.1, hatchSpacing: 5, hatchAngle: -40, lightAngle: -125, shading: 0.65, pencilFill: 0.55, grain: 0.6, paperClear: false, font: "Caveat", labelSize: 19, captionSize: 24, contextAlpha: 0.5, annot: 1 },
       show: { H: true, lonePairs: true, charges: true, arrows: true, labels: true, hbonds: true, context: false, caption: true, stepLabel: true, colorBonds: false, resLabels: false, valence: true, construction: false, orbitals: true, measures: true },
       palette: { ...PRESETS["PyMOL flat"] },
       rep: { detail: "auto", textureScale: "screen", mode: "sticks", fill: "flat", lonePairStyle: "dots", orbitalStyle: "auto", colorBy: "group", stickRadius: 0.2, sphereScale: 0.4, sideChainHelper: true, cartoonScale: 1, cartoonColor: "ss", cartoonStyle: "sketch", engraveLines: 8, engraveWidth: 0.45, strandThickness: 0.6, coilWidth: 1.25, ssLabels: false, probe: 1.4, surfaceScale: 1, surfaceOpacity: 1, surfaceColor: "carbon", surfEdges: 1, surfPool: 1, surfFade: 1 },
@@ -3903,10 +3945,11 @@
       const ux = (bx - ax) / L, uy = (by - ay) / L;
       const rng = mulberry32(o.seed);
       const r = o.r || 0.9, gap = o.gap || 5.5;
+      const hand2 = cfg.style.rough > 0 ? 1 : 0;
       ctx.save();
       ctx.fillStyle = rgba(o.color, o.alpha);
       for (let s = r + 1; s < L - r; s += gap) {
-        const j = (rng() - 0.5) * 0.8;
+        const j = (rng() - 0.5) * 0.8 * hand2;
         ctx.beginPath();
         ctx.arc(ax + ux * s - uy * j, ay + uy * s + ux * j, r, 0, Math.PI * 2);
         ctx.fill();
@@ -3918,12 +3961,15 @@
       if (mode === "ink") return { fill: null, hatch: P.hatch, side: P.ink, coil: null, mono: true };
       if (mode === "ink colour") return { fill: null, hatch: col, side: mix(col, P.ink, 0.3), coil: null, coilLine: true };
       if (mode === "chalk") return { fill: null, hatch: col, side: mix(col, P.paper, 0.25), coil: null, coilLine: true };
-      if (mode === "flat") return { fill: col, hatch: mix(col, P.ink, 0.6), side: mix(col, P.ink, 0.72), coil: col };
+      if (mode === "flat") {
+        const dark = mix(col, P.ink, clamp(0.3 * cfg.style.shading, 0, 1));
+        return { fill: col, back: dark, hatch: mix(col, P.ink, 0.6), side: dark, coil: col, flat: true };
+      }
       return { fill: mix(col, P.paper, 0.55), hatch: mix(col, P.ink, 0.5), side: mix(col, P.ink, 0.68), coil: mix(col, P.paper, 0.55) };
     }
     const engravedSticks = () => {
       const s = cfg.rep.stickStyle || "auto";
-      if (s === "sketch") return false;
+      if (s === "sketch" || s === "flat") return false;
       if (s === "engraved") return true;
       return cfg.rep.cartoonStyle === "engraved" && !!(scene && scene.reps && (scene.reps.cartoon || "").trim());
     };
@@ -3978,6 +4024,237 @@
       ctx.stroke();
       ctx.restore();
     }
+    const flatSticks = () => cfg.rep.stickStyle === "flat";
+    const hScale = (A, B) => A.el === "H" !== (B.el === "H") ? cfg.rep.stickHScale ?? 1 : 1;
+    const stickOutlined = () => {
+      const s = cfg.rep.stickOutline || "auto";
+      return s === "on" || s === "auto" && !!(scene && scene.reps && (scene.reps.cartoon || "").trim());
+    };
+    function drawFlatHalfStick(ctx, x0, y0, x1, y1, R, col, o) {
+      const Rm = o.Rm ?? R;
+      const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+      if (o.partial > 0 && o.partial < 1) {
+        drawHalfStick(ctx, x0, y0, x1, y1, R, col, o);
+        return;
+      }
+      const cap = o.cap !== false, ex = x1 + ux * 0.5, ey = y1 + uy * 0.5;
+      ctx.save();
+      ctx.globalAlpha = o.alpha ?? 1;
+      ctx.beginPath();
+      ctx.moveTo(x0 + nx * R, y0 + ny * R);
+      ctx.lineTo(ex + nx * Rm, ey + ny * Rm);
+      ctx.lineTo(ex - nx * Rm, ey - ny * Rm);
+      ctx.lineTo(x0 - nx * R, y0 - ny * R);
+      if (cap) ctx.arc(x0, y0, R, Math.atan2(-ny, -nx), Math.atan2(ny, nx), true);
+      ctx.closePath();
+      ctx.fillStyle = fogged(col, o.fog || 0);
+      ctx.fill();
+      if (o.outline > 0) {
+        ctx.lineWidth = o.outline;
+        ctx.strokeStyle = fogged(cfg.palette.ink, o.fog || 0);
+        ctx.lineCap = "round";
+        ctx.lineJoin = "round";
+        ctx.beginPath();
+        if (cap) {
+          ctx.moveTo(x1 + nx * Rm, y1 + ny * Rm);
+          ctx.lineTo(x0 + nx * R, y0 + ny * R);
+          ctx.arc(x0, y0, R, Math.atan2(ny, nx), Math.atan2(-ny, -nx), false);
+          ctx.lineTo(x1 - nx * Rm, y1 - ny * Rm);
+        } else {
+          const t = o.trim || [0, 0];
+          for (const [k, sg] of [[0, 1], [1, -1]]) {
+            const f2 = t[k] / L;
+            if (f2 >= 1) continue;
+            const ax = x0 + sg * nx * R, ay = y0 + sg * ny * R, bx = x1 + sg * nx * Rm, by = y1 + sg * ny * Rm;
+            ctx.moveTo(ax + (bx - ax) * f2, ay + (by - ay) * f2);
+            ctx.lineTo(bx, by);
+          }
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    function stickTrims(u, R, others) {
+      const n = [-u[1], u[0]];
+      const out = [0, 0];
+      for (const [k, sg] of [[0, 1], [1, -1]]) {
+        let t0 = 0;
+        for (const o of others) {
+          const v = o.u, m = [-v[1], v[0]];
+          const a0 = sg * R * (n[0] * v[0] + n[1] * v[1]), da = u[0] * v[0] + u[1] * v[1], b0 = sg * R * (n[0] * m[0] + n[1] * m[1]), db = u[0] * m[0] + u[1] * m[1];
+          let lo = 0, hi = Infinity;
+          const clip = (p, q) => {
+            if (Math.abs(p) < 1e-9) return q >= 0;
+            const r = q / p;
+            if (p < 0) {
+              if (r > hi) return false;
+              if (r > lo) lo = r;
+            } else {
+              if (r < lo) return false;
+              if (r < hi) hi = r;
+            }
+            return true;
+          };
+          if (clip(-da, a0 + 0.01) && clip(da, o.L - a0) && clip(-db, o.R + b0) && clip(db, o.R - b0) && lo <= 1e-6 && hi > t0) t0 = hi;
+        }
+        out[k] = t0;
+      }
+      return out;
+    }
+    function drawFlatJoint(ctx, x, y, R, col, legs, o) {
+      ctx.save();
+      ctx.globalAlpha = o.alpha ?? 1;
+      const w = o.outline;
+      ctx.beginPath();
+      ctx.arc(x, y, Math.max(0, R - w / 2), 0, Math.PI * 2);
+      ctx.fillStyle = fogged(col, o.fog || 0);
+      ctx.fill();
+      const TAU = 2 * Math.PI, cov = legs.map((l) => {
+        const t = Math.atan2(l.u[1], l.u[0]), h = Math.asin(Math.min(1, l.R / R));
+        return [t - h, t + h];
+      }).sort((p, q) => p[0] - q[0]);
+      const merged = [];
+      for (const c of cov) {
+        const m = merged[merged.length - 1];
+        if (m && c[0] <= m[1]) m[1] = Math.max(m[1], c[1]);
+        else merged.push(c.slice());
+      }
+      if (merged.length > 1) {
+        const f2 = merged[0], l = merged[merged.length - 1];
+        if (l[1] - TAU >= f2[0]) {
+          f2[0] = l[0] - TAU;
+          f2[1] = Math.max(f2[1], l[1] - TAU);
+          merged.pop();
+        }
+      }
+      ctx.beginPath();
+      let any = false;
+      for (let i = 0; i < merged.length; i++) {
+        const s0 = merged[i][1];
+        let s1 = merged[(i + 1) % merged.length][0] + (i + 1 === merged.length ? TAU : 0);
+        if (merged.length === 1) s1 = merged[0][0] + TAU;
+        if (s1 - s0 > 1e-3) {
+          ctx.moveTo(x + Math.cos(s0) * R, y + Math.sin(s0) * R);
+          ctx.arc(x, y, R, s0, s1, false);
+          any = true;
+        }
+      }
+      if (any) {
+        ctx.lineWidth = w;
+        ctx.strokeStyle = fogged(cfg.palette.ink, o.fog || 0);
+        ctx.lineCap = "round";
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    function drawValenceGaps(ctx, x0, y0, x1, y1, R, extra, o) {
+      const dx = x1 - x0, dy = y1 - y0, L = Math.hypot(dx, dy), s0 = R * 1.15;
+      if (L < s0 + 1) return;
+      const ux = dx / L, uy = dy / L, nx = -uy, ny = ux;
+      const triple = extra > 1.01, g2 = (triple ? 0.34 : 0.42) * R, lane = triple ? (2 * R - 2 * g2) / 3 : 0, offs = triple ? [(lane + g2) / 2, -(lane + g2) / 2] : [0];
+      const w = o.outline || 0;
+      ctx.save();
+      ctx.lineCap = "round";
+      offs.forEach((off, k) => {
+        const al = (o.alpha ?? 1) * (triple ? k ? Math.min(1, extra - 1) : 1 : Math.min(1, extra));
+        if (al <= 0.01) return;
+        ctx.globalAlpha = al;
+        const ax = x0 + ux * s0 + nx * off, ay = y0 + uy * s0 + ny * off, bx = x1 + ux * 0.6 + nx * off, by = y1 + uy * 0.6 + ny * off;
+        if (w > 0) {
+          ctx.lineWidth = g2 + 2 * w;
+          ctx.strokeStyle = fogged(cfg.palette.ink, o.fog || 0);
+          ctx.beginPath();
+          ctx.moveTo(ax, ay);
+          ctx.lineTo(bx, by);
+          ctx.stroke();
+        }
+        ctx.lineWidth = g2;
+        ctx.strokeStyle = cfg.palette.paper;
+        ctx.beginPath();
+        ctx.moveTo(ax, ay);
+        ctx.lineTo(bx, by);
+        ctx.stroke();
+      });
+      ctx.restore();
+    }
+    function drawChargeBadge(ctx, x, y, rb, text, col, alpha) {
+      ctx.save();
+      ctx.globalAlpha *= alpha;
+      const paper2 = cfg.palette.paper;
+      ctx.beginPath();
+      ctx.arc(x, y, rb + Math.max(1.2, 0.12 * rb), 0, Math.PI * 2);
+      ctx.fillStyle = paper2;
+      ctx.fill();
+      ctx.beginPath();
+      ctx.arc(x, y, rb, 0, Math.PI * 2);
+      ctx.fillStyle = col;
+      ctx.fill();
+      if (text === "+" || text === "\u2212" || text === "-") {
+        const s = rb * 0.52;
+        ctx.lineWidth = Math.max(1.4, rb * 0.24);
+        ctx.lineCap = "round";
+        ctx.strokeStyle = paper2;
+        ctx.beginPath();
+        ctx.moveTo(x - s, y);
+        ctx.lineTo(x + s, y);
+        if (text === "+") {
+          ctx.moveTo(x, y - s);
+          ctx.lineTo(x, y + s);
+        }
+        ctx.stroke();
+      } else {
+        ctx.font = `700 ${Math.round(rb * (text.length > 1 ? 0.95 : 1.2))}px "IBM Plex Sans", system-ui, sans-serif`;
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = paper2;
+        ctx.fillText(text, x, y + 0.5);
+      }
+      ctx.restore();
+    }
+    function chargeAngle(a, st, pos, proj) {
+      const p = pos[a.id], obst = [];
+      for (const b of st.bonds) {
+        if (!(b.alpha > 0.3)) continue;
+        const j = b.a === a.id ? b.b : b.b === a.id ? b.a : null;
+        if (j === null || !pos[j]) continue;
+        obst.push(Math.atan2(pos[j].y - p.y, pos[j].x - p.x));
+      }
+      for (const lp of a.lps || []) {
+        const d = proj.dir2(lp.dir);
+        if (Math.hypot(d[0], d[1]) > 0.2) obst.push(Math.atan2(d[1], d[0]));
+      }
+      const apart = (u, v) => {
+        let x = u - v;
+        while (x > Math.PI) x -= 2 * Math.PI;
+        while (x < -Math.PI) x += 2 * Math.PI;
+        return Math.abs(x);
+      };
+      let best = -Math.PI / 4, score = -Infinity;
+      for (let k = 0; k < 72; k++) {
+        const f2 = -Math.PI + k * Math.PI / 36;
+        const clear = obst.length ? Math.min(...obst.map((o) => apart(f2, o))) : Math.PI;
+        const sc = Math.min(clear, 0.6 * Math.PI) - 0.12 * apart(f2, -Math.PI / 4);
+        if (sc > score) {
+          score = sc;
+          best = f2;
+        }
+      }
+      return best;
+    }
+    function drawFlatDisc(ctx, x, y, r, col, o) {
+      ctx.save();
+      ctx.globalAlpha = o.alpha ?? 1;
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = fogged(col, o.fog || 0);
+      ctx.fill();
+      if (o.outline > 0) {
+        ctx.lineWidth = o.outline;
+        ctx.strokeStyle = fogged(cfg.palette.ink, o.fog || 0);
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
     let SITE = null;
     function siteFade(cx, cy, z) {
       if (!SITE) return 1;
@@ -3999,6 +4276,23 @@
         nb[b.a] = (nb[b.a] || 0) + 1;
         nb[b.b] = (nb[b.b] || 0) + 1;
       }
+      const OUT = flatSticks() && stickOutlined() ? cfg.style.inkWidth * LW.outer : 0, legs = {};
+      if (OUT) for (const b of bonds) {
+        const A = inSet[b.a], B = inSet[b.b];
+        if (!A || !B || b.order === 0 || b.partial > 0 && b.partial < 1) continue;
+        const pa = pos[b.a], pb = pos[b.b];
+        const L = Math.hypot(pb.x - pa.x, pb.y - pa.y);
+        if (L < 1e-6) continue;
+        const ks = (A._site && B._site ? cfg.rep.siteScale || 1.9 : 1) * hScale(A, B), u = [(pb.x - pa.x) / L, (pb.y - pa.y) / L];
+        (legs[b.a] = legs[b.a] || []).push({ b, u, L: L / 2, R: R0 * pa.d * ks });
+        (legs[b.b] = legs[b.b] || []).push({ b, u: [-u[0], -u[1]], L: L / 2, R: R0 * pb.d * ks });
+      }
+      const flatEnd = (atom, b, R) => {
+        if (!OUT) return {};
+        const lg = legs[atom.id] || [], own = lg.find((l) => l.b === b), others = lg.filter((l) => l.b !== b);
+        const cap = !others.length && !atom.sphere;
+        return { outline: OUT, cap, trim: !cap && own ? stickTrims(own.u, R, others) : null };
+      };
       for (const b of bonds) {
         const A = inSet[b.a], B = inSet[b.b];
         if (!A || !B) continue;
@@ -4011,7 +4305,7 @@
           items.push({ z, draw: (ctx) => {
             const ra = atomDrawR(A, proj) * pa.d, rb = atomDrawR(B, proj) * pb.d;
             const dx2 = pb.x - pa.x, dy2 = pb.y - pa.y, L2 = Math.hypot(dx2, dy2) || 1;
-            drawHBond(ctx, pa.x + dx2 / L2 * (ra + 2), pa.y + dy2 / L2 * (ra + 2), pb.x - dx2 / L2 * (rb + 2), pb.y - dy2 / L2 * (rb + 2), { seed, color: fogged(luminance(P.paper) > 0.5 ? P.hatch : P.ink, fog), alpha: 0.8 * b.alpha * (1 - fog * cfg.view.fog * 0.5), r: R0 * 0.5 * ((pa.d + pb.d) / 2), gap: R0 * 1.5 });
+            drawHBond(ctx, pa.x + dx2 / L2 * (ra + 2), pa.y + dy2 / L2 * (ra + 2), pb.x - dx2 / L2 * (rb + 2), pb.y - dy2 / L2 * (rb + 2), { seed, color: fogged(P.hbond || (luminance(P.paper) > 0.5 ? P.hatch : P.ink), fog), alpha: (flatSticks() ? 1 : 0.8) * b.alpha * (1 - fog * cfg.view.fog * 0.5), r: R0 * 0.5 * ((pa.d + pb.d) / 2), gap: R0 * 1.5 });
           } });
           continue;
         }
@@ -4038,7 +4332,7 @@
           const cr = ux * sy - uy * sx;
           side = cr >= 0 ? 1 : -1;
         }
-        if (isInk() && A.el !== B.el) {
+        if (isInk() && A.el !== B.el && !flatSticks()) {
           const zm = (pa.z + pb.z) / 2;
           items.push({ z: zm - 15e-4, draw: (ctx) => {
             const Rm = R0 * (pa.d + pb.d) / 2;
@@ -4050,29 +4344,33 @@
           } });
         }
         for (const [near, far, atom, half] of [[pa, pb, A, 0], [pb, pa, B, 1]]) {
-          const site = !!(A._site && B._site), ks = site ? cfg.rep.siteScale || 1.9 : 1;
+          const site = !!(A._site && B._site), ks = (site ? cfg.rep.siteScale || 1.9 : 1) * hScale(A, B);
           items.push({ z: near.z - 2e-3, draw: (ctx) => {
             const col = atomColor(atom);
             const R = R0 * near.d * ks, Rm = R0 * (near.d + far.d) / 2 * ks;
             if (engravedSticks()) drawEngravedHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha, site, cap: (nb[atom.id] || 0) === 1 && !atom.sphere });
+            else if (flatSticks()) drawFlatHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, ...flatEnd(atom, b, R) });
             else drawHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, passes: lowDetail ? 1 : void 0 });
-            if (extra > 0.01 && !(b.partial > 0 && b.partial < 1)) {
+            if (extra > 0.01 && !(b.partial > 0 && b.partial < 1) && flatSticks()) drawValenceGaps(ctx, near.x, near.y, mx, my, R, extra, { alpha: b.alpha, fog: near.fog, outline: OUT });
+            else if (extra > 0.01 && !(b.partial > 0 && b.partial < 1)) {
               const frac = Math.min(1, extra);
               const off = R0 * 1.95 * near.d * side * frac;
               const r2 = R0 * 0.42 * near.d * (0.5 + 0.5 * frac);
               const sh = 0.18;
               const ax = near.x + ux * L * sh * (half ? -1 : 1), ay = near.y + uy * L * sh * (half ? -1 : 1);
               if (engravedSticks()) drawEngravedHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2 * ks, col, { Rm: r2 * ks, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha * frac, site, inner: true });
+              else if (flatSticks()) drawFlatHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2 * ks, col, { Rm: r2 * ks, fog: near.fog, alpha: b.alpha * frac, outline: OUT });
               else drawHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, seed: seed + half * 3 + 101, fog: near.fog, d: near.d, alpha: b.alpha * frac, partial: 0, passes: 1, noShadow: true, inner: true });
               if (extra > 1.01) {
                 const off2 = -off;
-                drawHalfStick(ctx, ax - uy * off2, ay + ux * off2, mx - uy * off2, my + ux * off2, r2, col, { Rm: r2, seed: seed + half * 3 + 202, fog: near.fog, d: near.d, alpha: b.alpha * (extra - 1), partial: 0, passes: 1, noShadow: true });
+                if (flatSticks()) drawFlatHalfStick(ctx, ax - uy * off2, ay + ux * off2, mx - uy * off2, my + ux * off2, r2 * ks, col, { Rm: r2 * ks, fog: near.fog, alpha: b.alpha * (extra - 1), outline: OUT });
+                else drawHalfStick(ctx, ax - uy * off2, ay + ux * off2, mx - uy * off2, my + ux * off2, r2, col, { Rm: r2, seed: seed + half * 3 + 202, fog: near.fog, d: near.d, alpha: b.alpha * (extra - 1), partial: 0, passes: 1, noShadow: true });
               }
             }
           } });
         }
       }
-      if (SITE) {
+      if (SITE && !OUT) {
         const ks = cfg.rep.siteScale || 1.9;
         const sb = bonds.filter((b) => b.order !== 0 && inSet[b.a] && inSet[b.b] && inSet[b.a]._site && inSet[b.b]._site);
         const sa = atoms.filter((a) => a._site);
@@ -4109,9 +4407,18 @@
         const col = atomColor(a);
         if (a.sphere || cnt === 0) {
           const r = (cnt === 0 && !a.sphere ? R0 * 1.7 : atomDrawR(a, proj)) * p.d;
+          if (flatSticks()) {
+            items.push({ z: p.z + 3e-3, draw: (ctx) => drawFlatDisc(ctx, p.x, p.y, r, col, { fog: p.fog, alpha: a.alpha, outline: OUT }) });
+            continue;
+          }
           items.push({ z: p.z + 3e-3, draw: (ctx) => drawFlatBall(ctx, p.x, p.y, r, col, { seed, el: a.el, fog: p.fog, d: p.d, alpha: a.alpha, passes: lowDetail ? 1 : void 0 }) });
         } else if (cnt >= 2) {
           const R = R0 * p.d * (a._site ? cfg.rep.siteScale || 1.9 : 1);
+          if (flatSticks()) {
+            const lg = legs[a.id] || [];
+            if (OUT && lg.length >= 2) items.push({ z: p.z + 1e-3, draw: (ctx) => drawFlatJoint(ctx, p.x, p.y, R, col, lg, { outline: OUT, fog: p.fog, alpha: a.alpha }) });
+            continue;
+          }
           if (engravedSticks()) {
             const site = !!a._site;
             items.push({ z: p.z + 1e-3, draw: (ctx) => {
@@ -5752,6 +6059,53 @@
       }
       return traces.filter((t) => t.atoms.length >= 2);
     }
+    function ribbonElements(A) {
+      const n = A.length;
+      const ss = A.map((a) => a.nucleic ? "L" : a.ss === "H" || a.ss === "E" ? a.ss : "L");
+      const runs = [];
+      for (let i = 0; i < n; ) {
+        let j = i;
+        while (j + 1 < n && ss[j + 1] === ss[i]) j++;
+        runs.push({ t: ss[i], s: i, e: j });
+        i = j + 1;
+      }
+      for (const r of runs) if (r.t === "H" && r.e - r.s < 2 || r.t === "E" && r.e - r.s < 1) r.t = "L";
+      const el = [];
+      for (const r of runs) {
+        const last = el[el.length - 1];
+        if (last && last.t === "L" && r.t === "L") last.e = r.e;
+        else el.push({ ...r });
+      }
+      for (let k = 0; k < el.length - 1; k++) el[k].e = el[k + 1].s;
+      return el;
+    }
+    function priestle(pts, steps) {
+      for (let s = 0; s < steps; s++) {
+        const tmp = pts.map((p) => p.slice());
+        for (let i = 1; i < pts.length - 1; i++) {
+          const a = pts[i - 1], b = pts[i + 1], c = pts[i];
+          tmp[i] = [((a[0] + b[0]) / 2 + c[0]) / 2, ((a[1] + b[1]) / 2 + c[1]) / 2, ((a[2] + b[2]) / 2 + c[2]) / 2];
+        }
+        for (let i = 1; i < pts.length - 1; i++) pts[i] = tmp[i];
+      }
+    }
+    function ribbonAnchors(atoms, sel) {
+      const out = /* @__PURE__ */ new Map();
+      for (const tr of backboneTraces(atoms, sel)) {
+        const A = tr.atoms, n = A.length;
+        if (cfg.rep.cartoonStyle === "engraved") {
+          for (const e of ribbonElements(A)) {
+            const len = e.e - e.s + 1;
+            if (len < 2 || e.t === "H" && len >= 3) continue;
+            const p = [];
+            for (let i = e.s; i <= e.e; i++) p.push(A[i].pos.slice());
+            priestle(p, 2);
+            for (let k = 1; k < len - 1; k++) out.set(A[e.s + k].id, p[k]);
+          }
+        } else for (let i = 1; i < n - 1; i++) if (A[i].ss === "E") out.set(A[i].id, [0, 1, 2].map((k) => 0.25 * A[i - 1].pos[k] + 0.5 * A[i].pos[k] + 0.25 * A[i + 1].pos[k]));
+      }
+      return out;
+    }
     function catmull(P, i, t) {
       const p0 = P[Math.max(0, i - 1)], p1 = P[i], p2 = P[Math.min(P.length - 1, i + 1)], p3 = P[Math.min(P.length - 1, i + 2)];
       const t2 = t * t, t3 = t2 * t;
@@ -5805,13 +6159,6 @@
         const h1 = 6 * t2 - 6 * t, h2 = 3 * t2 - 4 * t + 1, h3 = -6 * t2 + 6 * t, h4 = 3 * t2 - 2 * t;
         return [0, 1, 2].map((k) => h1 * p0[k] + h2 * v0[k] + h3 * p1[k] + h4 * v1[k]);
       };
-      const priestle = (pts, steps) => {
-        for (let s = 0; s < steps; s++) {
-          const tmp = pts.map((p) => p.slice());
-          for (let i = 1; i < pts.length - 1; i++) tmp[i] = mid2(mid2(pts[i - 1], pts[i + 1]), pts[i]);
-          for (let i = 1; i < pts.length - 1; i++) pts[i] = tmp[i];
-        }
-      };
       const nz = (n) => proj.rot([n[0] + FIT.cx, n[1] + FIT.cy, n[2] + FIT.cz])[2];
       const P2 = (p) => {
         const q = proj.proj(p);
@@ -5845,15 +6192,18 @@
         ctx.moveTo(a[0], a[1]);
         ctx.lineTo(b[0], b[1]);
       };
-      const face = (q, kind, znorm, back, edges, alpha, col) => {
+      const face = (q, kind, znorm, back, edges, alpha, col, last) => {
         const T = tone(col || P.loop);
         const z = Math.max(q[0][2], q[1][2], q[2][2], q[3][2]);
-        alpha *= siteFade((q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4, z);
+        const sf = siteFade((q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4, z);
         const d = (q[0][3] + q[1][3] + q[2][3] + q[3][3]) / 4, fog = (q[0][4] + q[2][4]) / 2, fk = 1 - fog * cfg.view.fog;
+        const quiet = T.flat && SITE ? 0.55 * SITE.quiet : 0;
+        alpha *= quiet ? sf / (1 - quiet) : sf;
+        const qc = (c) => quiet ? mix(c, P.paper, quiet) : c;
         drawItem(z, alpha, (ctx) => {
-          const ink = fogged(P.ink, fog), hatch = fogged(T.hatch, fog), side = fogged(T.side, fog);
-          const fl = kind === "plain" ? T.coil : T.fill;
-          let fillC = fl ? fogged(fl, fog) : paperFill();
+          const ink = qc(fogged(P.ink, fog)), hatch = fogged(T.hatch, fog), side = qc(fogged(T.side, fog));
+          const fl = kind === "plain" ? T.coil : back && T.back ? T.back : T.fill;
+          let fillC = fl ? qc(fogged(fl, fog)) : paperFill();
           const wS = (Math.hypot(q[3][0] - q[0][0], q[3][1] - q[0][1]) + Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1])) / 2;
           let hl = null;
           if (kind === "hatch" && N > 0) {
@@ -5868,19 +6218,34 @@
             if (lost > 0.02 && !fl) fillC = fogged(mix(P.paper, T.coilLine ? col : T.hatch, (T.coilLine ? 0.55 : 0.3) * lost), fog);
             hl = { lw, ks };
           }
-          poly(ctx, q);
-          if (kind === "side") {
-            ctx.fillStyle = side;
+          if (T.flat) {
+            let f2 = q;
+            const W = Math.hypot(q[2][0] - q[1][0], q[2][1] - q[1][1]), inset = 0.5 * wInk + 0.25;
+            const La = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]), Lb = Math.hypot(q[2][0] - q[3][0], q[2][1] - q[3][1]);
+            if (!(edges[1] || last || alpha < 1) && W > 2 * inset + 0.5 && La > 1e-6 && Lb > 1e-6) {
+              const e = Math.min(3, 0.5 * Math.min(La, Lb));
+              const ia = [q[1][0] + (q[2][0] - q[1][0]) / W * inset, q[1][1] + (q[2][1] - q[1][1]) / W * inset], ib = [q[2][0] + (q[1][0] - q[2][0]) / W * inset, q[2][1] + (q[1][1] - q[2][1]) / W * inset];
+              const ua = [(q[1][0] - q[0][0]) / La * e, (q[1][1] - q[0][1]) / La * e], ub = [(q[2][0] - q[3][0]) / Lb * e, (q[2][1] - q[3][1]) / Lb * e];
+              f2 = [q[0], q[1], ia, [ia[0] + ua[0], ia[1] + ua[1]], [ib[0] + ub[0], ib[1] + ub[1]], ib, q[2], q[3]];
+            }
+            poly(ctx, f2);
+            ctx.fillStyle = kind === "side" ? side : fillC;
             ctx.fill();
-            ctx.lineWidth = 0.5;
-            ctx.strokeStyle = side;
-            ctx.stroke();
           } else {
-            ctx.fillStyle = fillC;
-            ctx.fill();
-            ctx.lineWidth = 0.6;
-            ctx.strokeStyle = fillC;
-            ctx.stroke();
+            poly(ctx, q);
+            if (kind === "side") {
+              ctx.fillStyle = side;
+              ctx.fill();
+              ctx.lineWidth = 0.5;
+              ctx.strokeStyle = side;
+              ctx.stroke();
+            } else {
+              ctx.fillStyle = fillC;
+              ctx.fill();
+              ctx.lineWidth = 0.6;
+              ctx.strokeStyle = fillC;
+              ctx.stroke();
+            }
           }
           const la = Math.hypot(q[1][0] - q[0][0], q[1][1] - q[0][1]) + Math.hypot(q[2][0] - q[3][0], q[2][1] - q[3][1]);
           if (kind === "plain" && T.coilLine && la > 0.05) {
@@ -5932,22 +6297,7 @@
         const A = tr.atoms, n = A.length;
         const pts = A.map((a) => a.pos.slice());
         const rc = (i, t) => ownColor(A[i]) || (colourMode === "rainbow" ? mode === "ink colour" ? hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.9, 0.8) : hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.75, 0.95) : colourMode === "carbon" ? carbonColor(A[i]) : colourMode === "chain" ? chainColor(A[i]) : ssCol(t));
-        const ss = A.map((a) => a.nucleic ? "L" : a.ss === "H" || a.ss === "E" ? a.ss : "L");
-        const runs = [];
-        for (let i = 0; i < n; ) {
-          let j = i;
-          while (j + 1 < n && ss[j + 1] === ss[i]) j++;
-          runs.push({ t: ss[i], s: i, e: j });
-          i = j + 1;
-        }
-        for (const r of runs) if (r.t === "H" && r.e - r.s < 2 || r.t === "E" && r.e - r.s < 1) r.t = "L";
-        const el = [];
-        for (const r of runs) {
-          const last = el[el.length - 1];
-          if (last && last.t === "L" && r.t === "L") last.e = r.e;
-          else el.push({ ...r });
-        }
-        for (let k = 0; k < el.length - 1; k++) el[k].e = el[k + 1].s;
+        const el = ribbonElements(A);
         for (const e of el) {
           const idx = [];
           for (let i = e.s; i <= e.e; i++) idx.push(i);
@@ -6002,7 +6352,7 @@
             const fold = (j) => j > 0 && j < zs.length && zs[j - 1] < 0 !== zs[j] < 0;
             for (let j = 0; j < zs.length; j++) {
               const zn = zs[j];
-              face([q[j][0], q[j + 1][0], q[j + 1][1], q[j][1]], "hatch", zn, zn < 0, [1, fold(j + 1), 1, fold(j)], alpha, rc(secs[j].r, "H"));
+              face([q[j][0], q[j + 1][0], q[j + 1][1], q[j][1]], "hatch", zn, zn < 0, [1, fold(j + 1), 1, fold(j)], alpha, rc(secs[j].r, "H"), j === zs.length - 1 || rc(secs[j + 1].r, "H") !== rc(secs[j].r, "H"));
             }
             nH++;
             labels.push({ pos: p[Math.floor(m / 2)], txt: "\u03B1" + nH, alpha });
@@ -6064,10 +6414,11 @@
               const nT = norm3(add(c0.n, c1.n)), nS = norm3(add(c0.s, c1.s));
               const zT = nz(nT), zS = nz(nS);
               const fc = rc(c0.r, "E");
-              if (zT >= 0) face([q0[0], q1[0], q1[3], q0[3]], isStep ? "bare" : "hatch", zT, false, [1, 0, 1, j === 0], alpha, fc);
-              else face([q0[1], q1[1], q1[2], q0[2]], isStep ? "bare" : "hatch", -zT, false, [1, 0, 1, j === 0], alpha, fc);
-              if (zS >= 0) face([q0[0], q1[0], q1[1], q0[1]], "side", zS, false, [1, 0, 1, j === 0], alpha, fc);
-              else face([q0[3], q1[3], q1[2], q0[2]], "side", -zS, false, [1, 0, 1, j === 0], alpha, fc);
+              const end = j === secs.length - 2 || rc(c1.r, "E") !== fc;
+              if (zT >= 0) face([q0[0], q1[0], q1[3], q0[3]], isStep ? "bare" : "hatch", zT, false, [1, 0, 1, j === 0], alpha, fc, end);
+              else face([q0[1], q1[1], q1[2], q0[2]], isStep ? "bare" : "hatch", -zT, false, [1, 0, 1, j === 0], alpha, fc, end);
+              if (zS >= 0) face([q0[0], q1[0], q1[1], q0[1]], "side", zS, false, [1, 0, 1, j === 0], alpha, fc, end);
+              else face([q0[3], q1[3], q1[2], q0[2]], "side", -zS, false, [1, 0, 1, j === 0], alpha, fc, end);
             }
             {
               const c = secs[0], q0 = q[0];
@@ -6104,7 +6455,7 @@
               Rr.push([pr[j][0] + ty / l * hw, pr[j][1] - tx / l * hw, pr[j][2], pr[j][3], pr[j][4]]);
             }
             const atEnd = (j, end) => end === 0 ? j === 0 && !first : j === pr.length - 2 && !last;
-            for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], ct));
+            for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], ct), j === pr.length - 2 || rc(pr_i[j + 1], ct) !== rc(pr_i[j], ct));
             if (ct === "N" && rungs) for (let k = 0; k < m; k++) {
               const a = A[idx[k]], e2 = baseEnd(a.group);
               if (!e2 || rungDone.has(a.group)) continue;
@@ -6745,14 +7096,14 @@
       ctx.restore();
     }
     let DOTK = 1;
-    function electronDots(ctx, x, y, dx, dy, n, s, col, alpha, gap) {
+    function electronDots(ctx, x, y, dx, dy, n, s, col, alpha, gap, rad) {
       const L = Math.hypot(dx, dy);
       let px = 0, py = 1;
       if (L > 1e-3) {
         px = -dy / L;
         py = dx / L;
       }
-      const r = 2.6 * s * DOTK, g2 = gap ?? 3.8 * s * DOTK;
+      const r = rad ?? 2.6 * s * DOTK, g2 = gap ?? 3.8 * s * DOTK;
       const at = n >= 2 ? [-g2, g2] : [0];
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -7339,13 +7690,21 @@
       const P = cfg.palette, S = cfg.style, SH = cfg.show;
       ctx.save();
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-      const pc = paper(W, H, dpr, boil);
-      ctx.drawImage(pc, 0, 0, W, H);
-      try {
-        PAPER_FILL = ctx.createPattern(pc, "no-repeat");
-        if (PAPER_FILL && PAPER_FILL.setTransform) PAPER_FILL.setTransform(new DOMMatrix().scale(1 / dpr));
-      } catch (e) {
+      if (S.grain <= 0 && S.wash <= 0) {
         PAPER_FILL = null;
+        if (!S.paperClear) {
+          ctx.fillStyle = P.paper;
+          ctx.fillRect(0, 0, W, H);
+        }
+      } else {
+        const pc = paper(W, H, dpr, boil);
+        if (!S.paperClear) ctx.drawImage(pc, 0, 0, W, H);
+        try {
+          PAPER_FILL = ctx.createPattern(pc, "no-repeat");
+          if (PAPER_FILL && PAPER_FILL.setTransform) PAPER_FILL.setTransform(new DOMMatrix().scale(1 / dpr));
+        } catch (e) {
+          PAPER_FILL = null;
+        }
       }
       if (SH.context) drawContext(ctx, proj, st, seedBase);
       const pos = {};
@@ -7391,6 +7750,14 @@
         if (cfg.rep.sideChainHelper && cartoonRes.has((a.chain || "") + "/" + a.resi) && (a.name === "N" || a.name === "C" || a.name === "O" || a.name === "OXT")) return false;
         return true;
       });
+      if (cartoonOn && cfg.rep.sideChainHelper && stickAtoms.some((a) => a.name === "CA" && !a.nucleic && cartoonRes.has((a.chain || "") + "/" + a.resi))) {
+        const anchors = ribbonAnchors(st.atoms, selC);
+        for (const a of stickAtoms) {
+          if (a.name !== "CA" || a.nucleic) continue;
+          const q = anchors.get(a.id);
+          if (q) pos[a.id] = proj.proj(q);
+        }
+      }
       const stickIds = new Set(stickAtoms.map((a) => a.id));
       const stickBonds = st.bonds.filter((b) => stickIds.has(b.a) && stickIds.has(b.b));
       const surfAtoms = reps.surface && reps.surface.trim() ? st.atoms.filter((a) => selF(a) && (SH.H || a.el !== "H")) : [];
@@ -7417,12 +7784,20 @@
         const p = pos[a.id];
         const r = atomDrawR(a, proj) * p.d;
         const seed = seedBase + strHash(a.id);
+        const badge = SH.charges && a.charges.length && flatSticks() ? chargeAngle(a, st, pos, proj) : null;
         if (SH.lonePairs && !lpLobes && a.lps.length && cfg.rep.lonePairStyle === "bold") {
           const taken = st._lpTaken[a.id];
           const an = S.annot || 1;
           const NB = st._nb || (st._nb = neighbours(st));
           const fixed = (NB[a.id] || []).filter((j) => pos[j]).map((j) => Math.atan2(pos[j].y - p.y, pos[j].x - p.x));
-          if (a.charges.length) fixed.push(-Math.PI / 4);
+          if (a.charges.length) fixed.push(badge ?? -Math.PI / 4);
+          const flatLp = flatSticks();
+          if (flatLp) for (const b of st.bonds) {
+            if (b.order !== 0 || !(b.alpha > 0.3)) continue;
+            const j = b.a === a.id ? b.b : b.b === a.id ? b.a : null;
+            if (j !== null && pos[j]) fixed.push(Math.atan2(pos[j].y - p.y, pos[j].x - p.x));
+          }
+          const clear = flatLp ? 0.85 : 0.6;
           const dif = (u, v) => {
             let x = u - v;
             while (x > Math.PI) x -= 2 * Math.PI;
@@ -7433,7 +7808,7 @@
           for (let it = 0; it < 24; it++) {
             for (const q of ps) for (const f2 of fixed) {
               const x = dif(q.ang, f2);
-              if (Math.abs(x) < 0.6) q.ang += (x >= 0 ? 1 : -1) * (0.6 - Math.abs(x)) * 0.5;
+              if (Math.abs(x) < clear) q.ang += (x >= 0 ? 1 : -1) * (clear - Math.abs(x)) * 0.5;
             }
             for (let m = 0; m < ps.length; m++) for (let n = m + 1; n < ps.length; n++) {
               const x = dif(ps[m].ang, ps[n].ang);
@@ -7444,12 +7819,13 @@
               }
             }
           }
+          const fs = flatSticks() ? cfg.rep.stickRadius * proj.pxPerA * p.d * an : 0, dot = fs ? Math.max(2, 0.4 * fs) : null, spread = fs ? Math.max(3, 0.55 * fs) : null;
           for (const q of ps) {
             const ux = Math.cos(q.ang), uy = Math.sin(q.ang);
-            const off = r + (4.5 + 2.6 * DOTK) * an;
+            const off = fs ? r + 0.5 * fs + dot : r + (4.5 + 2.6 * DOTK) * an;
             const x = p.x + ux * off, y = p.y + uy * off;
             (st._lpAt[a.id] = st._lpAt[a.id] || [])[q.i] = [x, y];
-            electronDots(ctx, x, y, ux, uy, 2, an, P.ink, a.alpha * q.lp.alpha);
+            electronDots(ctx, x, y, ux, uy, 2, an, P.ink, a.alpha * q.lp.alpha, spread, dot);
           }
         } else if (SH.lonePairs && !lpLobes && a.lps.length) {
           ctx.save();
@@ -7472,7 +7848,13 @@
           });
           ctx.restore();
         }
-        if (SH.charges && a.charges.length) {
+        if (badge !== null) {
+          const an = S.annot || 1, rb = Math.max(8, 1.45 * cfg.rep.stickRadius * proj.pxPerA * p.d) * an, off = r + 1.35 * rb, ux = Math.cos(badge), uy = Math.sin(badge);
+          ctx.save();
+          ctx.globalAlpha = a.alpha;
+          for (const c of a.charges) drawChargeBadge(ctx, p.x + ux * off, p.y + uy * off, rb, c.text, P.charge, c.alpha);
+          ctx.restore();
+        } else if (SH.charges && a.charges.length) {
           ctx.save();
           ctx.globalAlpha = a.alpha;
           const an = S.annot || 1;
@@ -8907,6 +9289,7 @@
         shading: style.shading,
         pencilFill: style.pencilFill,
         grain: style.paper.grain,
+        paperClear: !!style.paper.transparent,
         font: style.font,
         labelSize: style.labelSize,
         captionSize: style.captionSize,
@@ -8922,12 +9305,14 @@
         fill: style.fill,
         colorBy: style.colorBy,
         stickRadius: style.stickRadius,
+        stickHScale: style.stickHScale ?? 1,
         sphereScale: style.sphereScale,
         sideChainHelper: style.sideChainHelper,
         cartoonScale: style.cartoonScale,
         cartoonColor: style.cartoonColor,
         cartoonStyle: style.cartoonStyle || "sketch",
         stickStyle: style.stickStyle || "auto",
+        stickOutline: style.stickOutline || "auto",
         lonePairStyle: style.lonePairStyle || "dots",
         orbitalStyle: style.orbitalStyle || "auto",
         engraveLines: style.engrave?.lines ?? 8,

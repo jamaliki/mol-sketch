@@ -170,6 +170,47 @@ def test_svg_is_vector_and_valid(tmp_path):
     assert "mix-blend-mode" in ms.load(EX / "1A8O.pdb").look("watercolour").svg((320, 240))   # watercolour multiplies
 
 
+def test_flat_svg_is_shapes_in_the_colours_given():
+    """the flat look as an SVG: shapes only (no pictures, the paper one rectangle), and every ribbon painted in a colour it
+    was given or that colour's one darker shade, so another program can recolour it shape by shape"""
+    import re
+    given = {"helix": "#3366aa", "sheet": "#ddaa33", "loop": "#f0f0f0"}
+    s = ms.load(EX / "trypsin_active_site.json").look("flat").set(palette=given).site("resi 57+102+195").svg((640, 480))
+    assert "<image" not in s and s.count("<rect") == 1
+    fills = set(re.findall(r'fill="(#[0-9a-f]{6})"', s))
+    assert set(given.values()) <= fills
+    assert len(fills) < 24                                   # a few colours, two tones each, not a gradient of mixes
+
+
+def test_transparent_paper_is_left_out():
+    fig = ms.load(EX / "1A8O.pdb").look("flat").set(**{"paper.transparent": True})
+    a = fig.render(SMALL).to_numpy()
+    assert a[0, 0, 3] == 0 and a[..., 3].max() == 255        # nothing laid down where nothing is drawn
+    assert "<rect" not in fig.svg(SMALL)
+
+
+def test_flat_sticks_are_outlined_with_ribbons():
+    """stick_outline 'auto': flat sticks are inked round when ribbons are drawn, and plain on their own"""
+    ink = 'stroke="#000000"'
+    mech = ms.load(EX / "mechanism.json").look("flat")
+    assert ms.default_style()["stick_outline"] == "auto" and mech.style["stick_style"] == "flat"
+    assert ink not in mech.svg(SMALL)
+    assert ink in mech.set(stick_outline="on").svg(SMALL)
+    protein = ms.load(EX / "trypsin_active_site.json").look("flat").show(cartoon=None).site("resi 57+102+195")
+    assert ink not in protein.svg(SMALL)
+    assert ink in protein.show(cartoon="polymer").svg(SMALL)
+
+
+def test_flat_draws_protons_charges_and_valence_its_own_way():
+    """the flat look: bonds to hydrogens thinner, charges as badges, double bonds as lanes -- each a part of the drawing"""
+    fig = lambda **st: ms.load(EX / "mechanism.json").look("flat").set(**st).render(SMALL, frame=100).to_numpy()
+    st = ms.load(EX / "mechanism.json").look("flat").style
+    assert st["stick_h_scale"] == 0.55 and ms.default_style()["stick_h_scale"] == 1
+    plain = fig()
+    for change in ({"stick_h_scale": 1}, {"show.charges": False}, {"show.valence": False}):
+        assert not np.array_equal(fig(**change), plain), change
+
+
 def test_fit_puts_the_drawing_in_the_box():
     """fit(): zoom and pan so the drawing fills the box (its longer side), centred in it"""
     from molsketch._engine import engine
