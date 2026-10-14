@@ -51,8 +51,8 @@ class Figure:
     # ------------------------------------------------------------------ the look
     def look(self, name: str) -> "Figure":
         """Start from a named look: a complete style (fill, lines, colours, paper, what to draw). The looks are
-        watercolour, ink-colour, ink, dark-paper, chalkboard, engraved, engraved-colour, assembly-surface and
-        assembly-cartoon; ``molsketch.looks()`` describes each. Your other changes (``set``, ``show``, ``palette`` …)
+        watercolour, ink-colour, ink, dark-paper, chalkboard, engraved, engraved-colour, textbook, flat,
+        assembly-surface and assembly-cartoon; ``molsketch.looks()`` describes each. Your other changes (``set``, ``show``, ``palette`` …)
         apply on top, whenever you make them."""
         if name not in looks(): raise ValueError(f"unknown look {name!r}; the looks are {', '.join(looks())}")
         self._look = name; return self

@@ -36,7 +36,8 @@ Contents: [Fill and representation](#fill-and-representation) · [Depth in a sur
 | `sphere_scale` | `0.4` | in `"sticks"` mode, the size of the balls on atoms marked as spheres (a protein's Cα atoms, and atoms a scene marks); 0 draws them as plain stick ends |
 | `cartoon_scale` | `1` | width of the cartoon ribbons and tubes, relative to normal |
 | `cartoon_style` | `"engraved"` | `"engraved"`: white ribbons shaded with lines along their length, after MOLSCRIPT. `"sketch"`: ribbons filled in the style of `fill` |
-| `stick_style` | `"auto"` | whether sticks follow the engraved style too: `"auto"` (when the ribbons are engraved), `"engraved"` (always) or `"sketch"` (never) |
+| `stick_style` | `"auto"` | whether sticks follow the engraved style too: `"auto"` (when the ribbons are engraved), `"engraved"` (always) or `"sketch"` (never); or `"flat"`: PyMOL's sticks under flat light, solid colour split at each bond's middle, round joints |
+| `stick_outline` | `"auto"` | with flat sticks, an ink line round their silhouette (never across a joint or where a bond changes colour), as PyMOL's `ray_trace_mode 1`: `"on"`, `"off"`, or `"auto"` (when ribbons are drawn, so side chains match the ribbons' outlines and a mechanism in sticks alone stays plain) |
 | `side_chain_helper` | `true` | where a residue is drawn as cartoon, leave its backbone atoms out of the sticks, so only the side chain sticks out of the ribbon |
 | `probe` | `1.4` | the surface is drawn as each residue's atom discs, enlarged by this probe radius (Å); larger values give a smoother, fatter surface |
 
@@ -44,7 +45,7 @@ The fills:
 
 | `fill` | what it looks like |
 |---|---|
-| `"flat"` | solid colour, like PyMOL's flat-shaded illustrations |
+| `"flat"` | solid colour, like PyMOL's flat-shaded illustrations. Engraved ribbons take the colour itself on their faces and one darker shade of it (`shading`) on a ribbon's far side and a strand's narrow side, and nothing else: two tones of each colour |
 | `"wash"` | a pale tint under the ink |
 | `"pencil"` | coloured-pencil scribbles that stray past the line |
 | `"watercolour"` | stacked translucent layers with feathered edges, a darker drying ring and granulation |
@@ -102,6 +103,7 @@ To colour one residue, chain, subunit or entity yourself, use [`fig.color`](api.
 | `surface` | the surface, with `surface_color="single"` |
 | `filled`, `empty` | orbitals that hold electrons (a lone pair, a σ or π bond) and empty ones (σ*, π*, an empty p); chosen from the paper when unset |
 | `window`, `measure` | a measure's window and its lines and labels; chosen from the ink and paper when unset |
+| `hbond` | hydrogen bonds' dots; the hatch colour (on dark paper, the ink) when unset |
 
 ```python
 fig.set(palette={"paper": "#fbf7ee", "helix": "#de9151"})
@@ -160,7 +162,7 @@ by name.
 
 | field | default | meaning |
 |---|---|---|
-| `shading` | `0.65` | how dark the shadow side of each shape is |
+| `shading` | `0.65` | how dark the shadow side of each shape is; in the flat fill, how far a ribbon's far side and a strand's narrow side go toward the ink (`0.3 × shading`) |
 | `hatch.spacing` | `5` | the gap between hatching lines |
 | `hatch.angle` | `-40` | the hatching direction, in degrees |
 | `hatch.density` | `1.4` | how much of a shape the hatching covers |
@@ -175,6 +177,7 @@ by name.
 | `paper.wash` | `0.3` | how much watercolour wash is laid on the paper itself |
 | `paper.wash_seed` | `1` | which pattern of wash; change it for a different arrangement of blotches |
 | `paper.wash_life` | `0.6` | how much the wash changes from one drawing to the next in an animation |
+| `paper.transparent` | `false` | leave the paper out, so a PNG or SVG goes onto a page of its own (Keynote, Illustrator, a figure tool). Its colour still sets what the fog fades into and what is knocked out round an active site, so set it to the page's colour. Paper with neither grain nor wash is a plain rectangle in an SVG, not a picture |
 
 ## Engraved ribbons
 

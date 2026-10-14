@@ -104,6 +104,8 @@ Start from a named look: a complete style covering the fill, the pen, the colour
 | `chalkboard` | chalk on navy: broad dusty fills, soft pitted lines |
 | `engraved` | line-shaded ribbons in black on white, after MOLSCRIPT |
 | `engraved-colour` | the engraved ribbons with colour only in the lines |
+| `textbook` | engraved colour as a 1960s text draws a mechanism: ruled orbital lobes, bold lone pairs, lettered labels |
+| `flat` | PyMOL under flat light, outlined: solid colours in two tones, thin even outlines, round sticks; an SVG of plain shapes |
 | `assembly-surface` | a watercolour surface coloured by subunit, for large assemblies |
 | `assembly-cartoon` | thin tubes and ribbons coloured by subunit, with heavy depth fog, for large assemblies |
 

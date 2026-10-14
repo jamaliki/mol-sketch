@@ -5,11 +5,11 @@
 Every look draws the same way and differs only in its medium. Ribbons are the engraved ones (MOLSCRIPT's geometry,
 colour carried in lines along each face), and sticks follow them: next to engraved ribbons a side chain or ligand is
 drawn with the same lines along each bond, so the whole figure reads as one drawing. A mechanism drawn only in sticks
-keeps its hand-drawn sticks (`stick_style="auto"`; set it to `"engraved"` or `"sketch"` to choose). All looks share one
+keeps its hand-drawn sticks (`stick_style="auto"`; set it to `"engraved"`, `"sketch"` or `"flat"` to choose). All looks share one
 pen (width 1.6, hierarchy 0.45; chalk keeps a broader stick, Assembly cartoon a thin one for huge complexes), and
 what makes a look loose or crisp is its **hand**, one number from 0 (a ruled, engraved line) to 1 (a loose sketch)
-that sets roughness, passes, pen pressure and fill wobble together: Engraved 0.08, Ink 0.55, Watercolour and Dark
-paper 0.6, Chalkboard 0.72. The medium supplies the rest: ink leaves the faces paper, chalk leaves them board, and
+that sets roughness, passes, pen pressure and fill wobble together: Flat 0, Engraved 0.08, Ink 0.55, Watercolour and
+Dark paper 0.6, Chalkboard 0.72. The medium supplies the rest: ink leaves the faces paper, chalk leaves them board, and
 watercolour lays a pale wash of the colour under darker lines.
 
 In the app, the *hand* slider is at the top of *Look › Lines*.
@@ -295,6 +295,49 @@ ms.scene("examples/reactions/pi_star.json").look("textbook").save("pi_star.png",
 | `font`, `label_size`, `caption_size` | `"Plain sans"`, `22`, `22` | lettered labels, large enough to read at print size |
 | `stick_radius` | `0.17` | thinner sticks, so the lobes have room |
 | hand | 0.05 | a ruling pen |
+
+## 11. Flat
+
+| | |
+|---|---|
+| ![Trypsin in the Flat look](img/flat.png) | ![Its catalytic triad, close up](img/flat_site.png) |
+
+![The serine hydrolase mechanism's sticks in the Flat look](img/flat_mechanism.png)
+
+PyMOL under flat light with its outlines on (`ray_trace_mode 1`), the look of many protein-design papers, for when a
+talk or a paper wants a clean illustration rather than a drawing. Ribbons keep MOLSCRIPT's geometry, filled solid: each
+colour on a face, one darker shade of it on a ribbon's far side and a strand's narrow side, and a thin, even line round
+them. Sticks are PyMOL's: solid colour split at each bond's middle, round joints, a ball at Cα. Beside ribbons they are
+outlined as the ribbons are; on their own (a mechanism) they are plain (`stick_outline`). Hydrogen bonds are evenly
+spaced round dots in a colour of their own.
+
+The look keeps every colour as it is given: no grain, wash, fog or translucency, and a site is not faded into the
+protein, so a figure is in exactly the colours it was handed, each in two tones. As an SVG it is shapes only: one path
+per ribbon face, half-bond and outline, and the paper one rectangle (or nothing, with `paper.transparent`), so it can be
+recoloured or rearranged in Illustrator, Inkscape or a figure tool, and laid on a page of its own colour.
+
+```python
+fig = ms.load("app/public/examples/trypsin_active_site.json").look("flat").site("resi 57+102+195")
+fig.save("trypsin.svg", (960, 720))
+fig.set(palette={"helix": "#4c78a8", "sheet": "#f2c14e", "loop": "#eeeeee"}, **{"paper.transparent": True})
+```
+
+| field | value | why |
+|---|---|---|
+| `fill` | `"flat"` | solid colour, two tones of each |
+| `cartoon_style` | `"engraved"` | MOLSCRIPT's ribbons, filled |
+| `stick_style` | `"flat"` | PyMOL's sticks; outlined beside ribbons (`stick_outline="auto"`) |
+| `engrave.lines` | `0` | no lines along the faces |
+| `shading` | `0.55` | the far side a sixth of the way to the ink |
+| `line.width`, `line.hierarchy` | `1.1`, `0` | one thin weight for every outline |
+| `palette.ink` | `#000000` | black outlines |
+| `palette.helix`, `.sheet`, `.loop` | `#e8796b`, `#f6c85f`, `#eeeeee` | coral helices, amber strands, near-white loops |
+| `palette.hbond`, `palette.H` | `#2b8ea3`, `#d4d4d4` | teal hydrogen bonds; hydrogens grey, as white vanishes on white |
+| `stick_radius`, `sphere_scale` | `0.25`, `0.25` | PyMOL's stick, and a Cα ball twice as wide |
+| `site.quiet`, `site.cutaway` | `0`, `false` | nothing faded or seen through: the site reads by its sticks |
+| `font`, `label_size` | `"Plain sans"`, `22` | lettered labels |
+| `view.fog`, `view.fov` | `0`, `0` | no fog, an orthographic view |
+| hand | 0 | ruled |
 
 ## Turntables
 

@@ -90,11 +90,11 @@ visits. The app's own [README](app/README.md) covers how the renderers fit toget
 **One grammar, several media.** Every look draws the same way and differs only in its medium. Ribbons are the engraved ones (MOLSCRIPT's geometry,
 colour carried in lines along each face), and sticks follow them: next to engraved ribbons a side chain or ligand is
 drawn with the same lines along each bond, so the whole figure reads as one drawing. A mechanism drawn only in sticks
-keeps its hand-drawn sticks (*sticks style: auto*; set it to *engraved* or *sketch* to choose). All looks share one
+keeps its hand-drawn sticks (*sticks style: auto*; set it to *engraved*, *sketch* or *flat* to choose). All looks share one
 pen (width 1.6, hierarchy 0.45; chalk keeps a broader stick, Assembly cartoon a thin one for huge complexes), and
 what makes a look loose or crisp is its **hand**, one number from 0 (a ruled, engraved line) to 1 (a loose sketch)
-that sets roughness, passes, pen pressure and fill wobble together: Engraved 0.08, Ink 0.55, Watercolour and Dark
-paper 0.6, Chalkboard 0.72. The medium supplies the rest: ink leaves the faces paper, chalk leaves them board, and
+that sets roughness, passes, pen pressure and fill wobble together: Flat 0, Engraved 0.08, Ink 0.55, Watercolour and
+Dark paper 0.6, Chalkboard 0.72. The medium supplies the rest: ink leaves the faces paper, chalk leaves them board, and
 watercolour lays a pale wash of the colour under darker lines.
 
 The *hand* slider is at the top of *Look › Lines*.
@@ -114,6 +114,7 @@ are the same set (the files are what *Export › Save style* writes, and *Load s
 | Engraved | line-shaded ribbons, black on white, after MOLSCRIPT (Kraulis 1991) | `looks/engraved.json` |
 | Engraved colour | the engraved ribbons with colour only in the lines | `looks/engraved-colour.json` |
 | Textbook | engraved colour as a 1960s text draws a mechanism: ruled orbital lobes, bold lone pairs, lettered labels | `looks/textbook.json` |
+| Flat | PyMOL under flat light, outlined: solid colours in two tones, thin even outlines, round sticks; an SVG of plain shapes in exactly the colours given | `looks/flat.json` |
 | Assembly surface | watercolour surface coloured by subunit, for large complexes | `looks/assembly-surface.json` |
 | Assembly cartoon | tubes and ribbons by subunit, thin pen, heavy fog | `looks/assembly-cartoon.json` |
 
@@ -122,6 +123,8 @@ are the same set (the files are what *Export › Save style* writes, and *Load s
 | ![pencil](docs/img/pencil.png) | ![dark paper](docs/img/dark_paper.png) | ![chalkboard](docs/img/chalkboard.png) |
 | **Ink** | **Watercolour cartoon** | **Assembly cartoon** (70S ribosome) |
 | ![ink](docs/img/ink.png) | ![cartoon, watercolour](docs/img/protein_cartoon_watercolour.png) | ![ribosome cartoon by subunit](docs/img/ribosome_cartoon_by_subunit.png) |
+| **Flat** (trypsin) | **Flat**, its catalytic triad | **Flat**, sticks alone |
+| ![trypsin, flat](docs/img/flat.png) | ![catalytic triad, flat](docs/img/flat_site.png) | ![mechanism, flat](docs/img/flat_mechanism.png) |
 
 ## Engraved ribbons and palettes
 

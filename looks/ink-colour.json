@@ -51,6 +51,7 @@
  "cartoonColor": "ss",
  "cartoonStyle": "engraved",
  "stickStyle": "auto",
+ "stickOutline": "auto",
  "engrave": {
   "lines": 5,
   "width": 1.1,
@@ -138,7 +139,8 @@
   "wash": 0.3,
   "washSeed": 6,
   "washLife": 0.6,
-  "washScale": 1
+  "washScale": 1,
+  "transparent": false
  },
  "water": {
   "layers": 3,
