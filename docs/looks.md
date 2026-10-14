@@ -315,7 +315,8 @@ spaced round dots in a colour of their own.
 A mechanism's chemistry is drawn in the same terms. A bond to a hydrogen is thinner (`stick_h_scale`), so a proton
 reads lighter than the bonds it moves between. A double or triple bond is two or three lanes in the one stick, as
 PyMOL draws valence, the gap between them closing before each atom so the lanes run into it. A formal charge is a
-badge as wide as a stick, its sign drawn, set off the atom in whichever direction is clearest of its bonds, hydrogen
+solid badge in the ink, wider than a stick, its sign drawn in the paper's colour, set off the atom in whichever
+direction is clearest of its bonds, hydrogen
 bonds and lone pairs (the upper right when that is as clear); lone pairs are bold pairs of dots sized from the stick,
 as large as a hydrogen bond's dots, kept clear of the badge, the bonds and the hydrogen bonds.
 

@@ -4180,17 +4180,20 @@
     function drawChargeBadge(ctx, x, y, rb, text, col, alpha) {
       ctx.save();
       ctx.globalAlpha *= alpha;
+      const paper2 = cfg.palette.paper;
+      ctx.beginPath();
+      ctx.arc(x, y, rb + Math.max(1.2, 0.12 * rb), 0, Math.PI * 2);
+      ctx.fillStyle = paper2;
+      ctx.fill();
       ctx.beginPath();
       ctx.arc(x, y, rb, 0, Math.PI * 2);
-      ctx.fillStyle = cfg.palette.paper;
+      ctx.fillStyle = col;
       ctx.fill();
-      ctx.lineWidth = Math.max(0.8, cfg.style.inkWidth * LW.outer);
-      ctx.strokeStyle = col;
-      ctx.stroke();
       if (text === "+" || text === "\u2212" || text === "-") {
-        const s = rb * 0.5;
-        ctx.lineWidth = Math.max(1.1, rb * 0.2);
+        const s = rb * 0.52;
+        ctx.lineWidth = Math.max(1.4, rb * 0.24);
         ctx.lineCap = "round";
+        ctx.strokeStyle = paper2;
         ctx.beginPath();
         ctx.moveTo(x - s, y);
         ctx.lineTo(x + s, y);
@@ -4200,10 +4203,10 @@
         }
         ctx.stroke();
       } else {
-        ctx.font = `600 ${Math.round(rb * (text.length > 1 ? 0.95 : 1.2))}px "IBM Plex Sans", system-ui, sans-serif`;
+        ctx.font = `700 ${Math.round(rb * (text.length > 1 ? 0.95 : 1.2))}px "IBM Plex Sans", system-ui, sans-serif`;
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.fillStyle = col;
+        ctx.fillStyle = paper2;
         ctx.fillText(text, x, y + 0.5);
       }
       ctx.restore();
@@ -7846,7 +7849,7 @@
           ctx.restore();
         }
         if (badge !== null) {
-          const an = S.annot || 1, rb = Math.max(7, 1.1 * cfg.rep.stickRadius * proj.pxPerA * p.d) * an, off = r + 1.45 * rb, ux = Math.cos(badge), uy = Math.sin(badge);
+          const an = S.annot || 1, rb = Math.max(8, 1.45 * cfg.rep.stickRadius * proj.pxPerA * p.d) * an, off = r + 1.35 * rb, ux = Math.cos(badge), uy = Math.sin(badge);
           ctx.save();
           ctx.globalAlpha = a.alpha;
           for (const c of a.charges) drawChargeBadge(ctx, p.x + ux * off, p.y + uy * off, rb, c.text, P.charge, c.alpha);

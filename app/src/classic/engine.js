@@ -837,12 +837,14 @@ function drawValenceGaps(ctx,x0,y0,x1,y1,R,extra,o){
     if(w>0){ctx.lineWidth=g+2*w;ctx.strokeStyle=fogged(cfg.palette.ink,o.fog||0);ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke()}
     ctx.lineWidth=g;ctx.strokeStyle=cfg.palette.paper;ctx.beginPath();ctx.moveTo(ax,ay);ctx.lineTo(bx,by);ctx.stroke()});
   ctx.restore()}
-/* a formal charge with flat sticks: a badge -- the paper's colour, rimmed in the charge's -- holding a drawn + or − (2+ and
-   the like in letters), as wide as a stick, set off the atom in the direction chargeAngle finds clearest */
-function drawChargeBadge(ctx,x,y,rb,text,col,alpha){ctx.save();ctx.globalAlpha*=alpha;
-  ctx.beginPath();ctx.arc(x,y,rb,0,Math.PI*2);ctx.fillStyle=cfg.palette.paper;ctx.fill();ctx.lineWidth=Math.max(0.8,cfg.style.inkWidth*LW.outer);ctx.strokeStyle=col;ctx.stroke();
-  if(text==='+'||text==='−'||text==='-'){const s=rb*0.5;ctx.lineWidth=Math.max(1.1,rb*0.2);ctx.lineCap='round';ctx.beginPath();ctx.moveTo(x-s,y);ctx.lineTo(x+s,y);if(text==='+'){ctx.moveTo(x,y-s);ctx.lineTo(x,y+s)}ctx.stroke()}
-  else{ctx.font=`600 ${Math.round(rb*(text.length>1?0.95:1.2))}px "IBM Plex Sans", system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=col;ctx.fillText(text,x,y+0.5)}
+/* a formal charge with flat sticks: a badge -- solid, in the charge's colour, its + or − (2+ and the like in letters) in
+   the paper's, ringed in paper so it stands off whatever it touches -- wider than a stick, set off the atom in the
+   direction chargeAngle finds clearest. (A paper badge rimmed in ink read faintly: mostly white, on white.) */
+function drawChargeBadge(ctx,x,y,rb,text,col,alpha){ctx.save();ctx.globalAlpha*=alpha;const paper=cfg.palette.paper;
+  ctx.beginPath();ctx.arc(x,y,rb+Math.max(1.2,0.12*rb),0,Math.PI*2);ctx.fillStyle=paper;ctx.fill();
+  ctx.beginPath();ctx.arc(x,y,rb,0,Math.PI*2);ctx.fillStyle=col;ctx.fill();
+  if(text==='+'||text==='−'||text==='-'){const s=rb*0.52;ctx.lineWidth=Math.max(1.4,rb*0.24);ctx.lineCap='round';ctx.strokeStyle=paper;ctx.beginPath();ctx.moveTo(x-s,y);ctx.lineTo(x+s,y);if(text==='+'){ctx.moveTo(x,y-s);ctx.lineTo(x,y+s)}ctx.stroke()}
+  else{ctx.font=`700 ${Math.round(rb*(text.length>1?0.95:1.2))}px "IBM Plex Sans", system-ui, sans-serif`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillStyle=paper;ctx.fillText(text,x,y+0.5)}
   ctx.restore()}
 /* where an atom's charge sits on screen: the direction round it furthest from its bonds (hydrogen bonds too) and its lone
    pairs, the upper right when that is about as clear */
@@ -2178,7 +2180,7 @@ function renderFrame(ctx,W,H,frame,dpr){
         ctx.fillStyle=rgba(P.ink,0.9*lp.alpha);const rng=mulberry32(seed+i*3);
         for(const s of[-2.6*an,2.6*an]){ctx.beginPath();ctx.arc(cx-uy*s+(rng()-0.5),cy+ux*s+(rng()-0.5),1.35*p.d*an,0,Math.PI*2);ctx.fill()}});
       ctx.restore()}
-    if(badge!==null){const an=S.annot||1,rb=Math.max(7,1.1*cfg.rep.stickRadius*proj.pxPerA*p.d)*an,off=r+1.45*rb,ux=Math.cos(badge),uy=Math.sin(badge);
+    if(badge!==null){const an=S.annot||1,rb=Math.max(8,1.45*cfg.rep.stickRadius*proj.pxPerA*p.d)*an,off=r+1.35*rb,ux=Math.cos(badge),uy=Math.sin(badge);
       ctx.save();ctx.globalAlpha=a.alpha;for(const c of a.charges)drawChargeBadge(ctx,p.x+ux*off,p.y+uy*off,rb,c.text,P.charge,c.alpha);ctx.restore()}
     else if(SH.charges&&a.charges.length){ctx.save();ctx.globalAlpha=a.alpha;
       const an=S.annot||1;a.charges.forEach((c,i)=>{const cx=p.x+r*0.95+7*an,cy=p.y-r*0.95-6*an;const cr=7*p.d*an;
