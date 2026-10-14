@@ -870,7 +870,9 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
         }}});
     }
   }
-  if(SITE){const ks=cfg.rep.siteScale||1.9;const sb=bonds.filter(b=>b.order!==0&&inSet[b.a]&&inSet[b.b]&&inSet[b.a]._site&&inSet[b.b]._site);const sa=atoms.filter(a=>a._site);
+  // the site's sticks knocked out of what lies behind them by a paper halo -- but not outlined flat sticks: their outline
+  // sets them apart, as PyMOL's does, and a halo round it read as a second, white outline
+  if(SITE&&!OUT){const ks=cfg.rep.siteScale||1.9;const sb=bonds.filter(b=>b.order!==0&&inSet[b.a]&&inSet[b.b]&&inSet[b.a]._site&&inSet[b.b]._site);const sa=atoms.filter(a=>a._site);
     items.push({z:SITE.zmin-0.01,draw:(ctx)=>{ctx.save();ctx.strokeStyle=cfg.palette.paper;ctx.fillStyle=cfg.palette.paper;ctx.lineCap='round';
       for(const b of sb){const pa=pos[b.a],pb=pos[b.b];const R=R0*ks*(pa.d+pb.d)/2;ctx.globalAlpha=b.alpha;ctx.lineWidth=2*(R+Math.max(2.5,R*0.6));ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke()}
       for(const a of sa){const p=pos[a.id];const R=R0*ks*p.d;ctx.globalAlpha=a.alpha;ctx.beginPath();ctx.arc(p.x,p.y,R+Math.max(2.5,R*0.6),0,Math.PI*2);ctx.fill()}ctx.restore()}})}

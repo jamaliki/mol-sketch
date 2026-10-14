@@ -308,7 +308,8 @@ PyMOL under flat light with its outlines on (`ray_trace_mode 1`), the look of ma
 talk or a paper wants a clean illustration rather than a drawing. Ribbons keep MOLSCRIPT's geometry, filled solid: each
 colour on a face, one darker shade of it on a ribbon's far side and a strand's narrow side, and a thin, even line round
 them. Sticks are PyMOL's: solid colour split at each bond's middle, round joints, a ball at Cα. Beside ribbons they are
-outlined as the ribbons are; on their own (a mechanism) they are plain (`stick_outline`). Hydrogen bonds are evenly
+outlined as the ribbons are; on their own (a mechanism) they are plain (`stick_outline`). Outlined, an active
+site's sticks need no paper halo to stand off the ribbons behind them, and have none. Hydrogen bonds are evenly
 spaced round dots in a colour of their own.
 
 The look keeps every colour as it is given: no grain, wash, fog or translucency, and a site is not faded into the

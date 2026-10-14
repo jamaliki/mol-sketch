@@ -4255,7 +4255,7 @@
           } });
         }
       }
-      if (SITE) {
+      if (SITE && !OUT) {
         const ks = cfg.rep.siteScale || 1.9;
         const sb = bonds.filter((b) => b.order !== 0 && inSet[b.a] && inSet[b.b] && inSet[b.a]._site && inSet[b.b]._site);
         const sa = atoms.filter((a) => a._site);
