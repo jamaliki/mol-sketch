@@ -64,9 +64,11 @@ export const LOOKS: Record<string, Look> = {
     style: { fill: 'flat', cartoonStyle: 'engraved', stickStyle: 'flat', ...lines(0, 0.45), cartoonScale: 1,
       palette: { ...PALETTES['PyMOL flat'], paper: '#ffffff', ink: '#000000', hatch: '#000000', label: '#1a1a1a', charge: '#1a1a1a', arrow: '#1a1a1a',
         helix: '#e8796b', sheet: '#f6c85f', loop: '#eeeeee', hbond: '#2b8ea3', H: '#d4d4d4' },   // (white hydrogens vanish on white paper with no outline)
-      font: 'Plain sans', labelSize: 22, captionSize: 22, stickRadius: 0.25, sphereScale: 0.25, stickHScale: 0.55, lonePairStyle: 'bold',
+      font: 'Plain sans', labelSize: 22, captionSize: 22, stickRadius: 0.2, sphereScale: 0.25, stickHScale: 0.55, lonePairStyle: 'bold',
       ...pen(0, { width: 1.1, hierarchy: 0, alpha: 1 }), shading: 0.55, construction: false,
-      site: { cutaway: false, quiet: 0 } as any,   // every colour as given, nothing seen through: the site reads by its sticks
+      // every colour as given, nothing seen through: the site reads by its sticks, which its outline sets apart, so they
+      // need be only a little larger: PyMOL's own 0.25 Å beside the others' 0.2, as publication figures draw side chains
+      site: { cutaway: false, quiet: 0, scale: 1.25 } as any,
       paper: { grain: 0, wash: 0 } as any, view: { fog: 0, fov: 0 } as any },
   },
   'assembly-surface': {

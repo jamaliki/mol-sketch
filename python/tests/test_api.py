@@ -239,6 +239,13 @@ def test_flat_ball_and_stick_draws_double_bonds_and_hydrogens():
     for f in fig().frames("keyframes"): assert fig().render(SMALL, frame=f + 20).to_numpy()[..., :3].std() > 5
 
 
+def test_flat_site_sticks_are_slimmer():
+    """the flat look's sticks are 0.2 Å and its site's 1.25 times that (PyMOL's 0.25 Å); the other looks keep theirs"""
+    st = ms.load(EX / "1A8O.pdb").look("flat").style
+    assert st["stick_radius"] == 0.2 and st["site"]["scale"] == 1.25 and st["sphere_scale"] == 0.25
+    assert ms.default_style()["site"]["scale"] == 1.9 and ms.load(EX / "1A8O.pdb").look("engraved").style["site"]["scale"] == 1.9
+
+
 def test_fit_puts_the_drawing_in_the_box():
     """fit(): zoom and pan so the drawing fills the box (its longer side), centred in it"""
     from molsketch._engine import engine

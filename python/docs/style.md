@@ -201,7 +201,7 @@ Usually set through [`fig.site`](api.md#figsiteselectionnone--ligandfalse-within
 | `site.sel` | `""` | the site's atoms, as a selection (empty: no site) |
 | `site.cutaway` | `true` | open the ribbon in front of the site (engraved ribbons) |
 | `site.quiet` | `0.35` | how much the rest of the protein fades, 0 to 1 |
-| `site.scale` | `1.9` | how much thicker the site's sticks (and, in ball-and-stick, its balls) are |
+| `site.scale` | `1.9` | how much thicker the site's sticks (and, in ball-and-stick, its balls) are; the Flat look's is 1.25, its outline setting the site apart |
 
 ## Density maps
 

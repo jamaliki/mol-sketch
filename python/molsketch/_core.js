@@ -2547,15 +2547,16 @@
         font: "Plain sans",
         labelSize: 22,
         captionSize: 22,
-        stickRadius: 0.25,
+        stickRadius: 0.2,
         sphereScale: 0.25,
         stickHScale: 0.55,
         lonePairStyle: "bold",
         ...pen(0, { width: 1.1, hierarchy: 0, alpha: 1 }),
         shading: 0.55,
         construction: false,
-        site: { cutaway: false, quiet: 0 },
-        // every colour as given, nothing seen through: the site reads by its sticks
+        // every colour as given, nothing seen through: the site reads by its sticks, which its outline sets apart, so they
+        // need be only a little larger: PyMOL's own 0.25 Å beside the others' 0.2, as publication figures draw side chains
+        site: { cutaway: false, quiet: 0, scale: 1.25 },
         paper: { grain: 0, wash: 0 },
         view: { fog: 0, fov: 0 }
       }

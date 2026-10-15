@@ -64,7 +64,7 @@
   "sel": "",
   "cutaway": false,
   "quiet": 0,
-  "scale": 1.9
+  "scale": 1.25
  },
  "surfaceColor": "subunit",
  "surfaceDepth": {
@@ -114,7 +114,7 @@
   "cartoon": "polymer",
   "surface": ""
  },
- "stickRadius": 0.25,
+ "stickRadius": 0.2,
  "stickHScale": 0.55,
  "cartoonScale": 1,
  "probe": 1.4,
