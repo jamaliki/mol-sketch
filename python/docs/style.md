@@ -126,7 +126,7 @@ is the easier way to set them.
 | field | default | meaning |
 |---|---|---|
 | `show.H` | `true` | hydrogen atoms |
-| `show.valence` | `true` | double and triple bonds drawn as such: with flat sticks, two or three lanes in the one stick; in flat ball-and-stick, two or three thinner rods; in the other looks, a thinner stick beside the bond. A structure's bonds take their orders when it is read ([reference.md](../../docs/reference.md#bond-orders)); a scene's are as written |
+| `show.valence` | `true` | double and triple bonds drawn as such: with flat sticks, two or three lanes in the one stick; in flat ball-and-stick, two or three thinner rods; in the other looks, a thinner stick of the look's own make against the bond, on its ring's side (out of a ring, its nearest neighbour's), stopping short of the joints. A structure's bonds take their orders when it is read ([reference.md](../../docs/reference.md#bond-orders)); a scene's are as written |
 | `show.hbonds` | `true` | hydrogen bonds, as dotted lines |
 | `show.charges` | `true` | charge signs (scenes) |
 | `show.lone_pairs` | `true` | lone-pair dots (scenes) |

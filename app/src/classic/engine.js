@@ -874,12 +874,32 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
   if(OUT)for(const b of bonds){const A=inSet[b.a],B=inSet[b.b];if(!A||!B||b.order===0||(b.partial>0&&b.partial<1))continue;const pa=pos[b.a],pb=pos[b.b];const L=Math.hypot(pb.x-pa.x,pb.y-pa.y);if(L<1e-6)continue;
     const ks=(A._site&&B._site?(cfg.rep.siteScale||1.9):1)*hScale(A,B),u=[(pb.x-pa.x)/L,(pb.y-pa.y)/L];
     (legs[b.a]=legs[b.a]||[]).push({b,u,L:L/2,R:R0*pa.d*ks});(legs[b.b]=legs[b.b]||[]).push({b,u:[-u[0],-u[1]],L:L/2,R:R0*pb.d*ks})}
-  // how far from its atom an inner valence stick starts: where it clears the stick of the nearest bond on its side of
-  // that atom (at angle φ: (R + r2 + o·cos φ) / sin φ along the bond, and its own cap), at least as far as it always did
-  const innerStop=(end,dx,dy,side,ux,uy,R,r2,o,L)=>{let need=0;
+  /* A double or triple bond outside the flat look: the bond's own stick, and beside it a thin stick of the same make
+     (filled and inked as the look draws its sticks, capped at its ends), as a textbook draws the inner line of a ring's
+     double bond and PyMOL's valence its second cylinder. It lies close and parallel, on the ring's side or, out of a
+     ring, on the side of the neighbour nearest the bond in space (a carboxylate's other oxygen first), so it does not
+     flip as the molecule turns; it is as thin for its stick as a plain bond's is, whatever the site's scale, and stops
+     short of the joints and of the next bond round its side. */
+  // the smallest ring (up to six atoms) a bond closes, as its atoms, or null
+  const ringOf=(a,b)=>{const prev={[a]:null};let front=[a];
+    for(let d=1;d<6&&front.length;d++){const next=[];for(const x of front)for(const q of byAtom[x]||[]){const y=q.a===x?q.b:q.a;if((x===a&&y===b)||y in prev)continue;prev[y]=x;
+      if(y===b){const out=[];let z=y;while(z!==null){out.push(z);z=prev[z]}return out}next.push(y)}front=next}return null};
+  const angle3=(c,p,q)=>{const u=[p[0]-c[0],p[1]-c[1],p[2]-c[2]],v=[q[0]-c[0],q[1]-c[1],q[2]-c[2]];return Math.acos(clamp(dot3(u,v)/((len3(u)*len3(v))||1),-1,1))};
+  const valenceSide=(b,ux,uy)=>{const pa=pos[b.a],pb=pos[b.b],mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2;
+    const ring=ringOf(b.a,b.b);if(ring){let cx=0,cy=0;for(const id of ring){cx+=pos[id].x;cy+=pos[id].y}const cr=ux*(cy/ring.length-my)-uy*(cx/ring.length-mx);if(Math.abs(cr)>1e-6)return cr>0?1:-1}
+    let best=null,bs=Infinity;
+    for(const end of[b.a,b.b]){const other=end===b.a?b.b:b.a,E=inSet[end],O=inSet[other];
+      for(const q of byAtom[end]||[]){const n=q.a===end?q.b:q.a,N=inSet[n];if(!N||n===other)continue;
+        const lone=N.el!=='C'&&N.el!=='H'&&(byAtom[n]||[]).length===1;   // a carboxylate's other oxygen, a nitro's
+        const sc=angle3(E.pos,O.pos,N.pos)-(lone?10:0)+(N.el==='H'?20:0);if(sc<bs-1e-9||(Math.abs(sc-bs)<=1e-9&&n<best.n)){bs=sc;best={end,n}}}}
+    if(!best)return 1;const e=pos[best.end],q=pos[best.n];return ux*(q.y-e.y)-uy*(q.x-e.x)>=0?1:-1};
+  // where an inner stick's end (the centre of its cap) lies, along the bond from its atom: as near as clears the stick of
+  // the nearest bond round its side of that atom by the gap (at angle φ: (R + r2 + gap + o·cos φ) / sin φ), and no
+  // nearer than a fifth of the bond, so it stops short of the atom
+  const innerStop=(end,dx,dy,side,ux,uy,R,r2,o,gap,L)=>{let need=0;
     for(const q of byAtom[end]||[]){const other=q.a===end?q.b:q.a;const p=pos[other],e=pos[end];if(!p||!inSet[other])continue;const vx=p.x-e.x,vy=p.y-e.y,vl=Math.hypot(vx,vy);if(vl<1e-6)continue;
-      if((ux*vy-uy*vx)*side<=0)continue;const c=(dx*vx+dy*vy)/vl,sn=Math.sqrt(Math.max(0,1-c*c));if(sn<0.05)continue;need=Math.max(need,(R+r2+o*c)/sn+r2)}
-    return clamp(need,0.18*L,0.45*L)};
+      if((ux*vy-uy*vx)*side<=0)continue;const c=(dx*vx+dy*vy)/vl,sn=Math.sqrt(Math.max(0,1-c*c));if(sn<0.05)continue;need=Math.max(need,(R+r2+gap+o*c)/sn)}
+    return clamp(need,0.18*L,0.4*L)};
   const flatEnd=(atom,b,R)=>{if(!OUT)return{};const lg=legs[atom.id]||[],own=lg.find(l=>l.b===b),others=lg.filter(l=>l.b!==b);const cap=!others.length&&!atom.sphere;
     return{outline:OUT,cap,trim:!cap&&own?stickTrims(own.u,R,others):null}};
   for(const b of bonds){
@@ -892,11 +912,7 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
     const dx=pb.x-pa.x,dy=pb.y-pa.y,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;
     // valence: the main stick stays full width; extra order is a shorter, thinner inner stick on the crowded side (ring interior / substituent side)
     const extra=SH.valence?clamp(b.order-1,0,2):0;
-    let side=1;
-    if(extra>0.01){let sx=0,sy=0;   // the side its neighbours lie on, from each end's own bonds (a protein has a C=O in every residue)
-      for(const end of[b.a,b.b])for(const o of byAtom[end]||[]){if(o===b||(end===b.b&&(o.a===b.a||o.b===b.a)))continue;const other=o.a===end?o.b:o.a;
-        if(!pos[other]||!inSet[other])continue;sx+=pos[other].x-pos[end].x;sy+=pos[other].y-pos[end].y}
-      const cr=ux*sy-uy*sx;side=cr>=0?1:-1}
+    const side=extra>0.01&&!flatSticks()?valenceSide(b,ux,uy):1;
     if(isInk()&&A.el!==B.el&&!flatSticks()){const zm=(pa.z+pb.z)/2;items.push({z:zm-0.0015,draw:(ctx)=>{const Rm=R0*(pa.d+pb.d)/2;const fog=(pa.fog+pb.fog)/2;
       ctx.save();ctx.globalAlpha=b.alpha;sketchLine(ctx,[[mx-uy*Rm*0.95,my+ux*Rm*0.95],[mx+uy*Rm*0.95,my-ux*Rm*0.95]],{seed:seed+55,passes:1,width:cfg.style.inkWidth*0.7*LW.inner,color:fogged(P.ink,fog),alpha:0.7,ampScale:0.4,step:4,overshoot:false});ctx.restore()}})}
     for(const [near,far,atom,half] of[[pa,pb,A,0],[pb,pa,B,1]]){
@@ -907,15 +923,15 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
         else if(flatSticks())drawFlatHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,seed:seed+half*3,fog:near.fog,d:near.d,alpha:b.alpha,partial:b.partial,...flatEnd(atom,b,R)});
         else drawHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,seed:seed+half*3,fog:near.fog,d:near.d,alpha:b.alpha,partial:b.partial,passes:lowDetail?1:undefined});
         if(extra>0.01&&!(b.partial>0&&b.partial<1)&&flatSticks())drawValenceGaps(ctx,near.x,near.y,mx,my,R,extra,{alpha:b.alpha,fog:near.fog,outline:OUT});
-        else if(extra>0.01&&!(b.partial>0&&b.partial<1)){ // inner valence stick(s)
-          // beside the stick at the plain stick's gap (a site's larger stick keeps its inner stick close), and stopped
-          // short of the atom where it would run into the next bond round that side (a ring's)
-          const frac=Math.min(1,extra),r0=R0*near.d,r2=r0*0.42*(0.5+0.5*frac),o=(R-r0+r0*1.95)*frac,off=o*side;
-          const sh=innerStop(half?b.b:b.a,half?-ux:ux,half?-uy:uy,side,ux,uy,R,r2,o,L);
-          const ax=near.x+ux*sh*(half?-1:1),ay=near.y+uy*sh*(half?-1:1);
-          if(engravedSticks())drawEngravedHalfStick(ctx,ax-uy*off,ay+ux*off,mx-uy*off,my+ux*off,r2,col,{Rm:r2,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha*frac,site,inner:true});
-          else drawHalfStick(ctx,ax-uy*off,ay+ux*off,mx-uy*off,my+ux*off,r2,col,{Rm:r2,el:atom.el,seed:seed+half*3+101,fog:near.fog,d:near.d,alpha:b.alpha*frac,partial:0,passes:1,noShadow:true,inner:true});
-          if(extra>1.01){const off2=-off;if(engravedSticks())drawEngravedHalfStick(ctx,ax-uy*off2,ay+ux*off2,mx-uy*off2,my+ux*off2,r2,col,{Rm:r2,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha*(extra-1),site,inner:true});else drawHalfStick(ctx,ax-uy*off2,ay+ux*off2,mx-uy*off2,my+ux*off2,r2,col,{Rm:r2,seed:seed+half*3+202,fog:near.fog,d:near.d,alpha:b.alpha*(extra-1),partial:0,passes:1,noShadow:true})}
+        else if(extra>0.01&&!(b.partial>0&&b.partial<1)){ // the inner stick(s) (valenceSide above): as thin for the bond's
+          // stick as a plain bond's is, against its side -- a little of it behind the bond's own stick, as one cylinder
+          // beside another -- sliding out from the stick as an order grows
+          const frac=Math.min(1,extra),r2=R*0.42*(0.5+0.5*frac),gap=-0.7*r2,o=(R+gap+r2)*frac;
+          const inner=(sd,al,sv)=>{const off=o*sd,sh=innerStop(half?b.b:b.a,half?-ux:ux,half?-uy:uy,sd,ux,uy,R,r2,o,gap,L);
+            const x0=near.x+ux*sh*(half?-1:1)-uy*off,y0=near.y+uy*sh*(half?-1:1)+ux*off;
+            if(engravedSticks())drawEngravedHalfStick(ctx,x0,y0,mx-uy*off,my+ux*off,r2,col,{Rm:r2,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha*al,site,inner:true,cap:true});
+            else drawHalfStick(ctx,x0,y0,mx-uy*off,my+ux*off,r2,col,{Rm:r2,el:atom.el,seed:seed+half*3+sv,fog:near.fog,d:near.d,alpha:b.alpha*al,partial:0,passes:1,noShadow:true,inner:true})};
+          inner(side,frac,101);if(extra>1.01)inner(-side,extra-1,202);
         }}});
     }
   }

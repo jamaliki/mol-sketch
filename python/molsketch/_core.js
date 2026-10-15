@@ -4920,7 +4920,65 @@
         (legs[b.a] = legs[b.a] || []).push({ b, u, L: L / 2, R: R0 * pa.d * ks });
         (legs[b.b] = legs[b.b] || []).push({ b, u: [-u[0], -u[1]], L: L / 2, R: R0 * pb.d * ks });
       }
-      const innerStop = (end, dx, dy, side, ux, uy, R, r2, o, L) => {
+      const ringOf = (a, b) => {
+        const prev = { [a]: null };
+        let front = [a];
+        for (let d = 1; d < 6 && front.length; d++) {
+          const next = [];
+          for (const x of front) for (const q of byAtom[x] || []) {
+            const y = q.a === x ? q.b : q.a;
+            if (x === a && y === b || y in prev) continue;
+            prev[y] = x;
+            if (y === b) {
+              const out = [];
+              let z = y;
+              while (z !== null) {
+                out.push(z);
+                z = prev[z];
+              }
+              return out;
+            }
+            next.push(y);
+          }
+          front = next;
+        }
+        return null;
+      };
+      const angle3 = (c, p, q) => {
+        const u = [p[0] - c[0], p[1] - c[1], p[2] - c[2]], v = [q[0] - c[0], q[1] - c[1], q[2] - c[2]];
+        return Math.acos(clamp(dot3(u, v) / (len3(u) * len3(v) || 1), -1, 1));
+      };
+      const valenceSide = (b, ux, uy) => {
+        const pa = pos[b.a], pb = pos[b.b], mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
+        const ring = ringOf(b.a, b.b);
+        if (ring) {
+          let cx = 0, cy = 0;
+          for (const id of ring) {
+            cx += pos[id].x;
+            cy += pos[id].y;
+          }
+          const cr = ux * (cy / ring.length - my) - uy * (cx / ring.length - mx);
+          if (Math.abs(cr) > 1e-6) return cr > 0 ? 1 : -1;
+        }
+        let best = null, bs = Infinity;
+        for (const end of [b.a, b.b]) {
+          const other = end === b.a ? b.b : b.a, E = inSet[end], O = inSet[other];
+          for (const q2 of byAtom[end] || []) {
+            const n = q2.a === end ? q2.b : q2.a, N = inSet[n];
+            if (!N || n === other) continue;
+            const lone = N.el !== "C" && N.el !== "H" && (byAtom[n] || []).length === 1;
+            const sc = angle3(E.pos, O.pos, N.pos) - (lone ? 10 : 0) + (N.el === "H" ? 20 : 0);
+            if (sc < bs - 1e-9 || Math.abs(sc - bs) <= 1e-9 && n < best.n) {
+              bs = sc;
+              best = { end, n };
+            }
+          }
+        }
+        if (!best) return 1;
+        const e = pos[best.end], q = pos[best.n];
+        return ux * (q.y - e.y) - uy * (q.x - e.x) >= 0 ? 1 : -1;
+      };
+      const innerStop = (end, dx, dy, side, ux, uy, R, r2, o, gap, L) => {
         let need = 0;
         for (const q of byAtom[end] || []) {
           const other = q.a === end ? q.b : q.a;
@@ -4931,9 +4989,9 @@
           if ((ux * vy - uy * vx) * side <= 0) continue;
           const c = (dx * vx + dy * vy) / vl, sn = Math.sqrt(Math.max(0, 1 - c * c));
           if (sn < 0.05) continue;
-          need = Math.max(need, (R + r2 + o * c) / sn + r2);
+          need = Math.max(need, (R + r2 + gap + o * c) / sn);
         }
-        return clamp(need, 0.18 * L, 0.45 * L);
+        return clamp(need, 0.18 * L, 0.4 * L);
       };
       const flatEnd = (atom, b, R) => {
         if (!OUT) return {};
@@ -4960,19 +5018,7 @@
         const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
         const dx = pb.x - pa.x, dy = pb.y - pa.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
         const extra = SH.valence ? clamp(b.order - 1, 0, 2) : 0;
-        let side = 1;
-        if (extra > 0.01) {
-          let sx = 0, sy = 0;
-          for (const end of [b.a, b.b]) for (const o of byAtom[end] || []) {
-            if (o === b || end === b.b && (o.a === b.a || o.b === b.a)) continue;
-            const other = o.a === end ? o.b : o.a;
-            if (!pos[other] || !inSet[other]) continue;
-            sx += pos[other].x - pos[end].x;
-            sy += pos[other].y - pos[end].y;
-          }
-          const cr = ux * sy - uy * sx;
-          side = cr >= 0 ? 1 : -1;
-        }
+        const side = extra > 0.01 && !flatSticks() ? valenceSide(b, ux, uy) : 1;
         if (isInk() && A.el !== B.el && !flatSticks()) {
           const zm = (pa.z + pb.z) / 2;
           items.push({ z: zm - 15e-4, draw: (ctx) => {
@@ -4994,16 +5040,15 @@
             else drawHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, passes: lowDetail ? 1 : void 0 });
             if (extra > 0.01 && !(b.partial > 0 && b.partial < 1) && flatSticks()) drawValenceGaps(ctx, near.x, near.y, mx, my, R, extra, { alpha: b.alpha, fog: near.fog, outline: OUT });
             else if (extra > 0.01 && !(b.partial > 0 && b.partial < 1)) {
-              const frac = Math.min(1, extra), r0 = R0 * near.d, r2 = r0 * 0.42 * (0.5 + 0.5 * frac), o = (R - r0 + r0 * 1.95) * frac, off = o * side;
-              const sh = innerStop(half ? b.b : b.a, half ? -ux : ux, half ? -uy : uy, side, ux, uy, R, r2, o, L);
-              const ax = near.x + ux * sh * (half ? -1 : 1), ay = near.y + uy * sh * (half ? -1 : 1);
-              if (engravedSticks()) drawEngravedHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha * frac, site, inner: true });
-              else drawHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, seed: seed + half * 3 + 101, fog: near.fog, d: near.d, alpha: b.alpha * frac, partial: 0, passes: 1, noShadow: true, inner: true });
-              if (extra > 1.01) {
-                const off2 = -off;
-                if (engravedSticks()) drawEngravedHalfStick(ctx, ax - uy * off2, ay + ux * off2, mx - uy * off2, my + ux * off2, r2, col, { Rm: r2, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha * (extra - 1), site, inner: true });
-                else drawHalfStick(ctx, ax - uy * off2, ay + ux * off2, mx - uy * off2, my + ux * off2, r2, col, { Rm: r2, seed: seed + half * 3 + 202, fog: near.fog, d: near.d, alpha: b.alpha * (extra - 1), partial: 0, passes: 1, noShadow: true });
-              }
+              const frac = Math.min(1, extra), r2 = R * 0.42 * (0.5 + 0.5 * frac), gap = -0.7 * r2, o = (R + gap + r2) * frac;
+              const inner = (sd, al, sv) => {
+                const off = o * sd, sh = innerStop(half ? b.b : b.a, half ? -ux : ux, half ? -uy : uy, sd, ux, uy, R, r2, o, gap, L);
+                const x0 = near.x + ux * sh * (half ? -1 : 1) - uy * off, y0 = near.y + uy * sh * (half ? -1 : 1) + ux * off;
+                if (engravedSticks()) drawEngravedHalfStick(ctx, x0, y0, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha * al, site, inner: true, cap: true });
+                else drawHalfStick(ctx, x0, y0, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, seed: seed + half * 3 + sv, fog: near.fog, d: near.d, alpha: b.alpha * al, partial: 0, passes: 1, noShadow: true, inner: true });
+              };
+              inner(side, frac, 101);
+              if (extra > 1.01) inner(-side, extra - 1, 202);
             }
           } });
         }

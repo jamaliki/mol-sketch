@@ -179,3 +179,13 @@ def test_a_scene_keeps_its_orders():
     written = [b[2] if len(b) > 2 else 1 for b in json.loads((EX / "mechanism.json").read_text())["keyframes"][0]["bonds"]]
     assert [b[2] if len(b) > 2 else 1 for b in keyframe(mech)["bonds"]] == written and 2 in written
     assert set(orders(ms.load(EX / "trypsin_active_site.json")).values()) == {1}
+
+
+def test_double_bonds_draw_in_every_look():
+    """the extra bond of a double bond is drawn in every look, at an active site's scale too: show.valence changes the
+    picture of the catalytic triad (His57's ring, Asp102's C=O) and of the example ligand's ring"""
+    site = lambda look, **st: ms.load(EX / "1LCD.pdb").look(look).site("resi 29").set(**st).render(SMALL).to_numpy()
+    for look in ("engraved", "engraved-colour", "ink", "ink-colour", "watercolour", "chalkboard", "textbook", "dark-paper", "flat"):
+        assert not np.array_equal(site(look), site(look, **{"show.valence": False})), look
+        lig = lambda **st: ms.load(EX / "test_protein.pdb").look(look).show(sticks="resn LIG", cartoon=None).set(**st).render(SMALL).to_numpy()
+        assert not np.array_equal(lig(), lig(**{"show.valence": False})), look
