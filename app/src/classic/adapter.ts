@@ -64,7 +64,7 @@ function keyframeOf(s: Structure, rot: (x: number, y: number, z: number) => numb
       atoms[id] = a;
     }
   }
-  const bonds: [string, string, number][] = []; for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], 1]);
+  const bonds: [string, string, number][] = []; for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], s.bondOrder[b >> 1] || 1]);   // orders as read (bondorder.ts)
   return { kf: { name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }, ids };
 }
 

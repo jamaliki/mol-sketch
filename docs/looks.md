@@ -300,21 +300,30 @@ ms.scene("examples/reactions/pi_star.json").look("textbook").save("pi_star.png",
 
 | | |
 |---|---|
-| ![Trypsin in the Flat look](img/flat.png) | ![Its catalytic triad, close up](img/flat_site.png) |
-
-![The serine hydrolase mechanism's sticks in the Flat look](img/flat_mechanism.png)
+| ![Trypsin with benzamidine in the Flat look](img/flat.png) | ![Its catalytic triad and benzamidine, close up](img/flat_site.png) |
+| ![The close-up in ball-and-stick](img/flat_ballstick.png) | ![The serine hydrolase mechanism's sticks in the Flat look](img/flat_mechanism.png) |
 
 PyMOL under flat light with its outlines on (`ray_trace_mode 1`), the look of many protein-design papers, for when a
 talk or a paper wants a clean illustration rather than a drawing. Ribbons keep MOLSCRIPT's geometry, filled solid: each
 colour on a face, one darker shade of it on a ribbon's far side and a strand's narrow side, and a thin, even line round
-them. Sticks are PyMOL's: solid colour split at each bond's middle, round joints, a ball at Cα. Beside ribbons they are
-outlined as the ribbons are; on their own (a mechanism) they are plain (`stick_outline`). Outlined, an active
-site's sticks need no paper halo to stand off the ribbons behind them, and have none. Hydrogen bonds are evenly
-spaced round dots in a colour of their own.
+them. Sticks are PyMOL's: solid colour split at each bond's middle, round joints, a ball at Cα, 0.2 Å thick as
+publication figures draw side chains. Beside ribbons they are outlined as the ribbons are; on their own (a mechanism)
+they are plain (`stick_outline`). Outlined, an active site's sticks need no paper halo to stand off the ribbons behind
+them, and have none; nor much extra bulk: they are 1.25 times the others, PyMOL's own 0.25 Å. Hydrogen bonds are
+evenly spaced round dots in a colour of their own.
+
+`mode="ballstick"` is PyMOL's ball-and-stick in the same terms: a solid ball on each atom in its colour (the carbons
+coloured as the sticks are, a residue's or chain's own colour included), a quarter of its van der Waals radius
+(`sphere_scale`; a hydrogen's smaller), joined by rods 0.7 times as thick as a stick (0.14 Å), each half in its atom's
+colour, outlined with the sticks. A rod leaves its ball where its surface does, so a bond turned toward you comes out
+of the middle of the ball behind it. A double or triple bond is two or three thinner rods side by side; the active
+site's balls and rods are larger by its scale. In an SVG every ball is a circle and every rod a quadrilateral.
 
 A mechanism's chemistry is drawn in the same terms. A bond to a hydrogen is thinner (`stick_h_scale`), so a proton
 reads lighter than the bonds it moves between. A double or triple bond is two or three lanes in the one stick, as
-PyMOL draws valence, the gap between them closing before each atom so the lanes run into it. A formal charge is a
+PyMOL draws valence, the gap between them closing before each atom so the lanes run into it; a structure's are its
+backbone's and side chains' C=O, its rings and its ligands' double and triple bonds, as the file gives them or its
+geometry shows ([bond orders](reference.md#bond-orders)). A formal charge is a
 solid badge in the ink, wider than a stick, its sign drawn in the paper's colour, set off the atom in whichever
 direction is clearest of its bonds, hydrogen
 bonds and lone pairs (the upper right when that is as clear); lone pairs are bold pairs of dots sized from the stick,
@@ -326,8 +335,9 @@ per ribbon face, half-bond and outline, and the paper one rectangle (or nothing,
 recoloured or rearranged in Illustrator, Inkscape or a figure tool, and laid on a page of its own colour.
 
 ```python
-fig = ms.load("app/public/examples/trypsin_active_site.json").look("flat").site("resi 57+102+195")
+fig = ms.fetch("3PTB").look("flat").site("resi 57+102+195 or resn BEN").frame_site((960, 720))
 fig.save("trypsin.svg", (960, 720))
+fig.set(mode="ballstick")                                   # PyMOL's ball-and-stick
 fig.set(palette={"helix": "#4c78a8", "sheet": "#f2c14e", "loop": "#eeeeee"}, **{"paper.transparent": True})
 ```
 
@@ -344,7 +354,8 @@ fig.set(palette={"helix": "#4c78a8", "sheet": "#f2c14e", "loop": "#eeeeee"}, **{
 | `palette.hbond`, `palette.H` | `#2b8ea3`, `#d4d4d4` | teal hydrogen bonds; hydrogens grey, as white vanishes on white |
 | `stick_h_scale` | `0.55` | bonds to hydrogens thinner |
 | `lone_pair_style` | `"bold"` | lone pairs as bold dots, clear of bonds and the charge |
-| `stick_radius`, `sphere_scale` | `0.25`, `0.25` | PyMOL's stick, and a Cα ball twice as wide |
+| `stick_radius`, `sphere_scale` | `0.2`, `0.25` | sticks as publication figures draw side chains, and a Cα ball twice as wide; in ball-and-stick, balls a quarter of the van der Waals radius (PyMOL's `sphere_scale`) |
+| `site.scale` | `1.25` | the site's sticks PyMOL's 0.25 Å: their outline sets them apart, not their bulk |
 | `site.quiet`, `site.cutaway` | `0`, `false` | nothing faded or seen through: the site reads by its sticks |
 | `font`, `label_size` | `"Plain sans"`, `22` | lettered labels |
 | `view.fog`, `view.fov` | `0`, `0` | no fog, an orthographic view |

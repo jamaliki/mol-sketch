@@ -90,11 +90,15 @@ def maps():
 
 
 def flat():
-    """the Flat look: trypsin with its catalytic triad, whole and close up (outlined sticks on outlined ribbons), and the
-    mechanism's sticks alone, plain"""
-    fig = ms.load(TRYPSIN).look("flat").site("resi 57+102+195")
+    """the Flat look: trypsin with benzamidine (PDB 3PTB) and its catalytic triad, whole and close up (outlined sticks on
+    outlined ribbons, double bonds as the file gives them), the close-up in ball-and-stick, and the mechanism's sticks
+    alone, plain"""
+    fig = ms.fetch("3PTB").look("flat").site("resi 57+102+195 or resn BEN").frame_site((960, 720))
     say(fig.copy().save(IMG / "flat.png", (960, 720)))
-    say(fig.copy().view(zoom=3.4, pan=(-0.03, 0.14)).save(IMG / "flat_site.png", (960, 720)))
+    c = fig.camera; k = 3 / c["zoom"]
+    close = fig.copy().view(zoom=3, pan=(c["pan_x"] * k, c["pan_y"] * k))
+    say(close.copy().save(IMG / "flat_site.png", (960, 720)))
+    say(close.copy().set(mode="ballstick").save(IMG / "flat_ballstick.png", (960, 720)))
     say(ms.scene(MECH).look("flat").save(IMG / "flat_mechanism.png", (960, 720), frame=28))
 
 

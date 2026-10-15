@@ -568,6 +568,7 @@ function atomColor(a){if(a.color)return cfg.palette[a.color]||a.color;if(a.el===
 /* ============================ frame render ============================ */
 function atomDrawR(a,proj){
   if(cfg.rep.mode==='sticks'){const R=cfg.rep.stickRadius*proj.pxPerA;return a.sphere?R*(1+cfg.rep.sphereScale*4):R}
+  if(flatSticks())return flatBallR(a)*proj.pxPerA;
   return (a.r??EL_R[a.el]??0.45)*cfg.style.ballScale*proj.pxPerA;
 }
 function anchorPoint(an,st,proj,other){
@@ -866,13 +867,39 @@ function siteFade(cx,cy,z){if(!SITE)return 1;let a=1-0.55*SITE.quiet;
 function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
   const P=cfg.palette,SH=cfg.show;const R0=cfg.rep.stickRadius*proj.pxPerA;
   const inSet={};for(const a of atoms)inSet[a.id]=a;
-  const nb={};for(const b of bonds){if(!inSet[b.a]||!inSet[b.b]||b.order===0)continue;nb[b.a]=(nb[b.a]||0)+1;nb[b.b]=(nb[b.b]||0)+1}
+  const nb={},byAtom={};for(const b of bonds){if(!inSet[b.a]||!inSet[b.b]||b.order===0)continue;nb[b.a]=(nb[b.a]||0)+1;nb[b.b]=(nb[b.b]||0)+1;(byAtom[b.a]=byAtom[b.a]||[]).push(b);(byAtom[b.b]=byAtom[b.b]||[]).push(b)}
   // outlined flat sticks: each atom's whole bonds on screen (direction, half-length, radius), which trim its bonds' edges
   // and shape its joint
   const OUT=flatSticks()&&stickOutlined()?cfg.style.inkWidth*LW.outer:0,legs={};
   if(OUT)for(const b of bonds){const A=inSet[b.a],B=inSet[b.b];if(!A||!B||b.order===0||(b.partial>0&&b.partial<1))continue;const pa=pos[b.a],pb=pos[b.b];const L=Math.hypot(pb.x-pa.x,pb.y-pa.y);if(L<1e-6)continue;
     const ks=(A._site&&B._site?(cfg.rep.siteScale||1.9):1)*hScale(A,B),u=[(pb.x-pa.x)/L,(pb.y-pa.y)/L];
     (legs[b.a]=legs[b.a]||[]).push({b,u,L:L/2,R:R0*pa.d*ks});(legs[b.b]=legs[b.b]||[]).push({b,u:[-u[0],-u[1]],L:L/2,R:R0*pb.d*ks})}
+  /* A double or triple bond outside the flat look: the bond's own stick, and beside it a thin stick of the same make
+     (filled and inked as the look draws its sticks, capped at its ends), as a textbook draws the inner line of a ring's
+     double bond and PyMOL's valence its second cylinder. It lies close and parallel, on the ring's side or, out of a
+     ring, on the side of the neighbour nearest the bond in space (a carboxylate's other oxygen first), so it does not
+     flip as the molecule turns; it is as thin for its stick as a plain bond's is, whatever the site's scale, and stops
+     short of the joints and of the next bond round its side. */
+  // the smallest ring (up to six atoms) a bond closes, as its atoms, or null
+  const ringOf=(a,b)=>{const prev={[a]:null};let front=[a];
+    for(let d=1;d<6&&front.length;d++){const next=[];for(const x of front)for(const q of byAtom[x]||[]){const y=q.a===x?q.b:q.a;if((x===a&&y===b)||y in prev)continue;prev[y]=x;
+      if(y===b){const out=[];let z=y;while(z!==null){out.push(z);z=prev[z]}return out}next.push(y)}front=next}return null};
+  const angle3=(c,p,q)=>{const u=[p[0]-c[0],p[1]-c[1],p[2]-c[2]],v=[q[0]-c[0],q[1]-c[1],q[2]-c[2]];return Math.acos(clamp(dot3(u,v)/((len3(u)*len3(v))||1),-1,1))};
+  const valenceSide=(b,ux,uy)=>{const pa=pos[b.a],pb=pos[b.b],mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2;
+    const ring=ringOf(b.a,b.b);if(ring){let cx=0,cy=0;for(const id of ring){cx+=pos[id].x;cy+=pos[id].y}const cr=ux*(cy/ring.length-my)-uy*(cx/ring.length-mx);if(Math.abs(cr)>1e-6)return cr>0?1:-1}
+    let best=null,bs=Infinity;
+    for(const end of[b.a,b.b]){const other=end===b.a?b.b:b.a,E=inSet[end],O=inSet[other];
+      for(const q of byAtom[end]||[]){const n=q.a===end?q.b:q.a,N=inSet[n];if(!N||n===other)continue;
+        const lone=N.el!=='C'&&N.el!=='H'&&(byAtom[n]||[]).length===1;   // a carboxylate's other oxygen, a nitro's
+        const sc=angle3(E.pos,O.pos,N.pos)-(lone?10:0)+(N.el==='H'?20:0);if(sc<bs-1e-9||(Math.abs(sc-bs)<=1e-9&&n<best.n)){bs=sc;best={end,n}}}}
+    if(!best)return 1;const e=pos[best.end],q=pos[best.n];return ux*(q.y-e.y)-uy*(q.x-e.x)>=0?1:-1};
+  // where an inner stick's end (the centre of its cap) lies, along the bond from its atom: as near as clears the stick of
+  // the nearest bond round its side of that atom by the gap (at angle φ: (R + r2 + gap + o·cos φ) / sin φ), and no
+  // nearer than a fifth of the bond, so it stops short of the atom
+  const innerStop=(end,dx,dy,side,ux,uy,R,r2,o,gap,L)=>{let need=0;
+    for(const q of byAtom[end]||[]){const other=q.a===end?q.b:q.a;const p=pos[other],e=pos[end];if(!p||!inSet[other])continue;const vx=p.x-e.x,vy=p.y-e.y,vl=Math.hypot(vx,vy);if(vl<1e-6)continue;
+      if((ux*vy-uy*vx)*side<=0)continue;const c=(dx*vx+dy*vy)/vl,sn=Math.sqrt(Math.max(0,1-c*c));if(sn<0.05)continue;need=Math.max(need,(R+r2+gap+o*c)/sn)}
+    return clamp(need,0.18*L,0.4*L)};
   const flatEnd=(atom,b,R)=>{if(!OUT)return{};const lg=legs[atom.id]||[],own=lg.find(l=>l.b===b),others=lg.filter(l=>l.b!==b);const cap=!others.length&&!atom.sphere;
     return{outline:OUT,cap,trim:!cap&&own?stickTrims(own.u,R,others):null}};
   for(const b of bonds){
@@ -885,10 +912,7 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
     const dx=pb.x-pa.x,dy=pb.y-pa.y,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;
     // valence: the main stick stays full width; extra order is a shorter, thinner inner stick on the crowded side (ring interior / substituent side)
     const extra=SH.valence?clamp(b.order-1,0,2):0;
-    let side=1;
-    if(extra>0.01){let sx=0,sy=0;for(const o of bonds){if(o.order===0||o===b)continue;let other=null,base=null;if(o.a===b.a||o.a===b.b){other=o.b;base=o.a}else if(o.b===b.a||o.b===b.b){other=o.a;base=o.b}
-        if(!other||!pos[other]||!inSet[other])continue;sx+=pos[other].x-pos[base].x;sy+=pos[other].y-pos[base].y}
-      const cr=ux*sy-uy*sx;side=cr>=0?1:-1}
+    const side=extra>0.01&&!flatSticks()?valenceSide(b,ux,uy):1;
     if(isInk()&&A.el!==B.el&&!flatSticks()){const zm=(pa.z+pb.z)/2;items.push({z:zm-0.0015,draw:(ctx)=>{const Rm=R0*(pa.d+pb.d)/2;const fog=(pa.fog+pb.fog)/2;
       ctx.save();ctx.globalAlpha=b.alpha;sketchLine(ctx,[[mx-uy*Rm*0.95,my+ux*Rm*0.95],[mx+uy*Rm*0.95,my-ux*Rm*0.95]],{seed:seed+55,passes:1,width:cfg.style.inkWidth*0.7*LW.inner,color:fogged(P.ink,fog),alpha:0.7,ampScale:0.4,step:4,overshoot:false});ctx.restore()}})}
     for(const [near,far,atom,half] of[[pa,pb,A,0],[pb,pa,B,1]]){
@@ -899,14 +923,15 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
         else if(flatSticks())drawFlatHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,seed:seed+half*3,fog:near.fog,d:near.d,alpha:b.alpha,partial:b.partial,...flatEnd(atom,b,R)});
         else drawHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,seed:seed+half*3,fog:near.fog,d:near.d,alpha:b.alpha,partial:b.partial,passes:lowDetail?1:undefined});
         if(extra>0.01&&!(b.partial>0&&b.partial<1)&&flatSticks())drawValenceGaps(ctx,near.x,near.y,mx,my,R,extra,{alpha:b.alpha,fog:near.fog,outline:OUT});
-        else if(extra>0.01&&!(b.partial>0&&b.partial<1)){ // inner valence stick(s)
-          const frac=Math.min(1,extra);const off=R0*1.95*near.d*side*frac;const r2=R0*0.42*near.d*(0.5+0.5*frac);
-          const sh=0.18; // shorten toward the atom so it does not poke out of the junction
-          const ax=near.x+ux*L*sh*(half?-1:1),ay=near.y+uy*L*sh*(half?-1:1);
-          if(engravedSticks())drawEngravedHalfStick(ctx,ax-uy*off,ay+ux*off,mx-uy*off,my+ux*off,r2*ks,col,{Rm:r2*ks,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha*frac,site,inner:true});
-          else if(flatSticks())drawFlatHalfStick(ctx,ax-uy*off,ay+ux*off,mx-uy*off,my+ux*off,r2*ks,col,{Rm:r2*ks,fog:near.fog,alpha:b.alpha*frac,outline:OUT});
-          else drawHalfStick(ctx,ax-uy*off,ay+ux*off,mx-uy*off,my+ux*off,r2,col,{Rm:r2,el:atom.el,seed:seed+half*3+101,fog:near.fog,d:near.d,alpha:b.alpha*frac,partial:0,passes:1,noShadow:true,inner:true});
-          if(extra>1.01){const off2=-off;if(flatSticks())drawFlatHalfStick(ctx,ax-uy*off2,ay+ux*off2,mx-uy*off2,my+ux*off2,r2*ks,col,{Rm:r2*ks,fog:near.fog,alpha:b.alpha*(extra-1),outline:OUT});else drawHalfStick(ctx,ax-uy*off2,ay+ux*off2,mx-uy*off2,my+ux*off2,r2,col,{Rm:r2,seed:seed+half*3+202,fog:near.fog,d:near.d,alpha:b.alpha*(extra-1),partial:0,passes:1,noShadow:true})}
+        else if(extra>0.01&&!(b.partial>0&&b.partial<1)){ // the inner stick(s) (valenceSide above): as thin for the bond's
+          // stick as a plain bond's is, against its side -- a little of it behind the bond's own stick, as one cylinder
+          // beside another -- sliding out from the stick as an order grows
+          const frac=Math.min(1,extra),r2=R*0.42*(0.5+0.5*frac),gap=-0.7*r2,o=(R+gap+r2)*frac;
+          const inner=(sd,al,sv)=>{const off=o*sd,sh=innerStop(half?b.b:b.a,half?-ux:ux,half?-uy:uy,sd,ux,uy,R,r2,o,gap,L);
+            const x0=near.x+ux*sh*(half?-1:1)-uy*off,y0=near.y+uy*sh*(half?-1:1)+ux*off;
+            if(engravedSticks())drawEngravedHalfStick(ctx,x0,y0,mx-uy*off,my+ux*off,r2,col,{Rm:r2,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha*al,site,inner:true,cap:true});
+            else drawHalfStick(ctx,x0,y0,mx-uy*off,my+ux*off,r2,col,{Rm:r2,el:atom.el,seed:seed+half*3+sv,fog:near.fog,d:near.d,alpha:b.alpha*al,partial:0,passes:1,noShadow:true,inner:true})};
+          inner(side,frac,101);if(extra>1.01)inner(-side,extra-1,202);
         }}});
     }
   }
@@ -931,6 +956,62 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
       if(isInk()){ctx.save();ctx.clip();if(isPencil())scribbleFill(ctx,p.x-R,p.y-R,p.x+R,p.y+R,col,seed,{fog:p.fog,d:p.d});penSphere(ctx,p.x,p.y,R,col,a.el,seed,{fog:p.fog,d:p.d});ctx.restore()}ctx.restore()}});
     }
   }
+}
+/* ---- flat ball and stick (mode 'ballstick' with flat sticks), as PyMOL draws it under flat light ----
+   A solid ball on each atom in its colour (carbons as the sticks colour them), sphereScale of its van der Waals radius
+   (PyMOL's sphere_scale; a hydrogen's smaller still), and between the balls thinner rods (half the stick's radius), each
+   half in its atom's colour. A double or triple bond is two or three thinner rods side by side. Inked round their
+   silhouettes when the sticks are outlined. A rod leaves its ball where its surface does: from the edge of a bond in the
+   picture's plane, from nearer the middle of a ball behind it as the bond turns toward the viewer; the nearer ball covers
+   its own end. Plain shapes -- a disc per atom, a quadrilateral per rod's half -- so an SVG keeps them so. An active
+   site's balls and rods are larger by its scale, as its sticks are. */
+const BS_ROD=0.7;   // a rod's radius as a share of the stick's: 0.14 Å beside the flat look's 0.2 Å sticks, PyMOL's ball-and-stick rod
+/** a ball's radius in Å: the atom's own (a scene's `r`), else its van der Waals radius (the surfaces' VDW) times sphereScale */
+function flatBallR(a){return(a.r??(VDW[a.el]??1.7)*cfg.rep.sphereScale*(a.el==='H'?0.6:1))*(a._site?(cfg.rep.siteScale||1.9):1)}
+/** the rods of a bond of order 1 + extra: [offset across the bond, radius, alpha] for each, in px from the single rod's
+    radius rb; between whole orders the two sets cross-fade */
+function bondLanes(rb,extra){
+  const set=n=>n===1?[[0,rb]]:n===2?[[0.87*rb,0.62*rb],[-0.87*rb,0.62*rb]]:[[0,0.52*rb],[1.46*rb,0.52*rb],[-1.46*rb,0.52*rb]];
+  const lo=Math.floor(extra+1e-6),f=extra-lo;const out=set(lo+1).map(([o,r])=>[o,r,f>0.01?1-f:1]);
+  if(f>0.01)for(const[o,r]of set(lo+2))out.push([o,r,f]);return out}
+/** one half of a rod, from its atom at (ax,ay) along (ux,uy): filled from t0 to just past t1 (the bond's middle), `off`
+    across it, and its two long edges inked when outlined -- each only outside its ball (of radius Rb on screen), so a rod
+    over a ball behind it shows no edge where it leaves that ball's surface */
+function drawRod(ctx,ax,ay,ux,uy,t0,t1,off,r,Rb,col,o){
+  if(t1-t0<0.5)return;const nx=-uy,ny=ux,at=(t,q)=>[ax+ux*t+nx*q,ay+uy*t+ny*q];
+  ctx.save();ctx.globalAlpha=o.alpha??1;ctx.beginPath();const q=[at(t0,off+r),at(t1+0.5,off+r),at(t1+0.5,off-r),at(t0,off-r)];ctx.moveTo(q[0][0],q[0][1]);for(let k=1;k<4;k++)ctx.lineTo(q[k][0],q[k][1]);ctx.closePath();
+  ctx.fillStyle=fogged(col,o.fog||0);ctx.fill();
+  if(o.outline>0){ctx.lineWidth=o.outline;ctx.strokeStyle=fogged(cfg.palette.ink,o.fog||0);ctx.lineCap='butt';ctx.beginPath();
+    for(const e of[off+r,off-r]){const s0=Math.max(t0,Math.sqrt(Math.max(0,Rb*Rb-e*e)));if(t1-s0<0.3)continue;const a=at(s0,e),b=at(t1,e);ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1])}ctx.stroke()}
+  ctx.restore()}
+function buildFlatBallStick(items,st,pos,atoms,bonds,proj,seedBase){
+  const P=cfg.palette,SH=cfg.show;const R0=cfg.rep.stickRadius*proj.pxPerA;const ks=cfg.rep.siteScale||1.9;
+  const inSet={};for(const a of atoms)inSet[a.id]=a;
+  const OUT=stickOutlined()?cfg.style.inkWidth*LW.outer:0;
+  for(const b of bonds){const A=inSet[b.a],B=inSet[b.b];if(!A||!B)continue;const pa=pos[b.a],pb=pos[b.b];
+    const dx=pb.x-pa.x,dy=pb.y-pa.y,L=Math.hypot(dx,dy);if(L<1e-6)continue;const ux=dx/L,uy=dy/L;
+    if(b.order===0){if(!SH.hbonds)continue;const fog=(pa.fog+pb.fog)/2;
+      items.push({z:(pa.z+pb.z)/2,draw:(ctx)=>{const ra=atomDrawR(A,proj)*pa.d,rb=atomDrawR(B,proj)*pb.d;
+        drawHBond(ctx,pa.x+ux*(ra+2),pa.y+uy*(ra+2),pb.x-ux*(rb+2),pb.y-uy*(rb+2),{seed:seedBase+strHash(bkey(b.a,b.b)),color:fogged(P.hbond||(luminance(P.paper)>0.5?P.hatch:P.ink),fog),alpha:b.alpha*(1-fog*cfg.view.fog*0.5),r:R0*0.5*((pa.d+pb.d)/2),gap:R0*1.5})}});continue}
+    const k=(A._site&&B._site?ks:1)*hScale(A,B),extra=SH.valence?clamp(b.order-1,0,2):0,mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2;
+    // how much the bond lies in the picture's plane: its length on screen over its length in space
+    const L3=Math.hypot(A.pos[0]-B.pos[0],A.pos[1]-B.pos[1],A.pos[2]-B.pos[2])*proj.pxPerA*(pa.d+pb.d)/2,inPlane=L3>1e-6?Math.min(1,L/L3):1;
+    for(const[near,far,atom,sg]of[[pa,pb,A,1],[pb,pa,B,-1]]){
+      const rb=R0*BS_ROD*near.d*k,lanes=bondLanes(rb,extra),hw=Math.max(...lanes.map(l=>Math.abs(l[0])+l[1]));
+      const Rb=atomDrawR(atom,proj)*near.d,e=Math.sqrt(Math.max(0,Rb*Rb-hw*hw))*inPlane;
+      // behind its ball when this end is the nearer, over it when it is the farther
+      items.push({z:near.z<far.z?near.z+0.002:near.z-0.002,draw:(ctx)=>{const col=atomColor(atom);
+        if(b.partial>0&&b.partial<1){drawHalfStick(ctx,near.x+sg*ux*e,near.y+sg*uy*e,mx,my,rb*1.5,col,{fog:near.fog,alpha:b.alpha,partial:b.partial});return}
+        for(const[off,r,al]of lanes)if(al>0.01)drawRod(ctx,near.x,near.y,sg*ux,sg*uy,e,L/2,sg*off,r,Rb,col,{alpha:b.alpha*al,fog:near.fog,outline:OUT})}});
+    }
+  }
+  // unoutlined, the site is knocked out of what lies behind it by a paper halo, as flat sticks are
+  if(SITE&&!OUT){const sb=bonds.filter(b=>b.order!==0&&inSet[b.a]&&inSet[b.b]&&inSet[b.a]._site&&inSet[b.b]._site);const sa=atoms.filter(a=>a._site);
+    items.push({z:SITE.zmin-0.01,draw:(ctx)=>{ctx.save();ctx.strokeStyle=cfg.palette.paper;ctx.fillStyle=cfg.palette.paper;ctx.lineCap='round';
+      for(const b of sb){const pa=pos[b.a],pb=pos[b.b];const R=R0*BS_ROD*ks*(pa.d+pb.d)/2;ctx.globalAlpha=b.alpha;ctx.lineWidth=2*(R+Math.max(2.5,R*0.6));ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke()}
+      for(const a of sa){const p=pos[a.id];const R=atomDrawR(a,proj)*p.d;ctx.globalAlpha=a.alpha;ctx.beginPath();ctx.arc(p.x,p.y,R+Math.max(2.5,R*0.6),0,Math.PI*2);ctx.fill()}ctx.restore()}})}
+  for(const a of atoms){const p=pos[a.id];const r=atomDrawR(a,proj)*p.d;
+    items.push({z:p.z,draw:(ctx)=>drawFlatDisc(ctx,p.x,p.y,r,atomColor(a),{fog:p.fog,alpha:a.alpha,outline:OUT})})}
 }
 /* ---- ball and stick representation (pencil balls) ---- */
 function buildBallStick(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
@@ -2146,7 +2227,8 @@ function renderFrame(ctx,W,H,frame,dpr){
   const stickBonds=st.bonds.filter(b=>stickIds.has(b.a)&&stickIds.has(b.b));
   const surfAtoms=reps.surface&&reps.surface.trim()?st.atoms.filter(a=>selF(a)&&(SH.H||a.el!=='H')):[];
   const items=[];const lowDetail=cfg.rep.detail!=='full'&&(stickAtoms.length+surfAtoms.length)>260;   // 'full': every atom gets the whole treatment however many there are
-  if(cfg.rep.mode==='sticks')buildSticks(items,st,pos,stickAtoms,stickBonds,proj,seedBase,lowDetail);else buildBallStick(items,st,pos,stickAtoms,stickBonds,proj,seedBase,lowDetail);
+  if(cfg.rep.mode==='sticks')buildSticks(items,st,pos,stickAtoms,stickBonds,proj,seedBase,lowDetail);
+  else if(flatSticks())buildFlatBallStick(items,st,pos,stickAtoms,stickBonds,proj,seedBase);else buildBallStick(items,st,pos,stickAtoms,stickBonds,proj,seedBase,lowDetail);
   if(cartoonOn)buildCartoon(items,st,pos,st.atoms,selC,proj,seedBase,lowDetail);
   if(surfAtoms.length)buildSurface(items,st,pos,surfAtoms,proj,seedBase,lowDetail);
   if(scene.map)buildMap(items,st,pos,proj,seedBase);

@@ -503,14 +503,14 @@ export function buildPanel(root: HTMLElement, H: PanelHost) {
   }
   {
     const g = sec(PS, 'Appearance', { keys: 'ball stick radius engraved sketch carbons colour' }); showWhen(g, sticksOn);
-    control(g, { t: 'seg', label: 'drawn as', path: 'mode', options: [['sticks', 'Sticks'], ['ballstick', 'Ball & stick']], geom: true });
+    control(g, { t: 'seg', label: 'drawn as', path: 'mode', options: [['sticks', 'Sticks'], ['ballstick', 'Ball & stick']], geom: true, tip: 'ball & stick with flat sticks: PyMOL\'s, solid balls joined by thin rods · with the other sticks: pencil balls' });
     control(g, { t: 'seg', label: 'line', path: 'stickStyle', options: [['auto', 'Auto'], ['engraved', 'Engraved'], ['sketch', 'Sketched'], ['flat', 'Flat']], geom: true, tip: 'engraved: lines along each bond, like the ribbons · sketched: hand-drawn · flat: solid colour, round joints, no outline, as PyMOL · auto: engraved when the ribbons are' });
     control(g, { t: 'seg', label: 'outline', path: 'stickOutline', options: [['auto', 'Auto'], ['on', 'On'], ['off', 'Off']], geom: true, when: () => H.style.stickStyle === 'flat', tip: 'flat sticks inked round their silhouette · auto: when ribbons are drawn, so side chains match them' });
     control(g, { t: 'color', label: 'hydrogen bonds', path: 'palette.hbond', unset: () => H.style.palette.hatch });
     control(g, { t: 'select', label: 'carbons by', path: 'colorBy', options: [['residue', 'residue'], ['element', 'element (grey)'], ['chain', 'chain'], ['subunit', 'subunit'], ['entity', 'molecule']], geom: true });
     control(g, { t: 'range', label: 'thickness', path: 'stickRadius', min: 0.08, max: 0.5, step: 0.01, geom: true });
     control(g, { t: 'range', label: 'to hydrogens', path: 'stickHScale', min: 0.3, max: 1, step: 0.05, geom: true, tip: 'a bond to a hydrogen as a share of the stick, as PyMOL\'s stick_h_scale' });
-    control(g, { t: 'range', label: 'atom spheres', path: 'sphereScale', min: 0, max: 1, step: 0.05, geom: true });
+    control(g, { t: 'range', label: 'atom spheres', path: 'sphereScale', min: 0, max: 1, step: 0.05, geom: true, tip: 'sticks: the balls at Cα · flat ball & stick: each ball as a share of its atom\'s van der Waals radius, as PyMOL\'s sphere_scale' });
     const g2 = el('div'); g.append(g2); swatchRow(g2, 'elements', ['C', 'N', 'O', 'S', 'P', 'H', 'X'], true);
   }
 

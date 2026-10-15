@@ -60,6 +60,11 @@ CASES = {
     "hero-calb-chalk": (lambda: HERO / "calb" / "calb_hero.json", ["--look", "chalkboard", "--style", str(HERO / "looks" / "chalkboard.json"), "--set", "show.labels=false", "--set", "show.caption=false",
                                                                   "--set", "show.stepLabel=false", "--set", "annot=1.5", "--set", "sphereScale=0.3", "--set", "boilHold=2"], (960, 540), 28,
                         lambda: ms.load(HERO / "calb" / "calb_hero.json").look("chalkboard").apply_style(HERO / "looks" / "chalkboard.json").set(**{"show.labels": False, "show.caption": False, "show.stepLabel": False, "annot": 1.5, "sphereScale": 0.3, "boilHold": 2})),
+    # the flat look on a structure: double bonds as the file gives them, sticks and PyMOL's ball-and-stick, the site larger
+    "trypsin-3ptb-flat": (lambda: cif("3PTB"), ["--look", "flat", "--set", "site.sel=resi 57+102+195 or resn BEN", "--yaw", "36", "--zoom", "2.4"], (1200, 900), None,
+                          lambda: ms.fetch("3PTB").look("flat").site("resi 57+102+195 or resn BEN").view(yaw=36, zoom=2.4)),
+    "trypsin-3ptb-flat-ballstick": (lambda: cif("3PTB"), ["--look", "flat", "--set", "mode=ballstick", "--set", "site.sel=resi 57+102+195 or resn BEN", "--yaw", "36", "--zoom", "2.4"], (1200, 900), None,
+                                    lambda: ms.fetch("3PTB").look("flat").set(mode="ballstick").site("resi 57+102+195 or resn BEN").view(yaw=36, zoom=2.4)),
     "test-protein-1a8o": (lambda: EX / "1A8O.pdb", ["--look", "ink-colour"], (960, 720), None, lambda: ms.load(EX / "1A8O.pdb").look("ink-colour")),
     "ribosome-surface": (lambda: cif("6GZQ"), ["--look", "assembly-surface"], (900, 900), None, lambda: ms.fetch("6GZQ").look("assembly-surface")),
     "ribosome-cartoon": (lambda: cif("6GZQ"), ["--look", "assembly-cartoon"], (900, 900), None, lambda: ms.fetch("6GZQ").look("assembly-cartoon")),

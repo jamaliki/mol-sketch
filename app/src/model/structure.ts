@@ -43,9 +43,13 @@ export class Structure {
   het!: Uint8Array;
   /** bit 0: draw a cut-point sphere at this atom (Cα of a residue drawn as sticks, or a scene atom marked `sphere`) */
   flags!: Uint8Array;
+  /** each atom's serial number in its file (what a PDB file's CONECT records name) */
+  serial!: Int32Array;
   residues: Residue[] = [];
   chains: Chain[] = [];
   bonds: Int32Array = new Int32Array(0);   // pairs
+  /** each bond's order (1, 2 or 3), one per pair in `bonds`: set by assignBondOrders (bondorder.ts); empty is all single */
+  bondOrder: Uint8Array = new Uint8Array(0);
   entities: Record<string, { desc: string }> = {};
   center: [number, number, number] = [0, 0, 0];
   radius = 1;
@@ -70,7 +74,7 @@ export class Structure {
     }
     const n = recs.length; s.count = n;
     s.x = new Float32Array(n); s.y = new Float32Array(n); s.z = new Float32Array(n); s.b = new Float32Array(n);
-    s.residueOf = new Int32Array(n); s.het = new Uint8Array(n); s.flags = new Uint8Array(n);
+    s.residueOf = new Int32Array(n); s.het = new Uint8Array(n); s.flags = new Uint8Array(n); s.serial = new Int32Array(n);
     let ai = 0;
     const subunitOf = (d: string): Subunit => {
       if (/\b(30S|16S|18S|40S|small)\b/i.test(d)) return 'S';
@@ -87,7 +91,7 @@ export class Structure {
       const res: Residue = { index: ri, chain: first.chain, resi: first.resi, resn: first.resn, atomStart: ai, atomEnd: ai + g.length, het: first.het, nucleic, trace: -1, ss: nucleic ? 'N' : 'L', entity: chainEntity[first.chain] ?? '', subunit: 'X', orient: -1 };
       res.subunit = res.entity && entities[res.entity] ? subunitOf(entities[res.entity].desc) : 'X';
       for (const a of g) {
-        s.x[ai] = a.x; s.y[ai] = a.y; s.z[ai] = a.z; s.b[ai] = a.b ?? NaN; s.element.push(a.el); s.atomName.push(a.name); s.residueOf[ai] = ri; s.het[ai] = a.het ? 1 : 0;
+        s.x[ai] = a.x; s.y[ai] = a.y; s.z[ai] = a.z; s.b[ai] = a.b ?? NaN; s.serial[ai] = a.serial | 0; s.element.push(a.el); s.atomName.push(a.name); s.residueOf[ai] = ri; s.het[ai] = a.het ? 1 : 0;
         if (nucleic) { if (a.name === 'P') res.trace = ai; else if (res.trace < 0 && a.name === "C4'") res.trace = ai; if (a.name === "C1'") res.orient = ai }
         else { if (a.name === 'CA') res.trace = ai; if (a.name === 'O') res.orient = ai }
         ai++;
@@ -193,7 +197,7 @@ export class Structure {
           out[m++] = i; out[m++] = j }
       }
     }
-    this.bonds = out.slice(0, m);
+    this.bonds = out.slice(0, m); this.bondOrder = new Uint8Array(m >> 1).fill(1);
   }
 }
 

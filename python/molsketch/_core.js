@@ -2,12 +2,12 @@
 "use strict";
 (() => {
   var __defProp = Object.defineProperty;
-  var __defNormalProp = (obj, key, value) => key in obj ? __defProp(obj, key, { enumerable: true, configurable: true, writable: true, value }) : obj[key] = value;
+  var __defNormalProp = (obj, key2, value) => key2 in obj ? __defProp(obj, key2, { enumerable: true, configurable: true, writable: true, value }) : obj[key2] = value;
   var __export = (target, all) => {
     for (var name in all)
       __defProp(target, name, { get: all[name], enumerable: true });
   };
-  var __publicField = (obj, key, value) => __defNormalProp(obj, typeof key !== "symbol" ? key + "" : key, value);
+  var __publicField = (obj, key2, value) => __defNormalProp(obj, typeof key2 !== "symbol" ? key2 + "" : key2, value);
 
   // src/headless/skarc.ts
   var f = Math.fround;
@@ -637,11 +637,11 @@
           SPECS.push(id, spec());
         }
       } else {
-        const key = JSON.stringify(spec());
-        id = PAINTS.get(key);
+        const key2 = JSON.stringify(spec());
+        id = PAINTS.get(key2);
         if (id === void 0) {
           id = nextPaint++;
-          PAINTS.set(key, id);
+          PAINTS.set(key2, id);
           SPECS.push(id, spec());
         }
       }
@@ -1149,18 +1149,18 @@
     hostTextures = keys ? new Set(keys) : null;
   }
   var textureHost = {
-    take(key, w, h) {
-      if (!hostTextures || !hostTextures.has(key)) return null;
+    take(key2, w, h) {
+      if (!hostTextures || !hostTextures.has(key2)) return null;
       const c = new RecCanvas();
       c.width = w;
       c.height = h;
-      c.push(["ext", key]);
+      c.push(["ext", key2]);
       return c;
     },
-    keep(key, c) {
+    keep(key2, c) {
       if (!hostTextures || !(c instanceof RecCanvas)) return;
       c.settle();
-      c.push(["keep", key]);
+      c.push(["keep", key2]);
     }
   };
 
@@ -1207,23 +1207,27 @@
       __publicField(this, "het");
       /** bit 0: draw a cut-point sphere at this atom (Cα of a residue drawn as sticks, or a scene atom marked `sphere`) */
       __publicField(this, "flags");
+      /** each atom's serial number in its file (what a PDB file's CONECT records name) */
+      __publicField(this, "serial");
       __publicField(this, "residues", []);
       __publicField(this, "chains", []);
       __publicField(this, "bonds", new Int32Array(0));
       // pairs
+      /** each bond's order (1, 2 or 3), one per pair in `bonds`: set by assignBondOrders (bondorder.ts); empty is all single */
+      __publicField(this, "bondOrder", new Uint8Array(0));
       __publicField(this, "entities", {});
       __publicField(this, "center", [0, 0, 0]);
       __publicField(this, "radius", 1);
     }
     static fromRecords(recs, ss, entities, chainEntity) {
       const s = new _Structure();
-      const key = (r) => r.chain + "/" + r.resi + "/" + r.resn + "/" + (r.het ? 1 : 0);
+      const key2 = (r) => r.chain + "/" + r.resi + "/" + r.resn + "/" + (r.het ? 1 : 0);
       const order = /* @__PURE__ */ new Map();
       for (const r of recs) {
-        let g2 = order.get(key(r));
+        let g2 = order.get(key2(r));
         if (!g2) {
           g2 = [];
-          order.set(key(r), g2);
+          order.set(key2(r), g2);
         }
         g2.push(r);
       }
@@ -1247,6 +1251,7 @@
       s.residueOf = new Int32Array(n);
       s.het = new Uint8Array(n);
       s.flags = new Uint8Array(n);
+      s.serial = new Int32Array(n);
       let ai = 0;
       const subunitOf = (d) => {
         if (/\b(30S|16S|18S|40S|small)\b/i.test(d)) return "S";
@@ -1267,6 +1272,7 @@
           s.y[ai] = a.y;
           s.z[ai] = a.z;
           s.b[ai] = a.b ?? NaN;
+          s.serial[ai] = a.serial | 0;
           s.element.push(a.el);
           s.atomName.push(a.name);
           s.residueOf[ai] = ri;
@@ -1432,11 +1438,11 @@
         const K = (x, y, z) => ((x + 512) * 1024 + (y + 512)) * 1024 + (z + 512);
         const ids = /* @__PURE__ */ new Map(), cnt = [], at = new Int32Array(n);
         for (let i = 0; i < n; i++) {
-          const key = K(gx[i], gy[i], gz[i]);
-          let k = ids.get(key);
+          const key2 = K(gx[i], gy[i], gz[i]);
+          let k = ids.get(key2);
           if (k === void 0) {
             k = cnt.length;
-            ids.set(key, k);
+            ids.set(key2, k);
             cnt.push(0);
           }
           at[i] = k;
@@ -1483,15 +1489,606 @@
         }
       }
       this.bonds = out.slice(0, m);
+      this.bondOrder = new Uint8Array(m >> 1).fill(1);
     }
   };
 
+  // src/model/bondorder.ts
+  var BB = [["C", "O", 2]];
+  var BENZYL = [["CG", "CD1", 2], ["CE1", "CZ", 2], ["CD2", "CE2", 2]];
+  var HIS_E = [["CG", "CD2", 2], ["ND1", "CE1", 2]];
+  var HIS_D = [["CG", "CD2", 2], ["CE1", "NE2", 2]];
+  var ADE = [["C8", "N7", 2], ["C4", "C5", 2], ["C6", "N1", 2], ["C2", "N3", 2]];
+  var GUA = [["C8", "N7", 2], ["C4", "C5", 2], ["C6", "O6", 2], ["C2", "N3", 2]];
+  var CYT = [["C2", "O2", 2], ["N3", "C4", 2], ["C5", "C6", 2]];
+  var URA = [["C2", "O2", 2], ["C4", "O4", 2], ["C5", "C6", 2]];
+  var RAW = {
+    GLY: BB,
+    ALA: BB,
+    SER: BB,
+    CYS: BB,
+    VAL: BB,
+    LEU: BB,
+    ILE: BB,
+    MET: BB,
+    PRO: BB,
+    THR: BB,
+    LYS: BB,
+    MSE: BB,
+    HYP: BB,
+    CYX: BB,
+    CYM: BB,
+    LYN: BB,
+    SEP: BB,
+    TPO: BB,
+    SEC: BB,
+    ASP: [...BB, ["CG", "OD1", 2]],
+    ASH: [...BB, ["CG", "OD1", 2]],
+    ASN: [...BB, ["CG", "OD1", 2]],
+    GLU: [...BB, ["CD", "OE1", 2]],
+    GLH: [...BB, ["CD", "OE1", 2]],
+    GLN: [...BB, ["CD", "OE1", 2]],
+    ARG: [...BB, ["CZ", "NH2", 2]],
+    PHE: [...BB, ...BENZYL],
+    TYR: [...BB, ...BENZYL],
+    PTR: [...BB, ...BENZYL],
+    TRP: [...BB, ["CG", "CD1", 2], ["CD2", "CE2", 2], ["CE3", "CZ3", 2], ["CZ2", "CH2", 2]],
+    HIS: [...BB, ...HIS_E],
+    HIE: [...BB, ...HIS_E],
+    HSE: [...BB, ...HIS_E],
+    HIP: [...BB, ...HIS_E],
+    HSP: [...BB, ...HIS_E],
+    HSH: [...BB, ...HIS_E],
+    HID: [...BB, ...HIS_D],
+    HSD: [...BB, ...HIS_D],
+    ACE: [["C", "O", 2]],
+    NME: [],
+    NH2: [],
+    A: ADE,
+    DA: ADE,
+    G: GUA,
+    DG: GUA,
+    I: GUA,
+    DI: GUA,
+    C: CYT,
+    DC: CYT,
+    U: URA,
+    DU: URA,
+    DT: URA
+  };
+  var HIS_FAMILY = /* @__PURE__ */ new Set(["HIS", "HIE", "HSE", "HIP", "HSP", "HSH", "HID", "HSD"]);
+  var WATER = /* @__PURE__ */ new Set(["HOH", "WAT", "DOD", "H2O", "TIP", "TIP3", "SOL"]);
+  var key = (a, b) => a + "|" + b;
+  function mapOf(t) {
+    const m = /* @__PURE__ */ new Map();
+    for (const [a, b, o] of t) {
+      m.set(key(a, b), o);
+      m.set(key(b, a), o);
+    }
+    return m;
+  }
+  var TEMPLATES = new Map(Object.entries(RAW).map(([k, t]) => [k, mapOf(t)]));
+  var variants = /* @__PURE__ */ new Map();
+  function variant(resn, tag, change) {
+    const k = resn + ":" + tag;
+    let m = variants.get(k);
+    if (!m) variants.set(k, m = mapOf(change(RAW[resn])));
+    return m;
+  }
+  function graphOf(s) {
+    const n = s.count, B = s.bonds, m = B.length >> 1;
+    const start = new Int32Array(n + 1);
+    for (let k = 0; k < m; k++) {
+      start[B[2 * k] + 1]++;
+      start[B[2 * k + 1] + 1]++;
+    }
+    for (let i = 0; i < n; i++) start[i + 1] += start[i];
+    const fill = start.slice(0, n), to = new Int32Array(2 * m), bond = new Int32Array(2 * m);
+    for (let k = 0; k < m; k++) {
+      const i = B[2 * k], j = B[2 * k + 1];
+      to[fill[i]] = j;
+      bond[fill[i]++] = k;
+      to[fill[j]] = i;
+      bond[fill[j]++] = k;
+    }
+    return { start, to, bond };
+  }
+  function assignBondOrders(s, hints = {}) {
+    const m = s.bonds.length >> 1;
+    const orders = new Uint8Array(m).fill(1);
+    s.bondOrder = orders;
+    if (!m) return;
+    const B = s.bonds, el = s.element, name = s.atomName, res = s.residues, of = s.residueOf;
+    const hc = new Uint8Array(s.count);
+    let anyH = false;
+    for (let k = 0; k < m; k++) {
+      const i = B[2 * k], j = B[2 * k + 1];
+      if (el[i] === "H") {
+        hc[j]++;
+        anyH = true;
+      }
+      if (el[j] === "H") {
+        hc[i]++;
+        anyH = true;
+      }
+    }
+    const tmpl = res.map((r) => {
+      const base = TEMPLATES.get(r.resn);
+      if (!base) return null;
+      if (!anyH) return base;
+      const at = (nm) => {
+        for (let i = r.atomStart; i < r.atomEnd; i++) if (name[i] === nm) return i;
+        return -1;
+      };
+      const H = (nm) => {
+        const i = at(nm);
+        return i < 0 ? -1 : hc[i];
+      };
+      let t = base, tag = "";
+      if (HIS_FAMILY.has(r.resn)) {
+        const d = H("ND1"), e = H("NE2");
+        if (d > 0 && e <= 0) tag = "D";
+        else if (e > 0 && d <= 0) tag = "E";
+        else if (d > 0 && e > 0) tag = "P";
+      } else if (r.resn === "ARG") {
+        if (H("NE") === 0 && H("NH1") > 0) tag = "NE";
+        else if (H("NH1") === 1 && H("NH2") === 2) tag = "NH1";
+      } else if (r.resn === "ASP" || r.resn === "ASH") {
+        if (H("OD1") > 0 && H("OD2") === 0) tag = "OD2";
+      } else if (r.resn === "GLU" || r.resn === "GLH") {
+        if (H("OE1") > 0 && H("OE2") === 0) tag = "OE2";
+      }
+      const cterm = H("O") > 0 && H("OXT") === 0;
+      if (!tag && !cterm) return t;
+      const swap = (t0, from, to) => t0.map((b) => b[0] === from[0] && b[1] === from[1] ? [to[0], to[1], b[2]] : b);
+      t = variant(r.resn, tag + (cterm ? "+OXT" : ""), (t0) => {
+        let out = t0;
+        if (tag === "D") out = out.filter((b) => !(b[0] === "ND1" && b[1] === "CE1")).concat([["CE1", "NE2", 2]]);
+        if (tag === "E" || tag === "P") out = out.filter((b) => !(b[0] === "CE1" && b[1] === "NE2")).concat(out.some((b) => b[0] === "ND1") ? [] : [["ND1", "CE1", 2]]);
+        if (tag === "NE") out = swap(out, ["CZ", "NH2"], ["CZ", "NE"]);
+        if (tag === "NH1") out = swap(out, ["CZ", "NH2"], ["CZ", "NH1"]);
+        if (tag === "OD2") out = swap(out, ["CG", "OD1"], ["CG", "OD2"]);
+        if (tag === "OE2") out = swap(out, ["CD", "OE1"], ["CD", "OE2"]);
+        if (cterm) out = swap(out, ["C", "O"], ["C", "OXT"]);
+        return out;
+      });
+      return t;
+    });
+    let other = false;
+    for (let k = 0; k < m; k++) {
+      const i = B[2 * k], j = B[2 * k + 1];
+      const ri = of[i];
+      if (ri !== of[j]) continue;
+      const T = tmpl[ri];
+      if (!T) {
+        other = true;
+        continue;
+      }
+      const o = T.get(key(name[i], name[j]));
+      if (o) orders[k] = o;
+    }
+    const hasP = res.some((r, ri) => tmpl[ri] && (r.nucleic || /^(SEP|TPO|PTR)$/.test(r.resn)));
+    if (!other && !hasP) return;
+    const g2 = graphOf(s);
+    const ctx = { s, g: g2, orders, hc };
+    if (hasP) for (let ri = 0; ri < res.length; ri++) {
+      const r = res[ri];
+      if (!tmpl[ri]) continue;
+      for (let i = r.atomStart; i < r.atomEnd; i++) if (el[i] === "P") phosphoryl(ctx, i, ["OP1", "O1P", "OP2", "O2P", "OP3", "O3P"]);
+    }
+    if (!other) return;
+    const comp = hints.comp, conect = hints.conect;
+    for (let ri = 0; ri < res.length; ri++) {
+      const r = res[ri];
+      if (tmpl[ri] || WATER.has(r.resn) || r.atomEnd - r.atomStart < 2) continue;
+      const atoms = [];
+      for (let i = r.atomStart; i < r.atomEnd; i++) atoms.push(i);
+      const cb = comp?.get(r.resn);
+      if (cb) {
+        fromComp(ctx, atoms, cb);
+        continue;
+      }
+      if (conect && atoms.some((i) => {
+        const c = conect.get(s.serial[i]);
+        if (c) {
+          for (const v of c.values()) if (v > 1) return true;
+        }
+        return false;
+      })) {
+        fromConect(ctx, atoms, conect, tmpl);
+        continue;
+      }
+      perceive(ctx, atoms);
+    }
+  }
+  function phosphoryl(c, p, names = []) {
+    const { s, g: g2, orders, hc } = c;
+    const el = s.element;
+    let deg = 0;
+    const free = [];
+    for (let q = g2.start[p]; q < g2.start[p + 1]; q++) {
+      const j = g2.to[q];
+      if (!ORGANIC.has(el[j])) continue;
+      deg++;
+      if (el[j] === "O" && hc[j] === 0 && heavyDegree(c, j) === 1) free.push([j, g2.bond[q]]);
+    }
+    if (deg !== 4 || !free.length || free.some(([, k]) => orders[k] > 1)) return -1;
+    const pick = names.map((nm) => free.find(([j]) => s.atomName[j] === nm)).find((f2) => f2) ?? byName(s, p, free)[0];
+    if (dist(s, p, pick[0]) > 1.62) return -1;
+    orders[pick[1]] = 2;
+    return pick[0];
+  }
+  function byName(s, c, free) {
+    const L = (o) => dist(s, c, o[0]);
+    const m = Math.min(...free.map(L));
+    return free.filter((o) => L(o) <= m + 0.06).sort((a, b) => s.atomName[a[0]].localeCompare(s.atomName[b[0]], void 0, { numeric: true })).concat(free.filter((o) => L(o) > m + 0.06).sort((a, b) => L(a) - L(b)));
+  }
+  var ORGANIC = /* @__PURE__ */ new Set(["H", "C", "N", "O", "S", "P", "SE", "F", "CL", "BR", "I", "B", "SI", "AS"]);
+  function heavyDegree(c, i) {
+    const { s, g: g2 } = c;
+    let n = 0;
+    for (let q = g2.start[i]; q < g2.start[i + 1]; q++) {
+      const e = s.element[g2.to[q]];
+      if (e !== "H" && ORGANIC.has(e)) n++;
+    }
+    return n;
+  }
+  var dist = (s, i, j) => Math.hypot(s.x[i] - s.x[j], s.y[i] - s.y[j], s.z[i] - s.z[j]);
+  function fromComp(c, atoms, cb) {
+    const { s, g: g2, orders } = c;
+    const inR = new Set(atoms);
+    const arom = [];
+    for (const i of atoms) for (let q = g2.start[i]; q < g2.start[i + 1]; q++) {
+      const j = g2.to[q];
+      if (j <= i || !inR.has(j)) continue;
+      const o = cb.get(key(s.atomName[i], s.atomName[j]));
+      if (!o) continue;
+      if (o === 4) arom.push([i, j, g2.bond[q]]);
+      else orders[g2.bond[q]] = Math.min(3, o);
+    }
+    if (arom.length) kekulize(c, arom);
+  }
+  function fromConect(c, atoms, conect, tmpl) {
+    const { s, g: g2, orders } = c;
+    const sr = s.serial;
+    for (const i of atoms) for (let q = g2.start[i]; q < g2.start[i + 1]; q++) {
+      const j = g2.to[q];
+      if (tmpl[s.residueOf[j]]) continue;
+      const n = Math.max(conect.get(sr[i])?.get(sr[j]) ?? 0, conect.get(sr[j])?.get(sr[i]) ?? 0);
+      if (n > 1) orders[g2.bond[q]] = Math.min(3, n);
+    }
+  }
+  function kekulize(c, arom) {
+    const { s, orders } = c;
+    const ids = [...new Set(arom.flatMap(([i, j]) => [i, j]))];
+    const loc = new Map(ids.map((a, k) => [a, k]));
+    const taken = /* @__PURE__ */ new Set();
+    for (const a of ids) {
+      const { g: g2 } = c;
+      for (let q = g2.start[a]; q < g2.start[a + 1]; q++) if (orders[g2.bond[q]] > 1) taken.add(a);
+    }
+    const R = new Float64Array(ids.length);
+    ids.forEach((a, k) => {
+      const e = s.element[a], d = degreeOf(c, a);
+      R[k] = taken.has(a) ? -1e3 : e === "C" ? 10 : e === "N" ? d <= 2 ? 4 : -2 : -3;
+    });
+    const edges = arom.map(([i, j, b]) => [loc.get(i), loc.get(j), 0, b]);
+    const mate = bestMatching(ids.length, R, edges);
+    for (const e of edges) if (mate[e[0]] === e[1]) orders[e[3]] = 2;
+  }
+  function degreeOf(c, i) {
+    const { s, g: g2 } = c;
+    let n = 0;
+    for (let q = g2.start[i]; q < g2.start[i + 1]; q++) if (ORGANIC.has(s.element[g2.to[q]])) n++;
+    return n;
+  }
+  var PAIR = {
+    "C-C": { one: 1.54, two: 1.34, dmax: 1.4, amax: 1.48, tmax: 1.25 },
+    // (a porphyrin's pyrroles have Cα–Cβ of 1.44–1.47)
+    "C-N": { one: 1.47, two: 1.28, dmax: 1.36, amax: 1.45, tmax: 1.21 },
+    "C-O": { one: 1.43, two: 1.21, dmax: 1.34, amax: 1.42 },
+    "C-S": { one: 1.82, two: 1.62, dmax: 1.72, amax: 1.8 },
+    "N-N": { one: 1.45, two: 1.25, dmax: 1.32, amax: 1.42 },
+    "N-O": { one: 1.4, two: 1.21, dmax: 1.3, amax: 1.42 },
+    "N-S": { one: 1.7, two: 1.55, dmax: 0, amax: 1.75 },
+    "O-O": { one: 1.48, two: 1.21, dmax: 1.3, amax: 0 }
+    // dioxygen, not a peroxide
+  };
+  var pairOf = (a, b) => PAIR[a < b ? a + "-" + b : b + "-" + a];
+  function perceive(c, atoms) {
+    const { s, g: g2, orders } = c;
+    const el = s.element, X = s.x, Y = s.y, Z = s.z;
+    const heavy = atoms.filter((i) => el[i] !== "H");
+    if (heavy.length < 2) return;
+    const inG = new Set(heavy), groupH = heavy.length < atoms.length;
+    const nbr = /* @__PURE__ */ new Map(), deg = /* @__PURE__ */ new Map();
+    for (const i of heavy) {
+      const out = [];
+      for (let q = g2.start[i]; q < g2.start[i + 1]; q++) if (ORGANIC.has(el[g2.to[q]])) out.push(q);
+      nbr.set(i, out);
+      deg.set(i, out.length);
+    }
+    const D = (i) => deg.get(i);
+    const vec = (i, j) => [X[j] - X[i], Y[j] - Y[i], Z[j] - Z[i]];
+    const ang = (cA, a, b) => {
+      const u = vec(cA, a), v = vec(cA, b);
+      const L = Math.hypot(u[0], u[1], u[2]) * Math.hypot(v[0], v[1], v[2]) || 1;
+      return Math.acos(Math.max(-1, Math.min(1, (u[0] * v[0] + u[1] * v[1] + u[2] * v[2]) / L))) * 180 / Math.PI;
+    };
+    const around = (i) => nbr.get(i).map((q) => g2.to[q]);
+    const planar = (i) => {
+      const n = around(i);
+      return n.length === 3 && ang(i, n[0], n[1]) + ang(i, n[0], n[2]) + ang(i, n[1], n[2]) >= 345;
+    };
+    const straight = (i) => {
+      const n = around(i);
+      return n.length === 2 && ang(i, n[0], n[1]) >= 160;
+    };
+    const bent = (i) => {
+      const n = around(i);
+      return n.length === 2 ? ang(i, n[0], n[1]) : 0;
+    };
+    const used = /* @__PURE__ */ new Set();
+    const set = (k, o, ...a) => {
+      orders[k] = o;
+      for (const x of a) used.add(x);
+    };
+    const bonds = [];
+    for (const i of heavy) for (const q of nbr.get(i)) {
+      const j = g2.to[q];
+      if (j > i && inG.has(j)) bonds.push([i, j, g2.bond[q]]);
+    }
+    const len = (b) => dist(s, b[0], b[1]);
+    const adjG = /* @__PURE__ */ new Map();
+    for (const [i, j] of bonds) {
+      (adjG.get(i) ?? adjG.set(i, []).get(i)).push(j);
+      (adjG.get(j) ?? adjG.set(j, []).get(j)).push(i);
+    }
+    const flat = /* @__PURE__ */ new Set(), flat5 = /* @__PURE__ */ new Set(), six = /* @__PURE__ */ new Set(), flatBond = /* @__PURE__ */ new Set(), seen = /* @__PURE__ */ new Set();
+    const inRing = /* @__PURE__ */ new Set(), ring5 = /* @__PURE__ */ new Set(), flatN = /* @__PURE__ */ new Set();
+    for (const [u, v, k] of bonds) {
+      const ring = shortestRing(adjG, u, v, 6);
+      if (!ring) continue;
+      const id = [...ring].sort((a, b) => a - b).join(",");
+      if (seen.has(id)) continue;
+      seen.add(id);
+      for (const i of ring) {
+        inRing.add(i);
+        if (ring.length === 5) ring5.add(i);
+      }
+      if (ring.length < 5) continue;
+      if (!ring.every((i) => /^[CNOS]$/.test(el[i]) && (D(i) === 2 ? ring.length === 5 || /^[OS]$/.test(el[i]) || bent(i) >= 108 : D(i) === 3 && /^[CN]$/.test(el[i]) && planar(i)))) continue;
+      let ok = true;
+      const rk = [];
+      for (let t = 0; t < ring.length && ok; t++) {
+        const a = ring[t], b = ring[(t + 1) % ring.length];
+        const P = pairOf(el[a], el[b]);
+        if (!P || dist(s, a, b) > P.amax) ok = false;
+        else rk.push(bondBetween(c, a, b));
+      }
+      if (!ok || !flatEnough(s, ring)) continue;
+      const hasN = ring.some((i) => el[i] === "N");
+      for (const i of ring) {
+        flat.add(i);
+        (ring.length === 5 ? flat5 : six).add(i);
+        if (hasN) flatN.add(i);
+      }
+      for (const b of rk) flatBond.add(b);
+    }
+    const lactam = (i) => inRing.has(i) && around(i).some((cA) => inRing.has(cA) && el[cA] === "C" && around(cA).some((o) => el[o] === "O" && D(o) === 1 && dist(s, cA, o) <= 1.3));
+    for (const b of bonds) {
+      const [i, j, k] = b;
+      const P = pairOf(el[i], el[j]);
+      if (!P?.tmax || len(b) > P.tmax) continue;
+      if ((D(i) === 1 || straight(i)) && (D(j) === 1 || straight(j)) && (D(i) === 2 || D(j) === 2)) set(k, 3, i, j);
+    }
+    for (const i of heavy) {
+      if (used.has(i) || !straight(i)) continue;
+      const qs = nbr.get(i);
+      const two = qs.filter((q) => {
+        const j = g2.to[q];
+        const P = pairOf(el[i], el[j]);
+        return inG.has(j) && !used.has(j) && P && P.dmax && dist(s, i, j) <= P.dmax;
+      });
+      if (two.length === 2) {
+        for (const q of two) set(g2.bond[q], 2, g2.to[q]);
+        used.add(i);
+      }
+    }
+    for (const i of heavy) {
+      if (el[i] === "P") {
+        const o = phosphoryl(c, i);
+        if (o >= 0) used.add(o), used.add(i);
+      } else if (el[i] === "S" && D(i) >= 3) {
+        const free = byName(s, i, nbr.get(i).filter((q) => {
+          const j = g2.to[q];
+          return el[j] === "O" && D(j) === 1 && dist(s, i, j) <= 1.55;
+        }).map((q) => [g2.to[q], g2.bond[q]]));
+        const n = D(i) === 4 ? Math.min(2, free.length) : free.length === 1 ? 1 : 0;
+        for (let t = 0; t < n; t++) set(free[t][1], 2, free[t][0]);
+        if (n) used.add(i);
+      }
+    }
+    const want = /* @__PURE__ */ new Map();
+    for (const i of heavy) {
+      if (used.has(i)) continue;
+      const e = el[i], d = D(i), f2 = flat.has(i);
+      if (e === "C") {
+        if (d === 3 ? f2 || planar(i) : d === 2 ? f2 || !groupH && bent(i) >= 115 && bent(i) < 160 : d === 1 && !groupH) want.set(i, 10);
+      } else if (e === "N") {
+        if (d === 1) want.set(i, 4.5);
+        else if (d === 2 && (f2 || bent(i) >= 114)) want.set(i, flat5.has(i) && !six.has(i) ? -3 : lactam(i) ? 1 : 4);
+        else if (d === 3 && (f2 || planar(i))) want.set(i, ring5.has(i) ? -10 : -2);
+      } else if (e === "O") {
+        if (d === 1) want.set(i, 6);
+      } else if (e === "S") {
+        if (d === 1) want.set(i, 5);
+      }
+    }
+    const nodes = [...want.keys()];
+    const loc = new Map(nodes.map((a, k) => [a, k]));
+    const short = (i, j) => {
+      const P = pairOf(el[i], el[j]);
+      return P ? (P.one - dist(s, i, j)) / (P.one - P.two) : -1;
+    };
+    const clear = (i, j) => {
+      const sij = short(i, j);
+      for (const [a, b] of [[i, j], [j, i]]) for (const x of around(a)) if (x !== b && want.has(x) && D(x) >= 2 && short(a, x) > sij - 0.2) return false;
+      return true;
+    };
+    const edges = [];
+    for (const b of bonds) {
+      const [i, j, k] = b;
+      if (!want.has(i) || !want.has(j) || orders[k] > 1) continue;
+      if (inRing.has(i) && !inRing.has(j) && el[j] === "N" || inRing.has(j) && !inRing.has(i) && el[i] === "N") continue;
+      const P = pairOf(el[i], el[j]);
+      if (!P) continue;
+      const L = len(b), ring = flatBond.has(k);
+      if (!ring && L > ((el[i] + el[j] === "CO" || el[i] + el[j] === "OC") && (flatN.has(i) || flatN.has(j)) ? 1.38 : P.dmax)) continue;
+      if (!ring && D(i) >= 2 && D(j) >= 2 && !flat.has(i) && !flat.has(j) && !clear(i, j)) continue;
+      const sh = Math.max(-0.5, Math.min(1.3, (P.one - L) / (P.one - P.two)));
+      edges.push([loc.get(i), loc.get(j), 6 * sh, k]);
+    }
+    if (!edges.length) return;
+    const R = Float64Array.from(nodes.map((a) => want.get(a)));
+    const mate = bestMatching(nodes.length, R, edges);
+    for (const e of edges) if (mate[e[0]] === e[1]) orders[e[3]] = 2;
+  }
+  function bondBetween(c, a, b) {
+    const g2 = c.g;
+    for (let q = g2.start[a]; q < g2.start[a + 1]; q++) if (g2.to[q] === b) return g2.bond[q];
+    return -1;
+  }
+  function shortestRing(adj, u, v, maxLen) {
+    const prev = /* @__PURE__ */ new Map([[u, -1]]);
+    let front = [u];
+    for (let depth = 1; depth < maxLen && front.length; depth++) {
+      const next = [];
+      for (const a of front) for (const b of adj.get(a) || []) {
+        if (a === u && b === v) continue;
+        if (prev.has(b)) continue;
+        prev.set(b, a);
+        if (b === v) {
+          const path = [v];
+          let x = a;
+          while (x !== -1) {
+            path.push(x);
+            x = prev.get(x);
+          }
+          return path.reverse();
+        }
+        next.push(b);
+      }
+      front = next;
+    }
+    return null;
+  }
+  function flatEnough(s, ring) {
+    const n = ring.length;
+    let cx = 0, cy = 0, cz = 0;
+    for (const i of ring) {
+      cx += s.x[i];
+      cy += s.y[i];
+      cz += s.z[i];
+    }
+    cx /= n;
+    cy /= n;
+    cz /= n;
+    let nx = 0, ny = 0, nz = 0;
+    for (let t = 0; t < n; t++) {
+      const a = ring[t], b = ring[(t + 1) % n];
+      const ax = s.x[a] - cx, ay = s.y[a] - cy, az = s.z[a] - cz, bx = s.x[b] - cx, by = s.y[b] - cy, bz = s.z[b] - cz;
+      nx += ay * bz - az * by;
+      ny += az * bx - ax * bz;
+      nz += ax * by - ay * bx;
+    }
+    const L = Math.hypot(nx, ny, nz);
+    if (L < 1e-6) return false;
+    for (const i of ring) if (Math.abs(((s.x[i] - cx) * nx + (s.y[i] - cy) * ny + (s.z[i] - cz) * nz) / L) > 0.12) return false;
+    return true;
+  }
+  function bestMatching(n, R, edges) {
+    const mate = new Int32Array(n).fill(-1);
+    const adj = Array.from({ length: n }, () => []);
+    for (let t = 0; t < edges.length; t++) {
+      const [u, v, w] = edges[t];
+      adj[u].push([v, w]);
+      adj[v].push([u, w]);
+    }
+    for (const a of adj) a.sort((p, q) => R[q[0]] + q[1] - (R[p[0]] + p[1]));
+    const half = new Float64Array(n);
+    for (let u = 0; u < n; u++) for (const [v, w] of adj[u]) half[u] = Math.max(half[u], (R[u] + R[v] + w) / 2);
+    const comp = new Int32Array(n).fill(-1);
+    let nc = 0;
+    for (let u = 0; u < n; u++) {
+      if (comp[u] >= 0 || !adj[u].length) continue;
+      const st = [u];
+      comp[u] = nc;
+      while (st.length) {
+        const a = st.pop();
+        for (const [b] of adj[a]) if (comp[b] < 0) {
+          comp[b] = nc;
+          st.push(b);
+        }
+      }
+      nc++;
+    }
+    const state = new Int32Array(n).fill(-2);
+    for (let k = 0; k < nc; k++) {
+      const part = [];
+      for (let u = 0; u < n; u++) if (comp[u] === k) part.push(u);
+      let best = -Infinity, bestState = null, steps = 0;
+      let bound = 0;
+      for (const u of part) bound += half[u];
+      const rec = (cur, bnd) => {
+        if (++steps > 2e5 && bestState) return;
+        if (cur + bnd <= best + 1e-9) return;
+        let u = -1, fewest = Infinity;
+        for (const a of part) {
+          if (state[a] !== -2) continue;
+          let f2 = 0;
+          for (const [b] of adj[a]) if (state[b] === -2) f2++;
+          if (f2 < fewest) {
+            fewest = f2;
+            u = a;
+            if (!f2) break;
+          }
+        }
+        if (u < 0) {
+          if (cur > best) {
+            best = cur;
+            bestState = state.slice();
+          }
+          return;
+        }
+        for (const [v, w] of adj[u]) {
+          if (state[v] !== -2) continue;
+          state[u] = v;
+          state[v] = u;
+          rec(cur + R[u] + R[v] + w, bnd - half[u] - half[v]);
+          state[u] = state[v] = -2;
+        }
+        state[u] = -1;
+        rec(cur, bnd - half[u]);
+        state[u] = -2;
+      };
+      rec(0, bound);
+      if (bestState) for (const u of part) {
+        const p = bestState[u];
+        mate[u] = p >= 0 ? p : -1;
+      }
+    }
+    return mate;
+  }
+
   // src/model/parse.ts
   function parseModels(text, name = "") {
-    const out = /^\s*data_/.test(text) || text.indexOf("_atom_site.") >= 0 ? parseCIF(text) : parsePDB(text);
+    const hints = {};
+    const out = /^\s*data_/.test(text) || text.indexOf("_atom_site.") >= 0 ? parseCIF(text, hints) : parsePDB(text, hints);
     for (const s of out) {
       s.name = name;
       s.inferBonds();
+      assignBondOrders(s, hints);
     }
     return out;
   }
@@ -1505,15 +2102,29 @@
     if (el.length > 1 && !(el in COV_R)) el = el[0];
     return el;
   }
-  function parsePDB(text) {
+  function parsePDB(text, hints) {
     const lines2 = text.split(/\r?\n/);
     const models = [];
     let cur = [];
     let sawModel = false;
     const H = [], E = [];
+    const conect = /* @__PURE__ */ new Map();
+    let multiple = false;
     for (const line of lines2) {
       const rec = line.substr(0, 6).trim();
-      if (rec === "MODEL") {
+      if (rec === "CONECT") {
+        const a = parseInt(line.substr(6, 5));
+        if (isNaN(a)) continue;
+        let m = conect.get(a);
+        if (!m) conect.set(a, m = /* @__PURE__ */ new Map());
+        for (let c = 11; c <= 26; c += 5) {
+          const b = parseInt(line.substr(c, 5));
+          if (isNaN(b)) continue;
+          const n = (m.get(b) || 0) + 1;
+          m.set(b, n);
+          if (n > 1) multiple = true;
+        }
+      } else if (rec === "MODEL") {
         sawModel = true;
         cur = [];
       } else if (rec === "ENDMDL") {
@@ -1524,6 +2135,7 @@
       else cur.push(line);
     }
     if (!sawModel || cur.some((l) => /^(ATOM|HETATM)/.test(l))) models.push(cur);
+    if (multiple) hints.conect = conect;
     return models.filter((m) => m.some((l) => /^(ATOM|HETATM)/.test(l))).map((m) => {
       const recs = [];
       for (const line of m) {
@@ -1631,10 +2243,27 @@
     }
     return cats;
   }
-  function parseCIF(text) {
+  function parseCIF(text, hints) {
     const cats = readCIF(text);
     const AS = cats["_atom_site"];
     if (!AS) return [];
+    const CB = cats["_chem_comp_bond"];
+    if (CB) {
+      const c = (n) => CB.cols.indexOf(n);
+      const id = c("comp_id"), a1 = c("atom_id_1"), a2 = c("atom_id_2"), vo = c("value_order");
+      if (id >= 0 && a1 >= 0 && a2 >= 0 && vo >= 0) {
+        const comp = /* @__PURE__ */ new Map();
+        const ORD = { SING: 1, DOUB: 2, TRIP: 3, QUAD: 3, AROM: 4 };
+        for (const r of CB.rows) {
+          const o = ORD[(r[vo] || "").toUpperCase()] ?? 1;
+          let m = comp.get(r[id]);
+          if (!m) comp.set(r[id], m = /* @__PURE__ */ new Map());
+          m.set(r[a1] + "|" + r[a2], o);
+          m.set(r[a2] + "|" + r[a1], o);
+        }
+        hints.comp = comp;
+      }
+    }
     const ci = (n) => AS.cols.indexOf(n);
     const ix = { grp: ci("group_PDB"), id: ci("id"), el: ci("type_symbol"), name: ci("label_atom_id"), alt: ci("label_alt_id"), resn: ci("label_comp_id"), asym: ci("label_asym_id"), auth_asym: ci("auth_asym_id"), seq: ci("label_seq_id"), auth_seq: ci("auth_seq_id"), x: ci("Cartn_x"), y: ci("Cartn_y"), z: ci("Cartn_z"), model: ci("pdbx_PDB_model_num"), b: ci("B_iso_or_equiv") };
     const models = /* @__PURE__ */ new Map();
@@ -1918,15 +2547,16 @@
         font: "Plain sans",
         labelSize: 22,
         captionSize: 22,
-        stickRadius: 0.25,
+        stickRadius: 0.2,
         sphereScale: 0.25,
         stickHScale: 0.55,
         lonePairStyle: "bold",
         ...pen(0, { width: 1.1, hierarchy: 0, alpha: 1 }),
         shading: 0.55,
         construction: false,
-        site: { cutaway: false, quiet: 0 },
-        // every colour as given, nothing seen through: the site reads by its sticks
+        // every colour as given, nothing seen through: the site reads by its sticks, which its outline sets apart, so they
+        // need be only a little larger: PyMOL's own 0.25 Å beside the others' 0.2, as publication figures draw side chains
+        site: { cutaway: false, quiet: 0, scale: 1.25 },
         paper: { grain: 0, wash: 0 },
         view: { fog: 0, fov: 0 }
       }
@@ -2560,8 +3190,8 @@
     let TEX = 1;
     function computeFit() {
       const spinning = cfg.view.spin !== 0 || cfg.view.pitchSwing !== 0;
-      const key = scene.keyframes.length + "|" + (spinning ? "sphere" : VIEW_YAW + "|" + VIEW_PITCH + "|" + VIEW_ROLL) + "|" + (scene._rev || 0);
-      if (FIT.key === key) return;
+      const key2 = scene.keyframes.length + "|" + (spinning ? "sphere" : VIEW_YAW + "|" + VIEW_PITCH + "|" + VIEW_ROLL) + "|" + (scene._rev || 0);
+      if (FIT.key === key2) return;
       let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9], c = 0;
       const fitPts = [];
       if (scene.fitPoints) {
@@ -2578,7 +3208,7 @@
         c++;
       }
       if (!c) {
-        FIT = { cx: 0, cy: 0, cz: 0, rx: 0, ry: 0, spanX: 10, spanY: 10, zspan: 4, key };
+        FIT = { cx: 0, cy: 0, cz: 0, rx: 0, ry: 0, spanX: 10, spanY: 10, zspan: 4, key: key2 };
         return;
       }
       FIT.cx = (mn[0] + mx[0]) / 2;
@@ -2596,7 +3226,7 @@
         FIT.spanX = 2 * R;
         FIT.spanY = 2 * R;
         FIT.zspan = 2 * R;
-        FIT.key = key;
+        FIT.key = key2;
         return;
       }
       let rmn = [1e9, 1e9, 1e9], rmx = [-1e9, -1e9, -1e9];
@@ -2612,7 +3242,7 @@
       FIT.spanX = Math.max(rmx[0] - rmn[0], 1);
       FIT.spanY = Math.max(rmx[1] - rmn[1], 1);
       FIT.zspan = Math.max(rmx[2] - rmn[2], 1);
-      FIT.key = key;
+      FIT.key = key2;
     }
     function makeProjector(W, H) {
       const yaw = VIEW_YAW * Math.PI / 180, pitch = VIEW_PITCH * Math.PI / 180;
@@ -2921,8 +3551,8 @@
       const SMALL = 5e5;
       const small = (c) => c.width * c.height <= SMALL;
       return {
-        get(key) {
-          for (let i = 0; i < E.length; i++) if (E[i].key === key) {
+        get(key2) {
+          for (let i = 0; i < E.length; i++) if (E[i].key === key2) {
             const e = E[i];
             if (i) {
               E.splice(i, 1);
@@ -2932,8 +3562,8 @@
           }
           return null;
         },
-        put(key, canvas) {
-          E.unshift({ key, canvas });
+        put(key2, canvas) {
+          E.unshift({ key: key2, canvas });
           let big = !small(canvas), n = 0;
           for (let i = 1; i < E.length; i++) {
             const s = small(E[i].canvas);
@@ -2950,8 +3580,8 @@
     const paperCache = canvasCache(), baseCache = canvasCache();
     let TEXHOST = null;
     const TEXV = "t1";
-    function hostTexture(key, W, H, dpr, make) {
-      const k = TEXV + "|" + key;
+    function hostTexture(key2, W, H, dpr, make) {
+      const k = TEXV + "|" + key2;
       if (TEXHOST) {
         const c2 = TEXHOST.take(k, W * dpr, H * dpr);
         if (c2) return c2;
@@ -2963,8 +3593,8 @@
     function paper(W, H, dpr, boil) {
       const life = cfg.style.wash > 0 ? cfg.style.washLife : 0;
       const wb = life > 0 ? boil | 0 : 0;
-      const key = [W, H, dpr, cfg.palette.paper, cfg.style.grain, cfg.style.wash, cfg.style.washSeed, cfg.palette.wash, life, wb, cfg.style.wash > 0 ? shadeInk() : ""].join("|");
-      const hit = paperCache.get(key);
+      const key2 = [W, H, dpr, cfg.palette.paper, cfg.style.grain, cfg.style.wash, cfg.style.washSeed, cfg.palette.wash, life, wb, cfg.style.wash > 0 ? shadeInk() : ""].join("|");
+      const hit = paperCache.get(key2);
       if (hit) return hit;
       const make = () => {
         const bkey2 = [W, H, dpr, cfg.palette.paper, cfg.style.grain].join("|");
@@ -2978,7 +3608,7 @@
         if (cfg.style.wash > 0) watercolourWash(x, W, H, wb, life);
         return c;
       };
-      return paperCache.put(key, wb ? make() : hostTexture("paper|" + key, W, H, dpr, make));
+      return paperCache.put(key2, wb ? make() : hostTexture("paper|" + key2, W, H, dpr, make));
     }
     function paperBase(W, H, dpr) {
       return hostTexture("base|" + [W, H, dpr, cfg.palette.paper, cfg.style.grain].join("|"), W, H, dpr, () => paperBaseOnce(W, H, dpr));
@@ -3232,7 +3862,7 @@
       ctx.restore();
       sketchLine(ctx, h, { seed: seed + 9, width: 1.1, color: P.context, alpha: 0.9 * al, ampScale: 1.3, step: 6, overshoot: false, passes: 2 });
     }
-    const BB = /* @__PURE__ */ new Set(["N", "CA", "C", "O", "OXT"]);
+    const BB2 = /* @__PURE__ */ new Set(["N", "CA", "C", "O", "OXT"]);
     const VDW = { H: 1.1, C: 1.7, N: 1.55, O: 1.52, S: 1.8, P: 1.8, F: 1.47, CL: 1.75, BR: 1.85, I: 1.98, ZN: 1.39, MG: 1.73, CA: 2, FE: 1.5, NA: 2.27, K: 2.75 };
     const selCache = {};
     function compileSel(str) {
@@ -3272,10 +3902,10 @@
             return (a) => !a.het;
           case "backbone":
           case "bb":
-            return (a) => BB.has(a.name);
+            return (a) => BB2.has(a.name);
           case "sidechain":
           case "sc":
-            return (a) => !a.het && !BB.has(a.name);
+            return (a) => !a.het && !BB2.has(a.name);
           case "hydro":
           case "h.":
           case "hydrogens":
@@ -3366,7 +3996,7 @@
     }
     const GROUP_PALETTE = ["#f2e85a", "#7cbf72", "#5fc9c9", "#a98ad6", "#f0a050", "#d9a3c9", "#8fb8a8", "#b5c95a", "#c9a27a", "#9ad0b8"];
     let groupIdx = {}, groupIdxKey = "";
-    function groupIndex(key) {
+    function groupIndex(key2) {
       const sk = scene.keyframes.length + "|" + (scene.name || "");
       if (groupIdxKey !== sk) {
         groupIdx = {};
@@ -3382,7 +4012,7 @@
           if (!(e in groupIdx)) groupIdx[e] = n++;
         }
       }
-      return groupIdx[key] ?? 0;
+      return groupIdx[key2] ?? 0;
     }
     function ownColor(a) {
       const G = scene.groupColors;
@@ -3398,10 +4028,10 @@
       if (mode === "subunit") return subunitColor(a);
       if (mode === "entity") return entityColor(a);
       if (mode === "chain") return chainColor(a);
-      const key = a.group || (a.resn || "") + (a.resi ?? "");
+      const key2 = a.group || (a.resn || "") + (a.resi ?? "");
       if (mode === "group") return P.C;
       const GP = cfg.groupPalette && cfg.groupPalette.length ? cfg.groupPalette : GROUP_PALETTE;
-      return GP[groupIndex(key) % GP.length];
+      return GP[groupIndex(key2) % GP.length];
     }
     const SUBUNIT_COLS = { S: "#9cc27a", L: "#e6a45a", T: "#c96d8a", X: "#b8b4a8" };
     function subunitColor(a) {
@@ -3466,6 +4096,7 @@
         const R = cfg.rep.stickRadius * proj.pxPerA;
         return a.sphere ? R * (1 + cfg.rep.sphereScale * 4) : R;
       }
+      if (flatSticks()) return flatBallR(a) * proj.pxPerA;
       return (a.r ?? EL_R[a.el] ?? 0.45) * cfg.style.ballScale * proj.pxPerA;
     }
     function anchorPoint(an, st, proj, other) {
@@ -4270,11 +4901,13 @@
       const R0 = cfg.rep.stickRadius * proj.pxPerA;
       const inSet = {};
       for (const a of atoms) inSet[a.id] = a;
-      const nb = {};
+      const nb = {}, byAtom = {};
       for (const b of bonds) {
         if (!inSet[b.a] || !inSet[b.b] || b.order === 0) continue;
         nb[b.a] = (nb[b.a] || 0) + 1;
         nb[b.b] = (nb[b.b] || 0) + 1;
+        (byAtom[b.a] = byAtom[b.a] || []).push(b);
+        (byAtom[b.b] = byAtom[b.b] || []).push(b);
       }
       const OUT = flatSticks() && stickOutlined() ? cfg.style.inkWidth * LW.outer : 0, legs = {};
       if (OUT) for (const b of bonds) {
@@ -4287,6 +4920,79 @@
         (legs[b.a] = legs[b.a] || []).push({ b, u, L: L / 2, R: R0 * pa.d * ks });
         (legs[b.b] = legs[b.b] || []).push({ b, u: [-u[0], -u[1]], L: L / 2, R: R0 * pb.d * ks });
       }
+      const ringOf = (a, b) => {
+        const prev = { [a]: null };
+        let front = [a];
+        for (let d = 1; d < 6 && front.length; d++) {
+          const next = [];
+          for (const x of front) for (const q of byAtom[x] || []) {
+            const y = q.a === x ? q.b : q.a;
+            if (x === a && y === b || y in prev) continue;
+            prev[y] = x;
+            if (y === b) {
+              const out = [];
+              let z = y;
+              while (z !== null) {
+                out.push(z);
+                z = prev[z];
+              }
+              return out;
+            }
+            next.push(y);
+          }
+          front = next;
+        }
+        return null;
+      };
+      const angle3 = (c, p, q) => {
+        const u = [p[0] - c[0], p[1] - c[1], p[2] - c[2]], v = [q[0] - c[0], q[1] - c[1], q[2] - c[2]];
+        return Math.acos(clamp(dot3(u, v) / (len3(u) * len3(v) || 1), -1, 1));
+      };
+      const valenceSide = (b, ux, uy) => {
+        const pa = pos[b.a], pb = pos[b.b], mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
+        const ring = ringOf(b.a, b.b);
+        if (ring) {
+          let cx = 0, cy = 0;
+          for (const id of ring) {
+            cx += pos[id].x;
+            cy += pos[id].y;
+          }
+          const cr = ux * (cy / ring.length - my) - uy * (cx / ring.length - mx);
+          if (Math.abs(cr) > 1e-6) return cr > 0 ? 1 : -1;
+        }
+        let best = null, bs = Infinity;
+        for (const end of [b.a, b.b]) {
+          const other = end === b.a ? b.b : b.a, E = inSet[end], O = inSet[other];
+          for (const q2 of byAtom[end] || []) {
+            const n = q2.a === end ? q2.b : q2.a, N = inSet[n];
+            if (!N || n === other) continue;
+            const lone = N.el !== "C" && N.el !== "H" && (byAtom[n] || []).length === 1;
+            const sc = angle3(E.pos, O.pos, N.pos) - (lone ? 10 : 0) + (N.el === "H" ? 20 : 0);
+            if (sc < bs - 1e-9 || Math.abs(sc - bs) <= 1e-9 && n < best.n) {
+              bs = sc;
+              best = { end, n };
+            }
+          }
+        }
+        if (!best) return 1;
+        const e = pos[best.end], q = pos[best.n];
+        return ux * (q.y - e.y) - uy * (q.x - e.x) >= 0 ? 1 : -1;
+      };
+      const innerStop = (end, dx, dy, side, ux, uy, R, r2, o, gap, L) => {
+        let need = 0;
+        for (const q of byAtom[end] || []) {
+          const other = q.a === end ? q.b : q.a;
+          const p = pos[other], e = pos[end];
+          if (!p || !inSet[other]) continue;
+          const vx = p.x - e.x, vy = p.y - e.y, vl = Math.hypot(vx, vy);
+          if (vl < 1e-6) continue;
+          if ((ux * vy - uy * vx) * side <= 0) continue;
+          const c = (dx * vx + dy * vy) / vl, sn = Math.sqrt(Math.max(0, 1 - c * c));
+          if (sn < 0.05) continue;
+          need = Math.max(need, (R + r2 + gap + o * c) / sn);
+        }
+        return clamp(need, 0.18 * L, 0.4 * L);
+      };
       const flatEnd = (atom, b, R) => {
         if (!OUT) return {};
         const lg = legs[atom.id] || [], own = lg.find((l) => l.b === b), others = lg.filter((l) => l.b !== b);
@@ -4312,26 +5018,7 @@
         const mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
         const dx = pb.x - pa.x, dy = pb.y - pa.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
         const extra = SH.valence ? clamp(b.order - 1, 0, 2) : 0;
-        let side = 1;
-        if (extra > 0.01) {
-          let sx = 0, sy = 0;
-          for (const o of bonds) {
-            if (o.order === 0 || o === b) continue;
-            let other = null, base = null;
-            if (o.a === b.a || o.a === b.b) {
-              other = o.b;
-              base = o.a;
-            } else if (o.b === b.a || o.b === b.b) {
-              other = o.a;
-              base = o.b;
-            }
-            if (!other || !pos[other] || !inSet[other]) continue;
-            sx += pos[other].x - pos[base].x;
-            sy += pos[other].y - pos[base].y;
-          }
-          const cr = ux * sy - uy * sx;
-          side = cr >= 0 ? 1 : -1;
-        }
+        const side = extra > 0.01 && !flatSticks() ? valenceSide(b, ux, uy) : 1;
         if (isInk() && A.el !== B.el && !flatSticks()) {
           const zm = (pa.z + pb.z) / 2;
           items.push({ z: zm - 15e-4, draw: (ctx) => {
@@ -4353,19 +5040,15 @@
             else drawHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, passes: lowDetail ? 1 : void 0 });
             if (extra > 0.01 && !(b.partial > 0 && b.partial < 1) && flatSticks()) drawValenceGaps(ctx, near.x, near.y, mx, my, R, extra, { alpha: b.alpha, fog: near.fog, outline: OUT });
             else if (extra > 0.01 && !(b.partial > 0 && b.partial < 1)) {
-              const frac = Math.min(1, extra);
-              const off = R0 * 1.95 * near.d * side * frac;
-              const r2 = R0 * 0.42 * near.d * (0.5 + 0.5 * frac);
-              const sh = 0.18;
-              const ax = near.x + ux * L * sh * (half ? -1 : 1), ay = near.y + uy * L * sh * (half ? -1 : 1);
-              if (engravedSticks()) drawEngravedHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2 * ks, col, { Rm: r2 * ks, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha * frac, site, inner: true });
-              else if (flatSticks()) drawFlatHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2 * ks, col, { Rm: r2 * ks, fog: near.fog, alpha: b.alpha * frac, outline: OUT });
-              else drawHalfStick(ctx, ax - uy * off, ay + ux * off, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, seed: seed + half * 3 + 101, fog: near.fog, d: near.d, alpha: b.alpha * frac, partial: 0, passes: 1, noShadow: true, inner: true });
-              if (extra > 1.01) {
-                const off2 = -off;
-                if (flatSticks()) drawFlatHalfStick(ctx, ax - uy * off2, ay + ux * off2, mx - uy * off2, my + ux * off2, r2 * ks, col, { Rm: r2 * ks, fog: near.fog, alpha: b.alpha * (extra - 1), outline: OUT });
-                else drawHalfStick(ctx, ax - uy * off2, ay + ux * off2, mx - uy * off2, my + ux * off2, r2, col, { Rm: r2, seed: seed + half * 3 + 202, fog: near.fog, d: near.d, alpha: b.alpha * (extra - 1), partial: 0, passes: 1, noShadow: true });
-              }
+              const frac = Math.min(1, extra), r2 = R * 0.42 * (0.5 + 0.5 * frac), gap = -0.7 * r2, o = (R + gap + r2) * frac;
+              const inner = (sd, al, sv) => {
+                const off = o * sd, sh = innerStop(half ? b.b : b.a, half ? -ux : ux, half ? -uy : uy, sd, ux, uy, R, r2, o, gap, L);
+                const x0 = near.x + ux * sh * (half ? -1 : 1) - uy * off, y0 = near.y + uy * sh * (half ? -1 : 1) + ux * off;
+                if (engravedSticks()) drawEngravedHalfStick(ctx, x0, y0, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha * al, site, inner: true, cap: true });
+                else drawHalfStick(ctx, x0, y0, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, seed: seed + half * 3 + sv, fog: near.fog, d: near.d, alpha: b.alpha * al, partial: 0, passes: 1, noShadow: true, inner: true });
+              };
+              inner(side, frac, 101);
+              if (extra > 1.01) inner(-side, extra - 1, 202);
             }
           } });
         }
@@ -4473,6 +5156,118 @@
             ctx.restore();
           } });
         }
+      }
+    }
+    const BS_ROD = 0.7;
+    function flatBallR(a) {
+      return (a.r ?? (VDW[a.el] ?? 1.7) * cfg.rep.sphereScale * (a.el === "H" ? 0.6 : 1)) * (a._site ? cfg.rep.siteScale || 1.9 : 1);
+    }
+    function bondLanes(rb, extra) {
+      const set = (n) => n === 1 ? [[0, rb]] : n === 2 ? [[0.87 * rb, 0.62 * rb], [-0.87 * rb, 0.62 * rb]] : [[0, 0.52 * rb], [1.46 * rb, 0.52 * rb], [-1.46 * rb, 0.52 * rb]];
+      const lo = Math.floor(extra + 1e-6), f2 = extra - lo;
+      const out = set(lo + 1).map(([o, r]) => [o, r, f2 > 0.01 ? 1 - f2 : 1]);
+      if (f2 > 0.01) for (const [o, r] of set(lo + 2)) out.push([o, r, f2]);
+      return out;
+    }
+    function drawRod(ctx, ax, ay, ux, uy, t0, t1, off, r, Rb, col, o) {
+      if (t1 - t0 < 0.5) return;
+      const nx = -uy, ny = ux, at = (t, q2) => [ax + ux * t + nx * q2, ay + uy * t + ny * q2];
+      ctx.save();
+      ctx.globalAlpha = o.alpha ?? 1;
+      ctx.beginPath();
+      const q = [at(t0, off + r), at(t1 + 0.5, off + r), at(t1 + 0.5, off - r), at(t0, off - r)];
+      ctx.moveTo(q[0][0], q[0][1]);
+      for (let k = 1; k < 4; k++) ctx.lineTo(q[k][0], q[k][1]);
+      ctx.closePath();
+      ctx.fillStyle = fogged(col, o.fog || 0);
+      ctx.fill();
+      if (o.outline > 0) {
+        ctx.lineWidth = o.outline;
+        ctx.strokeStyle = fogged(cfg.palette.ink, o.fog || 0);
+        ctx.lineCap = "butt";
+        ctx.beginPath();
+        for (const e of [off + r, off - r]) {
+          const s0 = Math.max(t0, Math.sqrt(Math.max(0, Rb * Rb - e * e)));
+          if (t1 - s0 < 0.3) continue;
+          const a = at(s0, e), b = at(t1, e);
+          ctx.moveTo(a[0], a[1]);
+          ctx.lineTo(b[0], b[1]);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    function buildFlatBallStick(items, st, pos, atoms, bonds, proj, seedBase) {
+      const P = cfg.palette, SH = cfg.show;
+      const R0 = cfg.rep.stickRadius * proj.pxPerA;
+      const ks = cfg.rep.siteScale || 1.9;
+      const inSet = {};
+      for (const a of atoms) inSet[a.id] = a;
+      const OUT = stickOutlined() ? cfg.style.inkWidth * LW.outer : 0;
+      for (const b of bonds) {
+        const A = inSet[b.a], B = inSet[b.b];
+        if (!A || !B) continue;
+        const pa = pos[b.a], pb = pos[b.b];
+        const dx = pb.x - pa.x, dy = pb.y - pa.y, L = Math.hypot(dx, dy);
+        if (L < 1e-6) continue;
+        const ux = dx / L, uy = dy / L;
+        if (b.order === 0) {
+          if (!SH.hbonds) continue;
+          const fog = (pa.fog + pb.fog) / 2;
+          items.push({ z: (pa.z + pb.z) / 2, draw: (ctx) => {
+            const ra = atomDrawR(A, proj) * pa.d, rb = atomDrawR(B, proj) * pb.d;
+            drawHBond(ctx, pa.x + ux * (ra + 2), pa.y + uy * (ra + 2), pb.x - ux * (rb + 2), pb.y - uy * (rb + 2), { seed: seedBase + strHash(bkey(b.a, b.b)), color: fogged(P.hbond || (luminance(P.paper) > 0.5 ? P.hatch : P.ink), fog), alpha: b.alpha * (1 - fog * cfg.view.fog * 0.5), r: R0 * 0.5 * ((pa.d + pb.d) / 2), gap: R0 * 1.5 });
+          } });
+          continue;
+        }
+        const k = (A._site && B._site ? ks : 1) * hScale(A, B), extra = SH.valence ? clamp(b.order - 1, 0, 2) : 0, mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
+        const L3 = Math.hypot(A.pos[0] - B.pos[0], A.pos[1] - B.pos[1], A.pos[2] - B.pos[2]) * proj.pxPerA * (pa.d + pb.d) / 2, inPlane = L3 > 1e-6 ? Math.min(1, L / L3) : 1;
+        for (const [near, far, atom, sg] of [[pa, pb, A, 1], [pb, pa, B, -1]]) {
+          const rb = R0 * BS_ROD * near.d * k, lanes = bondLanes(rb, extra), hw = Math.max(...lanes.map((l) => Math.abs(l[0]) + l[1]));
+          const Rb = atomDrawR(atom, proj) * near.d, e = Math.sqrt(Math.max(0, Rb * Rb - hw * hw)) * inPlane;
+          items.push({ z: near.z < far.z ? near.z + 2e-3 : near.z - 2e-3, draw: (ctx) => {
+            const col = atomColor(atom);
+            if (b.partial > 0 && b.partial < 1) {
+              drawHalfStick(ctx, near.x + sg * ux * e, near.y + sg * uy * e, mx, my, rb * 1.5, col, { fog: near.fog, alpha: b.alpha, partial: b.partial });
+              return;
+            }
+            for (const [off, r, al] of lanes) if (al > 0.01) drawRod(ctx, near.x, near.y, sg * ux, sg * uy, e, L / 2, sg * off, r, Rb, col, { alpha: b.alpha * al, fog: near.fog, outline: OUT });
+          } });
+        }
+      }
+      if (SITE && !OUT) {
+        const sb = bonds.filter((b) => b.order !== 0 && inSet[b.a] && inSet[b.b] && inSet[b.a]._site && inSet[b.b]._site);
+        const sa = atoms.filter((a) => a._site);
+        items.push({ z: SITE.zmin - 0.01, draw: (ctx) => {
+          ctx.save();
+          ctx.strokeStyle = cfg.palette.paper;
+          ctx.fillStyle = cfg.palette.paper;
+          ctx.lineCap = "round";
+          for (const b of sb) {
+            const pa = pos[b.a], pb = pos[b.b];
+            const R = R0 * BS_ROD * ks * (pa.d + pb.d) / 2;
+            ctx.globalAlpha = b.alpha;
+            ctx.lineWidth = 2 * (R + Math.max(2.5, R * 0.6));
+            ctx.beginPath();
+            ctx.moveTo(pa.x, pa.y);
+            ctx.lineTo(pb.x, pb.y);
+            ctx.stroke();
+          }
+          for (const a of sa) {
+            const p = pos[a.id];
+            const R = atomDrawR(a, proj) * p.d;
+            ctx.globalAlpha = a.alpha;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, R + Math.max(2.5, R * 0.6), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        } });
+      }
+      for (const a of atoms) {
+        const p = pos[a.id];
+        const r = atomDrawR(a, proj) * p.d;
+        items.push({ z: p.z, draw: (ctx) => drawFlatDisc(ctx, p.x, p.y, r, atomColor(a), { fog: p.fog, alpha: a.alpha, outline: OUT }) });
       }
     }
     function buildBallStick(items, st, pos, atoms, bonds, proj, seedBase, lowDetail) {
@@ -7764,6 +8559,7 @@
       const items = [];
       const lowDetail = cfg.rep.detail !== "full" && stickAtoms.length + surfAtoms.length > 260;
       if (cfg.rep.mode === "sticks") buildSticks(items, st, pos, stickAtoms, stickBonds, proj, seedBase, lowDetail);
+      else if (flatSticks()) buildFlatBallStick(items, st, pos, stickAtoms, stickBonds, proj, seedBase);
       else buildBallStick(items, st, pos, stickAtoms, stickBonds, proj, seedBase, lowDetail);
       if (cartoonOn) buildCartoon(items, st, pos, st.atoms, selC, proj, seedBase, lowDetail);
       if (surfAtoms.length) buildSurface(items, st, pos, surfAtoms, proj, seedBase, lowDetail);
@@ -7944,10 +8740,10 @@
     const grainCache = canvasCache();
     const pitCache = canvasCache();
     function pitOverlay(W, H, dpr) {
-      const key = [W, H, dpr].join("|");
-      const hit = pitCache.get(key);
+      const key2 = [W, H, dpr].join("|");
+      const hit = pitCache.get(key2);
       if (hit) return hit;
-      return pitCache.put(key, hostTexture("pit|" + key, W, H, dpr, () => pitOnce(W, H, dpr)));
+      return pitCache.put(key2, hostTexture("pit|" + key2, W, H, dpr, () => pitOnce(W, H, dpr)));
     }
     function pitOnce(W, H, dpr) {
       const c = document.createElement("canvas");
@@ -7968,10 +8764,10 @@
       return c;
     }
     function grainOverlay(W, H, dpr, light) {
-      const key = [W, H, dpr, light].join("|");
-      const hit = grainCache.get(key);
+      const key2 = [W, H, dpr, light].join("|");
+      const hit = grainCache.get(key2);
       if (hit) return hit;
-      return grainCache.put(key, hostTexture("grain|" + key, W, H, dpr, () => grainOnce(W, H, dpr, light)));
+      return grainCache.put(key2, hostTexture("grain|" + key2, W, H, dpr, () => grainOnce(W, H, dpr, light)));
     }
     function grainOnce(W, H, dpr, light) {
       const c = document.createElement("canvas");
@@ -8490,14 +9286,14 @@
     return segs;
   }
   function joinSegments(segs, tol = 1e-4) {
-    const key = (x, y, z) => `${Math.round(x / tol)},${Math.round(y / tol)},${Math.round(z / tol)}`;
+    const key2 = (x, y, z) => `${Math.round(x / tol)},${Math.round(y / tol)},${Math.round(z / tol)}`;
     const n = segs.length, ka = new Array(n), kb = new Array(n);
     const ends = /* @__PURE__ */ new Map();
     const used = new Uint8Array(n);
     for (let i = 0; i < n; i++) {
       const s = segs[i];
-      ka[i] = key(s[0], s[1], s[2]);
-      kb[i] = key(s[3], s[4], s[5]);
+      ka[i] = key2(s[0], s[1], s[2]);
+      kb[i] = key2(s[3], s[4], s[5]);
       for (const e of [ka[i], kb[i]]) {
         let l = ends.get(e);
         if (!l) ends.set(e, l = []);
@@ -8804,10 +9600,10 @@
   function prepareMap(whole, style, s, base, localRes = null) {
     const o = style.map, level = mapLevel(whole, style);
     const factors = o.style === "layers" ? o.levels : [1];
-    const key = keyOf(whole, style, s, base, localRes);
+    const key2 = keyOf(whole, style, s, base, localRes);
     let per = cache2.get(whole);
     if (!per) cache2.set(whole, per = /* @__PURE__ */ new Map());
-    const hit = per.get(key);
+    const hit = per.get(key2);
     if (hit) return { ...hit, opts: o };
     let zoneSel = null;
     if (s && o.zone) {
@@ -8902,11 +9698,11 @@
     const levels = factors.map((f2) => {
       const iso = smoothSurface(isosurface(g2, same(level * f2)), o.finish !== "sketch" ? o.smoothing : 0);
       const nv = iso.positions.length / 3;
-      const near = new Int32Array(nv).fill(-1), dist = new Float32Array(nv).fill(99);
+      const near = new Int32Array(nv).fill(-1), dist2 = new Float32Array(nv).fill(99);
       if (atoms.length) for (let v = 0; v < nv; v++) {
         const [i, d] = nearest(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2]);
         near[v] = i;
-        dist[v] = d;
+        dist2[v] = d;
       }
       let tri = iso.triangles;
       if (R > 0 || o.finish !== "sketch") {
@@ -8941,11 +9737,11 @@
       }
       if (!zoneSel && carve <= 0 && atoms.length && o.context === "show" && o.crop > 0) {
         const r = Math.min(o.crop, 7.99), k2 = [];
-        for (let t = 0; t < tri.length; t += 3) if (dist[tri[t]] < r || dist[tri[t + 1]] < r || dist[tri[t + 2]] < r) k2.push(tri[t], tri[t + 1], tri[t + 2]);
+        for (let t = 0; t < tri.length; t += 3) if (dist2[tri[t]] < r || dist2[tri[t + 1]] < r || dist2[tri[t + 2]] < r) k2.push(tri[t], tri[t + 1], tri[t + 2]);
         tri = new Uint32Array(k2);
       }
       if (carve > 0 && atoms.length) {
-        const cd = zoneSel ? Float32Array.from({ length: nv }, (_, v) => carveDist(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2])) : dist;
+        const cd = zoneSel ? Float32Array.from({ length: nv }, (_, v) => carveDist(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2])) : dist2;
         const keep2 = [];
         for (let t = 0; t < tri.length; t += 3) if (cd[tri[t]] <= carve || cd[tri[t + 1]] <= carve || cd[tri[t + 2]] <= carve) keep2.push(tri[t], tri[t + 1], tri[t + 2]);
         tri = new Uint32Array(keep2);
@@ -8996,7 +9792,7 @@
         nor[v * 3 + 1] = q[1];
         nor[v * 3 + 2] = q[2];
       }
-      return { level: level * f2, pos, nor, tri, near, dist, hand: hand2 };
+      return { level: level * f2, pos, nor, tri, near, dist: dist2, hand: hand2 };
     });
     const primary = Math.max(0, factors.indexOf(1));
     const wire = [], gLevel = same(level);
@@ -9063,7 +9859,7 @@
       gridLevel: gLevel,
       farAt: Math.max(3.4, 0.75 * R)
     };
-    keep(per, key, out);
+    keep(per, key2, out);
     return out;
   }
   function sortedAt(a, k) {
@@ -9077,8 +9873,8 @@
     const v = kthOf(Float32Array.from(a), k);
     return v === 0 ? k < neg + negZero ? -0 : 0 : v;
   }
-  function keep(per, key, em) {
-    per.set(key, em);
+  function keep(per, key2, em) {
+    per.set(key2, em);
     if (per.size > 6) per.delete(per.keys().next().value);
   }
   function samplerOf(g2, base, level, gLevel) {
@@ -9387,7 +10183,7 @@
       }
     }
     const bonds = [];
-    for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], 1]);
+    for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], s.bondOrder[b >> 1] || 1]);
     return { kf: { name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }, ids };
   }
   function renderClassic(ctx, R, style, boil, dpr = 1) {
@@ -9537,9 +10333,9 @@
       return this.roll ? mat4Mul(mat4RotZ(this.roll * Math.PI / 180), yp) : yp;
     }
     computeFit() {
-      const key = this.yaw + "|" + this.pitch + "|" + this.roll + "|" + this.fitVersion;
-      if (key === this.fitKey) return;
-      this.fitKey = key;
+      const key2 = this.yaw + "|" + this.pitch + "|" + this.roll + "|" + this.fitVersion;
+      if (key2 === this.fitKey) return;
+      this.fitKey = key2;
       const p = this.pts;
       const n = p.length / 3;
       if (!n) {
@@ -9642,14 +10438,14 @@
   };
 
   // src/app/site.ts
-  var WATER = /* @__PURE__ */ new Set(["HOH", "WAT", "DOD", "H2O", "TIP", "TIP3", "SOL"]);
-  function pocketSel(s, dist = 5) {
+  var WATER2 = /* @__PURE__ */ new Set(["HOH", "WAT", "DOD", "H2O", "TIP", "TIP3", "SOL"]);
+  function pocketSel(s, dist2 = 5) {
     let lig = null;
-    for (const r of s.residues) if (r.het && !WATER.has(r.resn) && (!lig || r.atomEnd - r.atomStart > lig.atomEnd - lig.atomStart)) lig = r;
+    for (const r of s.residues) if (r.het && !WATER2.has(r.resn) && (!lig || r.atomEnd - r.atomStart > lig.atomEnd - lig.atomStart)) lig = r;
     if (!lig || lig.atomEnd - lig.atomStart < 2) return { sel: "", msg: "no ligand here to find a pocket around: type the site residues instead (resi 57+102+195)" };
     const L = [];
     for (let i = lig.atomStart; i < lig.atomEnd; i++) if (s.element[i] !== "H") L.push(i);
-    const d2 = dist * dist;
+    const d2 = dist2 * dist2;
     const byChain = /* @__PURE__ */ new Map();
     for (const r of s.residues) {
       if (r.het) continue;
@@ -9668,7 +10464,7 @@
     }
     const parts = [...byChain].map(([c, rs]) => byChain.size > 1 && c ? `(chain ${c} and resi ${rs.join("+")})` : `resi ${rs.join("+")}`);
     parts.push(`(resn ${lig.resn} and resi ${lig.resi}${lig.chain && byChain.size > 1 ? " and chain " + lig.chain : ""})`);
-    return { sel: parts.join(" or "), msg: `the pocket: ${[...byChain.values()].reduce((n, r) => n + r.length, 0)} residues within ${dist} \xC5 of ${lig.resn}${lig.resi}` };
+    return { sel: parts.join(" or "), msg: `the pocket: ${[...byChain.values()].reduce((n, r) => n + r.length, 0)} residues within ${dist2} \xC5 of ${lig.resn}${lig.resi}` };
   }
   function siteAtoms(h) {
     const E = h.engine();
@@ -9797,7 +10593,7 @@
     maps.set(ref, { name: header.name || ref, nx: header.nx, ny: header.ny, nz: header.nz, data, origin: header.origin, step: header.step, level: header.level ?? void 0, binned: header.binned || 1, mass: header.mass ?? void 0, resolution: header.resolution ?? void 0, ...mapStats(data) });
     return ref;
   }
-  function mapOf(ref) {
+  function mapOf2(ref) {
     const m = maps.get(ref);
     if (!m) throw new Error(`unknown map ${ref}`);
     return m;
@@ -9818,11 +10614,11 @@
   }
   var parsed2 = /* @__PURE__ */ new Map();
   function structureOf(text, name) {
-    const key = name + "\0" + text.length + "\0" + text.slice(0, 64) + text.slice(-64);
-    let s = parsed2.get(key);
+    const key2 = name + "\0" + text.length + "\0" + text.slice(0, 64) + text.slice(-64);
+    let s = parsed2.get(key2);
     if (!s) {
       s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, ""));
-      parsed2.set(key, s);
+      parsed2.set(key2, s);
       if (parsed2.size > 8) parsed2.delete(parsed2.keys().next().value);
     }
     return s;
@@ -9846,9 +10642,9 @@
     }
     return out;
   }
-  function withLook(style, key) {
-    const L = LOOKS[key];
-    if (!L) throw new Error(`unknown look "${key}"; the looks are ${Object.keys(LOOKS).join(", ")}`);
+  function withLook(style, key2) {
+    const L = LOOKS[key2];
+    if (!L) throw new Error(`unknown look "${key2}"; the looks are ${Object.keys(LOOKS).join(", ")}`);
     const keep2 = style.reps;
     const s = mergeStyle(DEFAULT_STYLE, L.style);
     if (!L.style.reps) s.reps = keep2;
@@ -9858,9 +10654,9 @@
   function fitPointsOf(s, style) {
     const siteSel = style.site?.sel?.trim();
     const stickSel = siteSel ? style.reps.sticks.trim() ? `(${style.reps.sticks}) or (${siteSel})` : siteSel : style.reps.sticks;
-    const key = [stickSel, style.reps.cartoon, style.reps.surface].join("\0");
+    const key2 = [stickSel, style.reps.cartoon, style.reps.surface].join("\0");
     const hit = fits.get(s);
-    if (hit && hit.key === key) return hit.pts;
+    if (hit && hit.key === key2) return hit.pts;
     const shown = new Uint8Array(s.count);
     for (const sel of [stickSel, style.reps.cartoon, style.reps.surface]) if (sel && sel.trim()) {
       const m = selectAtoms(s, sel);
@@ -9875,7 +10671,7 @@
       pts[k++] = s.y[i];
       pts[k++] = s.z[i];
     }
-    fits.set(s, { key, pts });
+    fits.set(s, { key: key2, pts });
     return pts;
   }
   var bases0 = /* @__PURE__ */ new WeakMap();
@@ -9928,7 +10724,7 @@
     }
     let map = null;
     if (inp.map !== void 0) {
-      map = mapOf(inp.map);
+      map = mapOf2(inp.map);
     } else if (inp.scene || inp.stack) {
       const doc = sceneDocOf(inp);
       scene = doc;
@@ -9999,8 +10795,8 @@
     if (spec.groupColors) overrides = { ...spec.groupColors };
     const [W, H] = spec.size || [960, 720];
     const dpr = spec.scale || 1;
-    if (spec.map && style.map.visible !== false) map = mapOf(spec.map.ref);
-    const localRes = spec.map?.localResolution ? mapOf(spec.map.localResolution) : null;
+    if (spec.map && style.map.visible !== false) map = mapOf2(spec.map.ref);
+    const localRes = spec.map?.localResolution ? mapOf2(spec.map.localResolution) : null;
     if (map && !structure && !scene) {
       const b = basisOf(map, mapLevel(map, style));
       cam.base = b;
@@ -10158,10 +10954,10 @@
   function siteHostOf(f2) {
     return { engine: () => engineFor(f2), camera: f2.camera, W: f2.W, H: f2.H, frame: f2.frame, siteSel: f2.style.site.sel || "" };
   }
-  function pocket(spec, dist = 5) {
+  function pocket(spec, dist2 = 5) {
     const f2 = settle(spec);
     if (!f2.structure) throw new Error("the pocket needs a structure, not a scene");
-    return pocketSel(f2.structure, dist);
+    return pocketSel(f2.structure, dist2);
   }
   function frameTheSite(spec) {
     const f2 = settle(spec);

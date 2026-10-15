@@ -179,7 +179,8 @@ class Figure:
             fig.site(None)                     # no site
 
         ``cutaway`` (default on) opens the ribbon in front of the site. ``quiet`` (0–1, default 0.35) is how much the
-        rest of the protein fades. ``scale`` (default 1.9) is how much thicker the site's sticks are. Follow with
+        rest of the protein fades. ``scale`` (default 1.9; 1.25 in the flat look) is how much thicker the site's sticks
+        are. Follow with
         ``frame_site()`` to turn the site towards you and ``label_site()`` to label its residues."""
         if ligand:
             r = engine().call("pocket", self._spec(), within)

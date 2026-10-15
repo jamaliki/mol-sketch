@@ -244,7 +244,7 @@ fig.site(None)                       # no site
 | `within` | with `ligand=True`, how far from the ligand a residue can be, in Å |
 | `cutaway` | open the ribbon in front of the site (on by default) |
 | `quiet` | how much the rest of the protein fades, 0 to 1 (0.35 by default) |
-| `scale` | how much thicker the site's sticks are than normal sticks (1.9 by default) |
+| `scale` | how much thicker the site's sticks are than normal sticks (1.9 by default; 1.25 in the Flat look) |
 
 #### `fig.frame_site(size=(1920, 1440))`
 
