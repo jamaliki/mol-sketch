@@ -211,6 +211,34 @@ def test_flat_draws_protons_charges_and_valence_its_own_way():
         assert not np.array_equal(fig(**change), plain), change
 
 
+def test_flat_ball_and_stick_is_pymols():
+    """ball-and-stick with flat sticks: solid balls in the atoms' own colours (a residue's colour too), outlined beside
+    ribbons, thinner rods between them -- plain shapes in an SVG, as the flat sticks are -- not the pencil balls"""
+    import re
+    site = lambda: ms.load(EX / "trypsin_active_site.json").look("flat").site("resi 57+102+195").color("HIS57", "#1b9e77")
+    sticks, balls = site(), site().set(mode="ballstick")
+    assert not np.array_equal(sticks.render(SMALL).to_numpy(), balls.render(SMALL).to_numpy())
+    s = balls.svg((640, 480))
+    for picture in ("<image", "<clipPath", "<pattern", "<filter", "mix-blend-mode"): assert picture not in s, picture
+    fills = set(re.findall(r'fill="(#[0-9a-f]{6})"', s))
+    assert {"#1b9e77", "#3a6ee0", "#e04848"} <= fills                 # His57's carbons as given, its N, Asp102's O
+    assert 'stroke="#000000"' in s
+    pencil = site().set(mode="ballstick", stick_style="engraved").render(SMALL).to_numpy()
+    assert not np.array_equal(pencil, balls.render(SMALL).to_numpy())
+    bigger = site().set(mode="ballstick", sphere_scale=0.4).render(SMALL).to_numpy()   # sphere_scale: the balls' share of the vdW radius
+    assert not np.array_equal(bigger, balls.render(SMALL).to_numpy())
+
+
+def test_flat_ball_and_stick_draws_double_bonds_and_hydrogens():
+    """the mechanism in flat ball-and-stick: double bonds as two rods (show.valence), hydrogens' balls smaller, the scene's
+    forming bonds dotted -- it draws at every frame"""
+    fig = lambda **st: ms.load(EX / "mechanism.json").look("flat").set(mode="ballstick", **st)
+    plain = fig().render(SMALL, frame=100).to_numpy()
+    assert not np.array_equal(fig(**{"show.valence": False}).render(SMALL, frame=100).to_numpy(), plain)
+    assert not np.array_equal(fig(**{"show.H": False}).render(SMALL, frame=100).to_numpy(), plain)
+    for f in fig().frames("keyframes"): assert fig().render(SMALL, frame=f + 20).to_numpy()[..., :3].std() > 5
+
+
 def test_fit_puts_the_drawing_in_the_box():
     """fit(): zoom and pan so the drawing fills the box (its longer side), centred in it"""
     from molsketch._engine import engine

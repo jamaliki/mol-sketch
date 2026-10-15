@@ -31,10 +31,10 @@ Contents: [Fill and representation](#fill-and-representation) · [Depth in a sur
 | field | default | meaning |
 |---|---|---|
 | `fill` | `"watercolour"` | how shapes are filled; the outlines are always ink. See the table below |
-| `mode` | `"sticks"` | how the stick atoms are drawn: `"sticks"` (PyMOL-style sticks, with small spheres where bonds meet) or `"ballstick"` (pencil ball-and-stick) |
+| `mode` | `"sticks"` | how the stick atoms are drawn: `"sticks"` (PyMOL-style sticks, with small spheres where bonds meet) or `"ballstick"`: with flat sticks (`stick_style="flat"`, as the Flat look sets) PyMOL's ball-and-stick, solid balls in the atoms' colours (`sphere_scale` of the van der Waals radius) joined by thinner rods (0.7 of `stick_radius`), outlined with the sticks (`stick_outline`); with any other sticks, pencil ball-and-stick |
 | `stick_radius` | `0.2` | stick radius, Å |
 | `stick_h_scale` | `1` | a bond to a hydrogen as a share of the stick radius, as PyMOL's `stick_h_scale`: below 1 the proton reads lighter than the bonds it moves between |
-| `sphere_scale` | `0.4` | in `"sticks"` mode, the size of the balls on atoms marked as spheres (a protein's Cα atoms, and atoms a scene marks); 0 draws them as plain stick ends |
+| `sphere_scale` | `0.4` | in `"sticks"` mode, the size of the balls on atoms marked as spheres (a protein's Cα atoms, and atoms a scene marks); 0 draws them as plain stick ends. In flat ball-and-stick, each ball's radius as a share of its atom's van der Waals radius, as PyMOL's `sphere_scale` (0.25 makes a carbon's 0.43 Å; a hydrogen's is smaller still, 0.6 of that share) |
 | `cartoon_scale` | `1` | width of the cartoon ribbons and tubes, relative to normal |
 | `cartoon_style` | `"engraved"` | `"engraved"`: white ribbons shaded with lines along their length, after MOLSCRIPT. `"sketch"`: ribbons filled in the style of `fill` |
 | `stick_style` | `"auto"` | whether sticks follow the engraved style too: `"auto"` (when the ribbons are engraved), `"engraved"` (always) or `"sketch"` (never); or `"flat"`: PyMOL's sticks under flat light, solid colour split at each bond's middle, round joints |
@@ -126,7 +126,7 @@ is the easier way to set them.
 | field | default | meaning |
 |---|---|---|
 | `show.H` | `true` | hydrogen atoms |
-| `show.valence` | `true` | double and triple bonds drawn as such: with flat sticks, two or three lanes in the one stick; in the other looks, a thinner stick beside the bond. A structure's bonds take their orders when it is read ([reference.md](../../docs/reference.md#bond-orders)); a scene's are as written |
+| `show.valence` | `true` | double and triple bonds drawn as such: with flat sticks, two or three lanes in the one stick; in flat ball-and-stick, two or three thinner rods; in the other looks, a thinner stick beside the bond. A structure's bonds take their orders when it is read ([reference.md](../../docs/reference.md#bond-orders)); a scene's are as written |
 | `show.hbonds` | `true` | hydrogen bonds, as dotted lines |
 | `show.charges` | `true` | charge signs (scenes) |
 | `show.lone_pairs` | `true` | lone-pair dots (scenes) |
@@ -201,7 +201,7 @@ Usually set through [`fig.site`](api.md#figsiteselectionnone--ligandfalse-within
 | `site.sel` | `""` | the site's atoms, as a selection (empty: no site) |
 | `site.cutaway` | `true` | open the ribbon in front of the site (engraved ribbons) |
 | `site.quiet` | `0.35` | how much the rest of the protein fades, 0 to 1 |
-| `site.scale` | `1.9` | how much thicker the site's sticks are |
+| `site.scale` | `1.9` | how much thicker the site's sticks (and, in ball-and-stick, its balls) are |
 
 ## Density maps
 

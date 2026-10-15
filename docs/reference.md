@@ -70,10 +70,10 @@ site and view. The app writes one with *Save scene*, and Python with `fig.save("
 
 Three representations can be shown at once, each on its own selection:
 
-- **Sticks**: PyMOL-style sticks (half-bonds coloured by element, small spheres at cut points) or pencil
-  ball-and-stick (`mode`). Curly arrows, charges, lone pairs and labels attach to stick atoms. Next to engraved
-  ribbons, sticks take the engraved line too (`stick_style`). Double and triple bonds are drawn as such
-  (`show.valence`), from a scene's own orders or a structure's ([bond orders](#bond-orders)).
+- **Sticks**: PyMOL-style sticks (half-bonds coloured by element, small spheres at cut points) or ball-and-stick
+  (`mode`): PyMOL's with flat sticks, pencil balls otherwise. Curly arrows, charges, lone pairs and labels attach to
+  stick atoms. Next to engraved ribbons, sticks take the engraved line too (`stick_style`). Double and triple bonds
+  are drawn as such (`show.valence`), from a scene's own orders or a structure's (below).
 - **Cartoon**: helices as ribbons, strands as arrows, loops as thin tubes, nucleic backbones as thicker tubes;
   engraved (after MOLSCRIPT) or sketched in the fill (`cartoon_style`). With a cartoon shown, the backbone atoms of
   those residues are left out of the sticks (`side_chain_helper`).

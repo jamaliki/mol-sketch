@@ -312,6 +312,13 @@ outlined as the ribbons are; on their own (a mechanism) they are plain (`stick_o
 site's sticks need no paper halo to stand off the ribbons behind them, and have none. Hydrogen bonds are evenly
 spaced round dots in a colour of their own.
 
+`mode="ballstick"` is PyMOL's ball-and-stick in the same terms: a solid ball on each atom in its colour (the carbons
+coloured as the sticks are, a residue's or chain's own colour included), a quarter of its van der Waals radius
+(`sphere_scale`; a hydrogen's smaller), joined by rods 0.7 times as thick as a stick, each half in its atom's colour,
+outlined with the sticks. A rod leaves its ball where its surface does, so a bond turned toward you comes out of the
+middle of the ball behind it. A double or triple bond is two or three thinner rods side by side; the active site's
+balls and rods are larger by its scale. In an SVG every ball is a circle and every rod a quadrilateral.
+
 A mechanism's chemistry is drawn in the same terms. A bond to a hydrogen is thinner (`stick_h_scale`), so a proton
 reads lighter than the bonds it moves between. A double or triple bond is two or three lanes in the one stick, as
 PyMOL draws valence, the gap between them closing before each atom so the lanes run into it; a structure's are its
@@ -346,7 +353,7 @@ fig.set(palette={"helix": "#4c78a8", "sheet": "#f2c14e", "loop": "#eeeeee"}, **{
 | `palette.hbond`, `palette.H` | `#2b8ea3`, `#d4d4d4` | teal hydrogen bonds; hydrogens grey, as white vanishes on white |
 | `stick_h_scale` | `0.55` | bonds to hydrogens thinner |
 | `lone_pair_style` | `"bold"` | lone pairs as bold dots, clear of bonds and the charge |
-| `stick_radius`, `sphere_scale` | `0.25`, `0.25` | PyMOL's stick, and a Cα ball twice as wide |
+| `stick_radius`, `sphere_scale` | `0.25`, `0.25` | PyMOL's stick, and a Cα ball twice as wide; in ball-and-stick, balls a quarter of the van der Waals radius (PyMOL's `sphere_scale`) |
 | `site.quiet`, `site.cutaway` | `0`, `false` | nothing faded or seen through: the site reads by its sticks |
 | `font`, `label_size` | `"Plain sans"`, `22` | lettered labels |
 | `view.fog`, `view.fov` | `0`, `0` | no fog, an orthographic view |

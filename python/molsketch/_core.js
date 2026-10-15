@@ -4095,6 +4095,7 @@
         const R = cfg.rep.stickRadius * proj.pxPerA;
         return a.sphere ? R * (1 + cfg.rep.sphereScale * 4) : R;
       }
+      if (flatSticks()) return flatBallR(a) * proj.pxPerA;
       return (a.r ?? EL_R[a.el] ?? 0.45) * cfg.style.ballScale * proj.pxPerA;
     }
     function anchorPoint(an, st, proj, other) {
@@ -5109,6 +5110,118 @@
             ctx.restore();
           } });
         }
+      }
+    }
+    const BS_ROD = 0.7;
+    function flatBallR(a) {
+      return (a.r ?? (VDW[a.el] ?? 1.7) * cfg.rep.sphereScale * (a.el === "H" ? 0.6 : 1)) * (a._site ? cfg.rep.siteScale || 1.9 : 1);
+    }
+    function bondLanes(rb, extra) {
+      const set = (n) => n === 1 ? [[0, rb]] : n === 2 ? [[0.87 * rb, 0.62 * rb], [-0.87 * rb, 0.62 * rb]] : [[0, 0.52 * rb], [1.46 * rb, 0.52 * rb], [-1.46 * rb, 0.52 * rb]];
+      const lo = Math.floor(extra + 1e-6), f2 = extra - lo;
+      const out = set(lo + 1).map(([o, r]) => [o, r, f2 > 0.01 ? 1 - f2 : 1]);
+      if (f2 > 0.01) for (const [o, r] of set(lo + 2)) out.push([o, r, f2]);
+      return out;
+    }
+    function drawRod(ctx, ax, ay, ux, uy, t0, t1, off, r, Rb, col, o) {
+      if (t1 - t0 < 0.5) return;
+      const nx = -uy, ny = ux, at = (t, q2) => [ax + ux * t + nx * q2, ay + uy * t + ny * q2];
+      ctx.save();
+      ctx.globalAlpha = o.alpha ?? 1;
+      ctx.beginPath();
+      const q = [at(t0, off + r), at(t1 + 0.5, off + r), at(t1 + 0.5, off - r), at(t0, off - r)];
+      ctx.moveTo(q[0][0], q[0][1]);
+      for (let k = 1; k < 4; k++) ctx.lineTo(q[k][0], q[k][1]);
+      ctx.closePath();
+      ctx.fillStyle = fogged(col, o.fog || 0);
+      ctx.fill();
+      if (o.outline > 0) {
+        ctx.lineWidth = o.outline;
+        ctx.strokeStyle = fogged(cfg.palette.ink, o.fog || 0);
+        ctx.lineCap = "butt";
+        ctx.beginPath();
+        for (const e of [off + r, off - r]) {
+          const s0 = Math.max(t0, Math.sqrt(Math.max(0, Rb * Rb - e * e)));
+          if (t1 - s0 < 0.3) continue;
+          const a = at(s0, e), b = at(t1, e);
+          ctx.moveTo(a[0], a[1]);
+          ctx.lineTo(b[0], b[1]);
+        }
+        ctx.stroke();
+      }
+      ctx.restore();
+    }
+    function buildFlatBallStick(items, st, pos, atoms, bonds, proj, seedBase) {
+      const P = cfg.palette, SH = cfg.show;
+      const R0 = cfg.rep.stickRadius * proj.pxPerA;
+      const ks = cfg.rep.siteScale || 1.9;
+      const inSet = {};
+      for (const a of atoms) inSet[a.id] = a;
+      const OUT = stickOutlined() ? cfg.style.inkWidth * LW.outer : 0;
+      for (const b of bonds) {
+        const A = inSet[b.a], B = inSet[b.b];
+        if (!A || !B) continue;
+        const pa = pos[b.a], pb = pos[b.b];
+        const dx = pb.x - pa.x, dy = pb.y - pa.y, L = Math.hypot(dx, dy);
+        if (L < 1e-6) continue;
+        const ux = dx / L, uy = dy / L;
+        if (b.order === 0) {
+          if (!SH.hbonds) continue;
+          const fog = (pa.fog + pb.fog) / 2;
+          items.push({ z: (pa.z + pb.z) / 2, draw: (ctx) => {
+            const ra = atomDrawR(A, proj) * pa.d, rb = atomDrawR(B, proj) * pb.d;
+            drawHBond(ctx, pa.x + ux * (ra + 2), pa.y + uy * (ra + 2), pb.x - ux * (rb + 2), pb.y - uy * (rb + 2), { seed: seedBase + strHash(bkey(b.a, b.b)), color: fogged(P.hbond || (luminance(P.paper) > 0.5 ? P.hatch : P.ink), fog), alpha: b.alpha * (1 - fog * cfg.view.fog * 0.5), r: R0 * 0.5 * ((pa.d + pb.d) / 2), gap: R0 * 1.5 });
+          } });
+          continue;
+        }
+        const k = (A._site && B._site ? ks : 1) * hScale(A, B), extra = SH.valence ? clamp(b.order - 1, 0, 2) : 0, mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
+        const L3 = Math.hypot(A.pos[0] - B.pos[0], A.pos[1] - B.pos[1], A.pos[2] - B.pos[2]) * proj.pxPerA * (pa.d + pb.d) / 2, inPlane = L3 > 1e-6 ? Math.min(1, L / L3) : 1;
+        for (const [near, far, atom, sg] of [[pa, pb, A, 1], [pb, pa, B, -1]]) {
+          const rb = R0 * BS_ROD * near.d * k, lanes = bondLanes(rb, extra), hw = Math.max(...lanes.map((l) => Math.abs(l[0]) + l[1]));
+          const Rb = atomDrawR(atom, proj) * near.d, e = Math.sqrt(Math.max(0, Rb * Rb - hw * hw)) * inPlane;
+          items.push({ z: near.z < far.z ? near.z + 2e-3 : near.z - 2e-3, draw: (ctx) => {
+            const col = atomColor(atom);
+            if (b.partial > 0 && b.partial < 1) {
+              drawHalfStick(ctx, near.x + sg * ux * e, near.y + sg * uy * e, mx, my, rb * 1.5, col, { fog: near.fog, alpha: b.alpha, partial: b.partial });
+              return;
+            }
+            for (const [off, r, al] of lanes) if (al > 0.01) drawRod(ctx, near.x, near.y, sg * ux, sg * uy, e, L / 2, sg * off, r, Rb, col, { alpha: b.alpha * al, fog: near.fog, outline: OUT });
+          } });
+        }
+      }
+      if (SITE && !OUT) {
+        const sb = bonds.filter((b) => b.order !== 0 && inSet[b.a] && inSet[b.b] && inSet[b.a]._site && inSet[b.b]._site);
+        const sa = atoms.filter((a) => a._site);
+        items.push({ z: SITE.zmin - 0.01, draw: (ctx) => {
+          ctx.save();
+          ctx.strokeStyle = cfg.palette.paper;
+          ctx.fillStyle = cfg.palette.paper;
+          ctx.lineCap = "round";
+          for (const b of sb) {
+            const pa = pos[b.a], pb = pos[b.b];
+            const R = R0 * BS_ROD * ks * (pa.d + pb.d) / 2;
+            ctx.globalAlpha = b.alpha;
+            ctx.lineWidth = 2 * (R + Math.max(2.5, R * 0.6));
+            ctx.beginPath();
+            ctx.moveTo(pa.x, pa.y);
+            ctx.lineTo(pb.x, pb.y);
+            ctx.stroke();
+          }
+          for (const a of sa) {
+            const p = pos[a.id];
+            const R = atomDrawR(a, proj) * p.d;
+            ctx.globalAlpha = a.alpha;
+            ctx.beginPath();
+            ctx.arc(p.x, p.y, R + Math.max(2.5, R * 0.6), 0, Math.PI * 2);
+            ctx.fill();
+          }
+          ctx.restore();
+        } });
+      }
+      for (const a of atoms) {
+        const p = pos[a.id];
+        const r = atomDrawR(a, proj) * p.d;
+        items.push({ z: p.z, draw: (ctx) => drawFlatDisc(ctx, p.x, p.y, r, atomColor(a), { fog: p.fog, alpha: a.alpha, outline: OUT }) });
       }
     }
     function buildBallStick(items, st, pos, atoms, bonds, proj, seedBase, lowDetail) {
@@ -8400,6 +8513,7 @@
       const items = [];
       const lowDetail = cfg.rep.detail !== "full" && stickAtoms.length + surfAtoms.length > 260;
       if (cfg.rep.mode === "sticks") buildSticks(items, st, pos, stickAtoms, stickBonds, proj, seedBase, lowDetail);
+      else if (flatSticks()) buildFlatBallStick(items, st, pos, stickAtoms, stickBonds, proj, seedBase);
       else buildBallStick(items, st, pos, stickAtoms, stickBonds, proj, seedBase, lowDetail);
       if (cartoonOn) buildCartoon(items, st, pos, st.atoms, selC, proj, seedBase, lowDetail);
       if (surfAtoms.length) buildSurface(items, st, pos, surfAtoms, proj, seedBase, lowDetail);
