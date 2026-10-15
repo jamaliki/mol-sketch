@@ -1,9 +1,11 @@
 /* PDB and mmCIF readers → Structure. Only the first model is returned by parseStructure; parseModels gives all. */
 import { Structure, COV_R, type AtomRecord, type SSRecord } from './structure';
+import { assignBondOrders, type OrderHints } from './bondorder';
 
 export function parseModels(text: string, name = ''): Structure[] {
-  const out = (/^\s*data_/.test(text) || text.indexOf('_atom_site.') >= 0) ? parseCIF(text) : parsePDB(text);
-  for (const s of out) { s.name = name; s.inferBonds() }
+  const hints: OrderHints = {};
+  const out = (/^\s*data_/.test(text) || text.indexOf('_atom_site.') >= 0) ? parseCIF(text, hints) : parsePDB(text, hints);
+  for (const s of out) { s.name = name; s.inferBonds(); assignBondOrders(s, hints) }
   return out;
 }
 export function parseStructure(text: string, name = ''): Structure { const m = parseModels(text, name); if (!m.length) throw new Error('no atoms found'); return m[0] }
@@ -15,19 +17,25 @@ function elementFromName(name: string): string {
 }
 
 /* ---------------- PDB ---------------- */
-function parsePDB(text: string): Structure[] {
+function parsePDB(text: string, hints: OrderHints): Structure[] {
   const lines = text.split(/\r?\n/);
   const models: string[][] = []; let cur: string[] = []; let sawModel = false;
   const H: SSRecord[] = [], E: SSRecord[] = [];
+  // CONECT: the bonded partners of an atom, four to a line (the columns after them were once hydrogen bonds); a
+  // partner listed twice or three times is a double or triple bond, as many programs write them
+  const conect = new Map<number, Map<number, number>>(); let multiple = false;
   for (const line of lines) {
     const rec = line.substr(0, 6).trim();
-    if (rec === 'MODEL') { sawModel = true; cur = [] }
+    if (rec === 'CONECT') { const a = parseInt(line.substr(6, 5)); if (isNaN(a)) continue; let m = conect.get(a); if (!m) conect.set(a, m = new Map());
+      for (let c = 11; c <= 26; c += 5) { const b = parseInt(line.substr(c, 5)); if (isNaN(b)) continue; const n = (m.get(b) || 0) + 1; m.set(b, n); if (n > 1) multiple = true } }
+    else if (rec === 'MODEL') { sawModel = true; cur = [] }
     else if (rec === 'ENDMDL') { models.push(cur); cur = [] }
     else if (rec === 'HELIX') H.push({ chain: line.substr(19, 1).trim(), a: parseInt(line.substr(21, 4)), b: parseInt(line.substr(33, 4)) });
     else if (rec === 'SHEET') E.push({ chain: line.substr(21, 1).trim(), a: parseInt(line.substr(22, 4)), b: parseInt(line.substr(33, 4)) });
     else cur.push(line);
   }
   if (!sawModel || cur.some(l => /^(ATOM|HETATM)/.test(l))) models.push(cur);
+  if (multiple) hints.conect = conect;   // (records with no partner listed twice say nothing of orders)
   return models.filter(m => m.some(l => /^(ATOM|HETATM)/.test(l))).map(m => {
     const recs: AtomRecord[] = [];
     for (const line of m) {
@@ -81,8 +89,16 @@ function readCIF(text: string): Record<string, Cat> {
   return cats;
 }
 
-function parseCIF(text: string): Structure[] {
+function parseCIF(text: string, hints: OrderHints): Structure[] {
   const cats = readCIF(text); const AS = cats['_atom_site']; if (!AS) return [];
+  // the components' own bonds, when the file carries them: a ligand's double bonds as its author or the CCD gives them
+  const CB = cats['_chem_comp_bond'];
+  if (CB) { const c = (n: string) => CB.cols.indexOf(n); const id = c('comp_id'), a1 = c('atom_id_1'), a2 = c('atom_id_2'), vo = c('value_order');
+    if (id >= 0 && a1 >= 0 && a2 >= 0 && vo >= 0) { const comp = new Map<string, Map<string, number>>();
+      const ORD: Record<string, number> = { SING: 1, DOUB: 2, TRIP: 3, QUAD: 3, AROM: 4 };
+      for (const r of CB.rows) { const o = ORD[(r[vo] || '').toUpperCase()] ?? 1; let m = comp.get(r[id]); if (!m) comp.set(r[id], m = new Map());
+        m.set(r[a1] + '|' + r[a2], o); m.set(r[a2] + '|' + r[a1], o) }
+      hints.comp = comp } }
   const ci = (n: string) => AS.cols.indexOf(n);
   const ix = { grp: ci('group_PDB'), id: ci('id'), el: ci('type_symbol'), name: ci('label_atom_id'), alt: ci('label_alt_id'), resn: ci('label_comp_id'), asym: ci('label_asym_id'), auth_asym: ci('auth_asym_id'), seq: ci('label_seq_id'), auth_seq: ci('auth_seq_id'), x: ci('Cartn_x'), y: ci('Cartn_y'), z: ci('Cartn_z'), model: ci('pdbx_PDB_model_num'), b: ci('B_iso_or_equiv') };
   const models = new Map<string, AtomRecord[]>();

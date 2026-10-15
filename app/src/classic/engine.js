@@ -866,13 +866,19 @@ function siteFade(cx,cy,z){if(!SITE)return 1;let a=1-0.55*SITE.quiet;
 function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
   const P=cfg.palette,SH=cfg.show;const R0=cfg.rep.stickRadius*proj.pxPerA;
   const inSet={};for(const a of atoms)inSet[a.id]=a;
-  const nb={};for(const b of bonds){if(!inSet[b.a]||!inSet[b.b]||b.order===0)continue;nb[b.a]=(nb[b.a]||0)+1;nb[b.b]=(nb[b.b]||0)+1}
+  const nb={},byAtom={};for(const b of bonds){if(!inSet[b.a]||!inSet[b.b]||b.order===0)continue;nb[b.a]=(nb[b.a]||0)+1;nb[b.b]=(nb[b.b]||0)+1;(byAtom[b.a]=byAtom[b.a]||[]).push(b);(byAtom[b.b]=byAtom[b.b]||[]).push(b)}
   // outlined flat sticks: each atom's whole bonds on screen (direction, half-length, radius), which trim its bonds' edges
   // and shape its joint
   const OUT=flatSticks()&&stickOutlined()?cfg.style.inkWidth*LW.outer:0,legs={};
   if(OUT)for(const b of bonds){const A=inSet[b.a],B=inSet[b.b];if(!A||!B||b.order===0||(b.partial>0&&b.partial<1))continue;const pa=pos[b.a],pb=pos[b.b];const L=Math.hypot(pb.x-pa.x,pb.y-pa.y);if(L<1e-6)continue;
     const ks=(A._site&&B._site?(cfg.rep.siteScale||1.9):1)*hScale(A,B),u=[(pb.x-pa.x)/L,(pb.y-pa.y)/L];
     (legs[b.a]=legs[b.a]||[]).push({b,u,L:L/2,R:R0*pa.d*ks});(legs[b.b]=legs[b.b]||[]).push({b,u:[-u[0],-u[1]],L:L/2,R:R0*pb.d*ks})}
+  // how far from its atom an inner valence stick starts: where it clears the stick of the nearest bond on its side of
+  // that atom (at angle φ: (R + r2 + o·cos φ) / sin φ along the bond, and its own cap), at least as far as it always did
+  const innerStop=(end,dx,dy,side,ux,uy,R,r2,o,L)=>{let need=0;
+    for(const q of byAtom[end]||[]){const other=q.a===end?q.b:q.a;const p=pos[other],e=pos[end];if(!p||!inSet[other])continue;const vx=p.x-e.x,vy=p.y-e.y,vl=Math.hypot(vx,vy);if(vl<1e-6)continue;
+      if((ux*vy-uy*vx)*side<=0)continue;const c=(dx*vx+dy*vy)/vl,sn=Math.sqrt(Math.max(0,1-c*c));if(sn<0.05)continue;need=Math.max(need,(R+r2+o*c)/sn+r2)}
+    return clamp(need,0.18*L,0.45*L)};
   const flatEnd=(atom,b,R)=>{if(!OUT)return{};const lg=legs[atom.id]||[],own=lg.find(l=>l.b===b),others=lg.filter(l=>l.b!==b);const cap=!others.length&&!atom.sphere;
     return{outline:OUT,cap,trim:!cap&&own?stickTrims(own.u,R,others):null}};
   for(const b of bonds){
@@ -886,8 +892,9 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
     // valence: the main stick stays full width; extra order is a shorter, thinner inner stick on the crowded side (ring interior / substituent side)
     const extra=SH.valence?clamp(b.order-1,0,2):0;
     let side=1;
-    if(extra>0.01){let sx=0,sy=0;for(const o of bonds){if(o.order===0||o===b)continue;let other=null,base=null;if(o.a===b.a||o.a===b.b){other=o.b;base=o.a}else if(o.b===b.a||o.b===b.b){other=o.a;base=o.b}
-        if(!other||!pos[other]||!inSet[other])continue;sx+=pos[other].x-pos[base].x;sy+=pos[other].y-pos[base].y}
+    if(extra>0.01){let sx=0,sy=0;   // the side its neighbours lie on, from each end's own bonds (a protein has a C=O in every residue)
+      for(const end of[b.a,b.b])for(const o of byAtom[end]||[]){if(o===b||(end===b.b&&(o.a===b.a||o.b===b.a)))continue;const other=o.a===end?o.b:o.a;
+        if(!pos[other]||!inSet[other])continue;sx+=pos[other].x-pos[end].x;sy+=pos[other].y-pos[end].y}
       const cr=ux*sy-uy*sx;side=cr>=0?1:-1}
     if(isInk()&&A.el!==B.el&&!flatSticks()){const zm=(pa.z+pb.z)/2;items.push({z:zm-0.0015,draw:(ctx)=>{const Rm=R0*(pa.d+pb.d)/2;const fog=(pa.fog+pb.fog)/2;
       ctx.save();ctx.globalAlpha=b.alpha;sketchLine(ctx,[[mx-uy*Rm*0.95,my+ux*Rm*0.95],[mx+uy*Rm*0.95,my-ux*Rm*0.95]],{seed:seed+55,passes:1,width:cfg.style.inkWidth*0.7*LW.inner,color:fogged(P.ink,fog),alpha:0.7,ampScale:0.4,step:4,overshoot:false});ctx.restore()}})}
@@ -900,13 +907,14 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
         else drawHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,seed:seed+half*3,fog:near.fog,d:near.d,alpha:b.alpha,partial:b.partial,passes:lowDetail?1:undefined});
         if(extra>0.01&&!(b.partial>0&&b.partial<1)&&flatSticks())drawValenceGaps(ctx,near.x,near.y,mx,my,R,extra,{alpha:b.alpha,fog:near.fog,outline:OUT});
         else if(extra>0.01&&!(b.partial>0&&b.partial<1)){ // inner valence stick(s)
-          const frac=Math.min(1,extra);const off=R0*1.95*near.d*side*frac;const r2=R0*0.42*near.d*(0.5+0.5*frac);
-          const sh=0.18; // shorten toward the atom so it does not poke out of the junction
-          const ax=near.x+ux*L*sh*(half?-1:1),ay=near.y+uy*L*sh*(half?-1:1);
-          if(engravedSticks())drawEngravedHalfStick(ctx,ax-uy*off,ay+ux*off,mx-uy*off,my+ux*off,r2*ks,col,{Rm:r2*ks,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha*frac,site,inner:true});
-          else if(flatSticks())drawFlatHalfStick(ctx,ax-uy*off,ay+ux*off,mx-uy*off,my+ux*off,r2*ks,col,{Rm:r2*ks,fog:near.fog,alpha:b.alpha*frac,outline:OUT});
+          // beside the stick at the plain stick's gap (a site's larger stick keeps its inner stick close), and stopped
+          // short of the atom where it would run into the next bond round that side (a ring's)
+          const frac=Math.min(1,extra),r0=R0*near.d,r2=r0*0.42*(0.5+0.5*frac),o=(R-r0+r0*1.95)*frac,off=o*side;
+          const sh=innerStop(half?b.b:b.a,half?-ux:ux,half?-uy:uy,side,ux,uy,R,r2,o,L);
+          const ax=near.x+ux*sh*(half?-1:1),ay=near.y+uy*sh*(half?-1:1);
+          if(engravedSticks())drawEngravedHalfStick(ctx,ax-uy*off,ay+ux*off,mx-uy*off,my+ux*off,r2,col,{Rm:r2,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha*frac,site,inner:true});
           else drawHalfStick(ctx,ax-uy*off,ay+ux*off,mx-uy*off,my+ux*off,r2,col,{Rm:r2,el:atom.el,seed:seed+half*3+101,fog:near.fog,d:near.d,alpha:b.alpha*frac,partial:0,passes:1,noShadow:true,inner:true});
-          if(extra>1.01){const off2=-off;if(flatSticks())drawFlatHalfStick(ctx,ax-uy*off2,ay+ux*off2,mx-uy*off2,my+ux*off2,r2*ks,col,{Rm:r2*ks,fog:near.fog,alpha:b.alpha*(extra-1),outline:OUT});else drawHalfStick(ctx,ax-uy*off2,ay+ux*off2,mx-uy*off2,my+ux*off2,r2,col,{Rm:r2,seed:seed+half*3+202,fog:near.fog,d:near.d,alpha:b.alpha*(extra-1),partial:0,passes:1,noShadow:true})}
+          if(extra>1.01){const off2=-off;if(engravedSticks())drawEngravedHalfStick(ctx,ax-uy*off2,ay+ux*off2,mx-uy*off2,my+ux*off2,r2,col,{Rm:r2,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha*(extra-1),site,inner:true});else drawHalfStick(ctx,ax-uy*off2,ay+ux*off2,mx-uy*off2,my+ux*off2,r2,col,{Rm:r2,seed:seed+half*3+202,fog:near.fog,d:near.d,alpha:b.alpha*(extra-1),partial:0,passes:1,noShadow:true})}
         }}});
     }
   }

@@ -22,8 +22,8 @@ export function structureFromState(st: any, name: string): Structure {
   const s = Structure.fromRecords(recs, { H: [], E: [] }, {}, {}); s.name = name;
   // the loader marks Cα; scenes mark their own cut points
   s.flags.fill(0); for (const a of atoms) { const i = index.get(a.id); if (i !== undefined && a.sphere) s.flags[i] |= 1 }
-  const bonds: number[] = [];
-  for (const b of st.bonds) { if (b.order === 0 || b.alpha < 0.05) continue; const i = index.get(b.a), j = index.get(b.b); if (i === undefined || j === undefined) continue; bonds.push(i, j) }
-  s.bonds = Int32Array.from(bonds);
+  const bonds: number[] = [], orders: number[] = [];
+  for (const b of st.bonds) { if (b.order === 0 || b.alpha < 0.05) continue; const i = index.get(b.a), j = index.get(b.b); if (i === undefined || j === undefined) continue; bonds.push(i, j); orders.push(Math.max(1, Math.min(3, Math.round(b.order)))) }
+  s.bonds = Int32Array.from(bonds); s.bondOrder = Uint8Array.from(orders);
   return s;
 }

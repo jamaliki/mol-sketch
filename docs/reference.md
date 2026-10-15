@@ -19,7 +19,8 @@ What is read:
 
 - ATOM/HETATM coordinates, element (from the element column, else the atom name), alternate location A only,
   residue name and number, chain (auth_asym_id in mmCIF).
-- CONECT records if present; otherwise bonds by covalent distance (on a 2.2 Å grid, so large files load quickly).
+- Bonds by covalent distance (on a 2.2 Å grid, so large files load quickly), and their orders: from the residues'
+  templates, the file's `CONECT` records or mmCIF `_chem_comp_bond`, else the geometry ([below](#bond-orders)).
 - Secondary structure from HELIX/SHEET (PDB) or `_struct_conf` / `_struct_sheet_range` (mmCIF). Without either,
   helices and strands are assigned from Cα geometry with P-SEA-style distance and pseudo-angle rules.
 - Nucleic acids, recognised from their sugar-phosphate atoms; their trace atom is P (else C4′) and they are drawn as
@@ -28,6 +29,29 @@ What is read:
   for ribosomes, a subunit (S for 30S/16S/18S/40S, L for 50S/23S/5S/28S/60S, T for tRNA/mRNA, X otherwise). These
   drive the `entity` and `subunit` colourings and selections.
 - On load the structure is turned by its principal axes so its widest spread lies in the picture plane.
+
+### Bond orders
+
+A PDB or mmCIF file lists atoms; their bonds are found by distance, and their orders are worked out as the file is
+read, most trusted first:
+
+- **Standard residues** take a template: every amino acid's backbone C=O (a C-terminal OXT stays single), the C=O of
+  Asp, Glu, Asn and Gln, Arg's C=N, and the rings of Phe, Tyr, Trp and His in a Kekulé form; the common variants
+  (HID/HIE/HIP, HSD/HSE/HSP, ASH, GLH, MSE, SEP, TPO, PTR, ACE); the nucleotides' bases (A, G, C, U, I, and DA, DG,
+  DC, DT, DU, DI) and their phosphate's P=OP1. With hydrogens in the file, His takes its tautomer's form (H on ND1:
+  CG=CD2 and CE1=NE2; H on NE2: CG=CD2 and ND1=CE1), and a protonated Asp, Glu or C-terminus moves its C=O.
+- **Any other residue** (a ligand, a modified residue) takes what the file says: mmCIF's `_chem_comp_bond` (RCSB's
+  files carry it, from the Chemical Component Dictionary; aromatic bonds are put in a Kekulé form), or a PDB file's
+  `CONECT` records, which list a partner twice or three times for a double or triple bond.
+- **Failing that, the geometry**: flat five- and six-membered rings with aromatic bond lengths alternate (a Kekulé
+  form that pairs every carbon, a pyrrole's or a lactam's NH left single); a planar centre takes its double bond to a
+  terminal O or S (C=O, C=S) or N (an amidine's or guanidine's C=N, not an amine on a ring); bonds between planar
+  atoms are double where they are clearly shorter than their neighbours (C=C, C=N); short, straight bonds are triple
+  (C≡C ~1.20 Å, C≡N ~1.16 Å); a phosphate keeps one P=O, a sulphate or sulphonamide two S=O. It is conservative: a
+  bond is made double only on clear evidence, as a wrong double bond misleads more than a missing one, so a ligand
+  refined to poor geometry may show fewer double bonds than it has.
+
+A scene keeps the orders it is written with. `show.valence` switches their drawing off.
 
 ### Density maps
 
@@ -48,7 +72,8 @@ Three representations can be shown at once, each on its own selection:
 
 - **Sticks**: PyMOL-style sticks (half-bonds coloured by element, small spheres at cut points) or pencil
   ball-and-stick (`mode`). Curly arrows, charges, lone pairs and labels attach to stick atoms. Next to engraved
-  ribbons, sticks take the engraved line too (`stick_style`).
+  ribbons, sticks take the engraved line too (`stick_style`). Double and triple bonds are drawn as such
+  (`show.valence`), from a scene's own orders or a structure's ([bond orders](#bond-orders)).
 - **Cartoon**: helices as ribbons, strands as arrows, loops as thin tubes, nucleic backbones as thicker tubes;
   engraved (after MOLSCRIPT) or sketched in the fill (`cartoon_style`). With a cartoon shown, the backbone atoms of
   those residues are left out of the sticks (`side_chain_helper`).
