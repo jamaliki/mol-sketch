@@ -344,7 +344,9 @@ you can edit in Inkscape, Illustrator or Affinity; letters are outlines, so the 
 installed. What a style paints as texture (the paper, watercolour washes, blurs) is raster by nature, and is embedded
 as PNG images at `size` × `scale` pixels, so use `scale=2` or more for print. Blend modes are written as CSS
 `mix-blend-mode`, which browsers, Inkscape and Affinity honour; Illustrator flattens them. A protein is a few MB; a
-144 000-atom ribosome about 30 MB.
+144 000-atom ribosome about 30 MB. The `flat` look is plain shapes, a few hundred kB for a protein: each stretch of
+ribbon one curved shape, in groups for each chain, helix, strand, loop and residue (`data-chain`, `data-ss`,
+`data-residues`, `data-resn`, `data-resi`, named for Inkscape's list of objects).
 
 #### `fig.save_frames(directory, frames="drawn", size=(1920, 1440), *, scale=1, workers=None)`
 

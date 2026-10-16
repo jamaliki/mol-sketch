@@ -182,6 +182,34 @@ def test_flat_svg_is_shapes_in_the_colours_given():
     assert len(fills) < 24                                   # a few colours, two tones each, not a gradient of mixes
 
 
+def test_flat_svg_draws_each_piece_of_ribbon_as_one_curved_shape_in_groups():
+    """the flat look as an SVG: each visible stretch of a ribbon one closed path of curves (not a strip of quadrilaterals),
+    inked round with one line; in a group per chain, and in it one per helix, strand or loop, named with its residues,
+    and one per residue's sticks"""
+    import xml.etree.ElementTree as ET
+    ns, ink = "{http://www.w3.org/2000/svg}", "{http://www.inkscape.org/namespaces/inkscape}"
+    s = ms.load(EX / "1A8O.pdb").look("flat").svg((640, 480))
+    root = ET.fromstring(s)
+    paths = root.findall(f".//{ns}path")
+    assert len(paths) < 120                                  # a few shapes per helix, not hundreds of slivers
+    chains = [g for g in root.iter(f"{ns}g") if g.get("data-chain")]
+    assert [g.get("id") for g in chains] == ["chain-A"] and chains[0].get(f"{ink}label") == "Chain A"
+    elements = [g for g in chains[0] if g.get("data-ss")]
+    assert {g.get("data-ss") for g in elements} == {"helix", "loop"}
+    helix = next(g for g in elements if g.get("data-ss") == "helix")
+    assert helix.get(f"{ink}label").startswith("Helix ") and "–" in helix.get(f"{ink}label") and "-" in helix.get("data-residues")
+    ribbon = [p for g in elements for p in g.iter(f"{ns}path")]
+    assert all(p in ribbon for p in paths)                   # every shape is in its element's group
+    assert any("C" in p.get("d") for p in ribbon)            # curves, fitted through the edges
+    assert any(p.get("fill") not in (None, "none") and p.get("stroke") for p in ribbon)   # one shape, filled and inked
+    ids = [g.get("id") for g in root.iter(f"{ns}g")]
+    assert len(ids) == len(set(ids))                         # a group the depth order splits is numbered again
+    site = ms.load(EX / "trypsin_active_site.json").look("flat").site("resi 57+102+195").svg((640, 480))
+    residues = {g.get("data-resn") + g.get("data-resi") for g in ET.fromstring(site).iter(f"{ns}g") if g.get("data-resn")}
+    assert {"HIS57", "ASP102", "SER195"} <= residues
+    for picture in ("<image", "<clipPath", "<pattern", "<filter", "mix-blend-mode"): assert picture not in site, picture
+
+
 def test_transparent_paper_is_left_out():
     fig = ms.load(EX / "1A8O.pdb").look("flat").set(**{"paper.transparent": True})
     a = fig.render(SMALL).to_numpy()

@@ -1,6 +1,7 @@
 /* The classic engine: MolSketch's canvas renderer, and the reference look. It is the only copy: the app draws with it
    in the browser, and the Python package (python/molsketch/_core.js, built from app/src/headless) draws with it
    headless. Everything here is plain JavaScript; the app talks to it through createClassic(). */
+import { paintFlat } from './vector.js';
 export function createClassic(){
 /* ============================ utilities ============================ */
 const clamp=(v,a,b)=>v<a?a:v>b?b:v;
@@ -785,6 +786,28 @@ function drawEngravedHalfStick(ctx,x0,y0,x1,y1,R,col,o){
    from stickTrims), a lone end round its cap; a joint is its own shape (drawFlatJoint) with the arcs of its circle that
    face out. */
 const flatSticks=()=>cfg.rep.stickStyle==='flat';
+/* The groups the flat look is drawn in (vector.js orders them; an SVG names them, for a reader's list of objects): each
+   chain, and in it each helix, strand and loop of its cartoon (buildCartoonEngraved) and each residue's sticks, a
+   ligand's, its water's. Items carry their group as `key`, and their extent on screen as `box` (or `poly`, a few points
+   round them) with `margin`, how far their outline reaches past that */
+const safeId=s=>{s=String(s).replace(/[^A-Za-z0-9_.-]/g,'_');return /^[A-Za-z_]/.test(s)?s:'_'+s};
+const GROUPS=new Map();
+function chainGroup(cn){if(!cn)return null;const k='chain|'+cn;let g=GROUPS.get(k);if(!g)GROUPS.set(k,g={id:safeId('chain-'+cn),label:'Chain '+cn,data:{chain:cn}});return g}   // (a scene's atoms, in no chain: none)
+function residueGroup(a){if(!a||a.resn==null||a.resi==null)return null;const cn=a.chain||'',water=a.resn==='HOH'||a.resn==='WAT'||a.resn==='DOD';
+  const k=cn+'|'+(water?'water':a.resn+'|'+a.resi);let g=GROUPS.get(k);if(g)return g;const pre=cn?cn+'-':'';
+  g=water?{chain:chainGroup(cn),id:safeId(pre+'water'),label:'Water',data:{resn:a.resn}}
+    :{chain:chainGroup(cn),id:safeId(pre+a.resn+a.resi),label:(a.het?'Ligand ':'')+a.resn+' '+a.resi,data:a.het?{resn:a.resn,resi:String(a.resi),ligand:''}:{resn:a.resn,resi:String(a.resi)}};
+  if(GROUPS.size>8192)GROUPS.clear();GROUPS.set(k,g);return g}
+/** a chain's hydrogen bonds, drawn in a group of their own in it */
+function hbondGroup(a){const cn=a&&a.chain||'',k='hb|'+cn;let g=GROUPS.get(k);if(!g)GROUPS.set(k,g={chain:chainGroup(cn),id:safeId((cn?cn+'-':'')+'hydrogen-bonds'),label:'Hydrogen bonds',data:{}});return g}
+const OCT=[0,1,2,3,4,5,6,7].map(k=>[Math.cos((k+0.5)*Math.PI/4)/Math.cos(Math.PI/8),Math.sin((k+0.5)*Math.PI/4)/Math.cos(Math.PI/8)]);
+const discBox=(x,y,r,m)=>({poly:OCT.map(([u,v])=>[x+u*r,y+v*r]),margin:m});   // (an octagon round the disc)
+/** a line's extent from a to b, r either side of it and past its ends */
+const lineBox=(a,b,r)=>{const dx=b.x-a.x,dy=b.y-a.y,L=Math.hypot(dx,dy)||1,ux=dx/L*r,uy=dy/L*r;
+  return{poly:[[a.x-ux-uy,a.y-uy+ux],[a.x-ux+uy,a.y-uy-ux],[b.x+ux+uy,b.y+uy-ux],[b.x+ux-uy,b.y+uy+ux]],margin:0}};
+/** a half-bond's extent: from its atom (its round end, radius R) to just past the bond's middle, w times its radius across */
+function halfBox(near,mx,my,R,Rm,w,m){const dx=mx-near.x,dy=my-near.y,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L,W=w*Math.max(R,Rm);
+  return{poly:[[near.x-ux*R-uy*W,near.y-uy*R+ux*W],[near.x-ux*R+uy*W,near.y-uy*R-ux*W],[mx+ux+uy*W,my+uy-ux*W],[mx+ux-uy*W,my+uy+ux*W]],margin:m}}
 /* a bond to a hydrogen is drawn thinner, as PyMOL's stick_h_scale draws it: the proton reads as lighter than the bonds
    it moves between */
 const hScale=(A,B)=>(A.el==='H')!==(B.el==='H')?(cfg.rep.stickHScale??1):1;
@@ -906,7 +929,7 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
     const A=inSet[b.a],B=inSet[b.b];if(!A||!B)continue;const pa=pos[b.a],pb=pos[b.b];
     const seed=seedBase+strHash(bkey(b.a,b.b));
     if(b.order===0){if(!SH.hbonds)continue;const z=(pa.z+pb.z)/2;const fog=(pa.fog+pb.fog)/2;
-      items.push({z,draw:(ctx)=>{const ra=atomDrawR(A,proj)*pa.d,rb=atomDrawR(B,proj)*pb.d;const dx=pb.x-pa.x,dy=pb.y-pa.y,L=Math.hypot(dx,dy)||1;
+      items.push({z,...lineBox(pa,pb,R0+2),key:hbondGroup(A),draw:(ctx)=>{const ra=atomDrawR(A,proj)*pa.d,rb=atomDrawR(B,proj)*pb.d;const dx=pb.x-pa.x,dy=pb.y-pa.y,L=Math.hypot(dx,dy)||1;
         drawHBond(ctx,pa.x+dx/L*(ra+2),pa.y+dy/L*(ra+2),pb.x-dx/L*(rb+2),pb.y-dy/L*(rb+2),{seed,color:fogged(P.hbond||(luminance(P.paper)>0.5?P.hatch:P.ink),fog),alpha:(flatSticks()?1:0.8)*b.alpha*(1-fog*cfg.view.fog*0.5),r:R0*0.5*((pa.d+pb.d)/2),gap:R0*1.5})}});continue}
     const mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2;
     const dx=pb.x-pa.x,dy=pb.y-pa.y,L=Math.hypot(dx,dy)||1,ux=dx/L,uy=dy/L;
@@ -917,7 +940,7 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
       ctx.save();ctx.globalAlpha=b.alpha;sketchLine(ctx,[[mx-uy*Rm*0.95,my+ux*Rm*0.95],[mx+uy*Rm*0.95,my-ux*Rm*0.95]],{seed:seed+55,passes:1,width:cfg.style.inkWidth*0.7*LW.inner,color:fogged(P.ink,fog),alpha:0.7,ampScale:0.4,step:4,overshoot:false});ctx.restore()}})}
     for(const [near,far,atom,half] of[[pa,pb,A,0],[pb,pa,B,1]]){
       const site=!!(A._site&&B._site),ks=(site?(cfg.rep.siteScale||1.9):1)*hScale(A,B);
-      items.push({z:near.z-0.002,draw:(ctx)=>{const col=atomColor(atom);
+      items.push({z:near.z-0.002,...halfBox(near,mx,my,R0*near.d*ks,R0*(near.d+far.d)/2*ks,flatSticks()?1:1.7,OUT/2+(flatSticks()?0.5:4)),key:residueGroup(atom),draw:(ctx)=>{const col=atomColor(atom);
         const R=R0*near.d*ks,Rm=R0*(near.d+far.d)/2*ks;
         if(engravedSticks())drawEngravedHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,fog:near.fog,d:near.d,alpha:b.alpha,site,cap:(nb[atom.id]||0)===1&&!atom.sphere});
         else if(flatSticks())drawFlatHalfStick(ctx,near.x,near.y,mx,my,R,col,{Rm,el:atom.el,seed:seed+half*3,fog:near.fog,d:near.d,alpha:b.alpha,partial:b.partial,...flatEnd(atom,b,R)});
@@ -943,16 +966,16 @@ function buildSticks(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
       for(const a of sa){const p=pos[a.id];const R=R0*ks*p.d;ctx.globalAlpha=a.alpha;ctx.beginPath();ctx.arc(p.x,p.y,R+Math.max(2.5,R*0.6),0,Math.PI*2);ctx.fill()}ctx.restore()}})}
   for(const a of atoms){const p=pos[a.id];const seed=seedBase+strHash(a.id);const cnt=nb[a.id]||0;const col=atomColor(a);
     if(a.sphere||cnt===0){const r=(cnt===0&&!a.sphere?R0*1.7:atomDrawR(a,proj))*p.d;
-      if(flatSticks()){items.push({z:p.z+0.003,draw:(ctx)=>drawFlatDisc(ctx,p.x,p.y,r,col,{fog:p.fog,alpha:a.alpha,outline:OUT})});continue}
-      items.push({z:p.z+0.003,draw:(ctx)=>drawFlatBall(ctx,p.x,p.y,r,col,{seed,el:a.el,fog:p.fog,d:p.d,alpha:a.alpha,passes:lowDetail?1:undefined})})}
+      if(flatSticks()){items.push({z:p.z+0.003,...discBox(p.x,p.y,r,OUT/2+0.5),key:residueGroup(a),draw:(ctx)=>drawFlatDisc(ctx,p.x,p.y,r,col,{fog:p.fog,alpha:a.alpha,outline:OUT})});continue}
+      items.push({z:p.z+0.003,...discBox(p.x,p.y,r,4),key:residueGroup(a),draw:(ctx)=>drawFlatBall(ctx,p.x,p.y,r,col,{seed,el:a.el,fog:p.fog,d:p.d,alpha:a.alpha,passes:lowDetail?1:undefined})})}
     else if(cnt>=2){const R=R0*p.d*(a._site?(cfg.rep.siteScale||1.9):1);
       if(flatSticks()){const lg=legs[a.id]||[];   // unoutlined, the bonds' round ends are the joint
-        if(OUT&&lg.length>=2)items.push({z:p.z+0.001,draw:(ctx)=>drawFlatJoint(ctx,p.x,p.y,R,col,lg,{outline:OUT,fog:p.fog,alpha:a.alpha})});continue}
-      if(engravedSticks()){const site=!!a._site;items.push({z:p.z+0.001,draw:(ctx)=>{const P2=cfg.palette;ctx.save();ctx.globalAlpha=a.alpha;const fk=1-p.fog*cfg.view.fog;
+        if(OUT&&lg.length>=2)items.push({z:p.z+0.001,...discBox(p.x,p.y,R,OUT/2+0.5),key:residueGroup(a),draw:(ctx)=>drawFlatJoint(ctx,p.x,p.y,R,col,lg,{outline:OUT,fog:p.fog,alpha:a.alpha})});continue}
+      if(engravedSticks()){const site=!!a._site;items.push({z:p.z+0.001,...discBox(p.x,p.y,R,3),key:residueGroup(a),draw:(ctx)=>{const P2=cfg.palette;ctx.save();ctx.globalAlpha=a.alpha;const fk=1-p.fog*cfg.view.fog;
         const T=engraveTone(col);ctx.beginPath();ctx.arc(p.x,p.y,R,0,Math.PI*2);ctx.fillStyle=T.fill?fogged(site?mix(T.fill,col,0.35):T.fill,p.fog):site?fogged(mix(P2.paper,col,cfg.rep.fill==='ink'?0.12:0.2),p.fog):paperFill();ctx.fill();
         ctx.lineWidth=cfg.style.inkWidth*LW.outer*(site?1.2:0.85)*(0.8+0.2*fk);ctx.strokeStyle=fogged(P2.ink,p.fog);ctx.stroke();ctx.restore()}});continue}
-      items.push({z:p.z-0.004,draw:(ctx)=>{ctx.save();ctx.globalAlpha=a.alpha;sketchCircle(ctx,p.x,p.y,R,{seed:seed+4,width:cfg.style.inkWidth*p.d*(0.75+0.25*(1-p.fog*cfg.view.fog))*LW.outer,color:fogged(P.ink,p.fog),alpha:0.55+0.4*(1-p.fog*cfg.view.fog),passes:lowDetail?1:undefined});ctx.restore()}});
-      items.push({z:p.z+0.001,draw:(ctx)=>{ctx.save();ctx.globalAlpha=a.alpha;ctx.beginPath();ctx.arc(p.x,p.y,Math.max(0,R-0.6),0,Math.PI*2);ctx.fillStyle=paperFill();ctx.fill();if(!isInk()){ctx.fillStyle=fogged(fillFor(col),p.fog);ctx.fill()}if(isWC()){const q=[];for(let i=0;i<10;i++){const an=i/10*Math.PI*2;q.push([p.x+Math.cos(an)*(R-0.8),p.y+Math.sin(an)*(R-0.8)])}watercolourShape(ctx,q,col,seed,{fog:p.fog,layers:5,strength:0.7,granulate:false})}
+      items.push({z:p.z-0.004,...discBox(p.x,p.y,R,5),key:residueGroup(a),draw:(ctx)=>{ctx.save();ctx.globalAlpha=a.alpha;sketchCircle(ctx,p.x,p.y,R,{seed:seed+4,width:cfg.style.inkWidth*p.d*(0.75+0.25*(1-p.fog*cfg.view.fog))*LW.outer,color:fogged(P.ink,p.fog),alpha:0.55+0.4*(1-p.fog*cfg.view.fog),passes:lowDetail?1:undefined});ctx.restore()}});
+      items.push({z:p.z+0.001,...discBox(p.x,p.y,R,5),key:residueGroup(a),draw:(ctx)=>{ctx.save();ctx.globalAlpha=a.alpha;ctx.beginPath();ctx.arc(p.x,p.y,Math.max(0,R-0.6),0,Math.PI*2);ctx.fillStyle=paperFill();ctx.fill();if(!isInk()){ctx.fillStyle=fogged(fillFor(col),p.fog);ctx.fill()}if(isWC()){const q=[];for(let i=0;i<10;i++){const an=i/10*Math.PI*2;q.push([p.x+Math.cos(an)*(R-0.8),p.y+Math.sin(an)*(R-0.8)])}watercolourShape(ctx,q,col,seed,{fog:p.fog,layers:5,strength:0.7,granulate:false})}
       if(isInk()){ctx.save();ctx.clip();if(isPencil())scribbleFill(ctx,p.x-R,p.y-R,p.x+R,p.y+R,col,seed,{fog:p.fog,d:p.d});penSphere(ctx,p.x,p.y,R,col,a.el,seed,{fog:p.fog,d:p.d});ctx.restore()}ctx.restore()}});
     }
   }
@@ -991,7 +1014,7 @@ function buildFlatBallStick(items,st,pos,atoms,bonds,proj,seedBase){
   for(const b of bonds){const A=inSet[b.a],B=inSet[b.b];if(!A||!B)continue;const pa=pos[b.a],pb=pos[b.b];
     const dx=pb.x-pa.x,dy=pb.y-pa.y,L=Math.hypot(dx,dy);if(L<1e-6)continue;const ux=dx/L,uy=dy/L;
     if(b.order===0){if(!SH.hbonds)continue;const fog=(pa.fog+pb.fog)/2;
-      items.push({z:(pa.z+pb.z)/2,draw:(ctx)=>{const ra=atomDrawR(A,proj)*pa.d,rb=atomDrawR(B,proj)*pb.d;
+      items.push({z:(pa.z+pb.z)/2,...lineBox(pa,pb,R0+2),key:hbondGroup(A),draw:(ctx)=>{const ra=atomDrawR(A,proj)*pa.d,rb=atomDrawR(B,proj)*pb.d;
         drawHBond(ctx,pa.x+ux*(ra+2),pa.y+uy*(ra+2),pb.x-ux*(rb+2),pb.y-uy*(rb+2),{seed:seedBase+strHash(bkey(b.a,b.b)),color:fogged(P.hbond||(luminance(P.paper)>0.5?P.hatch:P.ink),fog),alpha:b.alpha*(1-fog*cfg.view.fog*0.5),r:R0*0.5*((pa.d+pb.d)/2),gap:R0*1.5})}});continue}
     const k=(A._site&&B._site?ks:1)*hScale(A,B),extra=SH.valence?clamp(b.order-1,0,2):0,mx=(pa.x+pb.x)/2,my=(pa.y+pb.y)/2;
     // how much the bond lies in the picture's plane: its length on screen over its length in space
@@ -1000,7 +1023,7 @@ function buildFlatBallStick(items,st,pos,atoms,bonds,proj,seedBase){
       const rb=R0*BS_ROD*near.d*k,lanes=bondLanes(rb,extra),hw=Math.max(...lanes.map(l=>Math.abs(l[0])+l[1]));
       const Rb=atomDrawR(atom,proj)*near.d,e=Math.sqrt(Math.max(0,Rb*Rb-hw*hw))*inPlane;
       // behind its ball when this end is the nearer, over it when it is the farther
-      items.push({z:near.z<far.z?near.z+0.002:near.z-0.002,draw:(ctx)=>{const col=atomColor(atom);
+      items.push({z:near.z<far.z?near.z+0.002:near.z-0.002,...halfBox(near,mx,my,1.5*hw,hw,1,OUT/2+0.5),key:residueGroup(atom),draw:(ctx)=>{const col=atomColor(atom);
         if(b.partial>0&&b.partial<1){drawHalfStick(ctx,near.x+sg*ux*e,near.y+sg*uy*e,mx,my,rb*1.5,col,{fog:near.fog,alpha:b.alpha,partial:b.partial});return}
         for(const[off,r,al]of lanes)if(al>0.01)drawRod(ctx,near.x,near.y,sg*ux,sg*uy,e,L/2,sg*off,r,Rb,col,{alpha:b.alpha*al,fog:near.fog,outline:OUT})}});
     }
@@ -1011,7 +1034,7 @@ function buildFlatBallStick(items,st,pos,atoms,bonds,proj,seedBase){
       for(const b of sb){const pa=pos[b.a],pb=pos[b.b];const R=R0*BS_ROD*ks*(pa.d+pb.d)/2;ctx.globalAlpha=b.alpha;ctx.lineWidth=2*(R+Math.max(2.5,R*0.6));ctx.beginPath();ctx.moveTo(pa.x,pa.y);ctx.lineTo(pb.x,pb.y);ctx.stroke()}
       for(const a of sa){const p=pos[a.id];const R=atomDrawR(a,proj)*p.d;ctx.globalAlpha=a.alpha;ctx.beginPath();ctx.arc(p.x,p.y,R+Math.max(2.5,R*0.6),0,Math.PI*2);ctx.fill()}ctx.restore()}})}
   for(const a of atoms){const p=pos[a.id];const r=atomDrawR(a,proj)*p.d;
-    items.push({z:p.z,draw:(ctx)=>drawFlatDisc(ctx,p.x,p.y,r,atomColor(a),{fog:p.fog,alpha:a.alpha,outline:OUT})})}
+    items.push({z:p.z,...discBox(p.x,p.y,r,OUT/2+0.5),key:residueGroup(a),draw:(ctx)=>drawFlatDisc(ctx,p.x,p.y,r,atomColor(a),{fog:p.fog,alpha:a.alpha,outline:OUT})})}
 }
 /* ---- ball and stick representation (pencil balls) ---- */
 function buildBallStick(items,st,pos,atoms,bonds,proj,seedBase,lowDetail){
@@ -1624,6 +1647,29 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
   const hsv=(h,s,v)=>{const f=(k)=>{const q=(k+h*6)%6;return v-v*s*Math.max(0,Math.min(q,4-q,1))};return'#'+[f(5),f(3),f(1)].map(x=>Math.round(x*255).toString(16).padStart(2,'0')).join('')};
   const mode=R.fill,colourMode=cartoonMode();
   const tone=engraveTone;
+  /* the flat look (fill 'flat'): its faces are not drawn here but kept, in strips along each surface of each element, for
+     the shape painter (vector.js), which joins them into pieces each drawn as one curved shape. A face is [a0,a1,b1,b0]:
+     a the strip's first edge, b its second, 0 the section it starts at, 1 the one it ends at */
+  const VEC=mode==='flat';
+  const vstrip=(key,trace)=>({faces:[],key,trace,prev:null,next:null,prevEnd:false,nextEnd:false});
+  const vlink=(a,b)=>{if(!a||!b)return;a.next=b;a.nextEnd=false;b.prev=a;b.prevEnd=true};   // a's end runs on into b's start, with no line between
+  const vface=(st,q,kind,znorm,back,alpha,col,inkA,inkB,sec,cornerA,cornerB)=>{   // as face(), the face kept
+    const T=tone(col||P.loop);
+    const z=Math.max(q[0][2],q[1][2],q[2][2],q[3][2]);const sf=siteFade((q[0][0]+q[1][0]+q[2][0]+q[3][0])/4,(q[0][1]+q[1][1]+q[2][1]+q[3][1])/4,z);const fog=(q[0][4]+q[2][4])/2,fk=1-fog*cfg.view.fog;
+    const quiet=T.flat&&SITE?0.55*SITE.quiet:0;alpha*=quiet?sf/(1-quiet):sf;const qc=c=>quiet?mix(c,P.paper,quiet):c;   // as face() below
+    const fl=kind==='plain'?T.coil:back&&T.back?T.back:T.fill,fill=kind==='side'?qc(fogged(T.side,fog)):fl?qc(fogged(fl,fog)):paperFill();
+    const f={s:st,q,fill,ink:qc(fogged(P.ink,fog)),lw:wInk*(0.8+0.2*fk),alpha:Math.round(alpha*1024)/1024,inkA:!!inkA,inkB:!!inkB,sec,cornerA:!!cornerA,cornerB:!!cornerB,thin:kind==='plain'&&luminance(col||P.loop)>0.3};
+    st.faces.push(f);items.push({z,face:f})};
+  const counts=new Map();   // each chain's helices, strands and loops numbered from 1, along it
+  const elKey=(A,e,last,t)=>{const cn=A[e.s].chain||'',ck=cn+'|'+t,k=(counts.get(ck)||0)+1;counts.set(ck,k);
+    const r0=A[e.s].resi,r1=A[last?e.e:Math.max(e.s,e.e-1)].resi;   // (an element ends on the residue the next begins on)
+    return{chain:chainGroup(cn),id:safeId(`${cn?cn+'-':''}${t}-${k}`),label:`${t[0].toUpperCase()+t.slice(1)} ${k} (${r0===r1?r0:r0+'–'+r1})`,data:{ss:t,residues:r0===r1?`${r0}`:`${r0}-${r1}`}}};
+  /* faces' sides, back (true) or front, by their winding on screen: which winding is the front is what most of the faces'
+     normals say (each face weighed by its area), a face with no area taking its normal's word */
+  const vsides=fs=>{const area=q=>{let a=0;for(let i=0;i<4;i++){const u=q[i],v=q[(i+1)%4];a+=u[0]*v[1]-v[0]*u[1]}return a/2};
+    const A=fs.map(([,q])=>area(q));let k=0;fs.forEach(([zn],i)=>{k+=Math.sign(zn)*A[i]});const sg=k<0?-1:1;
+    return fs.map(([zn],i)=>Math.abs(A[i])>1e-6?sg*A[i]<0:zn<0)};
+  const drawnAs=x=>{if(!x)return null;const len=x.e-x.s+1;return len<2?null:x.t==='H'&&len>=3?'H':x.t==='E'&&len>=3?'E':'L'};
   const drawItem=(z,alpha,fn)=>items.push({z,draw:(ctx)=>{ctx.save();ctx.globalAlpha=alpha;ctx.lineCap='round';ctx.lineJoin='round';fn(ctx);ctx.restore()}});
   const poly=(ctx,q)=>{ctx.beginPath();q.forEach((p,i)=>i?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]));ctx.closePath()};
   const seg=(ctx,a,b)=>{ctx.moveTo(a[0],a[1]);ctx.lineTo(b[0],b[1])};
@@ -1683,12 +1729,17 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
   const baseEnd=g=>{const b=bases[g];return b?(b.N9?b.N1:b.N3)||null:null};
   for(const tr of traces){
     const A=tr.atoms,n=A.length;const pts=A.map(a=>a.pos.slice());
+    // flat: where a helix runs into a loop's tube, both end on the one section, the tube's (its width, square to the trace)
+    const tubeAt=i=>{const c=P2(pts[i]),a=P2(pts[Math.max(0,i-1)]),b=P2(pts[Math.min(n-1,i+1)]);const tx=b[0]-a[0],ty=b[1]-a[1],l=Math.hypot(tx,ty)||1;
+      const hw=Math.max(coilR*proj.pxPerA*c[3],luminance(rc(i,'L'))>0.3?0.9*wInk:0);return[[c[0]-ty/l*hw,c[1]+tx/l*hw,c[2],c[3],c[4]],[c[0]+ty/l*hw,c[1]-tx/l*hw,c[2],c[3],c[4]]]};
+    let SECN=0,lastStrip=null;   // sections along the trace, so the painter knows which faces touch; the last element's last strip
     const rc=(i,t)=>ownColor(A[i])||(colourMode==='rainbow'?(mode==='ink colour'?hsv(0.6667*(1-i/Math.max(1,n-1)),0.9,0.8):hsv(0.6667*(1-i/Math.max(1,n-1)),0.75,0.95)):colourMode==='carbon'?carbonColor(A[i]):colourMode==='chain'?chainColor(A[i]):ssCol(t));
     // elements: runs of H (≥3 residues) and E (≥2), the rest coil; neighbours share their end residue, as MolAuto writes them
     const el=ribbonElements(A);
     for(const e of el){
       const idx=[];for(let i=e.s;i<=e.e;i++)idx.push(i);if(idx.length<2)continue;
       const alpha=A[idx[0]].alpha??1;
+      const ek=el.indexOf(e),prevType=drawnAs(el[ek-1]),nextType=drawnAs(el[ek+1]),s0=SECN;
       if(e.t==='H'&&idx.length>=3){ /* ---- helix ---- */
         const p=idx.map(i=>pts[i]),m=p.length;const ax=new Array(m),tg=new Array(m);
         for(let i=1;i<m-1;i++){const c=norm3(sub3(p[i+1],p[i-1]));const r=norm3(cross3(sub3(p[i],p[i-1]),sub3(p[i+1],p[i])));
@@ -1704,7 +1755,19 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
         const q=secs.map(c=>[P2(c.p1),P2(c.p2)]);
         const zs=[];for(let j=0;j<secs.length-1;j++)zs.push(nz(norm3(add(secs[j].nrm,secs[j+1].nrm))));
         const fold=j=>j>0&&j<zs.length&&(zs[j-1]<0)!==(zs[j]<0); // the section where the ribbon turns over: its silhouette, inked
-        for(let j=0;j<zs.length;j++){const zn=zs[j];
+        if(VEC){const key=elKey(A,e,ek===el.length-1,'helix'),J=q.length-1;
+          const meet=(k,o)=>{const T=tubeAt(idx[k?m-1:0]),Q=q[o],d=(u,v)=>Math.hypot(u[0]-v[0],u[1]-v[1]);q[k?J:0]=d(T[0],Q[0])+d(T[1],Q[1])<=d(T[0],Q[1])+d(T[1],Q[0])?T:[T[1],T[0]]};
+          if(prevType==='L')meet(0,1);if(nextType==='L')meet(1,J-1);
+          // which side of the ribbon each face shows, by which way round it is on screen (the side its normal faces, as the
+          // other looks have it, is a little off where the ribbon twists, and a shape between two folds would cross itself)
+          const sides=vsides(zs.map((zn,j)=>[zn,[q[j][0],q[j+1][0],q[j+1][1],q[j][1]]]));
+          const vfold=j=>j>0&&j<zs.length?sides[j-1]!==sides[j]:j===0?prevType!=='L':nextType!=='L';   // (and its ends, but where a tube runs on from them)
+          let st=null,bk=null;   // a strip per side of the ribbon between two folds: its face, or its darker back
+          for(let j=0;j<zs.length;j++){const zn=zs[j],b=sides[j];
+            if(st===null||b!==bk){st=vstrip(key,tr);bk=b;if(j===0&&prevType==='L')vlink(lastStrip,st)}
+            vface(st,[q[j][0],q[j+1][0],q[j+1][1],q[j][1]],'hatch',zn,b,alpha,rc(secs[j].r,'H'),vfold(j),vfold(j+1),s0+j)}
+          lastStrip=st;SECN=s0+J}
+        else for(let j=0;j<zs.length;j++){const zn=zs[j];
           face([q[j][0],q[j+1][0],q[j+1][1],q[j][1]],'hatch',zn,zn<0,[1,fold(j+1),1,fold(j)],alpha,rc(secs[j].r,'H'),j===zs.length-1||rc(secs[j+1].r,'H')!==rc(secs[j].r,'H'))}
         nH++;labels.push({pos:p[Math.floor(m/2)],txt:'α'+nH,alpha});
       }else if(e.t==='E'&&idx.length>=3){ /* ---- strand ---- */
@@ -1723,7 +1786,33 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
           const d1=dir2,d2=norm3(sub3(p[m-1],p[m-2]));const dm=mid(d1,d2),pm=mid(p[m-2],p[m-1]),nn=norm3(mid(nm[m-2],nm[m-1])),sd=norm3(cross3(nn,dm));secs.push(box(pm,nn,sd,0.75*strandW,thick));
           secs.push(box(p[m-1],nm[m-1],sd,0,thick))}
         const q=secs.map(c=>[P2(c.p1),P2(c.p2),P2(c.p3),P2(c.p4)]);
-        for(let j=0;j<secs.length-1;j++){const c0=secs[j],c1=secs[j+1];const q0=q[j],q1=q[j+1];const isStep=!!c1.step;
+        if(VEC){const key=elKey(A,e,ek===el.length-1,'strand'),J=secs.length-1,stepAt=secs.findIndex(c=>c.step),s0=SECN+3;   // (its sections clear of the elements either side: a tube runs into the box, not on from it)
+          const cen=c=>scl(add(add(c.p1,c.p2),add(c.p3,c.p4)),0.25);
+          const kindAt=j=>secs[j+1].step?1:stepAt>=0&&j>=stepAt?2:0;   // the body, the shoulders, the head
+          // the face toward the viewer, top or bottom: a strip until the strand turns over, where it is edge-on and its end a
+          // fold, inked (the side between top and bottom shows there); its corners at the arrow's shoulders
+          const tops=vsides(secs.slice(0,J).map((c0,j)=>[nz(norm3(add(c0.n,secs[j+1].n))),[q[j][0],q[j+1][0],q[j+1][3],q[j][3]]]));   // (top seen from below: the bottom)
+          let stF=null,top=null;
+          for(let j=0;j<J;j++){const c0=secs[j],c1=secs[j+1],q0=q[j],q1=q[j+1],step=!!c1.step;const zT=nz(norm3(add(c0.n,c1.n))),t=step?(j>0?!tops[j-1]:zT>=0):!tops[j];
+            const turn=stF!==null&&t!==top;if(turn)stF.faces[stF.faces.length-1].inkB=true;
+            if(stF===null||turn){stF=vstrip(key,tr);top=t}
+            vface(stF,t?[q0[0],q1[0],q1[3],q0[3]]:[q0[1],q1[1],q1[2],q0[2]],'hatch',Math.abs(zT),false,alpha,rc(c0.r,'E'),j===0||turn,j===J-1,s0+j,step,step)}
+          // the sides that face the viewer, each by its own normal: along the body, the shoulders (facing back along the
+          // strand) and the head's slanted sides, inked all round (where one meets the next, where it turns away, at the
+          // strand's ends)
+          for(const sg of[1,-1]){let st=null;
+            for(let j=0;j<J;j++){const c0=secs[j],c1=secs[j+1],q0=q[j],q1=q[j+1],kind=kindAt(j);
+              const X=sg>0?[c0.p1,c1.p1,c1.p2,c0.p2]:[c0.p4,c1.p4,c1.p3,c0.p3];let nn;
+              if(kind===1)nn=scl(norm3(sub3(cen(c0),cen(secs[Math.max(0,j-1)]))),-1);
+              else{nn=norm3(cross3(add(sub3(X[1],X[0]),sub3(X[2],X[3])),add(sub3(X[3],X[0]),sub3(X[2],X[1]))));if(dot3(nn,add(c0.s,c1.s))*sg<0)nn=scl(nn,-1)}
+              const zn=nz(nn),crease=j>0&&kindAt(j-1)!==kind,band=st!==null;
+              if(st&&(crease||zn<=0))st.faces[st.faces.length-1].inkB=true;
+              if(zn<=0||(kind===1&&!band)){st=null;continue}   // a shoulder only where the side's band runs into it (alone, it stood off the head like an ear)
+              if(st===null||crease)st=vstrip(key,tr);
+              vface(st,sg>0?[q0[0],q1[0],q1[1],q0[1]]:[q0[3],q1[3],q1[2],q0[2]],'side',zn,false,alpha,rc(c0.r,'E'),st.faces.length===0,j===J-1,s0+j)}}
+          {const c=secs[0],q0=q[0];const nb=scl(norm3(sub3(secs[1].p1,c.p1)),-1);if(nz(nb)>=0)vface(vstrip(key,tr),[q0[0],q0[1],q0[2],q0[3]],'side',1,false,alpha,rc(idx[0],'E'),true,true,s0)} // butt end
+          lastStrip=null;SECN=s0+J+3}
+        else for(let j=0;j<secs.length-1;j++){const c0=secs[j],c1=secs[j+1];const q0=q[j],q1=q[j+1];const isStep=!!c1.step;
           const nT=norm3(add(c0.n,c1.n)),nS=norm3(add(c0.s,c1.s));const zT=nz(nT),zS=nz(nS);const fc=rc(c0.r,'E');
           // top (p1,p4 edge) and bottom (p2,p3); only the face toward the viewer, as MOLSCRIPT culls
           const end=j===secs.length-2||rc(c1.r,'E')!==fc;
@@ -1732,7 +1821,7 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
           // sides: p1–p2 (+side) and p4–p3 (−side)
           if(zS>=0)face([q0[0],q1[0],q1[1],q0[1]],'side',zS,false,[1,0,1,j===0],alpha,fc,end);
           else face([q0[3],q1[3],q1[2],q0[2]],'side',-zS,false,[1,0,1,j===0],alpha,fc,end)}
-        {const c=secs[0],q0=q[0];const nb=scl(norm3(sub3(secs[1].p1,c.p1)),-1);if(nz(nb)>=0)face([q0[0],q0[1],q0[2],q0[3]],'side',1,false,[1,1,1,1],alpha,rc(idx[0],'E'))} // butt end
+        if(!VEC){const c=secs[0],q0=q[0];const nb=scl(norm3(sub3(secs[1].p1,c.p1)),-1);if(nz(nb)>=0)face([q0[0],q0[1],q0[2],q0[3]],'side',1,false,[1,1,1,1],alpha,rc(idx[0],'E'))} // butt end
         nE++;labels.push({pos:p[Math.floor((m-1)/2)],txt:'β'+nE,alpha});
       }else{ /* ---- coil: smoothed spline, drawn as a paper band of constant width with an ink outline ---- */
         const p=idx.map(i=>pts[i].slice()),m=p.length;const first=e.s>0?pts[e.s-1]:null,last=e.e<n-1?pts[e.e+1]:null;
@@ -1747,16 +1836,25 @@ function buildCartoonEngraved(items,atoms,sel,proj,seedBase){
         for(let j=0;j<pr.length;j++){const a=pr[Math.max(0,j-1)],b=pr[Math.min(pr.length-1,j+1)];let tx=b[0]-a[0],ty=b[1]-a[1];const l=Math.hypot(tx,ty)||1;const hw=Math.max(cw*proj.pxPerA*pr[j][3],hwMin);
           L.push([pr[j][0]-ty/l*hw,pr[j][1]+tx/l*hw,pr[j][2],pr[j][3],pr[j][4]]);Rr.push([pr[j][0]+ty/l*hw,pr[j][1]-tx/l*hw,pr[j][2],pr[j][3],pr[j][4]])}
         const atEnd=(j,end)=>end===0?(j===0&&!first):(j===pr.length-2&&!last);
-        for(let j=0;j<pr.length-1;j++)face([L[j],L[j+1],Rr[j+1],Rr[j]],'plain',1,false,[1,atEnd(j,1),1,atEnd(j,0)],alpha,rc(pr_i[j],ct),j===pr.length-2||rc(pr_i[j+1],ct)!==rc(pr_i[j],ct));
+        let vkey=null;
+        if(VEC){const J=pr.length-1;vkey=elKey(A,e,ek===el.length-1,ct==='N'?'backbone':'loop');
+          if(prevType==='H'){const T=tubeAt(idx[0]);L[0]=T[0];Rr[0]=T[1]}if(nextType==='H'){const T=tubeAt(idx[m-1]);L[J]=T[0];Rr[J]=T[1]}
+          const st=vstrip(vkey,tr);if(prevType==='H')vlink(lastStrip,st);
+          // its ends inked where the chain ends, and where it runs into a strand (whose box it goes into, not on as)
+          for(let j=0;j<J;j++)vface(st,[L[j],L[j+1],Rr[j+1],Rr[j]],'plain',1,false,alpha,rc(pr_i[j],ct),atEnd(j,0)||(j===0&&prevType==='E'),atEnd(j,1)||(j===J-1&&nextType==='E'),s0+j);
+          lastStrip=st;SECN=s0+J}
+        else for(let j=0;j<pr.length-1;j++)face([L[j],L[j+1],Rr[j+1],Rr[j]],'plain',1,false,[1,atEnd(j,1),1,atEnd(j,0)],alpha,rc(pr_i[j],ct),j===pr.length-2||rc(pr_i[j+1],ct)!==rc(pr_i[j],ct));
         if(ct==='N'&&rungs)for(let k=0;k<m;k++){const a=A[idx[k]],e=baseEnd(a.group);if(!e||rungDone.has(a.group))continue;rungDone.add(a.group);
           const q0=P2(p[k]),q1=P2(e.pos);let tx=q1[0]-q0[0],ty=q1[1]-q0[1];const l=Math.hypot(tx,ty);if(l<1)continue;tx/=l;ty/=l;
           const w0=Math.max(cw*0.8*proj.pxPerA*q0[3],hwMin*0.9),w1=Math.max(cw*0.8*proj.pxPerA*q1[3],hwMin*0.9),nx=-ty,ny=tx;
-          face([[q0[0]+nx*w0,q0[1]+ny*w0,q0[2],q0[3],q0[4]],[q1[0]+nx*w1,q1[1]+ny*w1,q1[2],q1[3],q1[4]],[q1[0]-nx*w1,q1[1]-ny*w1,q1[2],q1[3],q1[4]],[q0[0]-nx*w0,q0[1]-ny*w0,q0[2],q0[3],q0[4]]],'plain',1,false,[1,1,1,0],a.alpha??alpha,rc(idx[k],ct))}
+          const rq=[[q0[0]+nx*w0,q0[1]+ny*w0,q0[2],q0[3],q0[4]],[q1[0]+nx*w1,q1[1]+ny*w1,q1[2],q1[3],q1[4]],[q1[0]-nx*w1,q1[1]-ny*w1,q1[2],q1[3],q1[4]],[q0[0]-nx*w0,q0[1]-ny*w0,q0[2],q0[3],q0[4]]];
+          if(VEC)vface(vstrip(vkey,{}),rq,'plain',1,false,a.alpha??alpha,rc(idx[k],ct),false,true,0);else face(rq,'plain',1,false,[1,1,1,0],a.alpha??alpha,rc(idx[k],ct))}
       }
     }
   }
-  if(R.ssLabels&&!cfg.show.noLabels){for(const lb of labels){const p=proj.proj(lb.pos);items.push({z:p.z+2,draw:(ctx)=>{ctx.save();ctx.globalAlpha=lb.alpha;
-    const fs=Math.max(9,Math.round(0.8*proj.pxPerA*p.d*K));ctx.font=`italic ${fs}px 'Times New Roman', Times, serif`;ctx.textAlign='center';ctx.textBaseline='middle';
+  if(R.ssLabels&&!cfg.show.noLabels){for(const lb of labels){const p=proj.proj(lb.pos);const fs0=Math.max(9,Math.round(0.8*proj.pxPerA*p.d*K));
+    items.push({z:p.z+2,box:[p.x-fs0*lb.txt.length-3,p.y-fs0-3,p.x+fs0*lb.txt.length+3,p.y+fs0+3],draw:(ctx)=>{ctx.save();ctx.globalAlpha=lb.alpha;
+    const fs=fs0;ctx.font=`italic ${fs}px 'Times New Roman', Times, serif`;ctx.textAlign='center';ctx.textBaseline='middle';
     if(ctx.strokeText){ctx.lineWidth=3;ctx.strokeStyle=paperFill();ctx.strokeText(lb.txt,p.x,p.y)}ctx.fillStyle=P.label;ctx.fillText(lb.txt,p.x,p.y);ctx.restore()}})}}
 }
 function buildCartoon(items,st,pos,atoms,sel,proj,seedBase,lowDetail){
@@ -2235,8 +2333,8 @@ function renderFrame(ctx,W,H,frame,dpr){
   st._orb={};st._orbLabels=[];st._lpTaken={};st._lpAt={};if(SH.orbitals!==false&&st.orbs&&st.orbs.length)buildOrbitals(items,st,proj,seedBase);
   const lpLobes=SH.lonePairs&&cfg.rep.lonePairStyle==='lobes';if(lpLobes)buildLonePairLobes(items,st,stickAtoms,proj,seedBase);
   if(SH.measures!==false&&st.meas&&st.meas.length)buildMeasureWindows(items,st,proj);
-  items.sort((u,v)=>u.z-v.z);
-  for(const it of items)it.draw(ctx);
+  if(cfg.rep.fill==='flat')paintFlat(ctx,items,W,H);   // the flat look: pieces of ribbon as single shapes, in groups (vector.js)
+  else{items.sort((u,v)=>u.z-v.z);for(const it of items)it.draw(ctx)}
   drawMapCaption(ctx,W,H);
   // annotations on stick atoms
   const fontFam=S.font==='Plain sans'?'"IBM Plex Sans", system-ui, sans-serif':`"${S.font}", "Caveat", cursive`;

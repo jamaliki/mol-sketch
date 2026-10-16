@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import base64
 import itertools
+from xml.sax.saxutils import quoteattr
 
 import skia
 
@@ -24,6 +25,7 @@ _BLEND = {skia.BlendMode.kMultiply: "multiply", skia.BlendMode.kScreen: "screen"
           skia.BlendMode.kPlus: "plus-lighter"}
 _CAP = {skia.Paint.kButt_Cap: "butt", skia.Paint.kRound_Cap: "round", skia.Paint.kSquare_Cap: "square"}
 _JOIN = {skia.Paint.kMiter_Join: "miter", skia.Paint.kRound_Join: "round", skia.Paint.kBevel_Join: "bevel"}
+_UNFILLED = 'fill="none" '   # how a stroke's attributes begin
 
 
 def _n(v: float) -> str:
@@ -67,6 +69,7 @@ class SvgCanvas:
         self.meta = meta or (lambda p: None)
         self.m = skia.Matrix(); self.stack: list[tuple[skia.Matrix, int]] = []; self.opened = 0   # groups a clip opened
         self.body: list[str] = []; self.defs: list[str] = []; self.ids = itertools.count(1); self.patterns: dict = {}
+        self.last_fill = None   # the fill just written, if a stroke of the same path can join it as one element
 
     # ---- state ----
     def save(self): self.stack.append((_copy(self.m), self.opened)); self.opened = 0
@@ -124,7 +127,24 @@ class SvgCanvas:
             if pe.filterPath(dst, path, rec, None): path = dst
         st = self._style(paint, "evenodd" if path.getFillType() == skia.PathFillType.kEvenOdd else None)
         if st is None or path.isEmpty(): return
-        self.body.append(f'<path{self._transform()} {st} d="{path_d(path)}"/>')
+        tr, d, plain = self._transform(), path_d(path), "style=" not in st and "filter=" not in st
+        last = self.last_fill; self.last_fill = None
+        if st.startswith(_UNFILLED):
+            # a stroke of the path just filled: one element, filled and stroked (as a drawing program makes a shape)
+            if plain and last is not None and last[0] == len(self.body) - 1 and last[1:3] == (tr, d):
+                self.body[-1] = f'<path{tr} {last[3]} {st[len(_UNFILLED):]} d="{d}"/>'; return
+        elif plain: self.last_fill = (len(self.body), tr, d, st)
+        self.body.append(f'<path{tr} {st} d="{d}"/>')
+
+    def group(self, attrs: dict | None):
+        """a group begun (its id, its name for a reader's list of objects, data attributes), or the open one ended"""
+        self.last_fill = None
+        if attrs is None: self.body.append("</g>"); return
+        at = []
+        if attrs.get("id"): at.append(f"id={quoteattr(str(attrs['id']))}")
+        if attrs.get("label"): at.append(f"inkscape:label={quoteattr(str(attrs['label']))}")
+        for k, v in (attrs.get("data") or {}).items(): at.append(f"data-{k}={quoteattr(str(v))}")
+        self.body.append("<g" + "".join(" " + a for a in at) + ">")
 
     def drawRect(self, rect: skia.Rect, paint: skia.Paint):
         st = self._style(paint)
@@ -180,5 +200,6 @@ class SvgCanvas:
         body = self.body + ["</g>"] * (self.opened + sum(o for _, o in self.stack))
         w, h = self.w / self.scale, self.h / self.scale
         return (f'<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" '
+                f'xmlns:inkscape="http://www.inkscape.org/namespaces/inkscape" '
                 f'width="{_n(w)}" height="{_n(h)}" viewBox="0 0 {self.w} {self.h}">\n'
                 + (f"<defs>\n{chr(10).join(self.defs)}\n</defs>\n" if self.defs else "") + "\n".join(body) + "\n</svg>\n")

@@ -15,6 +15,8 @@
      img id snap alpha composite smoothing filter … (the 2, 4 or 8 drawImage numbers)   snap: the source's snapshot
      snap id                        this canvas as it is now is snapshot `id` (drawn or patterned by another canvas)
      ext key / keep key             the host's texture `key` is this canvas's picture / keep this canvas as texture `key`
+     g {id, label, data} / /g       a group begun and ended: what an SVG of the canvas puts the shapes between in (a
+                                    picture of it has no groups)
    Paints are ids into the render's paint table (see Paints). */
 
 import { arcTo, type ArcSink } from './skarc';
@@ -435,6 +437,10 @@ export class RecContext {
     this.fused = { ver: this.ver, gen: runGen, off, len, close };
     this.shadow = reopened ? RUNS.slice(off, off + len) : null; this.shadowClose = close;
   }
+  /** a group of what is drawn until its end, for an SVG of the canvas: its id, its name (a label for a reader's list of
+     objects) and data attributes. Only the recorder has these; the engine asks for them when they are there */
+  beginGroup(attrs: { id?: string; label?: string; data?: Record<string, string> }) { this.op('g', attrs) }
+  endGroup() { this.op('/g') }
   clip(rule: string = 'nonzero') { this.opened(); this.settle(); this.restorePath(); this.op('clip', rule === 'evenodd' ? 'evenodd' : 'nonzero') }
   fillRect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) { this.op('fillRect', this.pid(false), x, y, w, h); handOver() } }
   strokeRect(x: number, y: number, w: number, h: number) { if (fin(x, y, w, h)) { this.op('strokeRect', this.pid(true), x, y, w, h); handOver() } }
