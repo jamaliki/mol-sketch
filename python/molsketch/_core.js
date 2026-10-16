@@ -101,9 +101,9 @@
       d = f(-d);
     }
     const rotId = a === 1 && kx === 0 && ky === 0 && d === 1;
-    const SX = rotId ? hw : f(hw * a), KX = rotId ? 0 : f(hw * kx), KY = rotId ? 0 : f(hh * ky), SY = rotId ? hh : f(hh * d);
+    const SX2 = rotId ? hw : f(hw * a), KX = rotId ? 0 : f(hw * kx), KY = rotId ? 0 : f(hh * ky), SY = rotId ? hh : f(hh * d);
     const affine = KX !== 0 || KY !== 0;
-    const map = (x, y) => affine ? [f(f(f(x * SX) + f(y * KX)) + cx), f(f(f(y * SY) + f(x * KY)) + cy)] : [f(f(x * SX) + cx), f(f(y * SY) + cy)];
+    const map = (x, y) => affine ? [f(f(f(x * SX2) + f(y * KX)) + cx), f(f(f(y * SY) + f(x * KY)) + cy)] : [f(f(x * SX2) + cx), f(f(y * SY) + cy)];
     return (x, y, raw) => raw ? [f(f(x * hw) + cx), f(f(y * hh) + cy)] : map(x, y);
   }
 
@@ -993,6 +993,14 @@
       this.shadow = reopened ? RUNS.slice(off, off + len) : null;
       this.shadowClose = close;
     }
+    /** a group of what is drawn until its end, for an SVG of the canvas: its id, its name (a label for a reader's list of
+       objects) and data attributes. Only the recorder has these; the engine asks for them when they are there */
+    beginGroup(attrs) {
+      this.op("g", attrs);
+    }
+    endGroup() {
+      this.op("/g");
+    }
     clip(rule = "nonzero") {
       this.opened();
       this.settle();
@@ -1233,13 +1241,13 @@
       }
       const groups = [...order.values()];
       const atom = (g2, nm) => g2?.find((a) => a.name === nm);
-      const near = (a, b, d) => !!a && !!b && (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2 <= d * d;
+      const near2 = (a, b, d) => !!a && !!b && (a.x - b.x) ** 2 + (a.y - b.y) ** 2 + (a.z - b.z) ** 2 <= d * d;
       for (let i = 0; i < groups.length; i++) {
         const g2 = groups[i];
         if (!g2[0].het || g2[0].resn === "HOH") continue;
         const prev = groups[i - 1]?.[0]?.chain === g2[0].chain ? groups[i - 1] : void 0, next = groups[i + 1]?.[0]?.chain === g2[0].chain ? groups[i + 1] : void 0;
-        const peptide = !!atom(g2, "CA") && (near(atom(prev, "C"), atom(g2, "N"), 1.75) || near(atom(g2, "C"), atom(next, "N"), 1.75));
-        const nucleotide = !atom(g2, "CA") && (near(atom(prev, "O3'"), atom(g2, "P"), 1.9) || near(atom(g2, "O3'"), atom(next, "P"), 1.9));
+        const peptide = !!atom(g2, "CA") && (near2(atom(prev, "C"), atom(g2, "N"), 1.75) || near2(atom(g2, "C"), atom(next, "N"), 1.75));
+        const nucleotide = !atom(g2, "CA") && (near2(atom(prev, "O3'"), atom(g2, "P"), 1.9) || near2(atom(g2, "O3'"), atom(next, "P"), 1.9));
         if (peptide || nucleotide) for (const a of g2) a.het = false;
       }
       const n = recs.length;
@@ -2638,12 +2646,12 @@
   function ribbonColours(colors, paper, ink) {
     const cs = colors.map((c) => c.toLowerCase());
     const out = [];
-    const apart = (c, de) => out.every((o) => deltaE(o, c) >= de);
-    for (const c of cs) if (out.length < 3 && contrast(c, paper) >= MIN_CONTRAST && apart(c, MIN_DE)) out.push(c);
+    const apart2 = (c, de) => out.every((o) => deltaE(o, c) >= de);
+    for (const c of cs) if (out.length < 3 && contrast(c, paper) >= MIN_CONTRAST && apart2(c, MIN_DE)) out.push(c);
     for (const c of cs) {
       if (out.length >= 3) break;
       const d = deepen(c, paper, ink);
-      if (!out.includes(d) && apart(d, MIN_DE)) out.push(d);
+      if (!out.includes(d) && apart2(d, MIN_DE)) out.push(d);
     }
     while (out.length < 3) {
       const cand = cs.map((c) => contrast(c, paper) >= MIN_CONTRAST ? c : deepen(c, paper, ink)).filter((c) => !out.includes(c));
@@ -2654,6 +2662,929 @@
       out.push(cand.reduce((b, c) => Math.min(...out.map((o) => deltaE(o, c)), 999) > Math.min(...out.map((o) => deltaE(o, b)), 999) ? c : b));
     }
     return out;
+  }
+
+  // src/classic/vector.js
+  var TOL2 = 0.2 * 0.2;
+  var NEAR = 6;
+  var EPS = 0.3;
+  var TAB = 3;
+  var sub = (a, b) => [a[0] - b[0], a[1] - b[1]];
+  var BZ = new Float64Array(8);
+  var U = new Float64Array(256);
+  var SPLIT = 0;
+  function fitCurve(P, out, tol2 = TOL2) {
+    const n = P.length;
+    if (n < 2) return out;
+    if (n === 2) {
+      out.push([P[1][0], P[1][1]]);
+      return out;
+    }
+    const t1 = endTangent(P, 0, 1), t2 = endTangent(P, n - 1, -1);
+    fitRange(P, 0, n - 1, t1[0], t1[1], t2[0], t2[1], tol2, out, 0);
+    return out;
+  }
+  function endTangent(P, i, dir) {
+    for (let j = i + dir; j >= 0 && j < P.length; j += dir) {
+      const x = P[j][0] - P[i][0], y = P[j][1] - P[i][1], l = Math.sqrt(x * x + y * y);
+      if (l > 1e-6) return [x / l, y / l];
+    }
+    return [0, 0];
+  }
+  function fitRange(P, first, last, t1x, t1y, t2x, t2y, tol2, out, depth) {
+    const n = last - first + 1;
+    if (n === 2 || depth > 24) {
+      out.push([P[last][0], P[last][1]]);
+      return;
+    }
+    if (U.length < n) U = new Float64Array(2 * n);
+    let L = 0;
+    U[0] = 0;
+    for (let i = 1; i < n; i++) {
+      const x = P[first + i][0] - P[first + i - 1][0], y = P[first + i][1] - P[first + i - 1][1];
+      L += Math.sqrt(x * x + y * y);
+      U[i] = L;
+    }
+    if (L < 1e-9) {
+      out.push([P[last][0], P[last][1]]);
+      return;
+    }
+    for (let i = 1; i < n; i++) U[i] /= L;
+    generate(P, first, n, t1x, t1y, t2x, t2y, L);
+    let err = maxError(P, first, n);
+    if (err < tol2 && sane(L)) {
+      out.push([BZ[2], BZ[3], BZ[4], BZ[5], BZ[6], BZ[7]]);
+      return;
+    }
+    if (err < tol2 * 16) for (let it = 0; it < 3; it++) {
+      reparam(P, first, n);
+      generate(P, first, n, t1x, t1y, t2x, t2y, L);
+      err = maxError(P, first, n);
+      if (err < tol2 && sane(L)) {
+        out.push([BZ[2], BZ[3], BZ[4], BZ[5], BZ[6], BZ[7]]);
+        return;
+      }
+    }
+    const sp = SPLIT;
+    let cx = P[sp - 1][0] - P[sp + 1][0], cy = P[sp - 1][1] - P[sp + 1][1], cl = Math.sqrt(cx * cx + cy * cy);
+    if (cl < 1e-12) {
+      cx = P[sp - 1][0] - P[sp][0];
+      cy = P[sp - 1][1] - P[sp][1];
+      cl = Math.sqrt(cx * cx + cy * cy);
+    }
+    if (cl > 1e-12) {
+      cx /= cl;
+      cy /= cl;
+    } else cx = cy = 0;
+    fitRange(P, first, sp, t1x, t1y, cx, cy, tol2, out, depth + 1);
+    fitRange(P, sp, last, -cx, -cy, t2x, t2y, tol2, out, depth + 1);
+  }
+  function sane(L) {
+    const B = BZ;
+    return Math.hypot(B[2] - B[0], B[3] - B[1]) + Math.hypot(B[4] - B[2], B[5] - B[3]) + Math.hypot(B[6] - B[4], B[7] - B[5]) <= 1.5 * L + 0.5;
+  }
+  function generate(P, first, n, t1x, t1y, t2x, t2y, L) {
+    const p0x = P[first][0], p0y = P[first][1], p3x = P[first + n - 1][0], p3y = P[first + n - 1][1];
+    let c00 = 0, c01 = 0, c11 = 0, x0 = 0, x1 = 0;
+    for (let i = 0; i < n; i++) {
+      const t = U[i], s = 1 - t, b0 = s * s * s, b1 = 3 * s * s * t, b2 = 3 * s * t * t, b3 = t * t * t;
+      const a0x = t1x * b1, a0y = t1y * b1, a1x = t2x * b2, a1y = t2y * b2;
+      c00 += a0x * a0x + a0y * a0y;
+      c01 += a0x * a1x + a0y * a1y;
+      c11 += a1x * a1x + a1y * a1y;
+      const q = P[first + i], tx = q[0] - (p0x * (b0 + b1) + p3x * (b2 + b3)), ty = q[1] - (p0y * (b0 + b1) + p3y * (b2 + b3));
+      x0 += a0x * tx + a0y * ty;
+      x1 += a1x * tx + a1y * ty;
+    }
+    const det = c00 * c11 - c01 * c01, seg = Math.hypot(p3x - p0x, p3y - p0y);
+    let al = det !== 0 ? (x0 * c11 - x1 * c01) / det : 0, ar = det !== 0 ? (c00 * x1 - c01 * x0) / det : 0;
+    if (Math.abs(det) < 1e-12 || al < 1e-6 * seg || ar < 1e-6 * seg || al > L || ar > L) al = ar = seg / 3;
+    BZ[0] = p0x;
+    BZ[1] = p0y;
+    BZ[2] = p0x + t1x * al;
+    BZ[3] = p0y + t1y * al;
+    BZ[4] = p3x + t2x * ar;
+    BZ[5] = p3y + t2y * ar;
+    BZ[6] = p3x;
+    BZ[7] = p3y;
+  }
+  function maxError(P, first, n) {
+    let mx = 0;
+    SPLIT = first + (n >> 1);
+    const B = BZ;
+    for (let i = 1; i < n - 1; i++) {
+      const t = U[i], s = 1 - t, a = s * s * s, c = 3 * s * s * t, d = 3 * s * t * t, e = t * t * t;
+      const dx = a * B[0] + c * B[2] + d * B[4] + e * B[6] - P[first + i][0], dy = a * B[1] + c * B[3] + d * B[5] + e * B[7] - P[first + i][1], q = dx * dx + dy * dy;
+      if (q >= mx) {
+        mx = q;
+        SPLIT = first + i;
+      }
+    }
+    return mx;
+  }
+  function reparam(P, first, n) {
+    const B = BZ;
+    for (let i = 0; i < n; i++) {
+      const t = U[i], s = 1 - t, a = s * s * s, c = 3 * s * s * t, d = 3 * s * t * t, e = t * t * t;
+      const qx = a * B[0] + c * B[2] + d * B[4] + e * B[6] - P[first + i][0], qy = a * B[1] + c * B[3] + d * B[5] + e * B[7] - P[first + i][1];
+      const d1x = 3 * (s * s * (B[2] - B[0]) + 2 * s * t * (B[4] - B[2]) + t * t * (B[6] - B[4])), d1y = 3 * (s * s * (B[3] - B[1]) + 2 * s * t * (B[5] - B[3]) + t * t * (B[7] - B[5]));
+      const d2x = 6 * (s * (B[4] - 2 * B[2] + B[0]) + t * (B[6] - 2 * B[4] + B[2])), d2y = 6 * (s * (B[5] - 2 * B[3] + B[1]) + t * (B[7] - 2 * B[5] + B[3]));
+      const num = qx * d1x + qy * d1y, den = d1x * d1x + d1y * d1y + qx * d2x + qy * d2y;
+      const v = Math.abs(den) > 1e-12 ? t - num / den : t;
+      U[i] = v < 0 ? 0 : v > 1 ? 1 : v;
+    }
+  }
+  function crossing(a, b, c, d) {
+    const r = sub(b, a), s = sub(d, c), den = r[0] * s[1] - r[1] * s[0];
+    if (Math.abs(den) < 1e-12) return null;
+    const t = ((c[0] - a[0]) * s[1] - (c[1] - a[1]) * s[0]) / den, w = ((c[0] - a[0]) * r[1] - (c[1] - a[1]) * r[0]) / den;
+    return t > 1e-9 && t < 1 - 1e-9 && w > 1e-9 && w < 1 - 1e-9 ? [a[0] + r[0] * t, a[1] + r[1] * t] : null;
+  }
+  function untangle(P, K = 18) {
+    const out = P.slice();
+    for (let i = 0; i < out.length - 3; i++)
+      for (let j = Math.min(out.length - 2, i + K); j >= i + 2; j--) {
+        const x = crossing(out[i], out[i + 1], out[j], out[j + 1]);
+        if (x) {
+          out.splice(i + 1, j - i, x);
+          break;
+        }
+      }
+    return out;
+  }
+  function curves(P, corners) {
+    const out = [];
+    let a = 0;
+    const cs = [...corners].filter((c) => c > 0 && c < P.length - 1).sort((u, v) => u - v);
+    for (const c of [...cs, P.length - 1]) {
+      if (c > a) fitCurve(P.slice(a, c + 1), out);
+      a = c;
+    }
+    return out;
+  }
+  function trace(ctx, segs) {
+    for (const s of segs) if (s.length === 2) ctx.lineTo(s[0], s[1]);
+    else ctx.bezierCurveTo(s[0], s[1], s[2], s[3], s[4], s[5]);
+  }
+  function pen2(ctx) {
+    let x = NaN, y = NaN;
+    const at = (s) => {
+      if (s && s.length) {
+        const e = s[s.length - 1];
+        x = e[e.length - 2];
+        y = e[e.length - 1];
+      }
+    };
+    return {
+      move(p) {
+        ctx.moveTo(p[0], p[1]);
+        x = p[0];
+        y = p[1];
+      },
+      line(p) {
+        if (Math.abs(p[0] - x) > 1e-3 || Math.abs(p[1] - y) > 1e-3) ctx.lineTo(p[0], p[1]);
+        x = p[0];
+        y = p[1];
+      },
+      curves(s) {
+        trace(ctx, s);
+        at(s);
+      }
+    };
+  }
+  var HX = new Float64Array(1 << 16);
+  var SX = new Float64Array(16);
+  function hullAt(pts, o) {
+    const n = Math.min(pts.length, 8);
+    if (HX.length < 2 * (o + n)) {
+      const b = new Float64Array(Math.max(2 * HX.length, 2 * (o + n)));
+      b.set(HX);
+      HX = b;
+    }
+    for (let i = 0; i < n; i++) {
+      const x = pts[i][0], y = pts[i][1];
+      let j = i - 1;
+      while (j >= 0 && (SX[2 * j] > x || SX[2 * j] === x && SX[2 * j + 1] > y)) {
+        SX[2 * j + 2] = SX[2 * j];
+        SX[2 * j + 3] = SX[2 * j + 1];
+        j--;
+      }
+      SX[2 * j + 2] = x;
+      SX[2 * j + 3] = y;
+    }
+    if (n < 3) {
+      for (let i = 0; i < 2 * n; i++) HX[2 * o + i] = SX[i];
+      return n;
+    }
+    let k = 0;
+    const H = HX, base = 2 * o;
+    const cr = (ax, ay, bx, by, cx, cy) => (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+    for (let i = 0; i < n; i++) {
+      const x = SX[2 * i], y = SX[2 * i + 1];
+      while (k >= 2 && cr(H[base + 2 * k - 4], H[base + 2 * k - 3], H[base + 2 * k - 2], H[base + 2 * k - 1], x, y) <= 0) k--;
+      H[base + 2 * k] = x;
+      H[base + 2 * k + 1] = y;
+      k++;
+    }
+    for (let i = n - 2, t = k + 1; i >= 0; i--) {
+      const x = SX[2 * i], y = SX[2 * i + 1];
+      while (k >= t && cr(H[base + 2 * k - 4], H[base + 2 * k - 3], H[base + 2 * k - 2], H[base + 2 * k - 1], x, y) <= 0) k--;
+      H[base + 2 * k] = x;
+      H[base + 2 * k + 1] = y;
+      k++;
+    }
+    return k - 1;
+  }
+  var AX = new Float64Array(1 << 17);
+  function axesAt(o, n) {
+    if (AX.length < 4 * (o + n)) {
+      const b = new Float64Array(Math.max(2 * AX.length, 4 * (o + n)));
+      b.set(AX);
+      AX = b;
+    }
+    const H = HX;
+    for (let i = 0; i < n; i++) {
+      const j = i + 1 === n ? 0 : i + 1;
+      let nx = H[2 * (o + i) + 1] - H[2 * (o + j) + 1], ny = H[2 * (o + j)] - H[2 * (o + i)];
+      const l = Math.sqrt(nx * nx + ny * ny), q = 4 * (o + i);
+      if (l < 1e-9 || n < 2) {
+        AX[q] = AX[q + 1] = 0;
+        AX[q + 2] = -Infinity;
+        AX[q + 3] = Infinity;
+        continue;
+      }
+      nx /= l;
+      ny /= l;
+      let a0 = Infinity, a1 = -Infinity;
+      for (let k = 2 * o, e = 2 * (o + n); k < e; k += 2) {
+        const v = H[k] * nx + H[k + 1] * ny;
+        if (v < a0) a0 = v;
+        if (v > a1) a1 = v;
+      }
+      AX[q] = nx;
+      AX[q + 1] = ny;
+      AX[q + 2] = a0;
+      AX[q + 3] = a1;
+    }
+  }
+  function near(ao, an, bo, bn, m) {
+    return !apart(ao, an, bo, bn, m) && !apart(bo, bn, ao, an, m);
+  }
+  function apart(ao, an, bo, bn, m) {
+    if (an < 3) return false;
+    const H = HX, A = AX, e = 2 * (bo + bn);
+    for (let i = 0; i < an; i++) {
+      const q = 4 * (ao + i), nx = A[q], ny = A[q + 1];
+      if (nx === 0 && ny === 0) continue;
+      const lo = A[q + 2] - m, hi = A[q + 3] + m;
+      let below = true, above2 = true;
+      for (let k = 2 * bo; k < e; k += 2) {
+        const v = H[k] * nx + H[k + 1] * ny;
+        if (v >= lo) below = false;
+        if (v <= hi) above2 = false;
+        if (!below && !above2) break;
+      }
+      if (below || above2) return true;
+    }
+    return false;
+  }
+  var Heap = class {
+    constructor(key2) {
+      this.a = [];
+      this.key = key2;
+    }
+    get size() {
+      return this.a.length;
+    }
+    push(v) {
+      const a = this.a, k = this.key;
+      a.push(v);
+      let i = a.length - 1;
+      while (i > 0) {
+        const p = i - 1 >> 1;
+        if (k(a[p]) <= k(a[i])) break;
+        [a[p], a[i]] = [a[i], a[p]];
+        i = p;
+      }
+    }
+    top() {
+      return this.a[0];
+    }
+    pop() {
+      const a = this.a, k = this.key, r = a[0], x = a.pop();
+      if (a.length) {
+        a[0] = x;
+        let i = 0;
+        for (; ; ) {
+          const l = 2 * i + 1, rr = l + 1;
+          let m = i;
+          if (l < a.length && k(a[l]) < k(a[m])) m = l;
+          if (rr < a.length && k(a[rr]) < k(a[m])) m = rr;
+          if (m === i) break;
+          [a[m], a[i]] = [a[i], a[m]];
+          i = m;
+        }
+      }
+      return r;
+    }
+  };
+  function paintFlat(ctx, items, W, H) {
+    const n0 = items.length;
+    const rank = new Int32Array(n0), ix = /* @__PURE__ */ new Map();
+    items.forEach((it, i) => ix.set(it, i));
+    items.slice().sort((u, v) => u.z - v.z).forEach((it, r) => {
+      rank[ix.get(it)] = r;
+    });
+    const strips = [], barrier = new Uint8Array(n0), traces = /* @__PURE__ */ new Map();
+    const bx0 = new Float64Array(n0), by0 = new Float64Array(n0), bx1 = new Float64Array(n0), by1 = new Float64Array(n0), mg = new Float64Array(n0);
+    const HO = new Int32Array(n0), HN = new Int32Array(n0), ftr = new Int32Array(n0).fill(-1), fsec = new Float64Array(n0);
+    let hp = 0;
+    for (let i = 0; i < n0; i++) {
+      const it = items[i];
+      let pts = null, m = 0;
+      if (it.face) {
+        const f2 = it.face;
+        pts = f2.q;
+        m = f2.lw / 2;
+        f2.item = i;
+        if (f2.s._n === void 0) {
+          f2.s._n = strips.length;
+          strips.push(f2.s);
+          f2.s.faces.forEach((g2, k) => {
+            g2.i = k;
+          });
+        }
+        let t = traces.get(f2.s.trace);
+        if (t === void 0) traces.set(f2.s.trace, t = traces.size);
+        ftr[i] = t;
+        fsec[i] = f2.sec;
+      } else if (it.poly) {
+        pts = it.poly;
+        m = it.margin || 0;
+      } else if (it.box) {
+        const b = it.box;
+        pts = [[b[0], b[1]], [b[2], b[1]], [b[2], b[3]], [b[0], b[3]]];
+        m = it.margin || 0;
+      } else {
+        barrier[i] = 1;
+        continue;
+      }
+      let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+      for (const p of pts) {
+        if (p[0] < x0) x0 = p[0];
+        if (p[0] > x1) x1 = p[0];
+        if (p[1] < y0) y0 = p[1];
+        if (p[1] > y1) y1 = p[1];
+      }
+      bx0[i] = x0 - m;
+      by0[i] = y0 - m;
+      bx1[i] = x1 + m;
+      by1[i] = y1 + m;
+      mg[i] = m;
+      HO[i] = hp;
+      HN[i] = hullAt(pts, hp);
+      axesAt(hp, HN[i]);
+      hp += HN[i];
+    }
+    const sizes = [];
+    for (let i = 0; i < n0; i += Math.max(1, n0 / 2e3 | 0)) if (!barrier[i]) sizes.push(Math.max(bx1[i] - bx0[i], by1[i] - by0[i]));
+    Float64Array.from(sizes).sort().forEach((v, k) => {
+      sizes[k] = v;
+    });
+    const C = Math.min(48, Math.max(8, 2 * (sizes[sizes.length >> 1] || 12))), GX = Math.max(1, Math.ceil(W / C) + 2), GY = Math.max(1, Math.ceil(H / C) + 2);
+    const cell = (v, G2) => {
+      const c = Math.floor(v / C) + 1;
+      return c < 0 ? 0 : c >= G2 ? G2 - 1 : c;
+    };
+    const cx0 = new Int32Array(n0), cy0 = new Int32Array(n0), cx1 = new Int32Array(n0), cy1 = new Int32Array(n0), count = new Int32Array(GX * GY + 1);
+    for (let i = 0; i < n0; i++) {
+      if (barrier[i]) continue;
+      cx0[i] = cell(bx0[i], GX);
+      cx1[i] = cell(bx1[i], GX);
+      cy0[i] = cell(by0[i], GY);
+      cy1[i] = cell(by1[i], GY);
+      for (let y = cy0[i]; y <= cy1[i]; y++) for (let x = cx0[i]; x <= cx1[i]; x++) count[y * GX + x + 1]++;
+    }
+    for (let c = 1; c <= GX * GY; c++) count[c] += count[c - 1];
+    const keys = [];
+    for (let i = 0; i < n0; i++) if (!barrier[i]) keys.push(Math.min(Math.max(Math.floor(bx0[i] * 16) + 65536, 0), 4194303) * 2097152 + i);
+    const byX = Float64Array.from(keys).sort().map((k) => k % 2097152);
+    const fill = count.slice(), list = new Int32Array(count[GX * GY]);
+    for (const i of byX) for (let y = cy0[i]; y <= cy1[i]; y++) for (let x = cx0[i]; x <= cx1[i]; x++) list[fill[y * GX + x]++] = i;
+    const PA = [], PB = [];
+    for (let c = 0; c < GX * GY; c++) {
+      const s = count[c], e = count[c + 1], X = c % GX, Y = c / GX | 0;
+      for (let p = s; p < e; p++) {
+        const a = list[p];
+        for (let q = p + 1; q < e; q++) {
+          const b = list[q];
+          if (bx0[b] - bx1[a] > 0.0625 - EPS) break;
+          if (bx0[b] - bx1[a] > -EPS) continue;
+          if ((cx0[a] > cx0[b] ? cx0[a] : cx0[b]) !== X || (cy0[a] > cy0[b] ? cy0[a] : cy0[b]) !== Y) continue;
+          if (by0[b] - by1[a] > -EPS || by0[a] - by1[b] > -EPS) continue;
+          if (ftr[a] >= 0 && ftr[a] === ftr[b] && Math.abs(fsec[a] - fsec[b]) <= 1) continue;
+          if (!near(HO[a], HN[a], HO[b], HN[b], mg[a] + mg[b] - EPS)) continue;
+          if (rank[a] < rank[b]) {
+            PA.push(a);
+            PB.push(b);
+          } else {
+            PA.push(b);
+            PB.push(a);
+          }
+        }
+      }
+    }
+    const bars = [];
+    for (let i = 0; i < n0; i++) if (barrier[i]) bars.push(rank[i]);
+    bars.sort((a, b) => a - b);
+    const level = (r) => {
+      let lo2 = 0, hi = bars.length;
+      while (lo2 < hi) {
+        const m = lo2 + hi >> 1;
+        if (bars[m] < r) lo2 = m + 1;
+        else hi = m;
+      }
+      return lo2;
+    };
+    const pieceOf = new Int32Array(n0).fill(-1);
+    const pieces = [];
+    const same = (f2, g2) => f2.fill === g2.fill && f2.ink === g2.ink && f2.lw === g2.lw && f2.alpha === g2.alpha && !f2.inkB && !g2.inkA && level(rank[f2.item]) === level(rank[g2.item]);
+    const cuts = strips.map((s) => {
+      const c = /* @__PURE__ */ new Set();
+      for (let k = 1; k < s.faces.length; k++) if (!same(s.faces[k - 1], s.faces[k])) c.add(k);
+      return c;
+    });
+    const self = strips.map(() => []);
+    for (let k = 0; k < PA.length; k++) {
+      const f2 = items[PA[k]].face, g2 = items[PB[k]].face;
+      if (f2 && g2 && f2.s === g2.s && Math.abs(f2.i - g2.i) > NEAR) self[f2.s._n].push(f2.i < g2.i ? [f2.i, g2.i] : [g2.i, f2.i]);
+    }
+    strips.forEach((s, n) => {
+      const iv = self[n].sort((u, v) => u[1] - v[1]), c = cuts[n];
+      for (const [i, j] of iv) {
+        let hit = false;
+        for (let k = i + 1; k <= j; k++) if (c.has(k)) {
+          hit = true;
+          break;
+        }
+        if (!hit) c.add(Math.round((i + j + 1) / 2));
+      }
+    });
+    strips.forEach((s, n) => {
+      const c = [...cuts[n]].sort((u, v) => u - v);
+      let a = 0;
+      for (const k of [...c, s.faces.length]) {
+        if (k > a) {
+          const id = pieces.length;
+          pieces.push({ s, i0: a, i1: k - 1 });
+          for (let i = a; i < k; i++) pieceOf[s.faces[i].item] = id;
+        }
+        a = k;
+      }
+    });
+    const nodeOf = new Int32Array(n0);
+    const nodes = [];
+    pieces.forEach((p, id) => {
+      p.node = nodes.length;
+      nodes.push({ piece: p });
+      for (let i = p.i0; i <= p.i1; i++) nodeOf[p.s.faces[i].item] = p.node;
+    });
+    for (let i = 0; i < n0; i++) if (!items[i].face) {
+      nodeOf[i] = nodes.length;
+      nodes.push({ item: i });
+    }
+    const nP = PA.length, to = new Int32Array(nP), nxt = new Int32Array(nP);
+    let WA = Int32Array.from(PA), WB = Int32Array.from(PB), nW = nP;
+    const range = (l) => {
+      let lo2 = Infinity, hi = -Infinity;
+      for (const v of l) {
+        if (v < lo2) lo2 = v;
+        if (v > hi) hi = v;
+      }
+      return [lo2, hi];
+    };
+    for (let round = 0; round < 400; round++) {
+      const N2 = nodes.length, head = new Int32Array(N2).fill(-1);
+      let ne = 0;
+      for (let k = 0; k < nW; k++) {
+        const u = nodeOf[WA[k]], v = nodeOf[WB[k]];
+        if (u !== v) {
+          to[ne] = v;
+          nxt[ne] = head[u];
+          head[u] = ne++;
+        }
+      }
+      const comp = scc(N2, head, nxt, to);
+      if (!comp.many) break;
+      let m = 0;
+      for (let k = 0; k < nW; k++) {
+        const u = nodeOf[WA[k]], v = nodeOf[WB[k]];
+        if (u !== v && comp.id[u] === comp.id[v] && comp.size[comp.id[u]] > 1) {
+          WA[m] = WA[k];
+          WB[m] = WB[k];
+          m++;
+        }
+      }
+      nW = m;
+      const ins = /* @__PURE__ */ new Map(), outs = /* @__PURE__ */ new Map();
+      for (let k = 0; k < nW; k++) {
+        const u = nodeOf[WA[k]], v = nodeOf[WB[k]];
+        if (nodes[v].piece) {
+          let l = ins.get(v);
+          if (!l) ins.set(v, l = []);
+          l.push(items[WB[k]].face.i);
+        }
+        if (nodes[u].piece) {
+          let l = outs.get(u);
+          if (!l) outs.set(u, l = []);
+          l.push(items[WA[k]].face.i);
+        }
+      }
+      const best = /* @__PURE__ */ new Map();
+      for (const [v, I] of ins) {
+        const O = outs.get(v);
+        if (!O) continue;
+        const p = nodes[v].piece, c = comp.id[v];
+        const [a0, a1] = range(I), [b0, b1] = range(O);
+        if (Math.min(a0, b0) === Math.max(a1, b1)) continue;
+        const b = best.get(c);
+        if (!b || p.i1 - p.i0 > b.p.i1 - b.p.i0) best.set(c, { v, p, I, O });
+      }
+      if (!best.size) break;
+      for (const { p, I, O } of best.values()) {
+        const [mnI, mxI] = range(I), [mnO, mxO] = range(O);
+        let k;
+        if (mxI < mnO) k = Math.round((mxI + mnO + 1) / 2);
+        else if (mxO < mnI) k = Math.round((mxO + mnI + 1) / 2);
+        else {
+          const all2 = Int32Array.from([...I, ...O]).sort();
+          k = all2[all2.length >> 1];
+          if (k <= all2[0]) k = all2[0] + 1;
+        }
+        k = Math.min(Math.max(k, p.i0 + 1), p.i1);
+        const q = { s: p.s, i0: k, i1: p.i1, node: nodes.length };
+        p.i1 = k - 1;
+        const id = pieces.length;
+        pieces.push(q);
+        nodes.push({ piece: q });
+        for (let i = q.i0; i <= q.i1; i++) {
+          const it = p.s.faces[i].item;
+          pieceOf[it] = id;
+          nodeOf[it] = q.node;
+        }
+      }
+    }
+    const N = nodes.length, indeg = new Int32Array(N), succ = Array.from({ length: N }, () => []);
+    for (let k = 0; k < nP; k++) {
+      const u = nodeOf[PA[k]], v = nodeOf[PB[k]];
+      if (u !== v) {
+        succ[u].push(v);
+        indeg[v]++;
+      }
+    }
+    const lo = new Float64Array(N).fill(Infinity), lv = new Int32Array(N);
+    nodes.forEach((nd, id) => {
+      if (nd.piece) {
+        const p = nd.piece;
+        for (let i = p.i0; i <= p.i1; i++) lo[id] = Math.min(lo[id], rank[p.s.faces[i].item]);
+      } else lo[id] = rank[nd.item];
+      lv[id] = level(lo[id]);
+    });
+    if (bars.length) {
+      const barNode = /* @__PURE__ */ new Map();
+      nodes.forEach((nd, id) => {
+        if (nd.item !== void 0 && barrier[nd.item]) barNode.set(rank[nd.item], id);
+      });
+      const chain = bars.map((r) => barNode.get(r));
+      for (let k = 1; k < chain.length; k++) {
+        succ[chain[k - 1]].push(chain[k]);
+        indeg[chain[k]]++;
+      }
+      nodes.forEach((nd, id) => {
+        if (nd.item !== void 0 && barrier[nd.item]) return;
+        const l = lv[id];
+        if (l > 0) {
+          succ[chain[l - 1]].push(id);
+          indeg[id]++;
+        }
+        if (l < chain.length) {
+          succ[id].push(chain[l]);
+          indeg[chain[l]]++;
+        }
+      });
+    }
+    const keyOf2 = (id) => {
+      const nd = nodes[id];
+      return nd.piece ? nd.piece.s.key : items[nd.item].key;
+    };
+    const gid = (id) => {
+      const k = keyOf2(id);
+      return k && k.id ? k.id : "";
+    }, cid = (id) => {
+      const k = keyOf2(id);
+      return k && k.chain ? k.chain.id : "";
+    };
+    const byRank = (id) => lo[id];
+    const all = new Heap(byRank), groups = /* @__PURE__ */ new Map(), chains = /* @__PURE__ */ new Map(), left = /* @__PURE__ */ new Map(), ready = /* @__PURE__ */ new Map(), G = new Array(N), Cc = new Array(N);
+    for (let id = 0; id < N; id++) {
+      G[id] = gid(id);
+      Cc[id] = cid(id);
+      left.set(G[id], (left.get(G[id]) || 0) + 1);
+    }
+    const avail = (id) => {
+      all.push(id);
+      const g2 = G[id];
+      let h = groups.get(g2);
+      if (!h) groups.set(g2, h = new Heap(byRank));
+      h.push(id);
+      ready.set(g2, (ready.get(g2) || 0) + 1);
+      const c = Cc[id];
+      let st = chains.get(c);
+      if (!st) chains.set(c, st = /* @__PURE__ */ new Set());
+      st.add(g2);
+    };
+    const done = new Uint8Array(N), out = [];
+    const clean = (h) => {
+      while (h.size && done[h.top()]) h.pop();
+      return h.size;
+    };
+    const choose = (gs) => {
+      let best = null, whole = false, br = Infinity;
+      for (const g2 of gs) {
+        const h = groups.get(g2);
+        if (!clean(h)) {
+          gs.delete(g2);
+          continue;
+        }
+        const w = ready.get(g2) === left.get(g2), r = lo[h.top()];
+        if (w && !whole || w === whole && r < br) {
+          best = g2;
+          whole = w;
+          br = r;
+        }
+      }
+      return best;
+    };
+    for (let id = 0; id < N; id++) if (!indeg[id]) avail(id);
+    let curG = null, curC = null;
+    while (out.length < N) {
+      let pick = -1;
+      const hg = curG !== null ? groups.get(curG) : null;
+      if (hg && clean(hg)) pick = hg.pop();
+      else {
+        let g2 = curC !== null && chains.get(curC) ? choose(chains.get(curC)) : null;
+        if (g2 === null) {
+          const any = /* @__PURE__ */ new Set();
+          for (const st of chains.values()) for (const x of st) any.add(x);
+          g2 = choose(any);
+        }
+        if (g2 !== null) pick = groups.get(g2).pop();
+      }
+      if (pick < 0) {
+        while (all.size && done[all.top()]) all.pop();
+        if (!all.size) break;
+        pick = all.pop();
+      }
+      done[pick] = 1;
+      out.push(pick);
+      curG = G[pick];
+      curC = Cc[pick];
+      left.set(curG, left.get(curG) - 1);
+      ready.set(curG, ready.get(curG) - 1);
+      for (const v of succ[pick]) if (--indeg[v] === 0) avail(v);
+    }
+    if (out.length < N) for (let id = 0; id < N; id++) if (!done[id]) out.push(id);
+    else mergeRuns(out, G, succ, N);
+    const at = new Int32Array(N);
+    out.forEach((id, k) => {
+      at[id] = k;
+    });
+    const grouped = typeof ctx.beginGroup === "function", used = /* @__PURE__ */ new Map();
+    const uid = (id) => {
+      const k = used.get(id) || 0;
+      used.set(id, k + 1);
+      return k ? `${id}-${k + 1}` : id;
+    };
+    let openC = null, openG = null;
+    const close = (level2) => {
+      if (level2 <= 1 && openG !== null) {
+        if (openG) ctx.endGroup();
+        openG = null;
+      }
+      if (level2 === 0 && openC !== null) {
+        if (openC) ctx.endGroup();
+        openC = null;
+      }
+    };
+    for (const id of out) {
+      if (grouped) {
+        const k = keyOf2(id), c = k && k.chain ? k.chain : null, g2 = k && k.id ? k : null;
+        const cKey = c ? c.id : "", gKey = g2 ? g2.id : "";
+        if (openC !== null && openC !== cKey) close(0);
+        else if (openG !== null && openG !== gKey) close(1);
+        if (openC === null) {
+          openC = cKey;
+          if (c) ctx.beginGroup({ id: uid(c.id), label: c.label, data: c.data });
+        }
+        if (openG === null) {
+          openG = gKey;
+          if (g2) ctx.beginGroup({ id: uid(g2.id), label: g2.label, data: g2.data });
+        }
+      }
+      const nd = nodes[id];
+      if (nd.piece) drawPiece(ctx, nd.piece, pieceOf, pieces, at, items);
+      else items[nd.item].draw(ctx);
+    }
+    if (grouped) close(0);
+  }
+  function mergeRuns(out, G, succ, N) {
+    const pred = Array.from({ length: N }, () => []);
+    for (let u = 0; u < N; u++) for (const v of succ[u]) pred[v].push(u);
+    const runOf = new Array(N);
+    for (let pass = 0; pass < 3; pass++) {
+      const runs = [];
+      for (const id of out) {
+        const g2 = G[id], r = runs[runs.length - 1];
+        if (r && r.g === g2) r.n.push(id);
+        else runs.push({ g: g2, n: [id], at: runs.length, gone: false });
+      }
+      for (const r of runs) for (const id of r.n) runOf[id] = r;
+      const last = /* @__PURE__ */ new Map();
+      let merged = 0;
+      for (const rj of runs) {
+        const ri = last.get(rj.g);
+        last.set(rj.g, rj);
+        if (!ri || rj.g === "") continue;
+        const between = (r) => r.at > ri.at && r.at < rj.at;
+        if (rj.n.every((v) => pred[v].every((u) => !between(runOf[u])))) {
+          for (const v of rj.n) runOf[v] = ri;
+          ri.n.push(...rj.n);
+          rj.gone = true;
+          last.set(rj.g, ri);
+          merged++;
+        } else if (ri.n.every((u) => succ[u].every((v) => !between(runOf[v])))) {
+          for (const u of ri.n) runOf[u] = rj;
+          rj.n.unshift(...ri.n);
+          ri.gone = true;
+          merged++;
+        }
+      }
+      out.length = 0;
+      for (const r of runs) if (!r.gone) out.push(...r.n);
+      if (!merged) break;
+    }
+  }
+  function scc(N, head, nxt, to) {
+    const index = new Int32Array(N).fill(-1), low = new Int32Array(N), on = new Uint8Array(N), id = new Int32Array(N), size = [];
+    const stack = [], call = [];
+    let k = 0, c = 0, many = false;
+    for (let s = 0; s < N; s++) {
+      if (index[s] >= 0) continue;
+      call.push([s, head[s]]);
+      index[s] = low[s] = k++;
+      stack.push(s);
+      on[s] = 1;
+      while (call.length) {
+        const fr = call[call.length - 1], v = fr[0], e = fr[1];
+        if (e >= 0) {
+          fr[1] = nxt[e];
+          const w = to[e];
+          if (index[w] < 0) {
+            index[w] = low[w] = k++;
+            stack.push(w);
+            on[w] = 1;
+            call.push([w, head[w]]);
+          } else if (on[w] && index[w] < low[v]) low[v] = index[w];
+        } else {
+          call.pop();
+          if (call.length) {
+            const u = call[call.length - 1][0];
+            if (low[v] < low[u]) low[u] = low[v];
+          }
+          if (low[v] === index[v]) {
+            let n = 0, w;
+            do {
+              w = stack.pop();
+              on[w] = 0;
+              id[w] = c;
+              n++;
+            } while (w !== v);
+            size.push(n);
+            if (n > 1) many = true;
+            c++;
+          }
+        }
+      }
+    }
+    return { id, size, many };
+  }
+  function drawPiece(ctx, p, pieceOf, pieces, at, items) {
+    const F = p.s.faces, f0 = F[p.i0], f1 = F[p.i1];
+    const E1 = [f0.q[0]], E2 = [f0.q[3]], c1 = /* @__PURE__ */ new Set(), c2 = /* @__PURE__ */ new Set();
+    for (let i = p.i0; i <= p.i1; i++) {
+      const f2 = F[i], k = i - p.i0;
+      if (f2.cornerA) {
+        c1.add(k);
+        c2.add(k);
+      }
+      if (f2.cornerB) {
+        c1.add(k + 1);
+        c2.add(k + 1);
+      }
+      E1.push(f2.q[1]);
+      E2.push(f2.q[2]);
+    }
+    const A1 = untangle(E1), A2 = untangle(E2);
+    const ok = (P2, cs) => P2.length === E1.length ? cs : /* @__PURE__ */ new Set();
+    const s1 = curves(A1, ok(A1, c1)), s2r = curves(A2.slice().reverse(), new Set([...ok(A2, c2)].map((c) => A2.length - 1 - c)));
+    const me = at[pieces[pieceOf[f0.item]].node];
+    const tab = (end) => {
+      const inked = end ? f1.inkB : f0.inkA;
+      if (inked || f0.alpha < 1) return null;
+      let g2 = null;
+      if (end) g2 = p.i1 + 1 < F.length ? F[p.i1 + 1] : p.s.next ? p.s.next.faces[p.s.next.faces.length && p.s.nextEnd ? p.s.next.faces.length - 1 : 0] : null;
+      else g2 = p.i0 > 0 ? F[p.i0 - 1] : p.s.prev ? p.s.prev.faces[p.s.prevEnd ? p.s.prev.faces.length - 1 : 0] : null;
+      if (!g2 || g2.alpha < 1 || g2.item === void 0 || g2.item < 0) return null;
+      const gp = pieceOf[g2.item];
+      if (gp < 0 || at[pieces[gp].node] < me) return null;
+      const A = end ? A1[A1.length - 1] : A1[0], B = end ? A2[A2.length - 1] : A2[0];
+      const far = { 0: 1, 1: 0, 2: 3, 3: 2 }, nearest = (P2) => {
+        let b = 0, d = Infinity;
+        for (let k = 0; k < 4; k++) {
+          const e = Math.hypot(g2.q[k][0] - P2[0], g2.q[k][1] - P2[1]);
+          if (e < d) {
+            d = e;
+            b = k;
+          }
+        }
+        return b;
+      };
+      const ka = nearest(A), kb = nearest(B);
+      if (ka === kb || far[ka] === kb) return null;
+      const meets = (P2, k) => Math.hypot(g2.q[k][0] - P2[0], g2.q[k][1] - P2[1]) < 0.5;
+      if (!meets(A, ka) || !meets(B, kb)) return null;
+      const step = (k) => {
+        const a = g2.q[k], b = g2.q[far[k]], l = Math.hypot(b[0] - a[0], b[1] - a[1]);
+        if (l < 1e-6) return [a[0], a[1]];
+        const t = Math.min(TAB, 0.5 * l) / l;
+        return [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t];
+      };
+      return [step(ka), step(kb)];
+    };
+    const tA = tab(false), tB = tab(true);
+    const e1 = A1[A1.length - 1], e2 = A2[A2.length - 1];
+    ctx.save();
+    ctx.globalAlpha = f0.alpha;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    const P = pen2(ctx);
+    ctx.beginPath();
+    if (tA) {
+      P.move(tA[0]);
+      P.line(A1[0]);
+    } else P.move(A1[0]);
+    P.curves(s1);
+    if (tB) {
+      P.line(tB[0]);
+      P.line(tB[1]);
+    }
+    P.line(e2);
+    P.curves(s2r);
+    if (tA) P.line(tA[1]);
+    ctx.closePath();
+    ctx.fillStyle = f0.fill;
+    ctx.fill();
+    let lw = f0.lw;
+    if (f0.thin) {
+      let w = 0;
+      for (let k = 0; k < E1.length; k++) w += Math.hypot(E1[k][0] - E2[k][0], E1[k][1] - E2[k][1]);
+      lw = Math.min(lw, Math.max(0.4, w / E1.length * 0.28));
+    }
+    ctx.lineWidth = lw;
+    ctx.strokeStyle = f0.ink;
+    const inA = f0.inkA, inB = f1.inkB;
+    if (inA && inB && !tA && !tB) ctx.stroke();
+    else {
+      ctx.beginPath();
+      if (inB && !inA) {
+        P.move(A1[0]);
+        P.curves(s1);
+        P.line(e2);
+        P.curves(s2r);
+      } else if (inA && !inB) {
+        P.move(e2);
+        P.curves(s2r);
+        P.line(A1[0]);
+        P.curves(s1);
+      } else {
+        P.move(A1[0]);
+        P.curves(s1);
+        P.move(e2);
+        P.curves(s2r);
+      }
+      ctx.stroke();
+    }
+    ctx.restore();
   }
 
   // src/classic/engine.js
@@ -4656,6 +5587,46 @@
       ctx.restore();
     }
     const flatSticks = () => cfg.rep.stickStyle === "flat";
+    const safeId = (s) => {
+      s = String(s).replace(/[^A-Za-z0-9_.-]/g, "_");
+      return /^[A-Za-z_]/.test(s) ? s : "_" + s;
+    };
+    const GROUPS = /* @__PURE__ */ new Map();
+    function chainGroup(cn) {
+      if (!cn) return null;
+      const k = "chain|" + cn;
+      let g2 = GROUPS.get(k);
+      if (!g2) GROUPS.set(k, g2 = { id: safeId("chain-" + cn), label: "Chain " + cn, data: { chain: cn } });
+      return g2;
+    }
+    function residueGroup(a) {
+      if (!a || a.resn == null || a.resi == null) return null;
+      const cn = a.chain || "", water = a.resn === "HOH" || a.resn === "WAT" || a.resn === "DOD";
+      const k = cn + "|" + (water ? "water" : a.resn + "|" + a.resi);
+      let g2 = GROUPS.get(k);
+      if (g2) return g2;
+      const pre = cn ? cn + "-" : "";
+      g2 = water ? { chain: chainGroup(cn), id: safeId(pre + "water"), label: "Water", data: { resn: a.resn } } : { chain: chainGroup(cn), id: safeId(pre + a.resn + a.resi), label: (a.het ? "Ligand " : "") + a.resn + " " + a.resi, data: a.het ? { resn: a.resn, resi: String(a.resi), ligand: "" } : { resn: a.resn, resi: String(a.resi) } };
+      if (GROUPS.size > 8192) GROUPS.clear();
+      GROUPS.set(k, g2);
+      return g2;
+    }
+    function hbondGroup(a) {
+      const cn = a && a.chain || "", k = "hb|" + cn;
+      let g2 = GROUPS.get(k);
+      if (!g2) GROUPS.set(k, g2 = { chain: chainGroup(cn), id: safeId((cn ? cn + "-" : "") + "hydrogen-bonds"), label: "Hydrogen bonds", data: {} });
+      return g2;
+    }
+    const OCT = [0, 1, 2, 3, 4, 5, 6, 7].map((k) => [Math.cos((k + 0.5) * Math.PI / 4) / Math.cos(Math.PI / 8), Math.sin((k + 0.5) * Math.PI / 4) / Math.cos(Math.PI / 8)]);
+    const discBox = (x, y, r, m) => ({ poly: OCT.map(([u, v]) => [x + u * r, y + v * r]), margin: m });
+    const lineBox = (a, b, r) => {
+      const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, ux = dx / L * r, uy = dy / L * r;
+      return { poly: [[a.x - ux - uy, a.y - uy + ux], [a.x - ux + uy, a.y - uy - ux], [b.x + ux + uy, b.y + uy - ux], [b.x + ux - uy, b.y + uy + ux]], margin: 0 };
+    };
+    function halfBox(near2, mx, my, R, Rm, w, m) {
+      const dx = mx - near2.x, dy = my - near2.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L, W = w * Math.max(R, Rm);
+      return { poly: [[near2.x - ux * R - uy * W, near2.y - uy * R + ux * W], [near2.x - ux * R + uy * W, near2.y - uy * R - ux * W], [mx + ux + uy * W, my + uy - ux * W], [mx + ux - uy * W, my + uy + ux * W]], margin: m };
+    }
     const hScale = (A, B) => A.el === "H" !== (B.el === "H") ? cfg.rep.stickHScale ?? 1 : 1;
     const stickOutlined = () => {
       const s = cfg.rep.stickOutline || "auto";
@@ -4854,7 +5825,7 @@
         const d = proj.dir2(lp.dir);
         if (Math.hypot(d[0], d[1]) > 0.2) obst.push(Math.atan2(d[1], d[0]));
       }
-      const apart = (u, v) => {
+      const apart2 = (u, v) => {
         let x = u - v;
         while (x > Math.PI) x -= 2 * Math.PI;
         while (x < -Math.PI) x += 2 * Math.PI;
@@ -4863,8 +5834,8 @@
       let best = -Math.PI / 4, score = -Infinity;
       for (let k = 0; k < 72; k++) {
         const f2 = -Math.PI + k * Math.PI / 36;
-        const clear = obst.length ? Math.min(...obst.map((o) => apart(f2, o))) : Math.PI;
-        const sc = Math.min(clear, 0.6 * Math.PI) - 0.12 * apart(f2, -Math.PI / 4);
+        const clear = obst.length ? Math.min(...obst.map((o) => apart2(f2, o))) : Math.PI;
+        const sc = Math.min(clear, 0.6 * Math.PI) - 0.12 * apart2(f2, -Math.PI / 4);
         if (sc > score) {
           score = sc;
           best = f2;
@@ -5008,7 +5979,7 @@
           if (!SH.hbonds) continue;
           const z = (pa.z + pb.z) / 2;
           const fog = (pa.fog + pb.fog) / 2;
-          items.push({ z, draw: (ctx) => {
+          items.push({ z, ...lineBox(pa, pb, R0 + 2), key: hbondGroup(A), draw: (ctx) => {
             const ra = atomDrawR(A, proj) * pa.d, rb = atomDrawR(B, proj) * pb.d;
             const dx2 = pb.x - pa.x, dy2 = pb.y - pa.y, L2 = Math.hypot(dx2, dy2) || 1;
             drawHBond(ctx, pa.x + dx2 / L2 * (ra + 2), pa.y + dy2 / L2 * (ra + 2), pb.x - dx2 / L2 * (rb + 2), pb.y - dy2 / L2 * (rb + 2), { seed, color: fogged(P.hbond || (luminance(P.paper) > 0.5 ? P.hatch : P.ink), fog), alpha: (flatSticks() ? 1 : 0.8) * b.alpha * (1 - fog * cfg.view.fog * 0.5), r: R0 * 0.5 * ((pa.d + pb.d) / 2), gap: R0 * 1.5 });
@@ -5030,22 +6001,22 @@
             ctx.restore();
           } });
         }
-        for (const [near, far, atom, half] of [[pa, pb, A, 0], [pb, pa, B, 1]]) {
+        for (const [near2, far, atom, half] of [[pa, pb, A, 0], [pb, pa, B, 1]]) {
           const site = !!(A._site && B._site), ks = (site ? cfg.rep.siteScale || 1.9 : 1) * hScale(A, B);
-          items.push({ z: near.z - 2e-3, draw: (ctx) => {
+          items.push({ z: near2.z - 2e-3, ...halfBox(near2, mx, my, R0 * near2.d * ks, R0 * (near2.d + far.d) / 2 * ks, flatSticks() ? 1 : 1.7, OUT / 2 + (flatSticks() ? 0.5 : 4)), key: residueGroup(atom), draw: (ctx) => {
             const col = atomColor(atom);
-            const R = R0 * near.d * ks, Rm = R0 * (near.d + far.d) / 2 * ks;
-            if (engravedSticks()) drawEngravedHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha, site, cap: (nb[atom.id] || 0) === 1 && !atom.sphere });
-            else if (flatSticks()) drawFlatHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, ...flatEnd(atom, b, R) });
-            else drawHalfStick(ctx, near.x, near.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near.fog, d: near.d, alpha: b.alpha, partial: b.partial, passes: lowDetail ? 1 : void 0 });
-            if (extra > 0.01 && !(b.partial > 0 && b.partial < 1) && flatSticks()) drawValenceGaps(ctx, near.x, near.y, mx, my, R, extra, { alpha: b.alpha, fog: near.fog, outline: OUT });
+            const R = R0 * near2.d * ks, Rm = R0 * (near2.d + far.d) / 2 * ks;
+            if (engravedSticks()) drawEngravedHalfStick(ctx, near2.x, near2.y, mx, my, R, col, { Rm, el: atom.el, fog: near2.fog, d: near2.d, alpha: b.alpha, site, cap: (nb[atom.id] || 0) === 1 && !atom.sphere });
+            else if (flatSticks()) drawFlatHalfStick(ctx, near2.x, near2.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near2.fog, d: near2.d, alpha: b.alpha, partial: b.partial, ...flatEnd(atom, b, R) });
+            else drawHalfStick(ctx, near2.x, near2.y, mx, my, R, col, { Rm, el: atom.el, seed: seed + half * 3, fog: near2.fog, d: near2.d, alpha: b.alpha, partial: b.partial, passes: lowDetail ? 1 : void 0 });
+            if (extra > 0.01 && !(b.partial > 0 && b.partial < 1) && flatSticks()) drawValenceGaps(ctx, near2.x, near2.y, mx, my, R, extra, { alpha: b.alpha, fog: near2.fog, outline: OUT });
             else if (extra > 0.01 && !(b.partial > 0 && b.partial < 1)) {
               const frac = Math.min(1, extra), r2 = R * 0.42 * (0.5 + 0.5 * frac), gap = -0.7 * r2, o = (R + gap + r2) * frac;
               const inner = (sd, al, sv) => {
                 const off = o * sd, sh = innerStop(half ? b.b : b.a, half ? -ux : ux, half ? -uy : uy, sd, ux, uy, R, r2, o, gap, L);
-                const x0 = near.x + ux * sh * (half ? -1 : 1) - uy * off, y0 = near.y + uy * sh * (half ? -1 : 1) + ux * off;
-                if (engravedSticks()) drawEngravedHalfStick(ctx, x0, y0, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, fog: near.fog, d: near.d, alpha: b.alpha * al, site, inner: true, cap: true });
-                else drawHalfStick(ctx, x0, y0, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, seed: seed + half * 3 + sv, fog: near.fog, d: near.d, alpha: b.alpha * al, partial: 0, passes: 1, noShadow: true, inner: true });
+                const x0 = near2.x + ux * sh * (half ? -1 : 1) - uy * off, y0 = near2.y + uy * sh * (half ? -1 : 1) + ux * off;
+                if (engravedSticks()) drawEngravedHalfStick(ctx, x0, y0, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, fog: near2.fog, d: near2.d, alpha: b.alpha * al, site, inner: true, cap: true });
+                else drawHalfStick(ctx, x0, y0, mx - uy * off, my + ux * off, r2, col, { Rm: r2, el: atom.el, seed: seed + half * 3 + sv, fog: near2.fog, d: near2.d, alpha: b.alpha * al, partial: 0, passes: 1, noShadow: true, inner: true });
               };
               inner(side, frac, 101);
               if (extra > 1.01) inner(-side, extra - 1, 202);
@@ -5091,20 +6062,20 @@
         if (a.sphere || cnt === 0) {
           const r = (cnt === 0 && !a.sphere ? R0 * 1.7 : atomDrawR(a, proj)) * p.d;
           if (flatSticks()) {
-            items.push({ z: p.z + 3e-3, draw: (ctx) => drawFlatDisc(ctx, p.x, p.y, r, col, { fog: p.fog, alpha: a.alpha, outline: OUT }) });
+            items.push({ z: p.z + 3e-3, ...discBox(p.x, p.y, r, OUT / 2 + 0.5), key: residueGroup(a), draw: (ctx) => drawFlatDisc(ctx, p.x, p.y, r, col, { fog: p.fog, alpha: a.alpha, outline: OUT }) });
             continue;
           }
-          items.push({ z: p.z + 3e-3, draw: (ctx) => drawFlatBall(ctx, p.x, p.y, r, col, { seed, el: a.el, fog: p.fog, d: p.d, alpha: a.alpha, passes: lowDetail ? 1 : void 0 }) });
+          items.push({ z: p.z + 3e-3, ...discBox(p.x, p.y, r, 4), key: residueGroup(a), draw: (ctx) => drawFlatBall(ctx, p.x, p.y, r, col, { seed, el: a.el, fog: p.fog, d: p.d, alpha: a.alpha, passes: lowDetail ? 1 : void 0 }) });
         } else if (cnt >= 2) {
           const R = R0 * p.d * (a._site ? cfg.rep.siteScale || 1.9 : 1);
           if (flatSticks()) {
             const lg = legs[a.id] || [];
-            if (OUT && lg.length >= 2) items.push({ z: p.z + 1e-3, draw: (ctx) => drawFlatJoint(ctx, p.x, p.y, R, col, lg, { outline: OUT, fog: p.fog, alpha: a.alpha }) });
+            if (OUT && lg.length >= 2) items.push({ z: p.z + 1e-3, ...discBox(p.x, p.y, R, OUT / 2 + 0.5), key: residueGroup(a), draw: (ctx) => drawFlatJoint(ctx, p.x, p.y, R, col, lg, { outline: OUT, fog: p.fog, alpha: a.alpha }) });
             continue;
           }
           if (engravedSticks()) {
             const site = !!a._site;
-            items.push({ z: p.z + 1e-3, draw: (ctx) => {
+            items.push({ z: p.z + 1e-3, ...discBox(p.x, p.y, R, 3), key: residueGroup(a), draw: (ctx) => {
               const P2 = cfg.palette;
               ctx.save();
               ctx.globalAlpha = a.alpha;
@@ -5121,13 +6092,13 @@
             } });
             continue;
           }
-          items.push({ z: p.z - 4e-3, draw: (ctx) => {
+          items.push({ z: p.z - 4e-3, ...discBox(p.x, p.y, R, 5), key: residueGroup(a), draw: (ctx) => {
             ctx.save();
             ctx.globalAlpha = a.alpha;
             sketchCircle(ctx, p.x, p.y, R, { seed: seed + 4, width: cfg.style.inkWidth * p.d * (0.75 + 0.25 * (1 - p.fog * cfg.view.fog)) * LW.outer, color: fogged(P.ink, p.fog), alpha: 0.55 + 0.4 * (1 - p.fog * cfg.view.fog), passes: lowDetail ? 1 : void 0 });
             ctx.restore();
           } });
-          items.push({ z: p.z + 1e-3, draw: (ctx) => {
+          items.push({ z: p.z + 1e-3, ...discBox(p.x, p.y, R, 5), key: residueGroup(a), draw: (ctx) => {
             ctx.save();
             ctx.globalAlpha = a.alpha;
             ctx.beginPath();
@@ -5214,7 +6185,7 @@
         if (b.order === 0) {
           if (!SH.hbonds) continue;
           const fog = (pa.fog + pb.fog) / 2;
-          items.push({ z: (pa.z + pb.z) / 2, draw: (ctx) => {
+          items.push({ z: (pa.z + pb.z) / 2, ...lineBox(pa, pb, R0 + 2), key: hbondGroup(A), draw: (ctx) => {
             const ra = atomDrawR(A, proj) * pa.d, rb = atomDrawR(B, proj) * pb.d;
             drawHBond(ctx, pa.x + ux * (ra + 2), pa.y + uy * (ra + 2), pb.x - ux * (rb + 2), pb.y - uy * (rb + 2), { seed: seedBase + strHash(bkey(b.a, b.b)), color: fogged(P.hbond || (luminance(P.paper) > 0.5 ? P.hatch : P.ink), fog), alpha: b.alpha * (1 - fog * cfg.view.fog * 0.5), r: R0 * 0.5 * ((pa.d + pb.d) / 2), gap: R0 * 1.5 });
           } });
@@ -5222,16 +6193,16 @@
         }
         const k = (A._site && B._site ? ks : 1) * hScale(A, B), extra = SH.valence ? clamp(b.order - 1, 0, 2) : 0, mx = (pa.x + pb.x) / 2, my = (pa.y + pb.y) / 2;
         const L3 = Math.hypot(A.pos[0] - B.pos[0], A.pos[1] - B.pos[1], A.pos[2] - B.pos[2]) * proj.pxPerA * (pa.d + pb.d) / 2, inPlane = L3 > 1e-6 ? Math.min(1, L / L3) : 1;
-        for (const [near, far, atom, sg] of [[pa, pb, A, 1], [pb, pa, B, -1]]) {
-          const rb = R0 * BS_ROD * near.d * k, lanes = bondLanes(rb, extra), hw = Math.max(...lanes.map((l) => Math.abs(l[0]) + l[1]));
-          const Rb = atomDrawR(atom, proj) * near.d, e = Math.sqrt(Math.max(0, Rb * Rb - hw * hw)) * inPlane;
-          items.push({ z: near.z < far.z ? near.z + 2e-3 : near.z - 2e-3, draw: (ctx) => {
+        for (const [near2, far, atom, sg] of [[pa, pb, A, 1], [pb, pa, B, -1]]) {
+          const rb = R0 * BS_ROD * near2.d * k, lanes = bondLanes(rb, extra), hw = Math.max(...lanes.map((l) => Math.abs(l[0]) + l[1]));
+          const Rb = atomDrawR(atom, proj) * near2.d, e = Math.sqrt(Math.max(0, Rb * Rb - hw * hw)) * inPlane;
+          items.push({ z: near2.z < far.z ? near2.z + 2e-3 : near2.z - 2e-3, ...halfBox(near2, mx, my, 1.5 * hw, hw, 1, OUT / 2 + 0.5), key: residueGroup(atom), draw: (ctx) => {
             const col = atomColor(atom);
             if (b.partial > 0 && b.partial < 1) {
-              drawHalfStick(ctx, near.x + sg * ux * e, near.y + sg * uy * e, mx, my, rb * 1.5, col, { fog: near.fog, alpha: b.alpha, partial: b.partial });
+              drawHalfStick(ctx, near2.x + sg * ux * e, near2.y + sg * uy * e, mx, my, rb * 1.5, col, { fog: near2.fog, alpha: b.alpha, partial: b.partial });
               return;
             }
-            for (const [off, r, al] of lanes) if (al > 0.01) drawRod(ctx, near.x, near.y, sg * ux, sg * uy, e, L / 2, sg * off, r, Rb, col, { alpha: b.alpha * al, fog: near.fog, outline: OUT });
+            for (const [off, r, al] of lanes) if (al > 0.01) drawRod(ctx, near2.x, near2.y, sg * ux, sg * uy, e, L / 2, sg * off, r, Rb, col, { alpha: b.alpha * al, fog: near2.fog, outline: OUT });
           } });
         }
       }
@@ -5267,7 +6238,7 @@
       for (const a of atoms) {
         const p = pos[a.id];
         const r = atomDrawR(a, proj) * p.d;
-        items.push({ z: p.z, draw: (ctx) => drawFlatDisc(ctx, p.x, p.y, r, atomColor(a), { fog: p.fog, alpha: a.alpha, outline: OUT }) });
+        items.push({ z: p.z, ...discBox(p.x, p.y, r, OUT / 2 + 0.5), key: residueGroup(a), draw: (ctx) => drawFlatDisc(ctx, p.x, p.y, r, atomColor(a), { fog: p.fog, alpha: a.alpha, outline: OUT }) });
       }
     }
     function buildBallStick(items, st, pos, atoms, bonds, proj, seedBase, lowDetail) {
@@ -5281,8 +6252,8 @@
         const pa = pos[b.a], pb = pos[b.b];
         const seed = seedBase + strHash(bkey(b.a, b.b));
         for (const half of [0, 1]) {
-          const near = half ? pb : pa, far = half ? pa : pb, nearAtom = half ? B : A;
-          items.push({ z: lerp(near.z, far.z, 0.25) - 1e-3, draw: (ctx) => {
+          const near2 = half ? pb : pa, far = half ? pa : pb, nearAtom = half ? B : A;
+          items.push({ z: lerp(near2.z, far.z, 0.25) - 1e-3, draw: (ctx) => {
             const ra = atomDrawR(A, proj) * pa.d, rb = atomDrawR(B, proj) * pb.d;
             const dx = pb.x - pa.x, dy = pb.y - pa.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
             const gap = 1.5;
@@ -5299,7 +6270,7 @@
             ctx.lineTo(mx - uy * R + ux * side * R, my + ux * R + uy * side * R);
             ctx.closePath();
             ctx.clip();
-            const fog = near.fog, fk = 1 - fog * cfg.view.fog;
+            const fog = near2.fog, fk = 1 - fog * cfg.view.fog;
             const inkCol = SH.colorBonds ? fogged(mix(atomColor(nearAtom), P.ink, 0.35), fog) : fogged(P.ink, fog);
             if (b.order === 0) {
               drawHBond(ctx, ax, ay, bx, by, { seed, color: fogged(P.ink, fog), alpha: 0.55 * b.alpha * (0.5 + 0.5 * fk) });
@@ -6970,6 +7941,57 @@
       };
       const mode = R.fill, colourMode = cartoonMode();
       const tone = engraveTone;
+      const VEC = mode === "flat";
+      const vstrip = (key2, trace2) => ({ faces: [], key: key2, trace: trace2, prev: null, next: null, prevEnd: false, nextEnd: false });
+      const vlink = (a, b) => {
+        if (!a || !b) return;
+        a.next = b;
+        a.nextEnd = false;
+        b.prev = a;
+        b.prevEnd = true;
+      };
+      const vface = (st, q, kind, znorm, back, alpha, col, inkA, inkB, sec, cornerA, cornerB) => {
+        const T = tone(col || P.loop);
+        const z = Math.max(q[0][2], q[1][2], q[2][2], q[3][2]);
+        const sf = siteFade((q[0][0] + q[1][0] + q[2][0] + q[3][0]) / 4, (q[0][1] + q[1][1] + q[2][1] + q[3][1]) / 4, z);
+        const fog = (q[0][4] + q[2][4]) / 2, fk = 1 - fog * cfg.view.fog;
+        const quiet = T.flat && SITE ? 0.55 * SITE.quiet : 0;
+        alpha *= quiet ? sf / (1 - quiet) : sf;
+        const qc = (c) => quiet ? mix(c, P.paper, quiet) : c;
+        const fl = kind === "plain" ? T.coil : back && T.back ? T.back : T.fill, fill = kind === "side" ? qc(fogged(T.side, fog)) : fl ? qc(fogged(fl, fog)) : paperFill();
+        const f2 = { s: st, q, fill, ink: qc(fogged(P.ink, fog)), lw: wInk * (0.8 + 0.2 * fk), alpha: Math.round(alpha * 1024) / 1024, inkA: !!inkA, inkB: !!inkB, sec, cornerA: !!cornerA, cornerB: !!cornerB, thin: kind === "plain" && luminance(col || P.loop) > 0.3 };
+        st.faces.push(f2);
+        items.push({ z, face: f2 });
+      };
+      const counts = /* @__PURE__ */ new Map();
+      const elKey = (A, e, last, t) => {
+        const cn = A[e.s].chain || "", ck = cn + "|" + t, k = (counts.get(ck) || 0) + 1;
+        counts.set(ck, k);
+        const r0 = A[e.s].resi, r1 = A[last ? e.e : Math.max(e.s, e.e - 1)].resi;
+        return { chain: chainGroup(cn), id: safeId(`${cn ? cn + "-" : ""}${t}-${k}`), label: `${t[0].toUpperCase() + t.slice(1)} ${k} (${r0 === r1 ? r0 : r0 + "\u2013" + r1})`, data: { ss: t, residues: r0 === r1 ? `${r0}` : `${r0}-${r1}` } };
+      };
+      const vsides = (fs) => {
+        const area = (q) => {
+          let a = 0;
+          for (let i = 0; i < 4; i++) {
+            const u = q[i], v = q[(i + 1) % 4];
+            a += u[0] * v[1] - v[0] * u[1];
+          }
+          return a / 2;
+        };
+        const A = fs.map(([, q]) => area(q));
+        let k = 0;
+        fs.forEach(([zn], i) => {
+          k += Math.sign(zn) * A[i];
+        });
+        const sg = k < 0 ? -1 : 1;
+        return fs.map(([zn], i) => Math.abs(A[i]) > 1e-6 ? sg * A[i] < 0 : zn < 0);
+      };
+      const drawnAs = (x) => {
+        if (!x) return null;
+        const len = x.e - x.s + 1;
+        return len < 2 ? null : x.t === "H" && len >= 3 ? "H" : x.t === "E" && len >= 3 ? "E" : "L";
+      };
       const drawItem = (z, alpha, fn) => items.push({ z, draw: (ctx) => {
         ctx.save();
         ctx.globalAlpha = alpha;
@@ -7091,6 +8113,13 @@
       for (const tr of traces) {
         const A = tr.atoms, n = A.length;
         const pts = A.map((a) => a.pos.slice());
+        const tubeAt = (i) => {
+          const c = P2(pts[i]), a = P2(pts[Math.max(0, i - 1)]), b = P2(pts[Math.min(n - 1, i + 1)]);
+          const tx = b[0] - a[0], ty = b[1] - a[1], l = Math.hypot(tx, ty) || 1;
+          const hw = Math.max(coilR * proj.pxPerA * c[3], luminance(rc(i, "L")) > 0.3 ? 0.9 * wInk : 0);
+          return [[c[0] - ty / l * hw, c[1] + tx / l * hw, c[2], c[3], c[4]], [c[0] + ty / l * hw, c[1] - tx / l * hw, c[2], c[3], c[4]]];
+        };
+        let SECN = 0, lastStrip = null;
         const rc = (i, t) => ownColor(A[i]) || (colourMode === "rainbow" ? mode === "ink colour" ? hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.9, 0.8) : hsv(0.6667 * (1 - i / Math.max(1, n - 1)), 0.75, 0.95) : colourMode === "carbon" ? carbonColor(A[i]) : colourMode === "chain" ? chainColor(A[i]) : ssCol(t));
         const el = ribbonElements(A);
         for (const e of el) {
@@ -7098,6 +8127,7 @@
           for (let i = e.s; i <= e.e; i++) idx.push(i);
           if (idx.length < 2) continue;
           const alpha = A[idx[0]].alpha ?? 1;
+          const ek = el.indexOf(e), prevType = drawnAs(el[ek - 1]), nextType = drawnAs(el[ek + 1]), s0 = SECN;
           if (e.t === "H" && idx.length >= 3) {
             const p = idx.map((i) => pts[i]), m = p.length;
             const ax = new Array(m), tg = new Array(m);
@@ -7145,7 +8175,29 @@
             const zs = [];
             for (let j = 0; j < secs.length - 1; j++) zs.push(nz(norm3(add(secs[j].nrm, secs[j + 1].nrm))));
             const fold = (j) => j > 0 && j < zs.length && zs[j - 1] < 0 !== zs[j] < 0;
-            for (let j = 0; j < zs.length; j++) {
+            if (VEC) {
+              const key2 = elKey(A, e, ek === el.length - 1, "helix"), J = q.length - 1;
+              const meet = (k, o) => {
+                const T = tubeAt(idx[k ? m - 1 : 0]), Q = q[o], d = (u, v) => Math.hypot(u[0] - v[0], u[1] - v[1]);
+                q[k ? J : 0] = d(T[0], Q[0]) + d(T[1], Q[1]) <= d(T[0], Q[1]) + d(T[1], Q[0]) ? T : [T[1], T[0]];
+              };
+              if (prevType === "L") meet(0, 1);
+              if (nextType === "L") meet(1, J - 1);
+              const sides = vsides(zs.map((zn, j) => [zn, [q[j][0], q[j + 1][0], q[j + 1][1], q[j][1]]]));
+              const vfold = (j) => j > 0 && j < zs.length ? sides[j - 1] !== sides[j] : j === 0 ? prevType !== "L" : nextType !== "L";
+              let st = null, bk = null;
+              for (let j = 0; j < zs.length; j++) {
+                const zn = zs[j], b = sides[j];
+                if (st === null || b !== bk) {
+                  st = vstrip(key2, tr);
+                  bk = b;
+                  if (j === 0 && prevType === "L") vlink(lastStrip, st);
+                }
+                vface(st, [q[j][0], q[j + 1][0], q[j + 1][1], q[j][1]], "hatch", zn, b, alpha, rc(secs[j].r, "H"), vfold(j), vfold(j + 1), s0 + j);
+              }
+              lastStrip = st;
+              SECN = s0 + J;
+            } else for (let j = 0; j < zs.length; j++) {
               const zn = zs[j];
               face([q[j][0], q[j + 1][0], q[j + 1][1], q[j][1]], "hatch", zn, zn < 0, [1, fold(j + 1), 1, fold(j)], alpha, rc(secs[j].r, "H"), j === zs.length - 1 || rc(secs[j + 1].r, "H") !== rc(secs[j].r, "H"));
             }
@@ -7202,7 +8254,52 @@
               secs.push(box(p[m - 1], nm[m - 1], sd, 0, thick));
             }
             const q = secs.map((c) => [P2(c.p1), P2(c.p2), P2(c.p3), P2(c.p4)]);
-            for (let j = 0; j < secs.length - 1; j++) {
+            if (VEC) {
+              const key2 = elKey(A, e, ek === el.length - 1, "strand"), J = secs.length - 1, stepAt = secs.findIndex((c) => c.step), s02 = SECN + 3;
+              const cen = (c) => scl(add(add(c.p1, c.p2), add(c.p3, c.p4)), 0.25);
+              const kindAt = (j) => secs[j + 1].step ? 1 : stepAt >= 0 && j >= stepAt ? 2 : 0;
+              const tops = vsides(secs.slice(0, J).map((c0, j) => [nz(norm3(add(c0.n, secs[j + 1].n))), [q[j][0], q[j + 1][0], q[j + 1][3], q[j][3]]]));
+              let stF = null, top = null;
+              for (let j = 0; j < J; j++) {
+                const c0 = secs[j], c1 = secs[j + 1], q0 = q[j], q1 = q[j + 1], step = !!c1.step;
+                const zT = nz(norm3(add(c0.n, c1.n))), t = step ? j > 0 ? !tops[j - 1] : zT >= 0 : !tops[j];
+                const turn = stF !== null && t !== top;
+                if (turn) stF.faces[stF.faces.length - 1].inkB = true;
+                if (stF === null || turn) {
+                  stF = vstrip(key2, tr);
+                  top = t;
+                }
+                vface(stF, t ? [q0[0], q1[0], q1[3], q0[3]] : [q0[1], q1[1], q1[2], q0[2]], "hatch", Math.abs(zT), false, alpha, rc(c0.r, "E"), j === 0 || turn, j === J - 1, s02 + j, step, step);
+              }
+              for (const sg of [1, -1]) {
+                let st = null;
+                for (let j = 0; j < J; j++) {
+                  const c0 = secs[j], c1 = secs[j + 1], q0 = q[j], q1 = q[j + 1], kind = kindAt(j);
+                  const X = sg > 0 ? [c0.p1, c1.p1, c1.p2, c0.p2] : [c0.p4, c1.p4, c1.p3, c0.p3];
+                  let nn;
+                  if (kind === 1) nn = scl(norm3(sub3(cen(c0), cen(secs[Math.max(0, j - 1)]))), -1);
+                  else {
+                    nn = norm3(cross3(add(sub3(X[1], X[0]), sub3(X[2], X[3])), add(sub3(X[3], X[0]), sub3(X[2], X[1]))));
+                    if (dot3(nn, add(c0.s, c1.s)) * sg < 0) nn = scl(nn, -1);
+                  }
+                  const zn = nz(nn), crease = j > 0 && kindAt(j - 1) !== kind, band = st !== null;
+                  if (st && (crease || zn <= 0)) st.faces[st.faces.length - 1].inkB = true;
+                  if (zn <= 0 || kind === 1 && !band) {
+                    st = null;
+                    continue;
+                  }
+                  if (st === null || crease) st = vstrip(key2, tr);
+                  vface(st, sg > 0 ? [q0[0], q1[0], q1[1], q0[1]] : [q0[3], q1[3], q1[2], q0[2]], "side", zn, false, alpha, rc(c0.r, "E"), st.faces.length === 0, j === J - 1, s02 + j);
+                }
+              }
+              {
+                const c = secs[0], q0 = q[0];
+                const nb = scl(norm3(sub3(secs[1].p1, c.p1)), -1);
+                if (nz(nb) >= 0) vface(vstrip(key2, tr), [q0[0], q0[1], q0[2], q0[3]], "side", 1, false, alpha, rc(idx[0], "E"), true, true, s02);
+              }
+              lastStrip = null;
+              SECN = s02 + J + 3;
+            } else for (let j = 0; j < secs.length - 1; j++) {
               const c0 = secs[j], c1 = secs[j + 1];
               const q0 = q[j], q1 = q[j + 1];
               const isStep = !!c1.step;
@@ -7215,7 +8312,7 @@
               if (zS >= 0) face([q0[0], q1[0], q1[1], q0[1]], "side", zS, false, [1, 0, 1, j === 0], alpha, fc, end);
               else face([q0[3], q1[3], q1[2], q0[2]], "side", -zS, false, [1, 0, 1, j === 0], alpha, fc, end);
             }
-            {
+            if (!VEC) {
               const c = secs[0], q0 = q[0];
               const nb = scl(norm3(sub3(secs[1].p1, c.p1)), -1);
               if (nz(nb) >= 0) face([q0[0], q0[1], q0[2], q0[3]], "side", 1, false, [1, 1, 1, 1], alpha, rc(idx[0], "E"));
@@ -7250,7 +8347,26 @@
               Rr.push([pr[j][0] + ty / l * hw, pr[j][1] - tx / l * hw, pr[j][2], pr[j][3], pr[j][4]]);
             }
             const atEnd = (j, end) => end === 0 ? j === 0 && !first : j === pr.length - 2 && !last;
-            for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], ct), j === pr.length - 2 || rc(pr_i[j + 1], ct) !== rc(pr_i[j], ct));
+            let vkey = null;
+            if (VEC) {
+              const J = pr.length - 1;
+              vkey = elKey(A, e, ek === el.length - 1, ct === "N" ? "backbone" : "loop");
+              if (prevType === "H") {
+                const T = tubeAt(idx[0]);
+                L[0] = T[0];
+                Rr[0] = T[1];
+              }
+              if (nextType === "H") {
+                const T = tubeAt(idx[m - 1]);
+                L[J] = T[0];
+                Rr[J] = T[1];
+              }
+              const st = vstrip(vkey, tr);
+              if (prevType === "H") vlink(lastStrip, st);
+              for (let j = 0; j < J; j++) vface(st, [L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, alpha, rc(pr_i[j], ct), atEnd(j, 0) || j === 0 && prevType === "E", atEnd(j, 1) || j === J - 1 && nextType === "E", s0 + j);
+              lastStrip = st;
+              SECN = s0 + J;
+            } else for (let j = 0; j < pr.length - 1; j++) face([L[j], L[j + 1], Rr[j + 1], Rr[j]], "plain", 1, false, [1, atEnd(j, 1), 1, atEnd(j, 0)], alpha, rc(pr_i[j], ct), j === pr.length - 2 || rc(pr_i[j + 1], ct) !== rc(pr_i[j], ct));
             if (ct === "N" && rungs) for (let k = 0; k < m; k++) {
               const a = A[idx[k]], e2 = baseEnd(a.group);
               if (!e2 || rungDone.has(a.group)) continue;
@@ -7262,7 +8378,9 @@
               tx /= l;
               ty /= l;
               const w0 = Math.max(cw * 0.8 * proj.pxPerA * q0[3], hwMin * 0.9), w1 = Math.max(cw * 0.8 * proj.pxPerA * q1[3], hwMin * 0.9), nx = -ty, ny = tx;
-              face([[q0[0] + nx * w0, q0[1] + ny * w0, q0[2], q0[3], q0[4]], [q1[0] + nx * w1, q1[1] + ny * w1, q1[2], q1[3], q1[4]], [q1[0] - nx * w1, q1[1] - ny * w1, q1[2], q1[3], q1[4]], [q0[0] - nx * w0, q0[1] - ny * w0, q0[2], q0[3], q0[4]]], "plain", 1, false, [1, 1, 1, 0], a.alpha ?? alpha, rc(idx[k], ct));
+              const rq = [[q0[0] + nx * w0, q0[1] + ny * w0, q0[2], q0[3], q0[4]], [q1[0] + nx * w1, q1[1] + ny * w1, q1[2], q1[3], q1[4]], [q1[0] - nx * w1, q1[1] - ny * w1, q1[2], q1[3], q1[4]], [q0[0] - nx * w0, q0[1] - ny * w0, q0[2], q0[3], q0[4]]];
+              if (VEC) vface(vstrip(vkey, {}), rq, "plain", 1, false, a.alpha ?? alpha, rc(idx[k], ct), false, true, 0);
+              else face(rq, "plain", 1, false, [1, 1, 1, 0], a.alpha ?? alpha, rc(idx[k], ct));
             }
           }
         }
@@ -7270,10 +8388,11 @@
       if (R.ssLabels && !cfg.show.noLabels) {
         for (const lb of labels) {
           const p = proj.proj(lb.pos);
-          items.push({ z: p.z + 2, draw: (ctx) => {
+          const fs0 = Math.max(9, Math.round(0.8 * proj.pxPerA * p.d * K));
+          items.push({ z: p.z + 2, box: [p.x - fs0 * lb.txt.length - 3, p.y - fs0 - 3, p.x + fs0 * lb.txt.length + 3, p.y + fs0 + 3], draw: (ctx) => {
             ctx.save();
             ctx.globalAlpha = lb.alpha;
-            const fs = Math.max(9, Math.round(0.8 * proj.pxPerA * p.d * K));
+            const fs = fs0;
             ctx.font = `italic ${fs}px 'Times New Roman', Times, serif`;
             ctx.textAlign = "center";
             ctx.textBaseline = "middle";
@@ -8572,8 +9691,11 @@
       const lpLobes = SH.lonePairs && cfg.rep.lonePairStyle === "lobes";
       if (lpLobes) buildLonePairLobes(items, st, stickAtoms, proj, seedBase);
       if (SH.measures !== false && st.meas && st.meas.length) buildMeasureWindows(items, st, proj);
-      items.sort((u, v) => u.z - v.z);
-      for (const it of items) it.draw(ctx);
+      if (cfg.rep.fill === "flat") paintFlat(ctx, items, W, H);
+      else {
+        items.sort((u, v) => u.z - v.z);
+        for (const it of items) it.draw(ctx);
+      }
       drawMapCaption(ctx, W, H);
       const fontFam = S.font === "Plain sans" ? '"IBM Plex Sans", system-ui, sans-serif' : `"${S.font}", "Caveat", cursive`;
       for (const a of stickAtoms) {
@@ -9698,10 +10820,10 @@
     const levels = factors.map((f2) => {
       const iso = smoothSurface(isosurface(g2, same(level * f2)), o.finish !== "sketch" ? o.smoothing : 0);
       const nv = iso.positions.length / 3;
-      const near = new Int32Array(nv).fill(-1), dist2 = new Float32Array(nv).fill(99);
+      const near2 = new Int32Array(nv).fill(-1), dist2 = new Float32Array(nv).fill(99);
       if (atoms.length) for (let v = 0; v < nv; v++) {
         const [i, d] = nearest(iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2]);
-        near[v] = i;
+        near2[v] = i;
         dist2[v] = d;
       }
       let tri = iso.triangles;
@@ -9771,7 +10893,7 @@
       const raw = new Float32Array(nv).fill(NaN);
       if (o.localResolution === "map" && localRes) for (let v = 0; v < nv; v++) raw[v] = sampleMap(localRes, iso.positions[v * 3], iso.positions[v * 3 + 1], iso.positions[v * 3 + 2]);
       else if (o.localResolution === "bfactor" && s) {
-        for (let v = 0; v < nv; v++) if (near[v] >= 0) raw[v] = s.b[near[v]];
+        for (let v = 0; v < nv; v++) if (near2[v] >= 0) raw[v] = s.b[near2[v]];
       }
       if (o.localResolution !== "none") {
         const ok = Array.from(raw).filter((x) => isFinite(x)).sort((a, b) => a - b);
@@ -9792,7 +10914,7 @@
         nor[v * 3 + 1] = q[1];
         nor[v * 3 + 2] = q[2];
       }
-      return { level: level * f2, pos, nor, tri, near, dist: dist2, hand: hand2 };
+      return { level: level * f2, pos, nor, tri, near: near2, dist: dist2, hand: hand2 };
     });
     const primary = Math.max(0, factors.indexOf(1));
     const wire = [], gLevel = same(level);
@@ -10379,13 +11501,13 @@
       const Dv = ortho ? F.zspan + 10 : D;
       const view = mat4Mul(mat4Translate(-F.rx, -F.ry, -Dv), mat4Mul(this.rotation, mat4Translate(-F.cx, -F.cy, -F.cz)));
       const margin = F.zspan * 0.25 + 6, push = this.pushBehind ? F.zspan + 16 : 0;
-      const near = Math.max(0.05, Dv - F.zspan / 2 - margin), far = Dv + F.zspan / 2 + margin + (push ? push + 12 : 0);
+      const near2 = Math.max(0.05, Dv - F.zspan / 2 - margin), far = Dv + F.zspan / 2 + margin + (push ? push + 12 : 0);
       const proj = new Float32Array(16);
       if (ortho) {
         proj[0] = 2 * base / W;
         proj[5] = 2 * base / H;
-        proj[10] = -2 / (far - near);
-        proj[14] = -(far + near) / (far - near);
+        proj[10] = -2 / (far - near2);
+        proj[14] = -(far + near2) / (far - near2);
         proj[15] = 1;
         proj[12] = offX;
         proj[13] = offY;
@@ -10394,11 +11516,11 @@
         proj[5] = 2 * base * D / H;
         proj[8] = -offX;
         proj[9] = -offY;
-        proj[10] = (far + near) / (near - far);
+        proj[10] = (far + near2) / (near2 - far);
         proj[11] = -1;
-        proj[14] = 2 * far * near / (near - far);
+        proj[14] = 2 * far * near2 / (near2 - far);
       }
-      return { view, proj, near, far, ortho, D: Dv, base, rx: F.rx, ry: F.ry, spanX: F.spanX, spanY: F.spanY, zspan: F.zspan, cx: F.cx, cy: F.cy, cz: F.cz, sceneNear: Dv - F.zspan / 2, sceneFar: Dv + F.zspan / 2, push };
+      return { view, proj, near: near2, far, ortho, D: Dv, base, rx: F.rx, ry: F.ry, spanX: F.spanX, spanY: F.spanY, zspan: F.zspan, cx: F.cx, cy: F.cy, cz: F.cz, sceneNear: Dv - F.zspan / 2, sceneFar: Dv + F.zspan / 2, push };
     }
     /** Where points land on a W×H canvas with the current view, as fractions of the canvas (x right, y down): the bounding box
         of `pts` (xyz triples; default: the fit points). */
@@ -10474,16 +11596,16 @@
   }
   function frameSite(h) {
     if (!h.siteSel.trim()) return { ok: false, msg: "choose the site first" };
-    const { site, trace } = siteAtoms(h);
+    const { site, trace: trace2 } = siteAtoms(h);
     if (!site.length) return { ok: false, msg: "the site selection matches no atoms" };
     const c = [0, 0, 0];
-    for (const a of trace) for (let k = 0; k < 3; k++) c[k] += a.pos[k] / trace.length;
+    for (const a of trace2) for (let k = 0; k < 3; k++) c[k] += a.pos[k] / trace2.length;
     const sc = [0, 0, 0];
     for (const a of site) for (let k = 0; k < 3; k++) sc[k] += a.pos[k] / site.length;
     let rs = 0;
     for (const a of site) rs = Math.max(rs, Math.hypot(a.pos[0] - sc[0], a.pos[1] - sc[1], a.pos[2] - sc[2]));
-    const step = Math.max(1, Math.floor(trace.length / 800));
-    const pts = trace.filter((_, i) => i % step === 0).map((a) => [a.pos[0] - c[0], a.pos[1] - c[1], a.pos[2] - c[2]]);
+    const step = Math.max(1, Math.floor(trace2.length / 800));
+    const pts = trace2.filter((_, i) => i % step === 0).map((a) => [a.pos[0] - c[0], a.pos[1] - c[1], a.pos[2] - c[2]]);
     const v = [sc[0] - c[0], sc[1] - c[1], sc[2] - c[2]];
     const rot = (p, yaw, pitch) => {
       const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
@@ -10553,10 +11675,10 @@
     }
     const lig = site.filter((a) => a.het);
     const ref = lig.length ? lig : site;
-    const near = (g2) => Math.min(...g2.map((a) => Math.min(...ref.map((b) => Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1], a.pos[2] - b.pos[2])))));
+    const near2 = (g2) => Math.min(...g2.map((a) => Math.min(...ref.map((b) => Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1], a.pos[2] - b.pos[2])))));
     const all = [...groups.values()];
     const MAX = 8;
-    const pick = all.length <= MAX ? all : [...all.filter((g2) => g2[0].het), ...all.filter((g2) => !g2[0].het).sort((x, y) => near(x) - near(y)).slice(0, MAX - 1)];
+    const pick = all.length <= MAX ? all : [...all.filter((g2) => g2[0].het), ...all.filter((g2) => !g2[0].het).sort((x, y) => near2(x) - near2(y)).slice(0, MAX - 1)];
     let n = 0;
     for (const g2 of pick) {
       const ca = g2.find((a) => a.name === "CA") || g2[0];
@@ -11005,10 +12127,10 @@
     const m = /^\s*([A-Za-z]+)\s*(-?\d+)(?:\.([A-Za-z0-9]+))?(?::(\S+))?\s*$/.exec(q);
     if (!m) throw new Error(`"${q}" names no atom: use an id like TYR32.A:CA or a residue like Tyr32`);
     const [, resn, resi, chain, atom] = m;
-    const U = (x) => (x || "").toUpperCase();
-    const hits = st.atoms.filter((a) => U(a.resn) === U(resn) && String(a.resi) === resi && (!chain || U(a.chain) === U(chain)));
+    const U2 = (x) => (x || "").toUpperCase();
+    const hits = st.atoms.filter((a) => U2(a.resn) === U2(resn) && String(a.resi) === resi && (!chain || U2(a.chain) === U2(chain)));
     if (!hits.length) throw new Error(`no residue ${resn}${resi}${chain ? " in chain " + chain : ""} here`);
-    const pick = atom ? hits.find((a) => U(a.name) === U(atom)) : hits.find((a) => a.name === "CA") || hits[0];
+    const pick = atom ? hits.find((a) => U2(a.name) === U2(atom)) : hits.find((a) => a.name === "CA") || hits[0];
     if (!pick) throw new Error(`${resn}${resi} has no atom ${atom}; it has ${hits.map((a) => a.name).join(", ")}`);
     return pick.id;
   }

@@ -123,7 +123,8 @@ Every other field is in [python/docs/style.md](../python/docs/style.md).
   browsers, Inkscape and Affinity honour; Illustrator flattens them, so for Illustrator either accept flat colour or
   rasterise the watercolour first. From `fig.save("fig.svg")`, `molsketch render … -o fig.svg`, or the app's
   *Export › Picture › Save SVG* when it is served by `molsketch serve`. A protein is a few MB; a 144 000-atom ribosome
-  about 30 MB.
+  about 30 MB. In the Flat look a protein is a few hundred kB: its ribbons are drawn as whole shapes in groups (see
+  [Flat](looks.md#11-flat)).
 - **Video**: `fig.animate("loop.mp4")` and `fig.turntable(...)` (MP4, WebM, GIF, through ffmpeg), or the app's
   *Export › Video*.
 
@@ -153,6 +154,16 @@ Everything is 2D canvas drawing. Per frame: interpolate the keyframes (positions
 arrows with their own timing), rotate and project with a PyMOL-like camera (the field of view sets the camera
 distance from the scene width), then build a painter's list of items (half-sticks, junction rings and fills,
 spheres, cartoon faces, surface patches), sorted by depth and drawn back to front.
+
+The Flat look draws the same list as shapes (`app/src/classic/vector.js`). Its cartoon faces are kept in strips, one
+per surface of each element, and joined into pieces drawn whole: a closed path of cubic Béziers fitted through the
+strip's two edges (Schneider's algorithm, to a fifth of a pixel), filled, and inked along the silhouette in one stroke,
+the folds and the ends included and the cuts where the next piece runs on left open. Which items overlap on screen
+(their outlines included) is found with a grid; the depth order of each overlapping pair is kept, so any order of the
+pieces that keeps those pairs paints the same picture. A piece whose order would go round in a circle (a loop passing
+in front of one part of a helix's face and behind another, a tube crossing itself) is split there, until none is left.
+The pieces are then ordered to keep each chain, element and residue together where the overlaps allow, and a piece
+drawn before the next one of its ribbon runs on under it a little, so no hairline of paper shows at the cut.
 
 Every visible line is a sketch stroke: the ideal polyline is resampled, offset by low-frequency noise plus a small
 random jitter and an overall bow, given a pen-pressure width profile, and filled as a polygon; a second pass at lower

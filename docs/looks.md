@@ -330,9 +330,16 @@ bonds and lone pairs (the upper right when that is as clear); lone pairs are bol
 as large as a hydrogen bond's dots, kept clear of the badge, the bonds and the hydrogen bonds.
 
 The look keeps every colour as it is given: no grain, wash, fog or translucency, and a site is not faded into the
-protein, so a figure is in exactly the colours it was handed, each in two tones. As an SVG it is shapes only: one path
-per ribbon face, half-bond and outline, and the paper one rectangle (or nothing, with `paper.transparent`), so it can be
-recoloured or rearranged in Illustrator, Inkscape or a figure tool, and laid on a page of its own colour.
+protein, so a figure is in exactly the colours it was handed, each in two tones. As an SVG it is shapes only, drawn
+as an illustrator would draw them: each visible stretch of a ribbon (a helix's face between two folds, its darker back
+between the next two, a strand's top or its side, a run of a loop's tube) is one closed path of curves fitted through
+its edges, filled and inked with one continuous line round its silhouette; sticks are a path per half-bond and its
+outline; the paper is one rectangle (or nothing, with `paper.transparent`). The shapes are in groups named for a
+drawing program's list of objects: a chain, and in it each helix, strand and loop with its residues (`Helix 3 (63–68)`,
+with `data-ss` and `data-residues`), each residue's sticks (`HIS 57`, `data-resn` and `data-resi`), a ligand's, the
+water and the hydrogen bonds. Where one element lies partly in front of another and partly behind it, its group is
+drawn in two parts (`A-helix-3`, `A-helix-3-2`), as the picture needs. So it can be recoloured or rearranged in
+Illustrator, Inkscape or a figure tool, and laid on a page of its own colour.
 
 ```python
 fig = ms.fetch("3PTB").look("flat").site("resi 57+102+195 or resn BEN").frame_site((960, 720))

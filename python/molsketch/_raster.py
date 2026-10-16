@@ -294,6 +294,7 @@ class _Replay:
         self.path = skia.Path()   # in the space of the matrix it was built under (Blink moves it when the matrix changes)
         self.has_close = False
         self.handed = None   # the path is an F op's own (read from memory): copied before anything changes it
+        self.group = getattr(canvas, "group", None)   # groups: an SVG's (a picture has none)
 
     def _own(self):
         """make the path this replay's own before changing it: an F op's path is shared with the op list, and one read
@@ -424,6 +425,8 @@ class _Replay:
                 if t is None or not t.load(o[1], c, self.w, self.h): self.r.missing.add(o[1])
             elif k == "keep":   # a texture drawn: kept (unless one it was drawn from could not be given back)
                 if self.r.textures is not None and not self.r.missing: self.r.textures.keep(o[1], self.live.surface)
+            elif k == "g" or k == "/g":
+                if self.group is not None: self.group(o[1] if k == "g" else None)
             elif k == "size": return i
             else: raise RuntimeError(f"unknown op {k}")
         return i1
