@@ -54,11 +54,25 @@ function mapOf(ref: string) { const m = maps.get(ref); if (!m) throw new Error(`
 const bases = new WeakMap<DensityMap, Map<number, Float32Array>>();
 function basisOf(m: DensityMap, level: number) { let b = bases.get(m); if (!b) bases.set(m, b = new Map()); let r = b.get(level); if (!r) { r = mapBasis(m, level); b.set(level, r) } return r }
 export function drop(ref: string) { inputs.delete(ref) }
-const parsed = new Map<string, Structure>();
-function structureOf(text: string, name: string): Structure {
-  const key = name + '\u0000' + text.length + '\u0000' + text.slice(0, 64) + text.slice(-64);
-  let s = parsed.get(key); if (!s) { s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, '')); parsed.set(key, s); if (parsed.size > 8) parsed.delete(parsed.keys().next().value!) }
+/** structures read, kept by what they were read from: the input it came in (`owner`, an input the host registered
+    once, or a stack's file), and, so that two figures of one file share it, by the text's name, length and a hash of
+    the whole of it -- never its name and ends alone: two runs' run1/model.pdb and run2/model.pdb, alike but for their
+    middles, are two structures */
+const parsed = new Map<string, Structure>(), owned = new WeakMap<object, Structure>();
+function structureOf(text: string, name: string, owner?: object): Structure {
+  let s = owner ? owned.get(owner) : undefined; if (s) return s;
+  const key = name + '\u0000' + text.length + '\u0000' + textHash(text);
+  s = parsed.get(key); if (!s) { s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, '')); parsed.set(key, s); if (parsed.size > 8) parsed.delete(parsed.keys().next().value!) }
+  if (owner) owned.set(owner, s);
   return s;
+}
+/** a 53-bit hash of the whole of a text (cyrb53): a few milliseconds for a megabyte, once for each input */
+function textHash(text: string): string {
+  let h1 = 0xdeadbeef, h2 = 0x41c6ce57;
+  for (let i = 0; i < text.length; i++) { const c = text.charCodeAt(i); h1 = Math.imul(h1 ^ c, 2654435761); h2 = Math.imul(h2 ^ c, 1597334677) }
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
 }
 
 /** everything the engine needs for one figure, settled from a spec */
@@ -114,7 +128,7 @@ function sceneDocOf(inp: any): any {
 /** a stack of structures as one scene, one keyframe each, as the app's loadStack builds it */
 function stackScene(files: { text: string; name: string }[]): SceneDoc {
   files = [...files].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-  const structs = files.map(f => structureOf(f.text, f.name)); const base = pcaBasis(structs[0]); const one = structs.length === 1;
+  const structs = files.map(f => structureOf(f.text, f.name, f)); const base = pcaBasis(structs[0]); const one = structs.length === 1;
   const keyframes = structs.map(st => { const k = freshKeyframe(st, base); return { name: st.name, hold: one ? 24 : 0, transition: one ? 0 : 2, atoms: k.atoms, bonds: k.bonds, arrows: [] } });
   const hasPoly = structs[0].residues.some(r => !r.het);
   const doc: any = { name: files.length > 1 ? 'PDB stack' : structs[0].name, reps: { sticks: hasPoly ? 'hetatm and not water' : 'all', cartoon: hasPoly ? 'polymer' : '', surface: '' }, groupColors: {}, view: { yaw: 0, pitch: 0, zoom: 1, panX: 0, panY: 0 }, keyframes };
@@ -135,7 +149,7 @@ export function settle(spec: FigureSpec): Settled {
     if (doc.reps) style.reps = { ...doc.reps }; overrides = { ...(doc.groupColors || {}) }; labels = (doc.labels || []).map((l: any) => ({ ...l }));
     const dv = doc.view; if (dv) { if (dv.fov !== undefined) style.view.fov = dv.fov; if (dv.fog !== undefined) style.view.fog = dv.fog; if (dv.fogStart !== undefined) style.view.fogStart = dv.fogStart }   // as loadScene: a later look replaces them
   } else {   // loadText
-    structure = structureOf(inp.text, inp.name); cam.base = pcaOf(structure);
+    structure = structureOf(inp.text, inp.name, inp); cam.base = pcaOf(structure);
     if (!structure.residues.some(r => !r.het)) style.reps = { sticks: 'all', cartoon: '', surface: '' };
   }
   if (spec.look) { style = withLook(style, spec.look); look = spec.look }

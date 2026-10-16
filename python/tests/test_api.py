@@ -390,3 +390,37 @@ def test_kept_textures_draw_the_same(tmp_path, monkeypatch):
     assert np.array_equal(draw(e, "chalkboard"), first["chalkboard"])
     (tmp_path / "textures" / "x.tex").write_bytes(b"MSTX1\n")   # a broken file is passed over
     assert np.array_equal(draw(Engine(), "watercolour"), first["watercolour"])
+
+
+def _secondary(fig):
+    """Each residue's secondary structure, as the engine has read it, in residue order."""
+    from molsketch._engine import engine
+    atoms = engine().call("sceneJson", fig._spec())["keyframes"][0]["atoms"].values()
+    return [ss for _, ss in sorted({(a["resi"], a.get("ss") or "L") for a in atoms if not a.get("het")})]
+
+
+def test_two_files_of_one_name_are_read_as_their_own(tmp_path):
+    """Two structures with one file name, one length and the same first and last lines -- two
+    design runs' run1/model.pdb and run2/model.pdb -- are each read as they are, in one
+    process, not the second as the first."""
+    lines = (EX / "1A8O.pdb").read_text().splitlines()
+    atoms = [line for line in lines if line.startswith(("ATOM", "HETATM"))]
+    resi = sorted({int(line[22:26]) for line in atoms if line.startswith("ATOM")})
+    chain = atoms[0][21]
+    a, b = resi[2], resi[8]
+    # Two runs: the same atoms, a helix in the middle of one and a strand pair in the other's,
+    # their records the same length, the files the same length, header and footer alike.
+    head = "REMARK   1 DESIGN RUN OUTPUT, THE SAME HEADER FOR EVERY RUN, LONGER THAN SIXTY-FOUR"
+    helix = f"HELIX    1   1 ALA {chain} {a:>4}  ALA {chain} {b:>4}  1"
+    sheet = f"SHEET    1   A 2 ALA {chain}{a:>4}  ALA {chain}{a + 3:>4}  0"
+    sheet = sheet.ljust(len(helix))
+    one, two = tmp_path / "run1" / "model.pdb", tmp_path / "run2" / "model.pdb"
+    for path, record in ((one, helix), (two, sheet)):
+        path.parent.mkdir()
+        path.write_text("\n".join([head, record, *atoms, "TER", "END", ""]))
+    assert len(one.read_text()) == len(two.read_text())
+    first, second = _secondary(ms.load(one)), _secondary(ms.load(two))
+    assert "H" in first and "E" not in first
+    assert "E" in second and "H" not in second
+    # The same file loaded again is read once, and is the same.
+    assert _secondary(ms.load(one)) == first
