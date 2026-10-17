@@ -123,6 +123,7 @@ class Raster:
         self.templates: dict[tuple, skia.Paint] = {}         # paints without their colour, by the rest of the spec
         self.meta: dict[int, dict] = {}                        # what SVG needs of a paint that it does not tell: its pattern, its blur
         self.lazy = False                                      # draw canvases only when their pixels are needed (for SVG)
+        self.keep = False                                      # keep the ops drawn, so a canvas can be written as SVG too
         self.text = text
         self.textures = None                                   # the textures kept between runs (_textures.py), if any
         self.missing: set[str] = set()                         # those it said it had and could not give back, this render
@@ -143,7 +144,7 @@ class Raster:
                 k = o[0]
                 if k == "F": ops[i] = ("F", o[1], o[2], [(_read_path(mv[o[j]:o[j] + o[j + 1]]), o[j + 2]) for j in range(3, len(o), 3)])
                 elif k == "P": ops[i] = ("P", _read_path(mv[o[1]:o[1] + o[2]]), o[3], o[4])
-            if lv.i: lv.q = lv.q[lv.i:]; lv.i = 0
+            if lv.i and not self.keep: lv.q = lv.q[lv.i:]; lv.i = 0
             lv.q.extend(ops); fed.append(lv)
         if not self.lazy:
             for lv in fed: self._pump(lv)
@@ -188,16 +189,17 @@ class Raster:
         self._pump(lv)
         return lv.surface.makeImageSnapshot() if lv.surface is not None else None
 
-    def vector(self, cid: int, scale: float = 1) -> str:
-        """a canvas as SVG: its ops (none drawn yet: see ``lazy``) replayed onto an SVG canvas"""
+    def vector(self, cid: int, scale: float = 1, shapes_only: bool = False) -> str:
+        """a canvas as SVG: its ops (none drawn yet: see ``lazy``; or drawn, and kept: see ``keep``) replayed onto an
+        SVG canvas. ``shapes_only``: raise NotShapes (_svg.py) at anything but plain shapes"""
         from ._svg import SvgCanvas
         lv = self.live.get(cid)
         if lv is None: raise RuntimeError(f"canvas {cid} is not here")
-        q = lv.q; start = max((i for i in range(lv.i, len(q)) if q[i][0] == "size"), default=None)
+        q = lv.q; start = max((i for i in range(0 if self.keep else lv.i, len(q)) if q[i][0] == "size"), default=None)
         if start is None: raise RuntimeError("the canvas was drawn on before SVG was asked for")
         w, h = q[start][1], q[start][2]
-        c = SvgCanvas(w, h, scale, meta=lambda p: self.meta.get(id(p)))
-        rp = _Replay(self, lv, c, w, h); i = start + 1
+        c = SvgCanvas(w, h, scale, meta=lambda p: self.meta.get(id(p)), **({"shapes_only": True} if shapes_only else {}))
+        rp = _Replay(self, lv, c, w, h); rp.again = lv.i > start; i = start + 1
         while i < len(q):
             i = rp.run(q, i, len(q))
             if i < len(q): i += 1   # a resize after drawing: SVG keeps what was drawn
@@ -295,6 +297,7 @@ class _Replay:
         self.has_close = False
         self.handed = None   # the path is an F op's own (read from memory): copied before anything changes it
         self.group = getattr(canvas, "group", None)   # groups: an SVG's (a picture has none)
+        self.again = False   # the canvas's ops replayed a second time (as SVG, after its pixels): its snapshots are taken
 
     def _own(self):
         """make the path this replay's own before changing it: an F op's path is shared with the op list, and one read
@@ -419,12 +422,13 @@ class _Replay:
             elif k == "text":
                 p = paint(o[6])
                 if p is not None: self.r.text.draw(c, o[2], o[3], o[4], o[7], o[8], o[9], o[5], skia.Paint(p))
-            elif k == "snap": self.r._snapped(self.live, o[1])
+            elif k == "snap":
+                if not self.again: self.r._snapped(self.live, o[1])
             elif k == "ext":   # a kept texture: its pixels from the file (a fresh canvas of its size)
                 t = self.r.textures
                 if t is None or not t.load(o[1], c, self.w, self.h): self.r.missing.add(o[1])
             elif k == "keep":   # a texture drawn: kept (unless one it was drawn from could not be given back)
-                if self.r.textures is not None and not self.r.missing: self.r.textures.keep(o[1], self.live.surface)
+                if self.r.textures is not None and not self.r.missing and not self.again: self.r.textures.keep(o[1], self.live.surface)
             elif k == "g" or k == "/g":
                 if self.group is not None: self.group(o[1] if k == "g" else None)
             elif k == "size": return i

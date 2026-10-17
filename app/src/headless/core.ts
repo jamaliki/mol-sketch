@@ -97,18 +97,22 @@ function withLook(style: Style, key: string): Style {
 }
 
 /** what the app's rebuild() fits the camera to: the atoms any representation draws (or all, if none); kept for the
-    structure's last selections, as a host drawing frame after frame asks again and again */
-const fits = new WeakMap<Structure, { key: string; pts: Float32Array }>();
+    structure's last few selections, as a host drawing frame after frame asks again and again (and a host asking of
+    one figure with its look's selections and then its own would otherwise select them all again each time: for a
+    ribosome, tens of milliseconds a time) */
+const fits = new WeakMap<Structure, Map<string, Float32Array>>();
 function fitPointsOf(s: Structure, style: Style): Float32Array {
   const siteSel = style.site?.sel?.trim();
   const stickSel = siteSel ? (style.reps.sticks.trim() ? `(${style.reps.sticks}) or (${siteSel})` : siteSel) : style.reps.sticks;
-  const key = [stickSel, style.reps.cartoon, style.reps.surface].join('\u0000'); const hit = fits.get(s); if (hit && hit.key === key) return hit.pts;
+  const key = [stickSel, style.reps.cartoon, style.reps.surface].join('\u0000');
+  let kept = fits.get(s); if (!kept) fits.set(s, kept = new Map());
+  const hit = kept.get(key); if (hit) { kept.delete(key); kept.set(key, hit); return hit }   // (the last used, last out)
   const shown = new Uint8Array(s.count);
   for (const sel of [stickSel, style.reps.cartoon, style.reps.surface]) if (sel && sel.trim()) { const m = selectAtoms(s, sel); for (let i = 0; i < s.count; i++) shown[i] |= m[i] }
   let n = 0; for (let i = 0; i < s.count; i++) n += shown[i];
   const pts = new Float32Array((n || s.count) * 3); let k = 0;
   for (let i = 0; i < s.count; i++) if (!n || shown[i]) { pts[k++] = s.x[i]; pts[k++] = s.y[i]; pts[k++] = s.z[i] }
-  fits.set(s, { key, pts }); return pts;
+  kept.set(key, pts); if (kept.size > 8) kept.delete(kept.keys().next().value!); return pts;
 }
 const bases0 = new WeakMap<Structure, Float32Array>();
 function pcaOf(s: Structure) { let b = bases0.get(s); if (!b) bases0.set(s, b = pcaBasis(s)); return b }
@@ -274,6 +278,19 @@ function siteHostOf(f: Settled): SiteHost { return { engine: () => engineFor(f),
 export function pocket(spec: FigureSpec, dist = 5) { const f = settle(spec); if (!f.structure) throw new Error('the pocket needs a structure, not a scene'); return pocketSel(f.structure, dist) }
 export function frameTheSite(spec: FigureSpec) { const f = settle(spec); const r = frameSite(siteHostOf(f)); const { base, ...cam } = f.camera; return { ...r, camera: cam } }
 export function labelTheSite(spec: FigureSpec) { const f = settle(spec); const labels = f.labels.map(l => ({ ...l })); const r = labelSite(siteHostOf(f), labels); return { ...r, labels } }
+
+/** a structure's residues, in its order, as columns: what a host colouring residues needs to know of them without
+    the scene's every atom (a ribosome's scene is 220 000 atoms; its residues 18 000). Each as the scene's atoms say
+    it: name, number, chain, entity and subunit (an entity's only), hetero group, secondary structure; its atoms, and
+    those that are not hydrogen. null for a scene or a map, which have no structure of their own. */
+export function residues(spec: FigureSpec) {
+  let inp: any = spec.input; if (inp.ref !== undefined) { inp = inputs.get(inp.ref); if (!inp) throw new Error(`unknown input ${(spec.input as any).ref}`) }
+  if (typeof inp.text !== 'string') return null;
+  const s = structureOf(inp.text, inp.name, inp), R = s.residues, heavy: number[] = [];
+  for (const r of R) { let n = 0; for (let i = r.atomStart; i < r.atomEnd; i++) if (s.element[i] !== 'H') n++; heavy.push(n) }
+  return { resn: R.map(r => r.resn), resi: R.map(r => r.resi), chain: R.map(r => r.chain), entity: R.map(r => r.entity || ''), subunit: R.map(r => r.entity ? r.subunit : ''),
+    het: R.map(r => r.het ? 1 : 0), ss: R.map(r => r.ss), atoms: R.map(r => r.atomEnd - r.atomStart), heavy };
+}
 
 /** the scene JSON of a spec, as the app's Save scene JSON writes it */
 export function sceneJson(spec: FigureSpec) {

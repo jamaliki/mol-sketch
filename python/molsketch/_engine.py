@@ -116,6 +116,7 @@ class Engine:
         # the ring the engine writes its recording into, read in place, and the notification that a record is there:
         # handled on mini-racer's event-loop thread, so the replay runs while V8 goes on drawing
         self._maps: dict[int, tuple] = {}
+        self._put_text = None
         self._ring = self.v8.eval("__RING"); self._i32 = self._ring.cast("i"); self._read = 0; self._err = None
         ctx = self.v8._ctx
 
@@ -171,16 +172,27 @@ class Engine:
 
     def put(self, value) -> str:
         ref = f"in{next(self._ids)}"
+        if isinstance(value, dict) and value.keys() == {"text", "name"} and isinstance(value["text"], str):
+            # a structure's text handed to V8 as a string: as JSON in a call (escaped twice, then parsed as a script and
+            # again as JSON) a ribosome's 25 MB of mmCIF took 0.2 s, as a string 10 ms
+            with self._lock:
+                if self._put_text is None: self._put_text = self.v8.eval("(ref, name, text) => MolSketchCore.put(ref, { text, name })")
+                try: self._put_text(ref, str(value["name"]), value["text"])
+                except Exception as e: raise CoreError(_js_message(e)) from None
+            return ref
         self.call("put", ref, value)
         return ref
 
-    def render_svg(self, spec: dict) -> str:
-        """the figure as SVG: its canvas replayed as vector elements (what it draws off screen, embedded as images)"""
-        self.raster.lazy = True
-        try: return self.render(spec, svg=True)
-        finally: self.raster.lazy = False
+    def render_svg(self, spec: dict, shapes_only: bool = False):
+        """the figure as SVG: its canvas replayed as vector elements (what it draws off screen, embedded as images).
+        ``shapes_only``: the SVG if it is nothing but plain shapes, else the picture (a skia.Image) of the same render:
+        its pixels are drawn as it arrives, as ``render`` draws them, and its ops kept to be written as SVG after"""
+        if shapes_only: self.raster.keep = True
+        else: self.raster.lazy = True
+        try: return self.render(spec, svg="shapes" if shapes_only else True)
+        finally: self.raster.lazy = self.raster.keep = False
 
-    def render(self, spec: dict, svg: bool = False):
+    def render(self, spec: dict, svg: bool | str = False):
         # a large figure is millions of small objects (ops, paths) and none of them in a cycle: Python's collector,
         # walking them again and again as they arrive, would cost more than the drawing
         # and V8 hands records over through Python's lock: switching threads every 0.5 ms rather than 5 keeps the
@@ -206,7 +218,7 @@ class Engine:
         else: self.textures.rescan()
         self.v8.call("__call", "dropTextures", "[]")
 
-    def _render(self, spec: dict, svg: bool = False):
+    def _render(self, spec: dict, svg: bool | str = False):
         with self._lock:
             main = None
             try:
@@ -231,7 +243,7 @@ class Engine:
                         self.v8.call("__learn", json.dumps(rows))
                         self.misses = r["miss"]
                         continue
-                    img = self.raster.vector(main, spec.get("scale", 1)) if svg else self.raster.image(main)
+                    img = self._vector(main, spec.get("scale", 1), svg == "shapes") if svg else self.raster.image(main)
                     if not self.raster.missing: break
                     self.raster.drop(main); main = None; self._lost_textures(lost); lost += 1
             finally:   # the frame's canvas and the render's paints are done with, whatever happened
@@ -239,6 +251,13 @@ class Engine:
                 self.raster.end_render()
             if len(self.raster.live) > 48: self.v8.low_memory_notification()   # a full collection, so the engine's dropped canvases are reported
             return img
+
+    def _vector(self, main: int, scale: float, shapes_only: bool):
+        """the frame's canvas as SVG; with ``shapes_only``, as its picture where it is more than shapes"""
+        if not shapes_only: return self.raster.vector(main, scale)
+        from ._svg import NotShapes
+        try: return self.raster.vector(main, scale, shapes_only=True)
+        except NotShapes: return self.raster.image(main)
 
 
 RING = 64 << 20   # bytes: records larger than this wait for the end of the render

@@ -170,6 +170,46 @@ def test_svg_is_vector_and_valid(tmp_path):
     assert "mix-blend-mode" in ms.load(EX / "1A8O.pdb").look("watercolour").svg((320, 240))   # watercolour multiplies
 
 
+def test_svg_or_image_draws_once_as_shapes_or_as_a_picture():
+    """a drawing of shapes alone comes back as its SVG, one with more (a hatched surface, a watercolour) as its picture:
+    each the same as svg() or render() would give"""
+    flat = ms.load(EX / "1A8O.pdb").look("flat")
+    assert flat.svg_or_image(SMALL) == flat.svg(SMALL)
+    for fig in (ms.load(EX / "1A8O.pdb").look("flat").show(cartoon=None, surface="polymer"), ms.load(EX / "1A8O.pdb").look("watercolour")):
+        img = fig.svg_or_image(SMALL)
+        assert isinstance(img, ms.Image) and np.array_equal(img.to_numpy(), fig.render(SMALL).to_numpy())
+    assert "<clipPath" in ms.load(EX / "1A8O.pdb").look("flat").show(cartoon=None, surface="polymer").svg(SMALL)
+
+
+def test_svg_paths_are_written_as_skias_iterator_gives_them():
+    """path_d writes a path's numbers all at once from its serialised form: the same text as walking it with Skia's
+    iterator, a verb at a time (the close's line back to the start, a move at the end left out, conics as quads)"""
+    import random
+
+    import skia
+
+    from molsketch import _svg
+    rng = random.Random(7)
+    def coord():
+        r = rng.random()
+        if r < 0.1: return rng.choice([0.0, -0.0, 0.001, -0.004, 0.005, -0.005, 1.005, 2.675, -2.675, 100.0, 0.125, 1e-9])
+        return rng.uniform(-2000, 2000) * (10 ** rng.uniform(-6, 0))
+    for _ in range(3000):
+        p = skia.Path(); start = None
+        for _ in range(rng.randint(0, 12)):
+            v = rng.random()
+            if v < 0.15: start = (coord(), coord()); p.moveTo(*start)
+            elif v < 0.45: p.lineTo(coord(), coord())
+            elif v < 0.55: p.quadTo(coord(), coord(), coord(), coord())
+            elif v < 0.65: p.conicTo(coord(), coord(), coord(), coord(), rng.random() * 3)
+            elif v < 0.75: p.cubicTo(*(coord() for _ in range(6)))
+            elif v < 0.85: p.close()
+            elif v < 0.9 and start: p.lineTo(*start)
+            elif v < 0.95: p.addCircle(coord(), coord(), abs(coord()) + 0.1)
+            else: p.arcTo(skia.Rect.MakeLTRB(-50, -30, 40, 60), rng.uniform(0, 360), rng.uniform(-360, 360), rng.random() < 0.5)
+        assert _svg.path_d(p) == _svg._iter_d(p)
+
+
 def test_flat_svg_is_shapes_in_the_colours_given():
     """the flat look as an SVG: shapes only (no pictures, the paper one rectangle), and every ribbon painted in a colour it
     was given or that colour's one darker shade, so another program can recolour it shape by shape"""

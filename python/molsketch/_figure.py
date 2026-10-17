@@ -282,6 +282,14 @@ class Figure:
         Inkscape and Affinity honour; Illustrator flattens them."""
         return engine().render_svg(self._spec(size=size, scale=scale, frame=frame))
 
+    def svg_or_image(self, size: Size = DEFAULT_SIZE, *, scale: float = 1, frame: int | None = None) -> "str | Image":
+        """Draw the figure once: as SVG (``svg``) if it is nothing but shapes, filled and stroked in flat colours,
+        else as the ``Image`` ``render`` gives. A drawing with a clip, a picture, a pattern, a blend mode or a blur
+        comes back as the Image. For a page that nests a drawing as vectors where it can and embeds it as a picture
+        where it cannot, without drawing it twice."""
+        out = engine().render_svg(self._spec(size=size, scale=scale, frame=frame), shapes_only=True)
+        return out if isinstance(out, str) else Image(out)
+
     def save(self, path: str | os.PathLike, size: Size = DEFAULT_SIZE, *, scale: float = 1, frame: int | None = None) -> pathlib.Path:
         """Draw the figure and save it, returning the path. ``.png``, ``.jpg`` and ``.webp`` save an image (``size``,
         ``scale`` and ``frame`` as in ``render``); ``.svg`` saves a vector drawing (see ``svg``). ``.json`` saves the
