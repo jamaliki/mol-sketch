@@ -235,7 +235,8 @@ resi 57+102+195   resi 190-200   resn SER+HIS   name CA+CB   chain A+B   elem C+
 ss H+E   subunit S+L   entity 1+3   and  or  not  ( … )
 ```
 
-for example `hetatm and not water`, `chain A and resi 50-120`, `subunit L`.
+for example `hetatm and not water`, `chain A and resi 50-120`, `subunit L`. Chain IDs are matched as written: a
+large complex can have chains `A` and `a`.
 
 ## Repository layout
 

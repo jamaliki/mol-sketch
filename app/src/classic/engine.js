@@ -520,7 +520,7 @@ function compileSel(str){
       case'resi':case'i.':{const R=listArg().map(s=>{const m=s.match(/^(-?\d+)(?:-(-?\d+))?$/);return m?[+m[1],m[2]!==undefined?+m[2]:+m[1]]:null}).filter(Boolean);return a=>R.some(([lo,hi])=>a.resi>=lo&&a.resi<=hi)}
       case'resn':case'r.':{const S=new Set(listArg().map(s=>s.toUpperCase()));return a=>S.has((a.resn||'').toUpperCase())}
       case'name':case'n.':{const S=new Set(listArg().map(s=>s.toUpperCase()));return a=>S.has((a.name||'').toUpperCase())}
-      case'chain':case'c.':{const S=new Set(listArg().map(s=>s.toUpperCase()));return a=>S.has((a.chain||'').toUpperCase())}
+      case'chain':case'c.':{const S=new Set(listArg());return a=>S.has(a.chain||'')}   // as written: a big complex has chains A and a
       case'elem':case'e.':{const S=new Set(listArg().map(s=>s.toUpperCase()));return a=>S.has(a.el)}
       case'ss':{const S=new Set(listArg().map(s=>s.toUpperCase()));return a=>S.has(a.ss||'L')}
       case'id':{const S=new Set(listArg());return a=>S.has(a.id)}

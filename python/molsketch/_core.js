@@ -3179,7 +3179,7 @@
       let m = 0;
       for (let k = 0; k < nW; k++) {
         const u = nodeOf[WA[k]], v = nodeOf[WB[k]];
-        if (u !== v && comp.id[u] === comp.id[v] && comp.size[comp.id[u]] > 1) {
+        if (comp.id[u] === comp.id[v] && comp.size[comp.id[u]] > 1) {
           WA[m] = WA[k];
           WB[m] = WB[k];
           m++;
@@ -3189,6 +3189,7 @@
       const ins = /* @__PURE__ */ new Map(), outs = /* @__PURE__ */ new Map();
       for (let k = 0; k < nW; k++) {
         const u = nodeOf[WA[k]], v = nodeOf[WB[k]];
+        if (u === v) continue;
         if (nodes[v].piece) {
           let l = ins.get(v);
           if (!l) ins.set(v, l = []);
@@ -3353,8 +3354,9 @@
       ready.set(curG, ready.get(curG) - 1);
       for (const v of succ[pick]) if (--indeg[v] === 0) avail(v);
     }
-    if (out.length < N) for (let id = 0; id < N; id++) if (!done[id]) out.push(id);
-    else mergeRuns(out, G, succ, N);
+    if (out.length < N) {
+      for (let id = 0; id < N; id++) if (!done[id]) out.push(id);
+    } else mergeRuns(out, G, succ, N);
     const at = new Int32Array(N);
     out.forEach((id, k) => {
       at[id] = k;
@@ -4878,9 +4880,10 @@
           }
           case "chain":
           case "c.": {
-            const S = new Set(listArg().map((s) => s.toUpperCase()));
-            return (a) => S.has((a.chain || "").toUpperCase());
+            const S = new Set(listArg());
+            return (a) => S.has(a.chain || "");
           }
+          // as written: a big complex has chains A and a
           case "elem":
           case "e.": {
             const S = new Set(listArg().map((s) => s.toUpperCase()));
@@ -10618,9 +10621,10 @@
         }
         case "chain":
         case "c.": {
-          const S = new Set(listArg().map((v) => v.toUpperCase()));
-          return (s, a) => S.has(R(s, a).chain.toUpperCase());
+          const S = new Set(listArg());
+          return (s, a) => S.has(R(s, a).chain);
         }
+        // as written: a big complex has chains A and a
         case "elem":
         case "e.": {
           const S = new Set(listArg().map((v) => v.toUpperCase()));
@@ -12143,7 +12147,7 @@
     if (!m) throw new Error(`"${q}" names no atom: use an id like TYR32.A:CA or a residue like Tyr32`);
     const [, resn, resi, chain, atom] = m;
     const U2 = (x) => (x || "").toUpperCase();
-    const hits = st.atoms.filter((a) => U2(a.resn) === U2(resn) && String(a.resi) === resi && (!chain || U2(a.chain) === U2(chain)));
+    const hits = st.atoms.filter((a) => U2(a.resn) === U2(resn) && String(a.resi) === resi && (!chain || a.chain === chain));
     if (!hits.length) throw new Error(`no residue ${resn}${resi}${chain ? " in chain " + chain : ""} here`);
     const pick = atom ? hits.find((a) => U2(a.name) === U2(atom)) : hits.find((a) => a.name === "CA") || hits[0];
     if (!pick) throw new Error(`${resn}${resi} has no atom ${atom}; it has ${hits.map((a) => a.name).join(", ")}`);

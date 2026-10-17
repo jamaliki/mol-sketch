@@ -424,3 +424,60 @@ def test_two_files_of_one_name_are_read_as_their_own(tmp_path):
     assert "E" in second and "H" not in second
     # The same file loaded again is read once, and is the same.
     assert _secondary(ms.load(one)) == first
+
+
+# Nine ideal α-helices, Cα atoms only, four in chain A (residues from 1) and five in chain a (from 501): (chain,
+# residues, centre in Å, the axis's tilt from z and turn about it in degrees). One is seen nearly end on.
+HELICES = (("A", 11, (13, 15, 5), 3, 262), ("a", 16, (5, -2, 10), 7, 190), ("A", 15, (-17, -3, 0), 24, 15),
+           ("a", 10, (-9, -10, -7), 151, 183), ("A", 16, (13, -6, 4), 114, 98), ("a", 15, (-7, 15, 17), 146, 251),
+           ("A", 15, (14, 17, -4), 75, 253), ("a", 11, (-11, 11, 4), 21, 100), ("a", 12, (-2, -16, 3), 86, 269))
+
+
+def _helices() -> str:
+    """HELICES as a PDB file"""
+    import math
+    lines, first = [], {"A": 1, "a": 501}
+    for chain, n, centre, tilt, turn in HELICES:
+        t, u = math.radians(tilt), math.radians(turn)
+        axis = (math.sin(t) * math.cos(u), math.sin(t) * math.sin(u), math.cos(t))
+        e1, e2 = (math.cos(t) * math.cos(u), math.cos(t) * math.sin(u), -math.sin(t)), (-math.sin(u), math.cos(u), 0.0)
+        for i in range(n):   # 2.3 Å from the axis, 100° and 1.5 Å a residue
+            a, h = math.radians(100 * i), 1.5 * (i - (n - 1) / 2)
+            x, y, z = (c + 2.3 * math.cos(a) * p + 2.3 * math.sin(a) * q + h * w for c, p, q, w in zip(centre, e1, e2, axis))
+            lines.append(f"ATOM  {len(lines) + 1:5d}  CA  ALA {chain}{first[chain] + i:4d}    {x:8.3f}{y:8.3f}{z:8.3f}  1.00  0.00           C")
+        first[chain] += n + 10
+    return "\n".join(lines) + "\nEND\n"
+
+
+def test_flat_ribbon_cut_where_it_overlaps_itself_is_drawn():
+    """A helix seen nearly end on, small, its turns overlapping each other, and other ribbons in front of one turn and
+    behind another: the flat look cuts the helix's face so the order of the pieces goes round no circle, and the cut
+    falls between two of its faces that overlap. They are an order of their own then; it was not looked at, a circle
+    was left, and the drawing failed (as the human ribosome's did, 6QZP)."""
+    import xml.etree.ElementTree as ET
+    fig = ms.load(_helices(), name="helices", format="pdb").look("flat").show(cartoon="polymer", sticks=None)
+    root = ET.fromstring(fig.svg((200, 200)))
+    ns = "{http://www.w3.org/2000/svg}"
+    assert {g.get("data-chain") for g in root.iter(f"{ns}g") if g.get("data-chain")} == {"A", "a"}
+    assert sum(1 for g in root.iter(f"{ns}g") if g.get("data-ss") == "helix") >= 9
+    assert fig.render((200, 200)).to_numpy()[..., :3].std() > 5
+
+
+def test_chains_named_alike_but_for_case_are_two_chains():
+    """Chain IDs are case-sensitive (mmCIF's auth_asym_id; a ribosome has chains LE and Le): `chain A` selects A
+    alone, as PyMOL and ChimeraX do, for what is drawn and what the view is fitted to; an atom named in chain a is
+    found in a; the two chains are groups of their own in an SVG"""
+    import xml.etree.ElementTree as ET
+    ns, ink = "{http://www.w3.org/2000/svg}", "{http://www.inkscape.org/namespaces/inkscape}"
+    fig = ms.load(_helices(), name="helices", format="pdb").look("flat")
+    assert fig._info()["structure"]["chains"] == ["A", "a"]
+    chains = lambda s: {g.get("id"): (g.get(f"{ink}label"), g.get("data-chain")) for g in ET.fromstring(s).iter(f"{ns}g") if g.get("data-chain")}
+    assert chains(fig.svg(SMALL)) == {"chain-A": ("Chain A", "A"), "chain-a": ("Chain a", "a")}
+    assert chains(fig.copy().show(cartoon="chain A").svg(SMALL)) == {"chain-A": ("Chain A", "A")}
+    assert chains(fig.copy().show(cartoon="chain a").svg(SMALL)) == {"chain-a": ("Chain a", "a")}
+    assert chains(fig.copy().show(cartoon="chain A+a").svg(SMALL)).keys() == {"chain-A", "chain-a"}
+    # the same atoms drawn, the view fitted to the same atoms: chain A is residues 1-200
+    assert np.array_equal(fig.copy().show(cartoon="chain A").render(SMALL).to_numpy(), fig.copy().show(cartoon="resi 1-200").render(SMALL).to_numpy())
+    assert fig.copy().label("x", at="ALA501.a")._labels[-1]["at"] == "ALA501.a:CA"
+    assert fig.copy().label("x", at="ala1.A")._labels[-1]["at"] == "ALA1.A:CA"   # a residue's name in any case
+    with pytest.raises(ms.CoreError, match="no residue ALA1 in chain a"): fig.copy().label("x", at="ALA1.a")

@@ -90,7 +90,8 @@ ss H+E   subunit S+L   entity 1+3   group SER195   id <atom id>
 and  or  not  ( … )
 ```
 
-For example `hetatm and not water`, `chain A and resi 50-120`, `polymer and not hydro`, `subunit L`.
+For example `hetatm and not water`, `chain A and resi 50-120`, `polymer and not hydro`, `subunit L`. Chain IDs are
+matched as written: a large complex can have chains `A` and `a`.
 
 ## Fills and colour
 
