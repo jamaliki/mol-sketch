@@ -348,6 +348,14 @@ as PNG images at `size` × `scale` pixels, so use `scale=2` or more for print. B
 ribbon one curved shape, in groups for each chain, helix, strand, loop and residue (`data-chain`, `data-ss`,
 `data-residues`, `data-resn`, `data-resi`, named for Inkscape's list of objects).
 
+#### `fig.svg_or_image(size=(1920, 1440), *, scale=1, frame=None)`
+
+Draw the figure once, and return it as the SVG `svg` writes if it is nothing but shapes filled and stroked in flat
+colours, or else as the [`Image`](#images) `render` gives. A drawing with a clip, a picture, a pattern, a blend mode or
+a blur (the flat look's hatched surfaces, any watercolour) comes back as the Image. For a page that nests a drawing as
+vectors where it can and embeds it as a picture where it cannot: one drawing either way, where asking for the SVG and
+then the picture drew it twice.
+
 #### `fig.save_frames(directory, frames="drawn", size=(1920, 1440), *, scale=1, workers=None)`
 
 Save frames as numbered PNG files (`frame_0000.png`, `frame_0001.png` …) in `directory`, and return their paths.
