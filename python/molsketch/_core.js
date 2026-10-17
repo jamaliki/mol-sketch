@@ -11735,15 +11735,30 @@
     inputs.delete(ref);
   }
   var parsed2 = /* @__PURE__ */ new Map();
-  function structureOf(text, name) {
-    const key2 = name + "\0" + text.length + "\0" + text.slice(0, 64) + text.slice(-64);
-    let s = parsed2.get(key2);
+  var owned = /* @__PURE__ */ new WeakMap();
+  function structureOf(text, name, owner) {
+    let s = owner ? owned.get(owner) : void 0;
+    if (s) return s;
+    const key2 = name + "\0" + text.length + "\0" + textHash(text);
+    s = parsed2.get(key2);
     if (!s) {
       s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, ""));
       parsed2.set(key2, s);
       if (parsed2.size > 8) parsed2.delete(parsed2.keys().next().value);
     }
+    if (owner) owned.set(owner, s);
     return s;
+  }
+  function textHash(text) {
+    let h1 = 3735928559, h2 = 1103547991;
+    for (let i = 0; i < text.length; i++) {
+      const c = text.charCodeAt(i);
+      h1 = Math.imul(h1 ^ c, 2654435761);
+      h2 = Math.imul(h2 ^ c, 1597334677);
+    }
+    h1 = Math.imul(h1 ^ h1 >>> 16, 2246822507) ^ Math.imul(h2 ^ h2 >>> 13, 3266489909);
+    h2 = Math.imul(h2 ^ h2 >>> 16, 2246822507) ^ Math.imul(h1 ^ h1 >>> 13, 3266489909);
+    return (4294967296 * (2097151 & h2) + (h1 >>> 0)).toString(36);
   }
   var identity = () => new Float32Array([1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
   function setPath(st, path, v) {
@@ -11820,7 +11835,7 @@
   }
   function stackScene(files) {
     files = [...files].sort((a, b) => a.name.localeCompare(b.name, void 0, { numeric: true }));
-    const structs = files.map((f2) => structureOf(f2.text, f2.name));
+    const structs = files.map((f2) => structureOf(f2.text, f2.name, f2));
     const base = pcaBasis(structs[0]);
     const one = structs.length === 1;
     const keyframes2 = structs.map((st) => {
@@ -11865,7 +11880,7 @@
         if (dv.fogStart !== void 0) style.view.fogStart = dv.fogStart;
       }
     } else {
-      structure = structureOf(inp.text, inp.name);
+      structure = structureOf(inp.text, inp.name, inp);
       cam.base = pcaOf(structure);
       if (!structure.residues.some((r) => !r.het)) style.reps = { sticks: "all", cartoon: "", surface: "" };
     }
