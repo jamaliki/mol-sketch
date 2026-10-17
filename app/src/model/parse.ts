@@ -51,17 +51,26 @@ function parsePDB(text: string, hints: OrderHints): Structure[] {
 
 /* ---------------- mmCIF ---------------- */
 interface Cat { cols: string[]; rows: string[][] }
+/* (by character code, not one-character strings: an mmCIF of a ribosome is 4 million values) */
 function tokenize(line: string): string[] {
   const out: string[] = []; let j = 0; const n = line.length;
   while (j < n) {
-    const ch = line[j]; if (ch === ' ' || ch === '\t') { j++; continue }
-    if (ch === "'" || ch === '"') { let k = j + 1; while (k < n && !(line[k] === ch && (k + 1 >= n || line[k + 1] === ' ' || line[k + 1] === '\t'))) k++; out.push(line.substring(j + 1, k)); j = k + 1; continue }
-    let k = j; while (k < n && line[k] !== ' ' && line[k] !== '\t') k++; out.push(line.substring(j, k)); j = k;
+    const ch = line.charCodeAt(j); if (ch === 32 || ch === 9) { j++; continue }   // space, tab
+    if (ch === 39 || ch === 34) {   // ' or ": to the same quote before a space, a tab or the end
+      let k = j + 1; while (k < n) { if (line.charCodeAt(k) === ch) { const c = k + 1 < n ? line.charCodeAt(k + 1) : 32; if (c === 32 || c === 9) break } k++ }
+      out.push(line.substring(j + 1, k)); j = k + 1; continue }
+    let k = j; while (k < n) { const c = line.charCodeAt(k); if (c === 32 || c === 9) break; k++ } out.push(line.substring(j, k)); j = k;
   }
   return out;
 }
+/** the text's lines, without their line ends (\n or \r\n) */
+function linesOf(text: string): string[] {
+  const lines = text.split('\n');   // (a split on one character is V8's fastest)
+  if (text.indexOf('\r') >= 0) for (let i = 0; i < lines.length; i++) { const l = lines[i]; if (l.charCodeAt(l.length - 1) === 13) lines[i] = l.slice(0, -1) }
+  return lines;
+}
 function readCIF(text: string): Record<string, Cat> {
-  const lines = text.split(/\r?\n/); const cats: Record<string, Cat> = {}; let i = 0;
+  const lines = linesOf(text); const cats: Record<string, Cat> = {}; let i = 0;
   while (i < lines.length) {
     let line = lines[i];
     if (line.startsWith('loop_')) {
@@ -73,7 +82,7 @@ function readCIF(text: string): Record<string, Cat> {
         line = lines[i];
         if (line.startsWith('#') || line.startsWith('loop_') || line.startsWith('_') || line.startsWith('data_')) break;
         if (line.startsWith(';')) { let txt = line.substring(1); i++; while (i < lines.length && !lines[i].startsWith(';')) { txt += '\n' + lines[i]; i++ } buf.push(txt); i++ }
-        else { for (const v of tokenize(line)) buf.push(v); i++ }
+        else { const t = tokenize(line); i++; if (!buf.length && t.length === cols.length) { rows.push(t); continue } for (const v of t) buf.push(v) }   // (a row to a line, the usual: as it is)
         while (buf.length >= cols.length) rows.push(buf.splice(0, cols.length));
       }
       if (!cats[cat]) cats[cat] = { cols, rows }; else cats[cat].rows.push(...rows);

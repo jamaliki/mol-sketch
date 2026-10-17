@@ -1190,6 +1190,7 @@
     put: () => put,
     putMap: () => putMap,
     render: () => render,
+    residues: () => residues,
     ribbons: () => ribbons,
     sceneJson: () => sceneJson,
     settle: () => settle
@@ -2165,27 +2166,45 @@
     let j = 0;
     const n = line.length;
     while (j < n) {
-      const ch = line[j];
-      if (ch === " " || ch === "	") {
+      const ch = line.charCodeAt(j);
+      if (ch === 32 || ch === 9) {
         j++;
         continue;
       }
-      if (ch === "'" || ch === '"') {
+      if (ch === 39 || ch === 34) {
         let k2 = j + 1;
-        while (k2 < n && !(line[k2] === ch && (k2 + 1 >= n || line[k2 + 1] === " " || line[k2 + 1] === "	"))) k2++;
+        while (k2 < n) {
+          if (line.charCodeAt(k2) === ch) {
+            const c = k2 + 1 < n ? line.charCodeAt(k2 + 1) : 32;
+            if (c === 32 || c === 9) break;
+          }
+          k2++;
+        }
         out.push(line.substring(j + 1, k2));
         j = k2 + 1;
         continue;
       }
       let k = j;
-      while (k < n && line[k] !== " " && line[k] !== "	") k++;
+      while (k < n) {
+        const c = line.charCodeAt(k);
+        if (c === 32 || c === 9) break;
+        k++;
+      }
       out.push(line.substring(j, k));
       j = k;
     }
     return out;
   }
+  function linesOf(text) {
+    const lines2 = text.split("\n");
+    if (text.indexOf("\r") >= 0) for (let i = 0; i < lines2.length; i++) {
+      const l = lines2[i];
+      if (l.charCodeAt(l.length - 1) === 13) lines2[i] = l.slice(0, -1);
+    }
+    return lines2;
+  }
   function readCIF(text) {
-    const lines2 = text.split(/\r?\n/);
+    const lines2 = linesOf(text);
     const cats = {};
     let i = 0;
     while (i < lines2.length) {
@@ -2215,8 +2234,13 @@
             buf.push(txt);
             i++;
           } else {
-            for (const v of tokenize(line)) buf.push(v);
+            const t = tokenize(line);
             i++;
+            if (!buf.length && t.length === cols.length) {
+              rows.push(t);
+              continue;
+            }
+            for (const v of t) buf.push(v);
           }
           while (buf.length >= cols.length) rows.push(buf.splice(0, cols.length));
         }
@@ -4039,21 +4063,21 @@
         for (const n2 in Kj.atoms) if (!prevOf[n2]) addA(void 0, Kj.atoms[n2], inKey(n2));
       }
       const bonds = [];
-      const Bi = {}, Bj = {};
+      const Bi = /* @__PURE__ */ new Map(), Bj = /* @__PURE__ */ new Map();
       const norm = (b) => Array.isArray(b) ? { a: b[0], b: b[1], order: b[2] ?? 1 } : { a: b.a, b: b.b, order: b.order ?? 1 };
       (Ki.bonds || []).forEach((b) => {
         const o = norm(b);
-        Bi[bkey(o.a, o.b)] = o;
+        Bi.set(bkey(o.a, o.b), o);
       });
       if (isTrans) (Kj.bonds || []).forEach((b) => {
         const o = norm(b);
         o.a = inKey(o.a);
         o.b = inKey(o.b);
-        Bj[bkey(o.a, o.b)] = o;
+        Bj.set(bkey(o.a, o.b), o);
       });
-      const keys = /* @__PURE__ */ new Set([...Object.keys(Bi), ...Object.keys(Bj)]);
+      const keys = Bj.size ? /* @__PURE__ */ new Set([...Bi.keys(), ...Bj.keys()]) : Bi.keys();
       for (const k of keys) {
-        const bi = Bi[k], bj = Bj[k];
+        const bi = Bi.get(k), bj = Bj.get(k);
         const src = bi || bj;
         if (!A[src.a] || !A[src.b]) continue;
         const base = Math.min(A[src.a].alpha, A[src.b].alpha);
@@ -6387,38 +6411,56 @@
       DISC10C.push(Math.cos(an));
       DISC10S.push(Math.sin(an));
     }
-    function hullCandidates(pts) {
-      const ex = [pts[0], pts[0], pts[0], pts[0], pts[0], pts[0], pts[0], pts[0]];
-      for (const p of pts) {
-        const x = p[0], y = p[1];
-        if (x < ex[0][0]) ex[0] = p;
-        if (x + y < ex[1][0] + ex[1][1]) ex[1] = p;
-        if (y < ex[2][1]) ex[2] = p;
-        if (x - y > ex[3][0] - ex[3][1]) ex[3] = p;
-        if (x > ex[4][0]) ex[4] = p;
-        if (x + y > ex[5][0] + ex[5][1]) ex[5] = p;
-        if (y > ex[6][1]) ex[6] = p;
-        if (y - x > ex[7][1] - ex[7][0]) ex[7] = p;
+    let DISCPTS = new Float64Array(0);
+    function discHullPoints(g2) {
+      const n = g2.length * 10;
+      if (DISCPTS.length < 2 * n) DISCPTS = new Float64Array(2 * n);
+      const P = DISCPTS;
+      let j = 0;
+      for (const d of g2) {
+        for (let i = 0; i < 10; i++) {
+          P[j++] = d.x + DISC10C[i] * d.r;
+          P[j++] = d.y + DISC10S[i] * d.r;
+        }
+      }
+      const all = () => {
+        const out2 = [];
+        for (let i = 0; i < n; i++) out2.push([P[2 * i], P[2 * i + 1]]);
+        return out2;
+      };
+      if (n <= 40) return all();
+      const ex = [0, 0, 0, 0, 0, 0, 0, 0];
+      for (let q = 0; q < n; q++) {
+        const x = P[2 * q], y = P[2 * q + 1];
+        if (x < P[2 * ex[0]]) ex[0] = q;
+        if (x + y < P[2 * ex[1]] + P[2 * ex[1] + 1]) ex[1] = q;
+        if (y < P[2 * ex[2] + 1]) ex[2] = q;
+        if (x - y > P[2 * ex[3]] - P[2 * ex[3] + 1]) ex[3] = q;
+        if (x > P[2 * ex[4]]) ex[4] = q;
+        if (x + y > P[2 * ex[5]] + P[2 * ex[5] + 1]) ex[5] = q;
+        if (y > P[2 * ex[6] + 1]) ex[6] = q;
+        if (y - x > P[2 * ex[7] + 1] - P[2 * ex[7]]) ex[7] = q;
       }
       const oct = [];
-      for (const p of ex) if (!oct.length || oct[oct.length - 1] !== p) oct.push(p);
+      for (const q of ex) if (!oct.length || oct[oct.length - 1] !== q) oct.push(q);
       if (oct.length > 1 && oct[0] === oct[oct.length - 1]) oct.pop();
-      if (oct.length < 3) return pts;
+      if (oct.length < 3) return all();
       let area = 0;
       for (let i = 0; i < oct.length; i++) {
         const a = oct[i], b = oct[(i + 1) % oct.length];
-        area += a[0] * b[1] - b[0] * a[1];
+        area += P[2 * a] * P[2 * b + 1] - P[2 * b] * P[2 * a + 1];
       }
-      if (Math.abs(area) < 1e-6) return pts;
+      if (Math.abs(area) < 1e-6) return all();
       const sg = area > 0 ? 1 : -1, eps = 1e-6 * Math.abs(area);
       const out = [];
-      for (const p of pts) {
+      for (let q = 0; q < n; q++) {
+        const px = P[2 * q], py = P[2 * q + 1];
         let inside = true;
         for (let i = 0; i < oct.length && inside; i++) {
           const a = oct[i], b = oct[(i + 1) % oct.length];
-          if (sg * ((b[0] - a[0]) * (p[1] - a[1]) - (b[1] - a[1]) * (p[0] - a[0])) <= eps) inside = false;
+          if (sg * ((P[2 * b] - P[2 * a]) * (py - P[2 * a + 1]) - (P[2 * b + 1] - P[2 * a + 1]) * (px - P[2 * a])) <= eps) inside = false;
         }
-        if (!inside) out.push(p);
+        if (!inside) out.push([px, py]);
       }
       return out;
     }
@@ -6428,26 +6470,23 @@
         const p = pos[a.id];
         return { x: p.x, y: p.y, r: ((VDW[a.el] || 1.7) + probe * 0.55) * proj.pxPerA * p.d * cfg.rep.surfaceScale, z: p.z, d: p.d, fog: p.fog, alpha: a.alpha, a };
       });
-      const groups = {};
+      const groups = /* @__PURE__ */ new Map();
       for (const d of discs) {
         const k = (d.a.chain || "") + "/" + (d.a.resi ?? d.a.id);
-        (groups[k] = groups[k] || []).push(d);
+        let g2 = groups.get(k);
+        if (!g2) groups.set(k, g2 = []);
+        g2.push(d);
       }
       const patches = [];
-      for (const k in groups) {
-        const g2 = groups[k];
-        const pts = [];
+      for (const [k, g2] of groups) {
         let z = 0, px = 0, py = 0, dd = 0;
         for (const d of g2) {
-          for (let i = 0; i < 10; i++) {
-            pts.push([d.x + DISC10C[i] * d.r, d.y + DISC10S[i] * d.r]);
-          }
           z += d.z;
           px += d.x;
           py += d.y;
           dd += d.d;
         }
-        const h = hull(pts.length > 40 ? hullCandidates(pts) : pts);
+        const h = hull(discHullPoints(g2));
         if (h.length < 3) continue;
         patches.push({ h, k, z: z / g2.length, x: px / g2.length, y: py / g2.length, d: dd / g2.length, fog: g2.reduce((s, d) => s + d.fog, 0) / g2.length, alpha: Math.max(...g2.map((d) => d.alpha)), a: g2[0].a });
       }
@@ -7608,22 +7647,41 @@
     }
     function hiddenPatches(patches, W, H, wobble = 0) {
       const w = Math.max(1, Math.ceil(W)), h = Math.max(1, Math.ceil(H)), cov = new Uint8Array(w * h), out = new Uint8Array(patches.length);
-      const span = (q, cx, cy, k, y) => {
+      let SX2 = new Float64Array(64), SY = new Float64Array(64), SN = 0, SLO = 0, SHI = 0, S0 = 0, S1 = 0;
+      const scale = (q, cx, cy, k) => {
+        SN = q.length;
+        if (SX2.length < SN) {
+          SX2 = new Float64Array(2 * SN);
+          SY = new Float64Array(2 * SN);
+        }
+        SLO = Infinity;
+        SHI = -Infinity;
+        for (let i = 0; i < SN; i++) {
+          const a = q[i];
+          SX2[i] = cx + (a[0] - cx) * k;
+          const y = SY[i] = cy + (a[1] - cy) * k;
+          if (y < SLO) SLO = y;
+          if (y > SHI) SHI = y;
+        }
+      };
+      const span = (y) => {
         const yc = y + 0.5;
+        if (yc < SLO || yc > SHI) return false;
         let lo = Infinity, hi = -Infinity;
-        for (let i = 0, n = q.length; i < n; i++) {
-          const a = q[i], b = q[(i + 1) % n];
-          const ay = cy + (a[1] - cy) * k, by = cy + (b[1] - cy) * k;
+        for (let i = 0, n = SN; i < n; i++) {
+          const j = i + 1 === n ? 0 : i + 1;
+          const ay = SY[i], by = SY[j];
           if (ay <= yc && by >= yc || by <= yc && ay >= yc) {
-            const ax = cx + (a[0] - cx) * k, bx = cx + (b[0] - cx) * k;
+            const ax = SX2[i], bx = SX2[j];
             const x = ay === by ? Math.min(ax, bx) : ax + (bx - ax) * (yc - ay) / (by - ay), x2 = ay === by ? Math.max(ax, bx) : x;
             if (x < lo) lo = x;
             if (x2 > hi) hi = x2;
           }
         }
-        if (!(hi >= lo)) return null;
-        const x0 = Math.max(0, Math.ceil(lo - 0.5)), x1 = Math.min(w - 1, Math.floor(hi - 0.5));
-        return x1 >= x0 ? [x0, x1] : null;
+        if (!(hi >= lo)) return false;
+        S0 = Math.max(0, Math.ceil(lo - 0.5));
+        S1 = Math.min(w - 1, Math.floor(hi - 0.5));
+        return S1 >= S0;
       };
       for (let pi = patches.length - 1; pi >= 0; pi--) {
         const p = patches[pi], q = p.h;
@@ -7640,12 +7698,12 @@
         if (r < 1) continue;
         const kOut = 1 + (2 + (0.15 + wobble) * r) / r, kIn = Math.max(0, 1 - (1.5 + wobble * r) / r), R = r * kOut;
         const y0 = Math.max(0, Math.floor(cy - R)), y1 = Math.min(h - 1, Math.ceil(cy + R));
+        scale(q, cx, cy, kOut);
         let seen = false;
         for (let y = y0; y <= y1 && !seen; y++) {
-          const sp = span(q, cx, cy, kOut, y);
-          if (!sp) continue;
+          if (!span(y)) continue;
           const o = y * w;
-          for (let x = sp[0]; x <= sp[1]; x++) if (!cov[o + x]) {
+          for (let x = S0; x <= S1; x++) if (!cov[o + x]) {
             seen = true;
             break;
           }
@@ -7654,10 +7712,12 @@
           if (y1 >= y0) out[pi] = 1;
           continue;
         }
-        if ((p.alpha ?? 1) >= 0.999 && kIn > 0) for (let y = y0; y <= y1; y++) {
-          const sp = span(q, cx, cy, kIn, y);
-          if (!sp) continue;
-          cov.fill(1, y * w + sp[0], y * w + sp[1] + 1);
+        if ((p.alpha ?? 1) >= 0.999 && kIn > 0) {
+          scale(q, cx, cy, kIn);
+          for (let y = y0; y <= y1; y++) {
+            if (!span(y)) continue;
+            cov.fill(1, y * w + S0, y * w + S1 + 1);
+          }
         }
       }
       return out;
@@ -11792,8 +11852,14 @@
     const siteSel = style.site?.sel?.trim();
     const stickSel = siteSel ? style.reps.sticks.trim() ? `(${style.reps.sticks}) or (${siteSel})` : siteSel : style.reps.sticks;
     const key2 = [stickSel, style.reps.cartoon, style.reps.surface].join("\0");
-    const hit = fits.get(s);
-    if (hit && hit.key === key2) return hit.pts;
+    let kept = fits.get(s);
+    if (!kept) fits.set(s, kept = /* @__PURE__ */ new Map());
+    const hit = kept.get(key2);
+    if (hit) {
+      kept.delete(key2);
+      kept.set(key2, hit);
+      return hit;
+    }
     const shown = new Uint8Array(s.count);
     for (const sel of [stickSel, style.reps.cartoon, style.reps.surface]) if (sel && sel.trim()) {
       const m = selectAtoms(s, sel);
@@ -11808,7 +11874,8 @@
       pts[k++] = s.y[i];
       pts[k++] = s.z[i];
     }
-    fits.set(s, { key: key2, pts });
+    kept.set(key2, pts);
+    if (kept.size > 8) kept.delete(kept.keys().next().value);
     return pts;
   }
   var bases0 = /* @__PURE__ */ new WeakMap();
@@ -12107,6 +12174,31 @@
     const labels = f2.labels.map((l) => ({ ...l }));
     const r = labelSite(siteHostOf(f2), labels);
     return { ...r, labels };
+  }
+  function residues(spec) {
+    let inp = spec.input;
+    if (inp.ref !== void 0) {
+      inp = inputs.get(inp.ref);
+      if (!inp) throw new Error(`unknown input ${spec.input.ref}`);
+    }
+    if (typeof inp.text !== "string") return null;
+    const s = structureOf(inp.text, inp.name, inp), R = s.residues, heavy = [];
+    for (const r of R) {
+      let n = 0;
+      for (let i = r.atomStart; i < r.atomEnd; i++) if (s.element[i] !== "H") n++;
+      heavy.push(n);
+    }
+    return {
+      resn: R.map((r) => r.resn),
+      resi: R.map((r) => r.resi),
+      chain: R.map((r) => r.chain),
+      entity: R.map((r) => r.entity || ""),
+      subunit: R.map((r) => r.entity ? r.subunit : ""),
+      het: R.map((r) => r.het ? 1 : 0),
+      ss: R.map((r) => r.ss),
+      atoms: R.map((r) => r.atomEnd - r.atomStart),
+      heavy
+    };
   }
   function sceneJson(spec) {
     const f2 = settle(spec);
