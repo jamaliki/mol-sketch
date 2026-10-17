@@ -265,8 +265,8 @@ Add a label.
 
 - **Pinned to an atom** (`at`): the label moves with the molecule when you turn it. `at` can be a residue
   (`"Tyr32"`, meaning its Cα atom), a residue and an atom (`"Tyr32:OH"`), or a full atom id (`"TYR32.A:CA"`:
-  residue, chain and atom). `offset=(dx, dy)` moves the text away from the atom, in pixels (23 px up by default).
-  Once the text is far enough away, a thin leader line joins it to the atom.
+  residue, chain and atom; the chain as written). `offset=(dx, dy)` moves the text away from the atom, in pixels (23 px
+  up by default). Once the text is far enough away, a thin leader line joins it to the atom.
 - **On the canvas** (`xy`): without `at`, the label sits at `xy=(x, y)`, given as fractions of the width and height.
   By default it is centred near the top.
 
@@ -447,7 +447,7 @@ another size, show `fig.render((w, h))` instead.
 | `resi 57+102+195`, `resi 190-200` | residue numbers, as a list or a range |
 | `resn SER+HIS` | residue names |
 | `name CA+CB` | atom names |
-| `chain A+B` | chains |
+| `chain A+B` | chains, by their IDs as written: `chain A` is not `chain a` |
 | `elem C+N` | elements |
 | `ss H+E` | secondary structure: `H` helix, `E` strand |
 | `subunit S+L` | ribosome subunits (`S` small, `L` large, `T` tRNA/mRNA, `X` other) |

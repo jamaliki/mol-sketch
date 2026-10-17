@@ -35,7 +35,7 @@ export function compileSelection(str: string): Pred {
       case 'resi': case 'i.': { const ranges = listArg().map(v => { const m = v.match(/^(-?\d+)(?:-(-?\d+))?$/); return m ? [+m[1], m[2] !== undefined ? +m[2] : +m[1]] : null }).filter(Boolean) as number[][]; return (s, a) => { const r = R(s, a).resi; return ranges.some(([lo, hi]) => r >= lo && r <= hi) } }
       case 'resn': case 'r.': { const S = new Set(listArg().map(v => v.toUpperCase())); return (s, a) => S.has(R(s, a).resn.toUpperCase()) }
       case 'name': case 'n.': { const S = new Set(listArg().map(v => v.toUpperCase())); return (s, a) => S.has(s.atomName[a].toUpperCase()) }
-      case 'chain': case 'c.': { const S = new Set(listArg().map(v => v.toUpperCase())); return (s, a) => S.has(R(s, a).chain.toUpperCase()) }
+      case 'chain': case 'c.': { const S = new Set(listArg()); return (s, a) => S.has(R(s, a).chain) }   // as written: a big complex has chains A and a
       case 'elem': case 'e.': { const S = new Set(listArg().map(v => v.toUpperCase())); return (s, a) => S.has(s.element[a]) }
       case 'ss': { const S = new Set(listArg().map(v => v.toUpperCase())); return (s, a) => S.has(R(s, a).ss) }
       default: return () => false;

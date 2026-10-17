@@ -288,7 +288,8 @@ export function paintFlat(ctx, items, W, H) {
   for (let i = 0; i < n0; i++) if (!items[i].face) { nodeOf[i] = nodes.length; nodes.push({ item: i }) }
   // ---- split pieces until their order has no circles ----
   // Splitting a piece can only make circles inside the knot of pieces it was in: each round looks again only at the pairs
-  // within a knot of the last
+  // within a knot of the last, two faces of one of its pieces among them (a helix seen end on, its turns over one
+  // another): no order while they are one piece, they are one once it is cut between them, and can close a circle
   const nP = PA.length, to = new Int32Array(nP), nxt = new Int32Array(nP);
   let WA = Int32Array.from(PA), WB = Int32Array.from(PB), nW = nP;
   const range = l => { let lo = Infinity, hi = -Infinity; for (const v of l) { if (v < lo) lo = v; if (v > hi) hi = v } return [lo, hi] };
@@ -296,12 +297,12 @@ export function paintFlat(ctx, items, W, H) {
     const N = nodes.length, head = new Int32Array(N).fill(-1); let ne = 0;
     for (let k = 0; k < nW; k++) { const u = nodeOf[WA[k]], v = nodeOf[WB[k]]; if (u !== v) { to[ne] = v; nxt[ne] = head[u]; head[u] = ne++ } }
     const comp = scc(N, head, nxt, to); if (!comp.many) break;
-    let m = 0;   // the pairs left: those within a knot
-    for (let k = 0; k < nW; k++) { const u = nodeOf[WA[k]], v = nodeOf[WB[k]]; if (u !== v && comp.id[u] === comp.id[v] && comp.size[comp.id[u]] > 1) { WA[m] = WA[k]; WB[m] = WB[k]; m++ } }
+    let m = 0;   // the pairs left: those within a knot, a piece's own among them
+    for (let k = 0; k < nW; k++) { const u = nodeOf[WA[k]], v = nodeOf[WB[k]]; if (comp.id[u] === comp.id[v] && comp.size[comp.id[u]] > 1) { WA[m] = WA[k]; WB[m] = WB[k]; m++ } }
     nW = m;
     // in each knot, the largest piece that something enters at one face and leaves at another is cut between them
     const ins = new Map(), outs = new Map();
-    for (let k = 0; k < nW; k++) { const u = nodeOf[WA[k]], v = nodeOf[WB[k]];
+    for (let k = 0; k < nW; k++) { const u = nodeOf[WA[k]], v = nodeOf[WB[k]]; if (u === v) continue;
       if (nodes[v].piece) { let l = ins.get(v); if (!l) ins.set(v, l = []); l.push(items[WB[k]].face.i) }
       if (nodes[u].piece) { let l = outs.get(u); if (!l) outs.set(u, l = []); l.push(items[WA[k]].face.i) } }
     const best = new Map();
@@ -364,7 +365,7 @@ export function paintFlat(ctx, items, W, H) {
     done[pick] = 1; out.push(pick); curG = G[pick]; curC = Cc[pick]; left.set(curG, left.get(curG) - 1); ready.set(curG, ready.get(curG) - 1);
     for (const v of succ[pick]) if (--indeg[v] === 0) avail(v);
   }
-  if (out.length < N) for (let id = 0; id < N; id++) if (!done[id]) out.push(id);   // (a circle left: drawn as it falls)
+  if (out.length < N) { for (let id = 0; id < N; id++) if (!done[id]) out.push(id) }   // (a circle left: drawn as it falls)
   else mergeRuns(out, G, succ, N);
   const at = new Int32Array(N); out.forEach((id, k) => { at[id] = k });
   // ---- draw, opening and closing the groups as the order goes in and out of them ----

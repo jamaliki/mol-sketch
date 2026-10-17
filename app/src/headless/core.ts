@@ -294,14 +294,15 @@ export const catalog = () => ({
 export const ribbons = (name: string, paper: string, ink: string) => { const p = GROUP_PALETTES[name]; if (!p) throw new Error(`unknown palette "${name}"`); return ribbonColours(p.colors, paper, ink) };
 
 /** an atom id from a friendly name: an exact id ("TYR32.A:CA"), a residue ("Tyr32", "TYR32.A": its CA, else its first
-    atom), or a residue and atom ("Tyr32:OH"); case does not matter */
+    atom), or a residue and atom ("Tyr32:OH"); the residue's and the atom's names in any case, the chain's as written
+    (a big complex has chains A and a) */
 export function atomId(spec: FigureSpec, q: string): string {
   const f = settle(spec); const E = engineFor(f); const { st } = E.projectFrame(f.W, f.H, f.frame); const ids: string[] = st.atoms.map((a: any) => a.id);
   if (ids.includes(q)) return q;
   const m = /^\s*([A-Za-z]+)\s*(-?\d+)(?:\.([A-Za-z0-9]+))?(?::(\S+))?\s*$/.exec(q);
   if (!m) throw new Error(`"${q}" names no atom: use an id like TYR32.A:CA or a residue like Tyr32`);
   const [, resn, resi, chain, atom] = m; const U = (x?: string) => (x || '').toUpperCase();
-  const hits = st.atoms.filter((a: any) => U(a.resn) === U(resn) && String(a.resi) === resi && (!chain || U(a.chain) === U(chain)));
+  const hits = st.atoms.filter((a: any) => U(a.resn) === U(resn) && String(a.resi) === resi && (!chain || a.chain === chain));
   if (!hits.length) throw new Error(`no residue ${resn}${resi}${chain ? ' in chain ' + chain : ''} here`);
   const pick = atom ? hits.find((a: any) => U(a.name) === U(atom)) : hits.find((a: any) => a.name === 'CA') || hits[0];
   if (!pick) throw new Error(`${resn}${resi} has no atom ${atom}; it has ${hits.map((a: any) => a.name).join(', ')}`);

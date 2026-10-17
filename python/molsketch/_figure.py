@@ -224,8 +224,9 @@ class Figure:
 
         With ``at``, the label is pinned to an atom and moves with the molecule when you turn it. ``at`` can be a
         residue (``"Tyr32"``, which means its Cα atom), a residue and an atom (``"Tyr32:OH"``), or a full atom id
-        (``"TYR32.A:CA"``, residue, chain and atom). ``offset=(dx, dy)`` moves the text away from the atom, in pixels
-        (default 23 px up); once the text is far enough away, a leader line joins it to the atom.
+        (``"TYR32.A:CA"``, residue, chain and atom; the chain as written). ``offset=(dx, dy)`` moves the text away
+        from the atom, in pixels (default 23 px up); once the text is far enough away, a leader line joins it to the
+        atom.
 
         Without ``at``, the label sits on the canvas at ``xy=(x, y)``, given as fractions of the width and height
         (default: centred, near the top). ``size`` scales the text (1 is the style's label size)."""
