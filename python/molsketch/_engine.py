@@ -176,8 +176,10 @@ class Engine:
             # a structure's text handed to V8 as a string: as JSON in a call (escaped twice, then parsed as a script and
             # again as JSON) a ribosome's 25 MB of mmCIF took 0.2 s, as a string 10 ms
             with self._lock:
-                if self._put_text is None: self._put_text = self.v8.eval("(ref, name, text) => MolSketchCore.put(ref, { text, name })")
-                try: self._put_text(ref, str(value["name"]), value["text"])
+                # (with the text's hash, worked out here in C, which the core keys what it read by: its own would be a
+                # pass over every character)
+                if self._put_text is None: self._put_text = self.v8.eval("(ref, name, text, hash) => MolSketchCore.put(ref, { text, name, hash })")
+                try: self._put_text(ref, str(value["name"]), value["text"], format(hash(value["text"]) & 0xFFFFFFFFFFFFFFFF, "x"))
                 except Exception as e: raise CoreError(_js_message(e)) from None
             return ref
         self.call("put", ref, value)

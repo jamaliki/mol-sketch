@@ -56,16 +56,24 @@ function keyframeOf(s: Structure, rot: (x: number, y: number, z: number) => numb
   const atoms: Record<string, any> = {}; const ids: string[] = [];
   for (const res of s.residues) {
     const chain = res.chain ? '.' + res.chain : '';
+    const group = res.resn + res.resi + chain, pre = group + ':';   // (once a residue, not once an atom)
     for (let i = res.atomStart; i < res.atomEnd; i++) {
-      const name = s.atomName[i]; const id = `${res.resn}${res.resi}${chain}:${name}`; ids.push(id);
-      const a: any = { el: s.element[i], pos: rot(s.x[i], s.y[i], s.z[i]), resn: res.resn, resi: res.resi, chain: res.chain, name, het: !!res.het, group: res.resn + res.resi + chain, ss: res.ss };
+      const name = s.atomName[i]; const id = pre + name; ids.push(id);
+      const a: any = { el: s.element[i], pos: rot(s.x[i], s.y[i], s.z[i]), resn: res.resn, resi: res.resi, chain: res.chain, name, het: !!res.het, group, ss: res.ss };
       if (res.nucleic) a.nucleic = true; if (res.entity) { a.entity = res.entity; a.subunit = res.subunit }
       if (i === res.trace) { a.trace = true; if (!res.het) { a.label = res.resn + res.resi; a.labelDir = [0.7, -0.7]; a.labelAuto = true; if (!res.nucleic && name === 'CA') a.sphere = true } }
       atoms[id] = a;
     }
   }
-  const bonds: [string, string, number][] = []; for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], s.bondOrder[b >> 1] || 1]);   // orders as read (bondorder.ts)
-  return { kf: { name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }, ids };
+  // its bonds, by its atoms' ids, when first asked for: a drawing of only a surface or a cartoon never asks, and a
+  // ribosome's would be 230,000 of them (set, they are the ones set; the keys keep their order)
+  let bonds: [string, string, number][] | null = null;
+  const kf: any = { name: s.name, hold: 24, transition: 0, atoms };
+  Object.defineProperty(kf, 'bonds', { enumerable: true, configurable: true, set(v) { bonds = v },
+    get() { if (!bonds) { bonds = []; const B = s.bonds, O = s.bondOrder; for (let b = 0; b < B.length; b += 2) bonds.push([ids[B[b]], ids[B[b + 1]], O[b >> 1] || 1]) }   // orders as read (bondorder.ts)
+      return bonds } });
+  kf.arrows = [];
+  return { kf, ids };
 }
 
 /** Draw the current structure with the classic engine onto a 2D context of the renderer's pixel size. Returns ms. */

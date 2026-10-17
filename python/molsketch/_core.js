@@ -1220,25 +1220,63 @@
       __publicField(this, "serial");
       __publicField(this, "residues", []);
       __publicField(this, "chains", []);
-      __publicField(this, "bonds", new Int32Array(0));
-      // pairs
-      /** each bond's order (1, 2 or 3), one per pair in `bonds`: set by assignBondOrders (bondorder.ts); empty is all single */
-      __publicField(this, "bondOrder", new Uint8Array(0));
+      __publicField(this, "_bonds", new Int32Array(0));
+      __publicField(this, "_bondOrder", new Uint8Array(0));
+      __publicField(this, "_settleBonds", null);
       __publicField(this, "entities", {});
       __publicField(this, "center", [0, 0, 0]);
       __publicField(this, "radius", 1);
+    }
+    /** pairs. A structure read from a file works them out the first time they are asked for (deferBonds): most drawings
+        of a large one (its surface, its cartoon) never ask, and a ribosome's 230,000 would take a sixth of a second */
+    get bonds() {
+      this.bondsNow();
+      return this._bonds;
+    }
+    set bonds(v) {
+      this._settleBonds = null;
+      this._bonds = v;
+    }
+    /** each bond's order (1, 2 or 3), one per pair in `bonds`: set by assignBondOrders (bondorder.ts); empty is all single */
+    get bondOrder() {
+      this.bondsNow();
+      return this._bondOrder;
+    }
+    set bondOrder(v) {
+      this._settleBonds = null;
+      this._bondOrder = v;
+    }
+    /** the bonds are worked out by `f` when they are first asked for (setting them first does away with it) */
+    deferBonds(f2) {
+      this._settleBonds = f2;
+    }
+    bondsNow() {
+      const f2 = this._settleBonds;
+      if (f2) {
+        this._settleBonds = null;
+        f2();
+      }
     }
     static fromRecords(recs, ss, entities, chainEntity) {
       const s = new _Structure();
       const key2 = (r) => r.chain + "/" + r.resi + "/" + r.resn + "/" + (r.het ? 1 : 0);
       const order = /* @__PURE__ */ new Map();
+      let last = null, lg = null;
       for (const r of recs) {
-        let g2 = order.get(key2(r));
+        if (last && lg && r.chain === last.chain && r.resi === last.resi && r.resn === last.resn && r.het === last.het) {
+          lg.push(r);
+          last = r;
+          continue;
+        }
+        const k = key2(r);
+        let g2 = order.get(k);
         if (!g2) {
           g2 = [];
-          order.set(key2(r), g2);
+          order.set(k, g2);
         }
         g2.push(r);
+        last = r;
+        lg = g2;
       }
       const groups = [...order.values()];
       const atom = (g2, nm) => g2?.find((a) => a.name === nm);
@@ -1722,10 +1760,10 @@
       if (el[j] === "O" && hc[j] === 0 && heavyDegree(c, j) === 1) free.push([j, g2.bond[q]]);
     }
     if (deg !== 4 || !free.length || free.some(([, k]) => orders[k] > 1)) return -1;
-    const pick = names.map((nm) => free.find(([j]) => s.atomName[j] === nm)).find((f2) => f2) ?? byName(s, p, free)[0];
-    if (dist(s, p, pick[0]) > 1.62) return -1;
-    orders[pick[1]] = 2;
-    return pick[0];
+    const pick2 = names.map((nm) => free.find(([j]) => s.atomName[j] === nm)).find((f2) => f2) ?? byName(s, p, free)[0];
+    if (dist(s, p, pick2[0]) > 1.62) return -1;
+    orders[pick2[1]] = 2;
+    return pick2[0];
   }
   function byName(s, c, free) {
     const L = (o) => dist(s, c, o[0]);
@@ -2096,8 +2134,10 @@
     const out = /^\s*data_/.test(text) || text.indexOf("_atom_site.") >= 0 ? parseCIF(text, hints) : parsePDB(text, hints);
     for (const s of out) {
       s.name = name;
-      s.inferBonds();
-      assignBondOrders(s, hints);
+      s.deferBonds(() => {
+        s.inferBonds();
+        assignBondOrders(s, hints);
+      });
     }
     return out;
   }
@@ -2195,6 +2235,88 @@
     }
     return out;
   }
+  function pick(line, want, out, val) {
+    let j = 0, k = 0;
+    const n = line.length;
+    while (j < n) {
+      const ch = line.charCodeAt(j);
+      if (ch === 32 || ch === 9) {
+        j++;
+        continue;
+      }
+      if (ch === 39 || ch === 34) {
+        let e2 = j + 1;
+        while (e2 < n) {
+          if (line.charCodeAt(e2) === ch) {
+            const c = e2 + 1 < n ? line.charCodeAt(e2 + 1) : 32;
+            if (c === 32 || c === 9) break;
+          }
+          e2++;
+        }
+        if (want[k]) {
+          out[k] = line.substring(j + 1, e2);
+          val[k] = NaN;
+        }
+        k++;
+        j = e2 + 1;
+        continue;
+      }
+      let e = j;
+      while (e < n) {
+        const c = line.charCodeAt(e);
+        if (c === 32 || c === 9) break;
+        e++;
+      }
+      const w = want[k];
+      if (w === 2) {
+        const v = decimal(line, j, e);
+        if (v === v) val[k] = v;
+        else {
+          val[k] = NaN;
+          out[k] = line.substring(j, e);
+        }
+      } else if (w) out[k] = line.substring(j, e);
+      k++;
+      j = e;
+    }
+    return k;
+  }
+  var TEN = [1, 10, 100, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15];
+  function decimal(line, j, e) {
+    let i = j, neg = false;
+    const c0 = line.charCodeAt(i);
+    if (c0 === 45) {
+      neg = true;
+      i++;
+    } else if (c0 === 43) i++;
+    let m = 0, digits = 0, frac = -1;
+    for (; i < e; i++) {
+      const c = line.charCodeAt(i);
+      if (c >= 48 && c <= 57) {
+        m = m * 10 + (c - 48);
+        digits++;
+        if (frac >= 0) frac++;
+      } else if (c === 46 && frac < 0) frac = 0;
+      else return NaN;
+    }
+    if (digits === 0 || digits > 15) return NaN;
+    const v = frac > 0 ? m / TEN[frac] : m;
+    return neg ? -v : v;
+  }
+  function rowsOf(lines2, n) {
+    const rows = [];
+    const buf = [];
+    for (const line of lines2) {
+      const t = tokenize(line);
+      if (!buf.length && t.length === n) {
+        rows.push(t);
+        continue;
+      }
+      for (const v of t) buf.push(v);
+      while (buf.length >= n) rows.push(buf.splice(0, n));
+    }
+    return rows;
+  }
   function linesOf(text) {
     const lines2 = text.split("\n");
     if (text.indexOf("\r") >= 0) for (let i = 0; i < lines2.length; i++) {
@@ -2221,6 +2343,23 @@
         const cols = names.map((nm) => nm.split(".")[1]);
         const rows = [];
         let buf = [];
+        if (cat === "_atom_site" && !cats[cat]) {
+          const from = i;
+          let plain = true;
+          for (; i < lines2.length; i++) {
+            const l = lines2[i];
+            if (l.startsWith("#") || l.startsWith("loop_") || l.startsWith("_") || l.startsWith("data_")) break;
+            if (l.startsWith(";")) {
+              plain = false;
+              break;
+            }
+          }
+          if (plain) {
+            cats[cat] = { cols, rows, lines: lines2.slice(from, i) };
+            continue;
+          }
+          i = from;
+        }
         while (i < lines2.length) {
           line = lines2[i];
           if (line.startsWith("#") || line.startsWith("loop_") || line.startsWith("_") || line.startsWith("data_")) break;
@@ -2299,7 +2438,23 @@
     const ci = (n) => AS.cols.indexOf(n);
     const ix = { grp: ci("group_PDB"), id: ci("id"), el: ci("type_symbol"), name: ci("label_atom_id"), alt: ci("label_alt_id"), resn: ci("label_comp_id"), asym: ci("label_asym_id"), auth_asym: ci("auth_asym_id"), seq: ci("label_seq_id"), auth_seq: ci("auth_seq_id"), x: ci("Cartn_x"), y: ci("Cartn_y"), z: ci("Cartn_z"), model: ci("pdbx_PDB_model_num"), b: ci("B_iso_or_equiv") };
     const models = /* @__PURE__ */ new Map();
-    for (const r of AS.rows) {
+    let row = [], val = null;
+    const num = (k) => {
+      if (val) {
+        const v = val[k];
+        if (v === v) return v;
+      }
+      return +row[k];
+    };
+    const real = (k) => {
+      if (val) {
+        const v = val[k];
+        if (v === v) return v;
+      }
+      return parseFloat(row[k]);
+    };
+    const atom = (r) => {
+      row = r;
       const m = ix.model >= 0 ? r[ix.model] : "1";
       let M = models.get(m);
       if (!M) {
@@ -2307,7 +2462,7 @@
         models.set(m, M);
       }
       const alt = ix.alt >= 0 ? r[ix.alt] : ".";
-      if (alt && alt !== "." && alt !== "?" && alt !== "A") continue;
+      if (alt && alt !== "." && alt !== "?" && alt !== "A") return;
       const name = r[ix.name], resn = r[ix.resn];
       const chain = (ix.auth_asym >= 0 ? r[ix.auth_asym] : r[ix.asym]) || "";
       let seqS = ix.auth_seq >= 0 ? r[ix.auth_seq] : r[ix.seq];
@@ -2315,8 +2470,30 @@
       let el = (ix.el >= 0 ? r[ix.el] : "").toUpperCase();
       if (!el || el === "." || el === "?") el = elementFromName(name);
       const het = (ix.grp >= 0 ? r[ix.grp] : "ATOM") === "HETATM" || resn === "HOH";
-      M.push({ serial: +r[ix.id], name, el, resn, chain, resi: parseInt(seqS), x: +r[ix.x], y: +r[ix.y], z: +r[ix.z], het, b: ix.b >= 0 ? parseFloat(r[ix.b]) : NaN });
+      M.push({ serial: num(ix.id), name, el, resn, chain, resi: parseInt(seqS), x: num(ix.x), y: num(ix.y), z: num(ix.z), het, b: ix.b >= 0 ? real(ix.b) : NaN });
+    };
+    if (AS.lines) {
+      const n = AS.cols.length, want = new Uint8Array(n), r = new Array(n).fill(""), v = new Float64Array(n).fill(NaN);
+      let ok = true;
+      for (const k of Object.values(ix)) if (k >= 0) want[k] = 1;
+      for (const k of [ix.id, ix.x, ix.y, ix.z, ix.b]) if (k >= 0) want[k] = 2;
+      val = v;
+      for (const line of AS.lines) {
+        const got = pick(line, want, r, v);
+        if (got === 0) continue;
+        if (got !== n) {
+          ok = false;
+          break;
+        }
+        atom(r);
+      }
+      val = null;
+      if (!ok) {
+        models.clear();
+        for (const row2 of rowsOf(AS.lines, n)) atom(row2);
+      }
     }
+    for (const r of AS.rows) atom(r);
     const H = [], E = [];
     const SC = cats["_struct_conf"];
     if (SC) {
@@ -3353,9 +3530,9 @@
     for (let id = 0; id < N; id++) if (!indeg[id]) avail(id);
     let curG = null, curC = null;
     while (out.length < N) {
-      let pick = -1;
+      let pick2 = -1;
       const hg = curG !== null ? groups.get(curG) : null;
-      if (hg && clean(hg)) pick = hg.pop();
+      if (hg && clean(hg)) pick2 = hg.pop();
       else {
         let g2 = curC !== null && chains.get(curC) ? choose(chains.get(curC)) : null;
         if (g2 === null) {
@@ -3363,20 +3540,20 @@
           for (const st of chains.values()) for (const x of st) any.add(x);
           g2 = choose(any);
         }
-        if (g2 !== null) pick = groups.get(g2).pop();
+        if (g2 !== null) pick2 = groups.get(g2).pop();
       }
-      if (pick < 0) {
+      if (pick2 < 0) {
         while (all.size && done[all.top()]) all.pop();
         if (!all.size) break;
-        pick = all.pop();
+        pick2 = all.pop();
       }
-      done[pick] = 1;
-      out.push(pick);
-      curG = G[pick];
-      curC = Cc[pick];
+      done[pick2] = 1;
+      out.push(pick2);
+      curG = G[pick2];
+      curC = Cc[pick2];
       left.set(curG, left.get(curG) - 1);
       ready.set(curG, ready.get(curG) - 1);
-      for (const v of succ[pick]) if (--indeg[v] === 0) avail(v);
+      for (const v of succ[pick2]) if (--indeg[v] === 0) avail(v);
     }
     if (out.length < N) {
       for (let id = 0; id < N; id++) if (!done[id]) out.push(id);
@@ -3963,6 +4140,7 @@
       if (!q0 || !q1) return lerp3(p0, p1, t);
       return lerp3(q0, q1, f2);
     }
+    const NONE = Object.freeze([]);
     let SAMPLED = { k: null, rev: null, st: null };
     function sampleState(frame) {
       const K = scene.keyframes.length === 1 ? scene.keyframes[0] : null;
@@ -4032,10 +4210,8 @@
           }
         } else if (a) {
           const to = a.exitTo || (Ki.exitDir ? [a.pos[0] + Ki.exitDir[0], a.pos[1] + Ki.exitDir[1], a.pos[2] + Ki.exitDir[2]] : a.pos);
-          o = { id, el: a.el, pos: isTrans ? lerp3(a.pos, to, tm) : a.pos, alpha: (a.opacity ?? 1) * (isTrans ? 1 - tm : 1), r: a.r, color: a.color, label: a.label, labelDir: a.labelDir, labelAuto: a.labelAuto, charges: [], lps: [] };
-          const c = chargeText(a.charge);
-          if (c) o.charges.push({ text: c, alpha: 1 });
-          (a.lp || []).forEach((d) => o.lps.push({ dir: d, alpha: 1 }));
+          const c = chargeText(a.charge), lp = a.lp;
+          o = { id, el: a.el, pos: isTrans ? lerp3(a.pos, to, tm) : a.pos, alpha: (a.opacity ?? 1) * (isTrans ? 1 - tm : 1), r: a.r, color: a.color, label: a.label, labelDir: a.labelDir, labelAuto: a.labelAuto, charges: c ? [{ text: c, alpha: 1 }] : NONE, lps: lp && lp.length ? lp.map((d) => ({ dir: d, alpha: 1 })) : NONE };
         } else {
           const from = b.enterFrom || (Kj.enterDir ? [b.pos[0] + Kj.enterDir[0], b.pos[1] + Kj.enterDir[1], b.pos[2] + Kj.enterDir[2]] : b.pos);
           o = { id, el: b.el, pos: lerp3(from, b.pos, tm), alpha: (b.opacity ?? 1) * tm, r: b.r, color: b.color, label: b.label, labelDir: b.labelDir, labelAuto: b.labelAuto, charges: [], lps: [] };
@@ -4064,39 +4240,44 @@
       if (isTrans) {
         for (const n2 in Kj.atoms) if (!prevOf[n2]) addA(void 0, Kj.atoms[n2], inKey(n2));
       }
-      const bonds = [];
-      const Bi = /* @__PURE__ */ new Map(), Bj = /* @__PURE__ */ new Map();
-      const norm = (b) => Array.isArray(b) ? { a: b[0], b: b[1], order: b[2] ?? 1 } : { a: b.a, b: b.b, order: b.order ?? 1 };
-      (Ki.bonds || []).forEach((b) => {
-        const o = norm(b);
-        Bi.set(bkey(o.a, o.b), o);
-      });
-      if (isTrans) (Kj.bonds || []).forEach((b) => {
-        const o = norm(b);
-        o.a = inKey(o.a);
-        o.b = inKey(o.b);
-        Bj.set(bkey(o.a, o.b), o);
-      });
-      const keys = Bj.size ? /* @__PURE__ */ new Set([...Bi.keys(), ...Bj.keys()]) : Bi.keys();
-      for (const k of keys) {
-        const bi = Bi.get(k), bj = Bj.get(k);
-        const src = bi || bj;
-        if (!A[src.a] || !A[src.b]) continue;
-        const base = Math.min(A[src.a].alpha, A[src.b].alpha);
-        if (bi && bj) {
-          if (bi.order === bj.order) bonds.push({ a: bi.a, b: bi.b, order: bi.order, alpha: base, partial: 0 });
-          else if (bi.order === 0 || bj.order === 0) {
-            bonds.push({ a: bi.a, b: bi.b, order: bi.order, alpha: base * (1 - tm), partial: 0 });
-            bonds.push({ a: bj.a, b: bj.b, order: bj.order, alpha: base * tm, partial: 0 });
-          } else bonds.push({ a: bi.a, b: bi.b, order: lerp(bi.order, bj.order, tm), alpha: base, partial: 0 });
-        } else if (bi) {
-          const whole = isTrans && !nextOf[bi.a] && !nextOf[bi.b];
-          bonds.push({ a: bi.a, b: bi.b, order: bi.order, alpha: base, partial: isTrans && !whole ? 1 - tm : 0 });
-        } else {
-          const whole = !nextOf[bj.a] && !nextOf[bj.b];
-          bonds.push({ a: bj.a, b: bj.b, order: bj.order, alpha: base, partial: whole ? 0 : tm });
+      let BONDS = null;
+      const bondsNow = () => {
+        if (BONDS) return BONDS;
+        const bonds = [];
+        const Bi = /* @__PURE__ */ new Map(), Bj = /* @__PURE__ */ new Map();
+        const norm = (b) => Array.isArray(b) ? { a: b[0], b: b[1], order: b[2] ?? 1 } : { a: b.a, b: b.b, order: b.order ?? 1 };
+        (Ki.bonds || []).forEach((b) => {
+          const o = norm(b);
+          Bi.set(bkey(o.a, o.b), o);
+        });
+        if (isTrans) (Kj.bonds || []).forEach((b) => {
+          const o = norm(b);
+          o.a = inKey(o.a);
+          o.b = inKey(o.b);
+          Bj.set(bkey(o.a, o.b), o);
+        });
+        const keys = Bj.size ? /* @__PURE__ */ new Set([...Bi.keys(), ...Bj.keys()]) : Bi.keys();
+        for (const k of keys) {
+          const bi = Bi.get(k), bj = Bj.get(k);
+          const src = bi || bj;
+          if (!A[src.a] || !A[src.b]) continue;
+          const base = Math.min(A[src.a].alpha, A[src.b].alpha);
+          if (bi && bj) {
+            if (bi.order === bj.order) bonds.push({ a: bi.a, b: bi.b, order: bi.order, alpha: base, partial: 0 });
+            else if (bi.order === 0 || bj.order === 0) {
+              bonds.push({ a: bi.a, b: bi.b, order: bi.order, alpha: base * (1 - tm), partial: 0 });
+              bonds.push({ a: bj.a, b: bj.b, order: bj.order, alpha: base * tm, partial: 0 });
+            } else bonds.push({ a: bi.a, b: bi.b, order: lerp(bi.order, bj.order, tm), alpha: base, partial: 0 });
+          } else if (bi) {
+            const whole = isTrans && !nextOf[bi.a] && !nextOf[bi.b];
+            bonds.push({ a: bi.a, b: bi.b, order: bi.order, alpha: base, partial: isTrans && !whole ? 1 - tm : 0 });
+          } else {
+            const whole = !nextOf[bj.a] && !nextOf[bj.b];
+            bonds.push({ a: bj.a, b: bj.b, order: bj.order, alpha: base, partial: whole ? 0 : tm });
+          }
         }
-      }
+        return BONDS = bonds;
+      };
       let capA = Ki.caption || "", capAa = 1, capB = "", capBa = 0;
       if (isTrans) {
         capAa = 1 - smooth((t - 0.5) / 0.22);
@@ -4119,7 +4300,11 @@
         return out.filter((e) => e.alpha > 4e-3);
       };
       const orbs = carry(Ki.orbitals, Kj.orbitals), meas = carry(Ki.measures, Kj.measures);
-      return { atoms, A, bonds, orbs, meas, arrows: Ki.arrows || [], arrowProg, arrowAlpha, kf: seg.kf, t, isTrans, captions: [{ text: capA, alpha: capAa }, { text: capB, alpha: capBa }], stepIdx: seg.kf, stepName: Ki.name || "step " + (seg.kf + 1) };
+      return { atoms, A, get bonds() {
+        return bondsNow();
+      }, set bonds(v) {
+        BONDS = v;
+      }, orbs, meas, arrows: Ki.arrows || [], arrowProg, arrowAlpha, kf: seg.kf, t, isTrans, captions: [{ text: capA, alpha: capAa }, { text: capB, alpha: capBa }], stepIdx: seg.kf, stepName: Ki.name || "step " + (seg.kf + 1) };
     }
     let FIT = { cx: 0, cy: 0, cz: 0, rx: 0, ry: 0, spanX: 10, spanY: 10, zspan: 4, key: "" };
     function rot3(p, cy, sy, cp, sp) {
@@ -6474,11 +6659,20 @@
         return { x: p.x, y: p.y, r: ((VDW[a.el] || 1.7) + probe * 0.55) * proj.pxPerA * p.d * cfg.rep.surfaceScale, z: p.z, d: p.d, fog: p.fog, alpha: a.alpha, a };
       });
       const groups = /* @__PURE__ */ new Map();
+      let lc, lr, lg = null;
       for (const d of discs) {
-        const k = (d.a.chain || "") + "/" + (d.a.resi ?? d.a.id);
+        const c = d.a.chain, r = d.a.resi ?? d.a.id;
+        if (lg && c === lc && r === lr) {
+          lg.push(d);
+          continue;
+        }
+        const k = (c || "") + "/" + r;
         let g2 = groups.get(k);
         if (!g2) groups.set(k, g2 = []);
         g2.push(d);
+        lc = c;
+        lr = r;
+        lg = g2;
       }
       const patches = [];
       for (const [k, g2] of groups) {
@@ -9736,7 +9930,7 @@
         }
       }
       const stickIds = new Set(stickAtoms.map((a) => a.id));
-      const stickBonds = st.bonds.filter((b) => stickIds.has(b.a) && stickIds.has(b.b));
+      const stickBonds = stickIds.size ? st.bonds.filter((b) => stickIds.has(b.a) && stickIds.has(b.b)) : [];
       const surfAtoms = reps.surface && reps.surface.trim() ? st.atoms.filter((a) => selF(a) && (SH.H || a.el !== "H")) : [];
       const items = [];
       const lowDetail = cfg.rep.detail !== "full" && stickAtoms.length + surfAtoms.length > 260;
@@ -11346,11 +11540,12 @@
     const ids = [];
     for (const res of s.residues) {
       const chain = res.chain ? "." + res.chain : "";
+      const group = res.resn + res.resi + chain, pre = group + ":";
       for (let i = res.atomStart; i < res.atomEnd; i++) {
         const name = s.atomName[i];
-        const id = `${res.resn}${res.resi}${chain}:${name}`;
+        const id = pre + name;
         ids.push(id);
-        const a = { el: s.element[i], pos: rot(s.x[i], s.y[i], s.z[i]), resn: res.resn, resi: res.resi, chain: res.chain, name, het: !!res.het, group: res.resn + res.resi + chain, ss: res.ss };
+        const a = { el: s.element[i], pos: rot(s.x[i], s.y[i], s.z[i]), resn: res.resn, resi: res.resi, chain: res.chain, name, het: !!res.het, group, ss: res.ss };
         if (res.nucleic) a.nucleic = true;
         if (res.entity) {
           a.entity = res.entity;
@@ -11368,9 +11563,25 @@
         atoms[id] = a;
       }
     }
-    const bonds = [];
-    for (let b = 0; b < s.bonds.length; b += 2) bonds.push([ids[s.bonds[b]], ids[s.bonds[b + 1]], s.bondOrder[b >> 1] || 1]);
-    return { kf: { name: s.name, hold: 24, transition: 0, atoms, bonds, arrows: [] }, ids };
+    let bonds = null;
+    const kf = { name: s.name, hold: 24, transition: 0, atoms };
+    Object.defineProperty(kf, "bonds", {
+      enumerable: true,
+      configurable: true,
+      set(v) {
+        bonds = v;
+      },
+      get() {
+        if (!bonds) {
+          bonds = [];
+          const B = s.bonds, O = s.bondOrder;
+          for (let b = 0; b < B.length; b += 2) bonds.push([ids[B[b]], ids[B[b + 1]], O[b >> 1] || 1]);
+        }
+        return bonds;
+      }
+    });
+    kf.arrows = [];
+    return { kf, ids };
   }
   function renderClassic(ctx, R, style, boil, dpr = 1) {
     const t0 = performance.now();
@@ -11742,9 +11953,9 @@
     const near2 = (g2) => Math.min(...g2.map((a) => Math.min(...ref.map((b) => Math.hypot(a.pos[0] - b.pos[0], a.pos[1] - b.pos[1], a.pos[2] - b.pos[2])))));
     const all = [...groups.values()];
     const MAX = 8;
-    const pick = all.length <= MAX ? all : [...all.filter((g2) => g2[0].het), ...all.filter((g2) => !g2[0].het).sort((x, y) => near2(x) - near2(y)).slice(0, MAX - 1)];
+    const pick2 = all.length <= MAX ? all : [...all.filter((g2) => g2[0].het), ...all.filter((g2) => !g2[0].het).sort((x, y) => near2(x) - near2(y)).slice(0, MAX - 1)];
     let n = 0;
-    for (const g2 of pick) {
+    for (const g2 of pick2) {
       const ca = g2.find((a) => a.name === "CA") || g2[0];
       const tip = g2.reduce((b, a) => Math.hypot(a.pos[0] - ca.pos[0], a.pos[1] - ca.pos[1], a.pos[2] - ca.pos[2]) > Math.hypot(b.pos[0] - ca.pos[0], b.pos[1] - ca.pos[1], b.pos[2] - ca.pos[2]) ? a : b, ca);
       if (labels.some((l) => l.at === tip.id)) continue;
@@ -11762,7 +11973,7 @@
       labels.push({ text, at: tip.id, dx: Math.round(dx * 48), dy: Math.round(dy * 40) });
       n++;
     }
-    return { added: n, msg: n ? `${n} label${n > 1 ? "s" : ""} on the site${pick.length < all.length ? ` (the ${pick.length} residues nearest the ligand of ${all.length})` : ""}: drag any of them to tidy up` : "the site is already labelled" };
+    return { added: n, msg: n ? `${n} label${n > 1 ? "s" : ""} on the site${pick2.length < all.length ? ` (the ${pick2.length} residues nearest the ligand of ${all.length})` : ""}: drag any of them to tidy up` : "the site is already labelled" };
   }
 
   // src/headless/core.ts
@@ -11803,7 +12014,8 @@
   function structureOf(text, name, owner) {
     let s = owner ? owned.get(owner) : void 0;
     if (s) return s;
-    const key2 = name + "\0" + text.length + "\0" + textHash(text);
+    const hash = owner?.hash;
+    const key2 = name + "\0" + text.length + "\0" + (typeof hash === "string" && hash ? "h" + hash : textHash(text));
     s = parsed2.get(key2);
     if (!s) {
       s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, ""));
@@ -12241,9 +12453,9 @@
     const U2 = (x) => (x || "").toUpperCase();
     const hits = st.atoms.filter((a) => U2(a.resn) === U2(resn) && String(a.resi) === resi && (!chain || a.chain === chain));
     if (!hits.length) throw new Error(`no residue ${resn}${resi}${chain ? " in chain " + chain : ""} here`);
-    const pick = atom ? hits.find((a) => U2(a.name) === U2(atom)) : hits.find((a) => a.name === "CA") || hits[0];
-    if (!pick) throw new Error(`${resn}${resi} has no atom ${atom}; it has ${hits.map((a) => a.name).join(", ")}`);
-    return pick.id;
+    const pick2 = atom ? hits.find((a) => U2(a.name) === U2(atom)) : hits.find((a) => a.name === "CA") || hits[0];
+    if (!pick2) throw new Error(`${resn}${resi} has no atom ${atom}; it has ${hits.map((a) => a.name).join(", ")}`);
+    return pick2.id;
   }
   function engineConfig(spec) {
     const f2 = settle(spec);

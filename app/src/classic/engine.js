@@ -135,6 +135,7 @@ function pathPos(K,id,p0,p1,t){const P=K.path;if(!P||!P.length||t<=0||t>=1)retur
   const at=k=>k<=0?p0:k>=n?p1:(P[k-1][id]||null);
   const q0=at(i),q1=at(i+1);if(!q0||!q1)return lerp3(p0,p1,t);return lerp3(q0,q1,f)}
 // a structure (one keyframe, held, without arrows or a path) is in the same state at every frame: sampled once
+const NONE=Object.freeze([]);   // an atom's charges or lone pairs when it has none
 let SAMPLED={k:null,rev:null,st:null};   // (the app counts a scene's edits in _rev: an edited keyframe is sampled again)
 function sampleState(frame){
   const K=scene.keyframes.length===1?scene.keyframes[0]:null;
@@ -179,8 +180,10 @@ function sampleStateAt(frame){
       else{la.forEach(d=>o.lps.push({dir:d,alpha:1-tm}));lb.forEach(d=>o.lps.push({dir:d,alpha:tm}))}
     }else if(a){ // exiting (or holding)
       const to=a.exitTo||(Ki.exitDir?[a.pos[0]+Ki.exitDir[0],a.pos[1]+Ki.exitDir[1],a.pos[2]+Ki.exitDir[2]]:a.pos);
-      o={id,el:a.el,pos:isTrans?lerp3(a.pos,to,tm):a.pos,alpha:(a.opacity??1)*(isTrans?1-tm:1),r:a.r,color:a.color,label:a.label,labelDir:a.labelDir,labelAuto:a.labelAuto,charges:[],lps:[]};
-      const c=chargeText(a.charge);if(c)o.charges.push({text:c,alpha:1});(a.lp||[]).forEach(d=>o.lps.push({dir:d,alpha:1}));
+      // (an atom with no charge and no lone pairs, as nearly all of a protein's are, shares one empty list of each: a
+      // ribosome's would be 440,000 lists; nothing adds to an atom's after it is sampled)
+      const c=chargeText(a.charge),lp=a.lp;
+      o={id,el:a.el,pos:isTrans?lerp3(a.pos,to,tm):a.pos,alpha:(a.opacity??1)*(isTrans?1-tm:1),r:a.r,color:a.color,label:a.label,labelDir:a.labelDir,labelAuto:a.labelAuto,charges:c?[{text:c,alpha:1}]:NONE,lps:lp&&lp.length?lp.map(d=>({dir:d,alpha:1})):NONE};
     }else{ // entering
       const from=b.enterFrom||(Kj.enterDir?[b.pos[0]+Kj.enterDir[0],b.pos[1]+Kj.enterDir[1],b.pos[2]+Kj.enterDir[2]]:b.pos);
       o={id,el:b.el,pos:lerp3(from,b.pos,tm),alpha:(b.opacity??1)*tm,r:b.r,color:b.color,label:b.label,labelDir:b.labelDir,labelAuto:b.labelAuto,charges:[],lps:[]};
@@ -194,6 +197,9 @@ function sampleStateAt(frame){
   // bonds: Ki's by its ids, Kj's translated to this frame's keys
   // (maps, not objects: a structure's keyframe is hundreds of thousands of bonds; a key always has a '|', so the order
   // is the order they are set in either way)
+  // the frame's bonds, worked out when first asked for (a drawing of only a surface or a cartoon never asks; a
+  // ribosome's are 230,000), from the atoms' alphas as sampled, which nothing changes after
+  let BONDS=null;const bondsNow=()=>{if(BONDS)return BONDS;
   const bonds=[];const Bi=new Map(),Bj=new Map();
   const norm=b=>Array.isArray(b)?{a:b[0],b:b[1],order:b[2]??1}:{a:b.a,b:b.b,order:b.order??1};
   (Ki.bonds||[]).forEach(b=>{const o=norm(b);Bi.set(bkey(o.a,o.b),o)});
@@ -210,6 +216,7 @@ function sampleStateAt(frame){
       const whole=isTrans&&!nextOf[bi.a]&&!nextOf[bi.b];bonds.push({a:bi.a,b:bi.b,order:bi.order,alpha:base,partial:isTrans&&!whole?(1-tm):0}) }
     else{ const whole=!nextOf[bj.a]&&!nextOf[bj.b];bonds.push({a:bj.a,b:bj.b,order:bj.order,alpha:base,partial:whole?0:tm}) }
   }
+  return BONDS=bonds};
   // captions
   let capA=Ki.caption||'',capAa=1,capB='',capBa=0;
   if(isTrans){capAa=1-smooth((t-0.5)/0.22);capB=Kj.caption||'';capBa=smooth((t-0.76)/0.22)}
@@ -222,7 +229,7 @@ function sampleStateAt(frame){
     if(isTrans)(lj||[]).forEach(o=>{if(o.id===undefined||!kept.has(o.id))out.push({o,alpha:fadeIn,k:-1,map:inKey})});
     return out.filter(e=>e.alpha>0.004)};
   const orbs=carry(Ki.orbitals,Kj.orbitals),meas=carry(Ki.measures,Kj.measures);
-  return {atoms,A,bonds,orbs,meas,arrows:(Ki.arrows||[]),arrowProg,arrowAlpha,kf:seg.kf,t,isTrans,captions:[{text:capA,alpha:capAa},{text:capB,alpha:capBa}],stepIdx:seg.kf,stepName:Ki.name||('step '+(seg.kf+1))};
+  return {atoms,A,get bonds(){return bondsNow()},set bonds(v){BONDS=v},orbs,meas,arrows:(Ki.arrows||[]),arrowProg,arrowAlpha,kf:seg.kf,t,isTrans,captions:[{text:capA,alpha:capAa},{text:capB,alpha:capBa}],stepIdx:seg.kf,stepName:Ki.name||('step '+(seg.kf+1))};
 }
 
 /* ============================ projection ============================ */
@@ -1127,7 +1134,11 @@ function surfaceModel(atoms,pos,proj){
   const probe=cfg.rep.probe;
   const discs=atoms.map(a=>{const p=pos[a.id];return{x:p.x,y:p.y,r:((VDW[a.el]||1.7)+probe*0.55)*proj.pxPerA*p.d*cfg.rep.surfaceScale,z:p.z,d:p.d,fog:p.fog,alpha:a.alpha,a}});
   // (a map: a key always has a '/', so it keeps the order the residues come in, as an object would)
-  const groups=new Map();for(const d of discs){const k=(d.a.chain||'')+'/'+(d.a.resi??d.a.id);let g=groups.get(k);if(!g)groups.set(k,g=[]);g.push(d)}
+  // (an atom of the same chain and number as the one before it, as the atoms of a residue come, joins that one's group
+  // without its key being made: a ribosome's would be 220,000)
+  const groups=new Map();let lc,lr,lg=null;for(const d of discs){const c=d.a.chain,r=d.a.resi??d.a.id;
+    if(lg&&c===lc&&r===lr){lg.push(d);continue}
+    const k=(c||'')+'/'+r;let g=groups.get(k);if(!g)groups.set(k,g=[]);g.push(d);lc=c;lr=r;lg=g}
   const patches=[];
   for(const [k,g] of groups){let z=0,px=0,py=0,dd=0;for(const d of g){z+=d.z;px+=d.x;py+=d.y;dd+=d.d}
     const h=hull(discHullPoints(g));if(h.length<3)continue;
@@ -2340,7 +2351,7 @@ function renderFrame(ctx,W,H,frame,dpr){
     const anchors=ribbonAnchors(st.atoms,selC);
     for(const a of stickAtoms){if(a.name!=='CA'||a.nucleic)continue;const q=anchors.get(a.id);if(q)pos[a.id]=proj.proj(q)}}
   const stickIds=new Set(stickAtoms.map(a=>a.id));
-  const stickBonds=st.bonds.filter(b=>stickIds.has(b.a)&&stickIds.has(b.b));
+  const stickBonds=stickIds.size?st.bonds.filter(b=>stickIds.has(b.a)&&stickIds.has(b.b)):[];   // (no sticks: the bonds are not asked for)
   const surfAtoms=reps.surface&&reps.surface.trim()?st.atoms.filter(a=>selF(a)&&(SH.H||a.el!=='H')):[];
   const items=[];const lowDetail=cfg.rep.detail!=='full'&&(stickAtoms.length+surfAtoms.length)>260;   // 'full': every atom gets the whole treatment however many there are
   if(cfg.rep.mode==='sticks')buildSticks(items,st,pos,stickAtoms,stickBonds,proj,seedBase,lowDetail);

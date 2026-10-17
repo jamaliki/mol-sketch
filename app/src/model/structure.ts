@@ -47,9 +47,19 @@ export class Structure {
   serial!: Int32Array;
   residues: Residue[] = [];
   chains: Chain[] = [];
-  bonds: Int32Array = new Int32Array(0);   // pairs
+  /** pairs. A structure read from a file works them out the first time they are asked for (deferBonds): most drawings
+      of a large one (its surface, its cartoon) never ask, and a ribosome's 230,000 would take a sixth of a second */
+  get bonds(): Int32Array { this.bondsNow(); return this._bonds }
+  set bonds(v: Int32Array) { this._settleBonds = null; this._bonds = v }
   /** each bond's order (1, 2 or 3), one per pair in `bonds`: set by assignBondOrders (bondorder.ts); empty is all single */
-  bondOrder: Uint8Array = new Uint8Array(0);
+  get bondOrder(): Uint8Array { this.bondsNow(); return this._bondOrder }
+  set bondOrder(v: Uint8Array) { this._settleBonds = null; this._bondOrder = v }
+  private _bonds: Int32Array = new Int32Array(0);
+  private _bondOrder: Uint8Array = new Uint8Array(0);
+  private _settleBonds: (() => void) | null = null;
+  /** the bonds are worked out by `f` when they are first asked for (setting them first does away with it) */
+  deferBonds(f: () => void) { this._settleBonds = f }
+  private bondsNow() { const f = this._settleBonds; if (f) { this._settleBonds = null; f() } }
   entities: Record<string, { desc: string }> = {};
   center: [number, number, number] = [0, 0, 0];
   radius = 1;
@@ -59,7 +69,12 @@ export class Structure {
     // group into residues in file order (a residue is contiguous in well-formed files; we regroup anyway)
     const key = (r: AtomRecord) => r.chain + '/' + r.resi + '/' + r.resn + '/' + (r.het ? 1 : 0);
     const order = new Map<string, AtomRecord[]>();
-    for (const r of recs) { let g = order.get(key(r)); if (!g) { g = []; order.set(key(r), g) } g.push(r) }
+    // (an atom of the same residue as the one before it, as a residue's atoms come, joins that one's group without its
+    // key being made: a ribosome's would be 220,000)
+    let last: AtomRecord | null = null, lg: AtomRecord[] | null = null;
+    for (const r of recs) {
+      if (last && lg && r.chain === last.chain && r.resi === last.resi && r.resn === last.resn && r.het === last.het) { lg.push(r); last = r; continue }
+      const k = key(r); let g = order.get(k); if (!g) { g = []; order.set(k, g) } g.push(r); last = r; lg = g }
     // modified residues in a chain (selenomethionine, phosphoserine, pseudouridine …) are HETATM records, but they are
     // part of the polymer: one bonded to its neighbour (a peptide C–N, or a nucleic O3'–P) joins it, keeping its name
     const groups = [...order.values()];
