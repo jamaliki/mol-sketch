@@ -521,3 +521,39 @@ def test_chains_named_alike_but_for_case_are_two_chains():
     assert fig.copy().label("x", at="ALA501.a")._labels[-1]["at"] == "ALA501.a:CA"
     assert fig.copy().label("x", at="ala1.A")._labels[-1]["at"] == "ALA1.A:CA"   # a residue's name in any case
     with pytest.raises(ms.CoreError, match="no residue ALA1 in chain a"): fig.copy().label("x", at="ALA1.a")
+
+
+def _atoms_of(text: str, name: str) -> dict:
+    """each atom of a structure read from `text` (an mmCIF): its element, name and place, by its id"""
+    from molsketch._engine import engine
+    fig = ms.load(text, name=name, format="cif")
+    return {i: (a["el"], a["name"], a["resn"], a["chain"], a["pos"]) for i, a in engine().call("sceneJson", fig._spec())["keyframes"][0]["atoms"].items()}
+
+
+def test_atoms_read_alike_however_their_lines_are_written():
+    """An mmCIF's atoms are read a column at a time from their lines, a row to a line, the numbers where they are (a
+    ribosome's 220,000 atoms would be 4.6 million values): they are read as any loop is -- the same with a row split
+    over two lines (then every line is read as any loop's), a value in quotes, or a number with an exponent"""
+    text = (EX / "test_protein_rna.cif").read_text()
+    lines = text.splitlines()
+    rows = [i for i, line in enumerate(lines) if line.startswith(("ATOM", "HETATM"))]
+    plain = _atoms_of(text, "plain.cif")
+    assert len(plain) == len(rows) and any("'" in a[1] for a in plain.values())
+
+    def written(change) -> str:
+        out = list(lines)
+        for n, i in enumerate(rows): out[i] = change(n, out[i])
+        return "\n".join(out) + "\n"
+
+    def quoted(n, line):   # every third atom's residue name in quotes
+        t = line.split(); t[5] = f"'{t[5]}'" if n % 3 == 0 else t[5]; return " ".join(t)
+
+    def exponent(n, line):   # every other atom's x with an exponent (read from its text, not in place)
+        t = line.split(); t[8] = t[8] + "e0" if n % 2 else t[8]; return " ".join(t)
+
+    def split(n, line):   # every seventh atom's row over two lines
+        t = line.split(); return " ".join(t[:6]) + "\n" + " ".join(t[6:]) if n % 7 == 3 else line
+
+    assert _atoms_of(written(quoted), "quoted.cif") == plain
+    assert _atoms_of(written(exponent), "exponent.cif") == plain
+    assert _atoms_of(written(split), "split.cif") == plain

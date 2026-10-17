@@ -61,7 +61,8 @@ export function drop(ref: string) { inputs.delete(ref) }
 const parsed = new Map<string, Structure>(), owned = new WeakMap<object, Structure>();
 function structureOf(text: string, name: string, owner?: object): Structure {
   let s = owner ? owned.get(owner) : undefined; if (s) return s;
-  const key = name + '\u0000' + text.length + '\u0000' + textHash(text);
+  // (the host may hand over its own hash of the text with it, worked out in C: a ribosome's 25 MB took 35 ms here)
+  const hash = (owner as any)?.hash; const key = name + '\u0000' + text.length + '\u0000' + (typeof hash === 'string' && hash ? 'h' + hash : textHash(text));
   s = parsed.get(key); if (!s) { s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, '')); parsed.set(key, s); if (parsed.size > 8) parsed.delete(parsed.keys().next().value!) }
   if (owner) owned.set(owner, s);
   return s;

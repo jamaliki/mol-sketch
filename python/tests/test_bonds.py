@@ -189,3 +189,13 @@ def test_double_bonds_draw_in_every_look():
         assert not np.array_equal(site(look), site(look, **{"show.valence": False})), look
         lig = lambda **st: ms.load(EX / "test_protein.pdb").look(look).show(sticks="resn LIG", cartoon=None).set(**st).render(SMALL).to_numpy()
         assert not np.array_equal(lig(), lig(**{"show.valence": False})), look
+
+
+def test_bonds_worked_out_when_first_asked_for_are_the_same():
+    """A structure read from a file works out its bonds the first time they are asked for: drawn as a surface alone
+    first (which never asks), its bonds, and their orders, are those it has when they are asked for at once"""
+    text = (EX / "test_protein_rna.cif").read_text()
+    first = ms.load(text, name="asked.cif", format="cif")
+    surface = ms.load(text + "\n", name="surface.cif", format="cif").look("flat").show(cartoon=None, sticks=None, surface="polymer")
+    surface.render(SMALL)
+    assert orders(surface) == orders(first) and len(orders(first)) > 300

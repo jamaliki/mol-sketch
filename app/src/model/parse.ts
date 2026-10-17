@@ -5,7 +5,7 @@ import { assignBondOrders, type OrderHints } from './bondorder';
 export function parseModels(text: string, name = ''): Structure[] {
   const hints: OrderHints = {};
   const out = (/^\s*data_/.test(text) || text.indexOf('_atom_site.') >= 0) ? parseCIF(text, hints) : parsePDB(text, hints);
-  for (const s of out) { s.name = name; s.inferBonds(); assignBondOrders(s, hints) }
+  for (const s of out) { s.name = name; s.deferBonds(() => { s.inferBonds(); assignBondOrders(s, hints) }) }
   return out;
 }
 export function parseStructure(text: string, name = ''): Structure { const m = parseModels(text, name); if (!m.length) throw new Error('no atoms found'); return m[0] }
@@ -50,7 +50,9 @@ function parsePDB(text: string, hints: OrderHints): Structure[] {
 }
 
 /* ---------------- mmCIF ---------------- */
-interface Cat { cols: string[]; rows: string[][] }
+/** a category: its columns and rows -- or, for the atoms, also their lines as they are (`lines`, a row to a line), which
+    parseCIF reads a column at a time: a ribosome's 220,000 atoms would be 4.6 million values, most of them never used */
+interface Cat { cols: string[]; rows: string[][]; lines?: string[] }
 /* (by character code, not one-character strings: an mmCIF of a ribosome is 4 million values) */
 function tokenize(line: string): string[] {
   const out: string[] = []; let j = 0; const n = line.length;
@@ -62,6 +64,44 @@ function tokenize(line: string): string[] {
     let k = j; while (k < n) { const c = line.charCodeAt(k); if (c === 32 || c === 9) break; k++ } out.push(line.substring(j, k)); j = k;
   }
   return out;
+}
+/** the values of `line` whose places `want` marks, into `out` at those places (as tokenize reads them); how many values
+    the line has */
+function pick(line: string, want: Uint8Array, out: string[], val: Float64Array): number {
+  let j = 0, k = 0; const n = line.length;
+  while (j < n) {
+    const ch = line.charCodeAt(j); if (ch === 32 || ch === 9) { j++; continue }
+    if (ch === 39 || ch === 34) {
+      let e = j + 1; while (e < n) { if (line.charCodeAt(e) === ch) { const c = e + 1 < n ? line.charCodeAt(e + 1) : 32; if (c === 32 || c === 9) break } e++ }
+      if (want[k]) { out[k] = line.substring(j + 1, e); val[k] = NaN } k++; j = e + 1; continue }
+    let e = j; while (e < n) { const c = line.charCodeAt(e); if (c === 32 || c === 9) break; e++ }
+    const w = want[k];
+    if (w === 2) { const v = decimal(line, j, e); if (v === v) val[k] = v; else { val[k] = NaN; out[k] = line.substring(j, e) } }
+    else if (w) out[k] = line.substring(j, e);
+    k++; j = e;
+  }
+  return k;
+}
+/** a plain decimal (-12.345: no exponent, at most 15 digits) as JavaScript reads it, read where it is; NaN for any other
+    text (read from its text instead). Its digits as a whole number, divided by a power of ten: both exact, so the one
+    rounding is the division's, as correct as the reading of its text */
+const TEN = [1, 1e1, 1e2, 1e3, 1e4, 1e5, 1e6, 1e7, 1e8, 1e9, 1e10, 1e11, 1e12, 1e13, 1e14, 1e15];
+function decimal(line: string, j: number, e: number): number {
+  let i = j, neg = false; const c0 = line.charCodeAt(i); if (c0 === 45) { neg = true; i++ } else if (c0 === 43) i++;
+  let m = 0, digits = 0, frac = -1;
+  for (; i < e; i++) { const c = line.charCodeAt(i);
+    if (c >= 48 && c <= 57) { m = m * 10 + (c - 48); digits++; if (frac >= 0) frac++ }
+    else if (c === 46 && frac < 0) frac = 0;
+    else return NaN }
+  if (digits === 0 || digits > 15) return NaN;
+  const v = frac > 0 ? m / TEN[frac] : m;
+  return neg ? -v : v;
+}
+/** a loop's lines (with no text fields) as its rows, a row to as many lines as it takes, as readCIF reads any loop */
+function rowsOf(lines: string[], n: number): string[][] {
+  const rows: string[][] = []; const buf: string[] = [];
+  for (const line of lines) { const t = tokenize(line); if (!buf.length && t.length === n) { rows.push(t); continue } for (const v of t) buf.push(v); while (buf.length >= n) rows.push(buf.splice(0, n)) }
+  return rows;
 }
 /** the text's lines, without their line ends (\n or \r\n) */
 function linesOf(text: string): string[] {
@@ -78,6 +118,12 @@ function readCIF(text: string): Record<string, Cat> {
       while (i < lines.length && lines[i].trim().startsWith('_')) { names.push(lines[i].trim().split(/\s+/)[0]); i++ }
       if (!names.length) continue;
       const cat = names[0].split('.')[0]; const cols = names.map(nm => nm.split('.')[1]); const rows: string[][] = []; let buf: string[] = [];
+      if (cat === '_atom_site' && !cats[cat]) {   // the atoms: their lines kept as they are (a text field among them: read as any loop)
+        const from = i; let plain = true;
+        for (; i < lines.length; i++) { const l = lines[i]; if (l.startsWith('#') || l.startsWith('loop_') || l.startsWith('_') || l.startsWith('data_')) break; if (l.startsWith(';')) { plain = false; break } }
+        if (plain) { cats[cat] = { cols, rows, lines: lines.slice(from, i) }; continue }
+        i = from;
+      }
       while (i < lines.length) {
         line = lines[i];
         if (line.startsWith('#') || line.startsWith('loop_') || line.startsWith('_') || line.startsWith('data_')) break;
@@ -111,15 +157,29 @@ function parseCIF(text: string, hints: OrderHints): Structure[] {
   const ci = (n: string) => AS.cols.indexOf(n);
   const ix = { grp: ci('group_PDB'), id: ci('id'), el: ci('type_symbol'), name: ci('label_atom_id'), alt: ci('label_alt_id'), resn: ci('label_comp_id'), asym: ci('label_asym_id'), auth_asym: ci('auth_asym_id'), seq: ci('label_seq_id'), auth_seq: ci('auth_seq_id'), x: ci('Cartn_x'), y: ci('Cartn_y'), z: ci('Cartn_z'), model: ci('pdbx_PDB_model_num'), b: ci('B_iso_or_equiv') };
   const models = new Map<string, AtomRecord[]>();
-  for (const r of AS.rows) {
+  // (a row's numbers: from its text, or, for a line of atoms, as read in place where pick could)
+  let row: string[] = [], val: Float64Array | null = null;
+  const num = (k: number) => { if (val) { const v = val[k]; if (v === v) return v } return +row[k] };
+  const real = (k: number) => { if (val) { const v = val[k]; if (v === v) return v } return parseFloat(row[k]) };
+  const atom = (r: string[]) => { row = r;
     const m = ix.model >= 0 ? r[ix.model] : '1'; let M = models.get(m); if (!M) { M = []; models.set(m, M) }
-    const alt = ix.alt >= 0 ? r[ix.alt] : '.'; if (alt && alt !== '.' && alt !== '?' && alt !== 'A') continue;
+    const alt = ix.alt >= 0 ? r[ix.alt] : '.'; if (alt && alt !== '.' && alt !== '?' && alt !== 'A') return;
     const name = r[ix.name], resn = r[ix.resn]; const chain = (ix.auth_asym >= 0 ? r[ix.auth_asym] : r[ix.asym]) || '';
     let seqS = ix.auth_seq >= 0 ? r[ix.auth_seq] : r[ix.seq]; if (seqS === '.' || seqS === '?') seqS = ix.seq >= 0 ? r[ix.seq] : '0';
     let el = (ix.el >= 0 ? r[ix.el] : '').toUpperCase(); if (!el || el === '.' || el === '?') el = elementFromName(name);
     const het = (ix.grp >= 0 ? r[ix.grp] : 'ATOM') === 'HETATM' || resn === 'HOH';
-    M.push({ serial: +r[ix.id], name, el, resn, chain, resi: parseInt(seqS), x: +r[ix.x], y: +r[ix.y], z: +r[ix.z], het, b: ix.b >= 0 ? parseFloat(r[ix.b]) : NaN });
+    M.push({ serial: num(ix.id), name, el, resn, chain, resi: parseInt(seqS), x: num(ix.x), y: num(ix.y), z: num(ix.z), het, b: ix.b >= 0 ? real(ix.b) : NaN });
+  };
+  if (AS.lines) {   // a row to a line: only the values used are cut from each (a line otherwise: all read as any loop)
+    const n = AS.cols.length, want = new Uint8Array(n), r: string[] = new Array(n).fill(''), v = new Float64Array(n).fill(NaN); let ok = true;
+    for (const k of Object.values(ix)) if (k >= 0) want[k] = 1;
+    for (const k of [ix.id, ix.x, ix.y, ix.z, ix.b]) if (k >= 0) want[k] = 2;   // (numbers: read in place)
+    val = v;
+    for (const line of AS.lines) { const got = pick(line, want, r, v); if (got === 0) continue; if (got !== n) { ok = false; break } atom(r) }
+    val = null;
+    if (!ok) { models.clear(); for (const row of rowsOf(AS.lines, n)) atom(row) }
   }
+  for (const r of AS.rows) atom(r);
   const H: SSRecord[] = [], E: SSRecord[] = [];
   const SC = cats['_struct_conf'];
   if (SC) { const c = (n: string) => SC.cols.indexOf(n); const ty = c('conf_type_id'), ch = c('beg_auth_asym_id') >= 0 ? c('beg_auth_asym_id') : c('beg_label_asym_id'), a = c('beg_auth_seq_id') >= 0 ? c('beg_auth_seq_id') : c('beg_label_seq_id'), b = c('end_auth_seq_id') >= 0 ? c('end_auth_seq_id') : c('end_label_seq_id');
