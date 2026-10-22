@@ -1104,6 +1104,10 @@
   var STREAM_BYTES = 4 << 20;
   var stream = null;
   var held = [];
+  var frameCanvas = 0;
+  function setFrame(id) {
+    frameCanvas = id;
+  }
   function setStream(f2) {
     stream = f2;
   }
@@ -1126,7 +1130,7 @@
     runGen++;
     const paints = SPECS;
     SPECS = [];
-    return { canvases, paints, runs, dead };
+    return { canvases, paints, runs, dead, frame: frameCanvas };
   }
   function emit() {
     const c = takeChunk();
@@ -12257,6 +12261,7 @@
     classic().setTextGate(gate || null);
     const f2 = settle(spec);
     const c = new RecCanvas();
+    setFrame(c.id);
     c.width = Math.round(f2.W * f2.dpr);
     c.height = Math.round(f2.H * f2.dpr);
     const ctx = c.getContext("2d");

@@ -48,7 +48,7 @@ globalThis.__RING = new ArrayBuffer(%RING%);
   globalThis.__ringReset = () => { written = 0; Atomics.store(H, 0, 0); Atomics.store(H, 1, 0); return 0 };
   globalThis.__ringPut = (chunk) => {
     if (!globalThis.__note) return false;
-    const js = JSON.stringify({ canvases: chunk.canvases, paints: chunk.paints, dead: chunk.dead }), runs = chunk.runs;
+    const js = JSON.stringify({ canvases: chunk.canvases, paints: chunk.paints, dead: chunk.dead, frame: chunk.frame }), runs = chunk.runs;
     let wide = 1; for (let i = 0; i < js.length; i++) if (js.charCodeAt(i) > 255) { wide = 2; break }
     const jb = (js.length * wide + 3) & ~3, rb = (runs.length + 3) & ~3, need = 12 + jb + rb;
     if (need > CAP) return false;   // too big for the ring: it waits for the end of the render
@@ -76,7 +76,7 @@ globalThis.__render = (spec) => { __miss = []; __abort = null; let r;
   try { r = MolSketchCore.render(JSON.parse(spec), __measure, () => __miss.length > 0) /* words to learn: the frame stops before drawing */ } catch (e) { __last = (e && e.chunks) || []; __abort = e && e.canvas; throw e }
   __last = r.chunks;
   return JSON.stringify({ canvas: r.canvas, width: r.width, height: r.height, ms: r.ms, miss: __miss, held: r.chunks.length }) };
-globalThis.__heldJson = (k) => { const c = __last[k]; return JSON.stringify({ canvases: c.canvases, paints: c.paints, dead: c.dead }) };
+globalThis.__heldJson = (k) => { const c = __last[k]; return JSON.stringify({ canvases: c.canvases, paints: c.paints, dead: c.dead, frame: c.frame }) };
 globalThis.__heldRuns = (k) => __last[k].runs.buffer;
 globalThis.__done = () => { __last = null; return 0 };
 globalThis.__aborted = () => JSON.stringify({ canvas: __abort ?? null, held: (__last || []).length });
@@ -227,12 +227,13 @@ class Engine:
 
     def render_svg(self, spec: dict, shapes_only: bool = False):
         """the figure as SVG: its canvas replayed as vector elements (what it draws off screen, embedded as images).
-        ``shapes_only``: the SVG if it is nothing but plain shapes, else the picture (a skia.Image) of the same render:
-        its pixels are drawn as it arrives, as ``render`` draws them, and its ops kept to be written as SVG after"""
-        if shapes_only: self.raster.keep = True
-        else: self.raster.lazy = True
+        ``shapes_only``: the SVG if it is nothing but plain shapes, else the picture (a skia.Image) of the same render.
+        Its ops are kept to be written as SVG, and drawn as pixels only once they show it is more than shapes (a clip or
+        a picture on the frame's canvas: from then on as they arrive, as ``render`` draws them; anything else, at the end)"""
+        self.raster.lazy = True
+        if shapes_only: self.raster.keep = self.raster.watch = True
         try: return self.render(spec, svg="shapes" if shapes_only else True)
-        finally: self.raster.lazy = self.raster.keep = False
+        finally: self.raster.lazy = self.raster.keep = self.raster.watch = False
 
     def render(self, spec: dict, svg: bool | str = False):
         # a large figure is millions of small objects (ops, paths) and none of them in a cycle: Python's collector,
@@ -298,6 +299,7 @@ class Engine:
         """the frame's canvas as SVG; with ``shapes_only``, as its picture where it is more than shapes"""
         if not shapes_only: return self.raster.vector(main, scale)
         from ._svg import NotShapes
+        if self.raster.clipped: return self.raster.image(main)   # (a clip is never shapes alone)
         try: return self.raster.vector(main, scale, shapes_only=True)
         except NotShapes: return self.raster.image(main)
 

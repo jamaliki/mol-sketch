@@ -93,3 +93,20 @@ def test_an_engine_through_mini_racers_own_calls_draws_the_same(monkeypatch):
     assert all(np.array_equal(x, y) for x, y in zip(a, b)) and sa == sb and ca == cb
     for e in (line, loop): e.v8.close()
 
+
+def test_svg_or_image_draws_pixels_only_for_a_picture(monkeypatch):
+    """svg_or_image keeps a drawing's ops and draws them as pixels only once they show more than shapes (a clip, as a
+    surface's patches have): a drawing of shapes alone comes back as its SVG with no pixels drawn; one with a clip is
+    drawn as pixels from its first clip on, as it arrives, and both are what svg() and render() give"""
+    import molsketch._raster as R
+    drawn = []; init = R._Replay.__init__
+    def replay(self, raster, live, canvas, w=0, h=0):
+        if not hasattr(canvas, "svg"): drawn.append((w, h))
+        init(self, raster, live, canvas, w, h)
+    flat = ms.load(EX / "1A8O.pdb").look("flat")
+    surface = ms.load(EX / "1A8O.pdb").look("flat").show(cartoon=None, surface="polymer")
+    want = flat.svg(SMALL), surface.render(SMALL).to_numpy()
+    monkeypatch.setattr(R._Replay, "__init__", replay)
+    assert flat.svg_or_image(SMALL) == want[0] and SMALL not in drawn
+    img = surface.svg_or_image(SMALL)
+    assert isinstance(img, ms.Image) and np.array_equal(img.to_numpy(), want[1]) and SMALL in drawn

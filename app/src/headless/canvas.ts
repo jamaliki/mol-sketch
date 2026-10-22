@@ -504,12 +504,16 @@ function reopenLastRun(off: number, len: number): number {
   return len2;
 }
 
-/* Handing ops to the host: a chunk is every canvas's new ops, the paint specs and path runs they refer to, and the
-   canvases gone since the last one. While the engine draws, chunks go out as they fill (at a draw, so fused ops stay
-   whole) through the host's stream if it has one; what the stream cannot take waits for the end of the render. */
-export interface Chunk { canvases: Record<number, { start: number; ops: Op[] }>; paints: any[]; runs: Uint8Array; dead: number[] }
+/* Handing ops to the host: a chunk is every canvas's new ops, the paint specs and path runs they refer to, the
+   canvases gone since the last one, and the render's frame canvas (so the host knows from the first chunk which canvas
+   is the picture: whether it is shapes alone shows as its ops come). While the engine draws, chunks go out as they fill
+   (at a draw, so fused ops stay whole) through the host's stream if it has one; what the stream cannot take waits for
+   the end of the render. */
+export interface Chunk { canvases: Record<number, { start: number; ops: Op[] }>; paints: any[]; runs: Uint8Array; dead: number[]; frame: number }
 const STREAM_OPS = 20000, STREAM_BYTES = 4 << 20;
-let stream: ((c: Chunk) => boolean) | null = null; const held: Chunk[] = [];
+let stream: ((c: Chunk) => boolean) | null = null; const held: Chunk[] = []; let frameCanvas = 0;
+/** the canvas the render under way draws its picture on (0: none) */
+export function setFrame(id: number) { frameCanvas = id }
 /** the host's stream: takes a chunk (and returns true) or declines it */
 export function setStream(f: ((c: Chunk) => boolean) | null) { stream = f }
 function takeChunk(): Chunk {
@@ -521,7 +525,7 @@ function takeChunk(): Chunk {
   for (const [id, r] of alive) if (!r.deref()) { dead.push(id); alive.delete(id) }
   const runs = RUNS.slice(0, runsN); runsN = 0; runGen++;
   const paints = SPECS; SPECS = [];
-  return { canvases, paints, runs, dead };
+  return { canvases, paints, runs, dead, frame: frameCanvas };
 }
 function emit() { const c = takeChunk(); if (held.length || !stream || !stream(c)) held.push(c) }
 /** after a draw: hand over what has built up, if enough has */

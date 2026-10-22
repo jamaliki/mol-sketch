@@ -16,7 +16,7 @@ import { selectAtoms } from '../model/selection';
 import { pcaBasis } from '../render/pca';
 import { Camera as ViewCamera } from '../render/camera';
 import { pocketSel, frameSite, labelSite, type FigLabel, type SiteHost } from '../app/site';
-import { RecCanvas, endRender, release, setMeasure, textureHost } from './canvas';
+import { RecCanvas, endRender, release, setFrame, setMeasure, textureHost } from './canvas';
 
 export type Camera = { yaw: number; pitch: number; roll: number; zoom: number; panX: number; panY: number; fov?: number | null };
 export interface FigureSpec {
@@ -205,7 +205,7 @@ export function render(spec: FigureSpec, measure?: (font: string, text: string) 
   if (measure) setMeasure(measure);
   (classic() as any).setTextureHost(textureHost);   // the host's kept textures (when it says which it has: setHostTextures)
   (classic() as any).setTextGate(gate || null);   // gate: true when a text the frame measures has words the host must learn (then nothing is drawn)
-  const f = settle(spec); const c = new RecCanvas(); c.width = Math.round(f.W * f.dpr); c.height = Math.round(f.H * f.dpr);
+  const f = settle(spec); const c = new RecCanvas(); setFrame(c.id); c.width = Math.round(f.W * f.dpr); c.height = Math.round(f.H * f.dpr);
   const ctx = c.getContext('2d') as any; const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: c.width, h: c.height, map: f.map, localRes: f.localRes };
   const t0 = Date.now();
   try {

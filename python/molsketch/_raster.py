@@ -124,6 +124,8 @@ class Raster:
         self.meta: dict[int, dict] = {}                        # what SVG needs of a paint that it does not tell: its pattern, its blur
         self.lazy = False                                      # draw canvases only when their pixels are needed (for SVG)
         self.keep = False                                      # keep the ops drawn, so a canvas can be written as SVG too
+        self.watch = False                                     # lazy until the frame's canvas shows more than shapes
+        self.clipped = False                                   # the frame's canvas clips (since its last resize)
         self.text = text
         self.textures = None                                   # the textures kept between runs (_textures.py), if any
         self.missing: set[str] = set()                         # those it said it had and could not give back, this render
@@ -134,12 +136,13 @@ class Raster:
         d = json.loads(js) if isinstance(js, str) else js
         p = d["paints"]
         if p: self.specs.update(zip(p[0::2], p[1::2]))
-        mv = memoryview(runs); fed = []
+        mv = memoryview(runs); fed = []; frame = d.get("frame")
         for cid, c in d["canvases"].items():
             cid = int(cid); lv = self.live.get(cid)
             if lv is None: lv = self.live[cid] = _Live(cid)
             if c["start"] != lv.n: raise RuntimeError(f"canvas {cid}: ops out of order ({c['start']} after {lv.n})")
             ops = c["ops"]; lv.n += len(ops)
+            if self.watch and cid == frame: self._watch(ops)
             for i, o in enumerate(ops):
                 k = o[0]
                 if k == "F": ops[i] = ("F", o[1], o[2], [(_read_path(mv[o[j]:o[j] + o[j + 1]]), o[j + 2]) for j in range(3, len(o), 3)])
@@ -149,6 +152,19 @@ class Raster:
         if not self.lazy:
             for lv in fed: self._pump(lv)
         for cid in d["dead"]: self.drop(cid)
+
+    def _watch(self, ops: list):
+        """the frame canvas's new ops, watched while it might be shapes alone (``watch``): at a clip, a picture or a
+        snapshot of it, it is drawn as pixels from then on (every canvas drawn as far as it has come), as ``render``
+        draws it, so the pixels are ready when V8 is done"""
+        for o in ops:
+            k = o[0]
+            if k == "size": self.clipped = False; continue   # (SVG writes what comes after the last resize)
+            if k == "clip": self.clipped = True
+            elif k not in ("img", "snap", "ext", "keep"): continue
+            if self.lazy:
+                self.lazy = False
+                for lv in list(self.live.values()): self._pump(lv)
 
     def _pump(self, lv: _Live, until: int | None = None):
         """draw a canvas's queued ops (up to and including snapshot `until`)"""
@@ -215,6 +231,7 @@ class Raster:
 
     def end_render(self):
         """the render's paints: no op still to draw refers to them"""
+        self.clipped = False
         for p in self.paints.values():
             if p is not None and p.__class__ is not tuple: self.meta.pop(id(p), None)
         self.specs.clear(); self.paints.clear()
