@@ -4,8 +4,10 @@
      input → look → style → set → the scene's own view → camera → labels / group colours → fit points
    and then draws with the classic engine exactly as the app's runSketch('classic') does. Structures are parsed once
    and cached by their text. */
-import { parseStructure } from '../model/parse';
+import { parseFirst } from '../model/parse';
 import type { Structure } from '../model/structure';
+import type { OrderHints } from '../model/bondorder';
+import { modelBytes, modelFrom } from '../model/kept';
 import { DEFAULT_STYLE, cloneStyle, mergeStyle, PALETTES, type Style } from '../style';
 import { LOOKS } from '../looks';
 import { GROUP_PALETTES, ribbonColours } from '../palettes';
@@ -16,7 +18,7 @@ import { selectAtoms } from '../model/selection';
 import { pcaBasis } from '../render/pca';
 import { Camera as ViewCamera } from '../render/camera';
 import { pocketSel, frameSite, labelSite, type FigLabel, type SiteHost } from '../app/site';
-import { RecCanvas, endRender, release, setMeasure, textureHost } from './canvas';
+import { RecCanvas, endRender, release, setFrame, setMeasure, textureHost } from './canvas';
 
 export type Camera = { yaw: number; pitch: number; roll: number; zoom: number; panX: number; panY: number; fov?: number | null };
 export interface FigureSpec {
@@ -57,15 +59,29 @@ export function drop(ref: string) { inputs.delete(ref) }
 /** structures read, kept by what they were read from: the input it came in (`owner`, an input the host registered
     once, or a stack's file), and, so that two figures of one file share it, by the text's name, length and a hash of
     the whole of it -- never its name and ends alone: two runs' run1/model.pdb and run2/model.pdb, alike but for their
-    middles, are two structures */
-const parsed = new Map<string, Structure>(), owned = new WeakMap<object, Structure>();
+    middles, are two structures. An input may come with the structure its text gives as the host kept it from an
+    earlier run (`model`, kept.ts): read back from that, not parsed */
+const parsed = new Map<string, Structure>(), owned = new WeakMap<object, Structure>(), hintsOf = new WeakMap<Structure, OrderHints>();
 function structureOf(text: string, name: string, owner?: object): Structure {
   let s = owner ? owned.get(owner) : undefined; if (s) return s;
   // (the host may hand over its own hash of the text with it, worked out in C: a ribosome's 25 MB took 35 ms here)
   const hash = (owner as any)?.hash; const key = name + '\u0000' + text.length + '\u0000' + (typeof hash === 'string' && hash ? 'h' + hash : textHash(text));
-  s = parsed.get(key); if (!s) { s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, '')); parsed.set(key, s); if (parsed.size > 8) parsed.delete(parsed.keys().next().value!) }
+  s = parsed.get(key);
+  if (!s) {
+    const nm = name.replace(/\.(pdb|ent|cif|mmcif)$/i, ''), model = (owner as any)?.model;
+    if (model) { s = modelFrom(model, nm) ?? undefined; delete (owner as any).model }
+    if (!s) { const p = parseFirst(text, nm); s = p.s; hintsOf.set(s, p.hints) }
+    parsed.set(key, s); if (parsed.size > 8) parsed.delete(parsed.keys().next().value!);
+  }
   if (owner) owned.set(owner, s);
   return s;
+}
+/** the structure an input's text gives, read now, as bytes for the host to keep (kept.ts); null for an input that is
+    not a structure's text, one that does not read (its use says why), or one read back from what the host kept */
+export function modelOf(ref: string): ArrayBuffer | null {
+  const inp = inputs.get(ref); if (!inp || typeof inp.text !== 'string') return null;
+  let s: Structure; try { s = structureOf(inp.text, inp.name, inp) } catch { return null }
+  const h = hintsOf.get(s); return h ? modelBytes(s, h) : null;
 }
 /** a 53-bit hash of the whole of a text (cyrb53): a few milliseconds for a megabyte, once for each input */
 function textHash(text: string): string {
@@ -205,7 +221,7 @@ export function render(spec: FigureSpec, measure?: (font: string, text: string) 
   if (measure) setMeasure(measure);
   (classic() as any).setTextureHost(textureHost);   // the host's kept textures (when it says which it has: setHostTextures)
   (classic() as any).setTextGate(gate || null);   // gate: true when a text the frame measures has words the host must learn (then nothing is drawn)
-  const f = settle(spec); const c = new RecCanvas(); c.width = Math.round(f.W * f.dpr); c.height = Math.round(f.H * f.dpr);
+  const f = settle(spec); const c = new RecCanvas(); setFrame(c.id); c.width = Math.round(f.W * f.dpr); c.height = Math.round(f.H * f.dpr);
   const ctx = c.getContext('2d') as any; const R: any = { structure: f.structure, camera: f.camera, overrides: f.overrides, fitPoints: f.fitPoints, labels: f.labels, w: c.width, h: c.height, map: f.map, localRes: f.localRes };
   const t0 = Date.now();
   try {
