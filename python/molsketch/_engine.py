@@ -119,9 +119,8 @@ class Engine:
     def __init__(self):
         _init_v8()
         self.v8 = MiniRacer()
-        self.v8.eval(CORE.read_text())
-        self.v8.eval(PRELUDE.replace("%RING%", str(RING)))
         self._line = Line.of(self.v8)   # calls from this thread straight to V8 (_v8.py), where mini-racer allows
+        with turns(): self._eval(CORE.read_text()); self._eval(PRELUDE.replace("%RING%", str(RING)))
         self._answers: collections.OrderedDict[str, str] = collections.OrderedDict(); self._answer_chars = 0
         self.text = TextEngine()
         self.raster = Raster(self.text)
@@ -133,17 +132,19 @@ class Engine:
         self.models = ModelCache(_core_id()); self._modelled: set[str] = set()
         self._told: list[str] | None = None
         # the ring the engine writes its recording into, read in place, and the notification that a record is there:
-        # handled on mini-racer's event-loop thread, so the replay runs while V8 goes on drawing
+        # taken in by the thread waiting for the render (or, reached through mini-racer's own calls, on its event-loop
+        # thread), so the replay runs while V8 goes on drawing
         self._maps: dict[int, tuple] = {}
         self._put_text = None
-        self._ring = self.v8.eval("__RING"); self._i32 = self._ring.cast("i"); self._read = 0; self._err = None
+        self._ring = self._eval("__RING"); self._i32 = self._ring.cast("i"); self._read = 0; self._err = None
         ctx = self.v8._ctx
-        if self._line is not None: note = self._line.notifier()   # taken in by the thread that asked for the render
-        else:   # handled on mini-racer's event-loop thread
+        if self._line is not None: note = self._line.notifier()
+        else:
             async def register():
                 cm = ctx._register_js_notification(self._on_record); return cm, cm.__enter__()
             self._note_cm, note = asyncio.run_coroutine_threadsafe(register(), ctx.event_loop).result()
-        self.v8.eval("(f) => { globalThis.__note = f }")(note)
+        hand = self._eval("(f) => { globalThis.__note = f; return 0 }")
+        with turns(): self._line.call(hand, note) if self._line is not None else hand(note)
 
     def _resync(self):
         """after the engine threw mid-render: take what it had recorded, so the canvases here stay in step with its own,
