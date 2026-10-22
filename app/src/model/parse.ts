@@ -2,13 +2,17 @@
 import { Structure, COV_R, type AtomRecord, type SSRecord } from './structure';
 import { assignBondOrders, type OrderHints } from './bondorder';
 
-export function parseModels(text: string, name = ''): Structure[] {
-  const hints: OrderHints = {};
+export function parseModels(text: string, name = ''): Structure[] { return readModels(text, name, {}) }
+export function parseStructure(text: string, name = ''): Structure { return parseFirst(text, name).s }
+/** the first model, and what its bonds' orders will be worked out with (kept.ts keeps both) */
+export function parseFirst(text: string, name = ''): { s: Structure; hints: OrderHints } {
+  const hints: OrderHints = {}, m = readModels(text, name, hints); if (!m.length) throw new Error('no atoms found'); return { s: m[0], hints };
+}
+function readModels(text: string, name: string, hints: OrderHints): Structure[] {
   const out = (/^\s*data_/.test(text) || text.indexOf('_atom_site.') >= 0) ? parseCIF(text, hints) : parsePDB(text, hints);
   for (const s of out) { s.name = name; s.deferBonds(() => { s.inferBonds(); assignBondOrders(s, hints) }) }
   return out;
 }
-export function parseStructure(text: string, name = ''): Structure { const m = parseModels(text, name); if (!m.length) throw new Error('no atoms found'); return m[0] }
 
 function elementFromName(name: string): string {
   let el = name.replace(/[^A-Za-z]/g, '').toUpperCase();

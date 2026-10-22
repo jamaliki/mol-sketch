@@ -110,3 +110,35 @@ def test_svg_or_image_draws_pixels_only_for_a_picture(monkeypatch):
     assert flat.svg_or_image(SMALL) == want[0] and SMALL not in drawn
     img = surface.svg_or_image(SMALL)
     assert isinstance(img, ms.Image) and np.array_equal(img.to_numpy(), want[1]) and SMALL in drawn
+
+
+def test_a_large_structure_is_read_once_across_runs(tmp_path, monkeypatch):
+    """a large structure's text read by one run is kept as read (MOLSKETCH_CACHE/models), and a later run reads it back
+    from there instead of from its text: the same residues, settled figure, scene and drawings (sticks, whose bonds and
+    their orders are worked out from what was kept, ribbons and a surface). A file that is not the engine's, or of
+    another version, is passed over and the text read"""
+    import molsketch._engine as E
+    monkeypatch.setenv("MOLSKETCH_CACHE", str(tmp_path)); monkeypatch.setattr(E, "SMALLEST", 0)   # (every structure: these are small)
+    text = (EX / "test_protein_rna.cif").read_text()
+
+    def answers(e):
+        ref = e.put({"text": text, "name": "rna.cif"})
+        spec = lambda **k: {"input": {"ref": ref}, "size": list(SMALL), "scale": 1, "frame": 0, **k}
+        sticks = {"reps.sticks": "all", "reps.cartoon": ""}
+        return (e.call("residues", spec()), e.call("info", spec(look="flat")), e.call("sceneJson", spec(style=sticks)),
+                [e.render(spec(look=look, style=style)).toarray() for look, style in (("engraved-colour", sticks), ("flat", {}), ("ink", {"reps.surface": "polymer"}))],
+                e.render_svg(spec(look="flat", style=sticks)))
+
+    def same(a, b):
+        return a[:3] == b[:3] and all(np.array_equal(x, y) for x, y in zip(a[3], b[3])) and a[4] == b[4]
+
+    first = Engine(); read = answers(first); first.v8.close()
+    kept = list((tmp_path / "models").glob("*.msm")); assert len(kept) == 1
+    given = []; load = E.ModelCache.load
+    monkeypatch.setattr(E.ModelCache, "load", lambda self, key: given.append(load(self, key)) or given[-1])
+    again = Engine(); assert same(answers(again), read) and given[-1] is not None; again.v8.close()
+    data = bytearray(kept[0].read_bytes()); i = data.index(b"KMSM") + 4; data[i] = 99   # another version of the layout
+    kept[0].write_bytes(bytes(data))
+    other = Engine(); assert same(answers(other), read) and given[-1] is not None; other.v8.close()
+    kept[0].write_bytes(b"not a structure")
+    broken = Engine(); assert same(answers(broken), read) and given[-1] is None; broken.v8.close()

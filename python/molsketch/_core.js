@@ -1190,6 +1190,7 @@
     frames: () => frames,
     info: () => info,
     labelTheSite: () => labelTheSite,
+    modelOf: () => modelOf,
     pocket: () => pocket,
     put: () => put,
     putMap: () => putMap,
@@ -2133,8 +2134,12 @@
   }
 
   // src/model/parse.ts
-  function parseModels(text, name = "") {
-    const hints = {};
+  function parseFirst(text, name = "") {
+    const hints = {}, m = readModels(text, name, hints);
+    if (!m.length) throw new Error("no atoms found");
+    return { s: m[0], hints };
+  }
+  function readModels(text, name, hints) {
     const out = /^\s*data_/.test(text) || text.indexOf("_atom_site.") >= 0 ? parseCIF(text, hints) : parsePDB(text, hints);
     for (const s of out) {
       s.name = name;
@@ -2144,11 +2149,6 @@
       });
     }
     return out;
-  }
-  function parseStructure(text, name = "") {
-    const m = parseModels(text, name);
-    if (!m.length) throw new Error("no atoms found");
-    return m[0];
   }
   function elementFromName(name) {
     let el = name.replace(/[^A-Za-z]/g, "").toUpperCase();
@@ -2532,6 +2532,149 @@
     const entities = {};
     for (const e in ent) entities[e] = { desc: ent[e].desc };
     return [...models.values()].map((recs) => Structure.fromRecords(recs, { H, E }, entities, chainEnt));
+  }
+
+  // src/model/kept.ts
+  var MAGIC = 1297304907;
+  var VERSION = 1;
+  function modelBytes(s, hints) {
+    const n = s.count, R = s.residues, nr = R.length;
+    const strings = [], index = /* @__PURE__ */ new Map();
+    const str = (v) => {
+      let k = index.get(v);
+      if (k === void 0) {
+        k = strings.length;
+        strings.push(v);
+        index.set(v, k);
+      }
+      return k;
+    };
+    const el = new Uint16Array(n), nm = new Uint16Array(n);
+    for (let i = 0; i < n; i++) {
+      el[i] = str(s.element[i]);
+      nm[i] = str(s.atomName[i]);
+    }
+    const chain = new Int32Array(nr), resn = new Int32Array(nr), entity = new Int32Array(nr);
+    for (let r = 0; r < nr; r++) {
+      chain[r] = str(R[r].chain);
+      resn[r] = str(R[r].resn);
+      entity[r] = str(R[r].entity);
+    }
+    if (strings.length > 65535) return null;
+    const entries = (m) => m ? [...m].map(([k, v]) => [k, [...v]]) : null;
+    const json = JSON.stringify({
+      strings,
+      entities: s.entities,
+      chains: s.chains,
+      center: s.center,
+      radius: s.radius,
+      hints: { comp: entries(hints.comp), conect: entries(hints.conect) }
+    });
+    const pad = (b) => b + 3 & ~3;
+    const size = (20 + pad(2 * json.length) + 24 * n + 2 * pad(n) + 2 * pad(2 * n) + 7 & ~7) + 8 * nr + 28 * nr + pad(3 * nr);
+    const buf = new ArrayBuffer(size);
+    let o = 0;
+    const head = new Int32Array(buf, 0, 5);
+    head.set([MAGIC, VERSION, n, nr, json.length]);
+    o = 20;
+    const J = new Uint16Array(buf, o, json.length);
+    for (let i = 0; i < json.length; i++) J[i] = json.charCodeAt(i);
+    o += pad(2 * json.length);
+    const put2 = (src, Kind, bytes) => {
+      new Kind(buf, o, src.length).set(src);
+      o += pad(bytes);
+    };
+    for (const a of [s.x, s.y, s.z, s.b]) put2(a, Float32Array, 4 * n);
+    put2(s.residueOf, Int32Array, 4 * n);
+    put2(s.serial, Int32Array, 4 * n);
+    put2(s.het, Uint8Array, n);
+    put2(s.flags, Uint8Array, n);
+    put2(el, Uint16Array, 2 * n);
+    put2(nm, Uint16Array, 2 * n);
+    o = o + 7 & ~7;
+    const resi = new Float64Array(buf, o, nr);
+    for (let r = 0; r < nr; r++) resi[r] = R[r].resi;
+    o += 8 * nr;
+    const cols = [Int32Array.from(R, (r) => r.atomStart), Int32Array.from(R, (r) => r.atomEnd), Int32Array.from(R, (r) => r.trace), Int32Array.from(R, (r) => r.orient), chain, resn, entity];
+    for (const c of cols) put2(c, Int32Array, 4 * nr);
+    const flags = new Uint8Array(buf, o, 3 * nr);
+    for (let r = 0; r < nr; r++) {
+      flags[r] = (R[r].het ? 1 : 0) | (R[r].nucleic ? 2 : 0);
+      flags[nr + r] = R[r].ss.charCodeAt(0);
+      flags[2 * nr + r] = R[r].subunit.charCodeAt(0);
+    }
+    return buf;
+  }
+  function modelFrom(buf, name) {
+    if (!(buf instanceof ArrayBuffer) || buf.byteLength < 20) return null;
+    const [magic, version, n, nr, jl] = new Int32Array(buf, 0, 5);
+    if (magic !== MAGIC || version !== VERSION) return null;
+    const pad = (b) => b + 3 & ~3;
+    let o = 20;
+    const J = new Uint16Array(buf, o, jl);
+    let json = "";
+    for (let i = 0; i < jl; i += 8192) json += String.fromCharCode.apply(null, J.subarray(i, Math.min(jl, i + 8192)));
+    o += pad(2 * jl);
+    const d = JSON.parse(json);
+    const S = d.strings;
+    const take = (Kind, len, bytes) => {
+      const a = new Kind(buf.slice(o, o + bytes));
+      o += pad(bytes);
+      return a;
+    };
+    const s = new Structure();
+    s.name = name;
+    s.count = n;
+    s.x = take(Float32Array, n, 4 * n);
+    s.y = take(Float32Array, n, 4 * n);
+    s.z = take(Float32Array, n, 4 * n);
+    s.b = take(Float32Array, n, 4 * n);
+    s.residueOf = take(Int32Array, n, 4 * n);
+    s.serial = take(Int32Array, n, 4 * n);
+    s.het = take(Uint8Array, n, n);
+    s.flags = take(Uint8Array, n, n);
+    const el = take(Uint16Array, n, 2 * n), nm = take(Uint16Array, n, 2 * n);
+    for (let i = 0; i < n; i++) {
+      s.element.push(S[el[i]]);
+      s.atomName.push(S[nm[i]]);
+    }
+    o = o + 7 & ~7;
+    const resi = new Float64Array(buf, o, nr);
+    o += 8 * nr;
+    const [atomStart, atomEnd, trace2, orient, chain, resn, entity] = Array.from({ length: 7 }, () => new Int32Array(buf, (o += 4 * nr) - 4 * nr, nr));
+    const flags = new Uint8Array(buf, o, 3 * nr);
+    for (let r = 0; r < nr; r++) {
+      const res = {
+        index: r,
+        chain: S[chain[r]],
+        resi: resi[r],
+        resn: S[resn[r]],
+        atomStart: atomStart[r],
+        atomEnd: atomEnd[r],
+        het: !!(flags[r] & 1),
+        nucleic: !!(flags[r] & 2),
+        trace: trace2[r],
+        ss: String.fromCharCode(flags[nr + r]),
+        entity: S[entity[r]],
+        subunit: String.fromCharCode(flags[2 * nr + r]),
+        orient: orient[r]
+      };
+      s.residues.push(res);
+    }
+    s.chains = d.chains;
+    s.entities = d.entities;
+    s.center = d.center;
+    s.radius = d.radius;
+    const maps2 = (e) => e ? new Map(e.map(([k, v]) => [k, new Map(v)])) : void 0;
+    const hints = {};
+    const comp = maps2(d.hints.comp), conect = maps2(d.hints.conect);
+    if (comp) hints.comp = comp;
+    if (conect) hints.conect = conect;
+    s.deferBonds(() => {
+      s.inferBonds();
+      assignBondOrders(s, hints);
+    });
+    return s;
   }
 
   // src/style.ts
@@ -12015,6 +12158,7 @@
   }
   var parsed2 = /* @__PURE__ */ new Map();
   var owned = /* @__PURE__ */ new WeakMap();
+  var hintsOf = /* @__PURE__ */ new WeakMap();
   function structureOf(text, name, owner) {
     let s = owner ? owned.get(owner) : void 0;
     if (s) return s;
@@ -12022,12 +12166,33 @@
     const key2 = name + "\0" + text.length + "\0" + (typeof hash === "string" && hash ? "h" + hash : textHash(text));
     s = parsed2.get(key2);
     if (!s) {
-      s = parseStructure(text, name.replace(/\.(pdb|ent|cif|mmcif)$/i, ""));
+      const nm = name.replace(/\.(pdb|ent|cif|mmcif)$/i, ""), model = owner?.model;
+      if (model) {
+        s = modelFrom(model, nm) ?? void 0;
+        delete owner.model;
+      }
+      if (!s) {
+        const p = parseFirst(text, nm);
+        s = p.s;
+        hintsOf.set(s, p.hints);
+      }
       parsed2.set(key2, s);
       if (parsed2.size > 8) parsed2.delete(parsed2.keys().next().value);
     }
     if (owner) owned.set(owner, s);
     return s;
+  }
+  function modelOf(ref) {
+    const inp = inputs.get(ref);
+    if (!inp || typeof inp.text !== "string") return null;
+    let s;
+    try {
+      s = structureOf(inp.text, inp.name, inp);
+    } catch {
+      return null;
+    }
+    const h = hintsOf.get(s);
+    return h ? modelBytes(s, h) : null;
   }
   function textHash(text) {
     let h1 = 3735928559, h2 = 1103547991;

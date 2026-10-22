@@ -132,6 +132,15 @@ used first out), so a later run starts from their pixels: a 1920 × 1440 waterco
 to 0.5 s, a chalkboard's from 5.7 s to 0.7 s, with the same pixels. `MOLSKETCH_TEXTURE_CACHE_MB` sets the limit; 0
 turns the cache off.
 
+A large structure's text (2 million characters or more) is kept as read, too (`~/.cache/molsketch/models`, by a hash of
+the text, at most 300 MB): a later run reads it back instead of parsing it, a human ribosome's 25 MB of mmCIF in 0.04 s
+rather than 0.3. `MOLSKETCH_MODEL_CACHE_MB` sets the limit; 0 turns it off.
+
+The engine is called straight from the thread that asks, not through mini-racer's event loop, and Python's thread turns
+are kept short while it works: beside another busy Python thread, a call takes a millisecond rather than fifty. A
+figure's settled style (`style`, `camera`, what `Figure._info` asks) is asked of the engine once for each state of the
+figure.
+
 ## Development
 
 The drawing core is built from the app's source (`app/src/headless/`) into `molsketch/_core.js`, and the app itself

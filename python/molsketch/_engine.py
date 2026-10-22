@@ -18,6 +18,7 @@ import skia
 import py_mini_racer
 from py_mini_racer import MiniRacer
 
+from ._models import SMALLEST, ModelCache
 from ._raster import Raster
 from ._text import TextEngine
 from ._textures import TextureCache
@@ -72,6 +73,11 @@ globalThis.__MB = null;
 globalThis.__mapBuf = (n) => { __MB = new Float32Array(n); return __MB.buffer };
 globalThis.__putMap = (ref, header) => { const r = MolSketchCore.putMap(ref, JSON.parse(header), __MB); __MB = null; return r };
 globalThis.__abort = null;
+// a large structure as read, kept between runs (_models.py): handed in, written by the host straight into this buffer,
+// or read now and handed out
+globalThis.__MODEL = null;
+globalThis.__modelBuf = (n) => { __MODEL = new ArrayBuffer(n); return __MODEL };
+globalThis.__keepModel = (ref) => { __MODEL = MolSketchCore.modelOf(ref); return __MODEL ? __MODEL.byteLength : 0 };
 globalThis.__render = (spec) => { __miss = []; __abort = null; let r;
   try { r = MolSketchCore.render(JSON.parse(spec), __measure, () => __miss.length > 0) /* words to learn: the frame stops before drawing */ } catch (e) { __last = (e && e.chunks) || []; __abort = e && e.canvas; throw e }
   __last = r.chunks;
@@ -123,6 +129,8 @@ class Engine:
         # render, and takes those instead of drawing them
         self.textures = TextureCache(_host_id())
         if self.textures.on: self.raster.textures = self.textures
+        # large structures as read by earlier runs (files), and the texts this engine has been handed (by their key)
+        self.models = ModelCache(_core_id()); self._modelled: set[str] = set()
         self._told: list[str] | None = None
         # the ring the engine writes its recording into, read in place, and the notification that a record is there:
         # handled on mini-racer's event-loop thread, so the replay runs while V8 goes on drawing
@@ -214,13 +222,24 @@ class Engine:
         if isinstance(value, dict) and value.keys() == {"text", "name"} and isinstance(value["text"], str):
             # a structure's text handed to V8 as a string: as JSON in a call (escaped twice, then parsed as a script and
             # again as JSON) a ribosome's 25 MB of mmCIF took 0.2 s, as a string 10 ms
+            text = value["text"]; key = kept = made = None
+            if self.models.on and len(text) >= SMALLEST:   # a large structure: as an earlier run read it, if one did
+                key = ModelCache.key(text)
+                if key in self._modelled: key = None   # (handed over before: the core has it, by its text)
+                else: kept = self.models.load(key)
             with self._lock, turns():
                 # (with the text's hash, worked out here in C, which the core keys what it read by: its own would be a
                 # pass over every character)
-                if self._put_text is None: self._put_text = self.v8.eval("(ref, name, text, hash) => MolSketchCore.put(ref, { text, name, hash })")
-                given = (ref, str(value["name"]), value["text"], format(hash(value["text"]) & 0xFFFFFFFFFFFFFFFF, "x"))
+                if self._put_text is None:
+                    self._put_text = self.v8.eval("(ref, name, text, hash, kept) => { MolSketchCore.put(ref, kept ? { text, name, hash, model: __MODEL } : { text, name, hash }); __MODEL = null; return ref }")
+                if kept is not None: self._eval(f"__modelBuf({len(kept)})")[:] = kept
+                given = (ref, str(value["name"]), text, format(hash(text) & 0xFFFFFFFFFFFFFFFF, "x"), kept is not None)
                 try: self._line.call(self._put_text, *given) if self._line is not None else self._put_text(*given)
                 except Exception as e: raise CoreError(_js_message(e)) from None
+                if key is not None and kept is None and self._js("__keepModel", ref):   # read now, to be kept for later runs
+                    made = bytes(self._eval("__MODEL")); self._eval("__MODEL = null, 0")
+            if key is not None: self._modelled.add(key)
+            if made: self.models.keep(key, made)
             return ref
         self.call("put", ref, value)
         return ref
@@ -312,6 +331,11 @@ def _host_id() -> str:
     h = hashlib.sha1(skia.__version__.encode())
     for f in (CORE, pathlib.Path(__file__).resolve().parent / "_raster.py", pathlib.Path(__file__).resolve().parent / "_blur.py"): h.update(f.read_bytes())
     return h.hexdigest()[:16]
+
+
+def _core_id() -> str:
+    """the engine a kept structure was read by: a hash of its code"""
+    return hashlib.sha1(CORE.read_bytes()).hexdigest()[:16]
 
 
 def _js_message(e: Exception) -> str:
