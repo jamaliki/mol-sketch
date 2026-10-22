@@ -19,6 +19,7 @@ import subprocess
 import urllib.request
 from typing import Iterable
 
+from . import _cache
 from ._engine import CoreError
 from ._figure import Figure, looks, palettes, default_style
 from ._image import Image
@@ -59,22 +60,34 @@ def load(source, *, name: str | None = None, format: str | None = None) -> Figur
 
 def fetch(pdb_id: str, *, map: bool = False, **kw) -> Figure:
     """Make a figure of a PDB entry, such as ``"2PTN"``. The file is downloaded from RCSB once and kept in
-    ``~/.cache/molsketch`` (or the folder in the ``MOLSKETCH_CACHE`` environment variable). With ``map=True``, the
-    cryo-EM map the model was built into comes too (from EMDB; see ``Figure.map``). Takes the same keywords as
-    ``load``."""
+    ``~/.cache/molsketch`` (or the folder in the ``MOLSKETCH_CACHE`` environment variable; at most 500 MB of entries,
+    the least recently used going first, or ``MOLSKETCH_DOWNLOAD_CACHE_MB``). With ``map=True``, the cryo-EM map the
+    model was built into comes too (from EMDB; see ``Figure.map``). Takes the same keywords as ``load``."""
     if map: return fetch(pdb_id, **kw).map("auto")
     pid = pdb_id.strip().upper()
     if not re.fullmatch(r"[0-9][A-Z0-9]{3}", pid): raise ValueError(f"{pdb_id!r} is not a PDB ID: four characters, starting with a digit, e.g. 1A8O")
-    cache = pathlib.Path(os.environ.get("MOLSKETCH_CACHE", pathlib.Path.home() / ".cache" / "molsketch")); cache.mkdir(parents=True, exist_ok=True)
-    f = cache / f"{pid}.cif"
-    if not f.exists():
-        url = f"https://files.rcsb.org/download/{pid}.cif"
+    name = kw.pop("name", None) or pid; kw.pop("format", None)   # (an entry is mmCIF)
+    if kw: raise TypeError(f"fetch() got an unexpected keyword argument {next(iter(kw))!r}")
+    return Figure({"text": _entry_text(pid), "name": f"{pid}.cif"}, name)
+
+
+def _entry_text(pid: str) -> str:
+    """a PDB entry's mmCIF, from the cache or else from RCSB (and kept)"""
+    downloads = _cache.shelf("downloads"); f = downloads.dir / f"{pid}.cif"
+    if downloads.on:
         try:
-            data = _download(url)
-        except FileNotFoundError:
-            raise ValueError(f"{pid} is not in the PDB") from None
-        f.write_bytes(data)
-    return load(f, name=kw.pop("name", pid), **kw)
+            text = _lines(f.read_bytes()); downloads.used(f); return text
+        except (FileNotFoundError, ValueError): pass   # not fetched yet, or let go since (by this process or another)
+    try: data = _download(f"https://files.rcsb.org/download/{pid}.cif")
+    except FileNotFoundError: raise ValueError(f"{pid} is not in the PDB") from None
+    downloads.put(f, data)
+    return _lines(data)
+
+
+def _lines(data: bytes) -> str:
+    """a text file's bytes as reading it as text gives them (UTF-8, its line ends as \\n)"""
+    s = data.decode()
+    return s.replace("\r\n", "\n").replace("\r", "\n") if "\r" in s else s
 
 
 def load_map(source, *, name: str | None = None, level: float | None = None, max_voxels: int = 320) -> Figure:
@@ -90,8 +103,9 @@ def load_map(source, *, name: str | None = None, level: float | None = None, max
 
 
 def fetch_map(emdb_id: str, *, max_voxels: int = 320) -> Figure:
-    """Make a figure of an EMDB entry's map on its own, such as ``"EMD-11638"``: downloaded once (kept in
-    ``~/.cache/molsketch/emdb``), with the depositors' recommended contour level."""
+    """Make a figure of an EMDB entry's map on its own, such as ``"EMD-11638"``: downloaded once and kept as read
+    (``~/.cache/molsketch/emdb``, at most 1000 MB of maps, or ``MOLSKETCH_MAP_CACHE_MB``), with the depositors'
+    recommended contour level."""
     from ._maps import fetch_map as _fm
     return load_map(_fm(emdb_id, max_voxels=max_voxels))
 

@@ -92,9 +92,8 @@ class _Handler(BaseHTTPRequestHandler):
                 pathlib.Path(tmp).write_bytes(raw)
                 m = read_map(tmp, name=q.get("name") or "map", level=float(q["level"]) if q.get("level") else None)
                 m.data = m.data.copy()   # off the temporary file
-            finally:
-                for p in (tmp, tmp[:-3] if tmp.endswith(".gz") else None):
-                    if p and os.path.exists(p): os.remove(p)
+            finally:   # (a gzipped one is read as it is decompressed: nothing is written beside it)
+                if os.path.exists(tmp): os.remove(tmp)
             m.meta = {"mass": float(q["mass"]) if q.get("mass") else None, "resolution": float(q["resolution"]) if q.get("resolution") else None}
         ref = engine().put_map(m)
         return self._json({"ref": ref, **m.header()})

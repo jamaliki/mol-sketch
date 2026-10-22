@@ -59,7 +59,10 @@ ms.load("mechanism.json").look("chalkboard").animate("loop.mp4")
 ```
 
 `pip install ./python`, then `molsketch render …` from the terminal, or `molsketch serve` for the app itself with every
-figure drawn by the package.
+figure drawn by the package. What it fetches and what it draws once is kept in `~/.cache/molsketch`, every cache within
+a bound of its own: structures from the PDB 500 MB (`MOLSKETCH_DOWNLOAD_CACHE_MB`), EMDB maps 1000 MB
+(`MOLSKETCH_MAP_CACHE_MB`), paper and chalk textures 300 MB (`MOLSKETCH_TEXTURE_CACHE_MB`), large structures kept as read
+300 MB (`MOLSKETCH_MODEL_CACHE_MB`); 0 turns one off ([python/README.md](python/README.md#what-it-keeps-on-disk)).
 
 ## The app
 

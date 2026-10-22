@@ -141,6 +141,31 @@ are kept short while it works: beside another busy Python thread, a call takes a
 figure's settled style (`style`, `camera`, what `Figure._info` asks) is asked of the engine once for each state of the
 figure.
 
+## What it keeps on disk
+
+Everything kept between runs is in `~/.cache/molsketch` (or the folder `MOLSKETCH_CACHE` names), in four caches. Each
+has a bound in megabytes, set by its own environment variable; past it the least recently used entries go first, and 0
+turns that cache off.
+
+| what | where | bound | variable |
+|---|---|---|---|
+| structures `fetch` downloaded from the PDB | `2PTN.cif` and so on | 500 MB | `MOLSKETCH_DOWNLOAD_CACHE_MB` |
+| EMDB maps as read (averaged down), with their records | `emdb/` | 1000 MB | `MOLSKETCH_MAP_CACHE_MB` |
+| the paper, its grain and the chalkboard's tooth | `textures/` | 300 MB | `MOLSKETCH_TEXTURE_CACHE_MB` |
+| large structures kept as read | `models/` | 300 MB | `MOLSKETCH_MODEL_CACHE_MB` |
+
+A file is touched when it is used. A cache is pruned when something is written to it, and once when a process first
+uses it (so a lowered bound comes down at once), never as it is read. An entry larger than its cache's whole bound is
+kept alone: the rest of that cache goes to make room for it, and it goes when anything else is kept. Several processes
+can share the caches: entries are written whole and then put in place, and one that another process let go is fetched,
+read or drawn again.
+
+An EMDB map is kept as it is drawn, averaged down to `max_voxels` a side, rather than as EMDB serves it: TRPV1's 256³
+map (EMD-5778) takes 67 MB rather than 115 (its gzipped download and a decompressed copy, as kept before), a 512³ map
+67 MB rather than 537 and its download, and a later run maps it straight from the file in about 10 ms instead of
+averaging the whole map down again (0.44 s for the 512³ one). Another `max_voxels` downloads the map again. A gzipped
+map file of your own is decompressed as it is read; nothing is written beside it.
+
 ## Development
 
 The drawing core is built from the app's source (`app/src/headless/`) into `molsketch/_core.js`, and the app itself
