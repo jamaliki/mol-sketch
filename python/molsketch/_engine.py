@@ -3,13 +3,13 @@ replayed in Skia. One Engine per process is plenty; it keeps parsed structures, 
 from __future__ import annotations
 
 import asyncio
+import collections
 import gc
 import hashlib
 import itertools
 import json
 import os
 import pathlib
-import sys
 import threading
 
 import numpy as np
@@ -21,6 +21,7 @@ from py_mini_racer import MiniRacer
 from ._raster import Raster
 from ._text import TextEngine
 from ._textures import TextureCache
+from ._v8 import Line, turns
 
 CORE = pathlib.Path(__file__).resolve().parent / "_core.js"
 # the engine measures text synchronously; V8 cannot call back into Python, so the host keeps a table of measured
@@ -97,6 +98,14 @@ def _init_v8():
     except Exception: pass   # already started by someone else: theirs it is
 
 
+# the core's calls whose answer depends on their arguments alone (and the inputs they name, which never change): asked
+# again with the same arguments, the answer is the one kept. A host asks a figure's settled style and camera (info) again
+# and again as it builds one up; each ask is a round trip into V8, slow whenever another Python thread is busy
+PURE = frozenset({"info", "residues", "sceneJson", "catalog"})
+KEPT_ANSWERS = 256                  # answers kept, the least recently asked first out
+KEPT_CHARS = 32 << 20               # and their characters in all; an answer longer than an eighth of this is not kept
+
+
 class Engine:
     _lock = threading.Lock()
     _ids = itertools.count(1)
@@ -106,6 +115,8 @@ class Engine:
         self.v8 = MiniRacer()
         self.v8.eval(CORE.read_text())
         self.v8.eval(PRELUDE.replace("%RING%", str(RING)))
+        self._line = Line.of(self.v8)   # calls from this thread straight to V8 (_v8.py), where mini-racer allows
+        self._answers: collections.OrderedDict[str, str] = collections.OrderedDict(); self._answer_chars = 0
         self.text = TextEngine()
         self.raster = Raster(self.text)
         # the paper, grain and chalk textures earlier runs drew (files): the engine is told which there are before each
@@ -119,24 +130,26 @@ class Engine:
         self._put_text = None
         self._ring = self.v8.eval("__RING"); self._i32 = self._ring.cast("i"); self._read = 0; self._err = None
         ctx = self.v8._ctx
-
-        async def register():
-            cm = ctx._register_js_notification(self._on_record); return cm, cm.__enter__()
-        self._note_cm, note = asyncio.run_coroutine_threadsafe(register(), ctx.event_loop).result()
+        if self._line is not None: note = self._line.notifier()   # taken in by the thread that asked for the render
+        else:   # handled on mini-racer's event-loop thread
+            async def register():
+                cm = ctx._register_js_notification(self._on_record); return cm, cm.__enter__()
+            self._note_cm, note = asyncio.run_coroutine_threadsafe(register(), ctx.event_loop).result()
         self.v8.eval("(f) => { globalThis.__note = f }")(note)
 
     def _resync(self):
         """after the engine threw mid-render: take what it had recorded, so the canvases here stay in step with its own,
         and let the frame's canvas go"""
         try:
-            a = json.loads(self.v8.call("__aborted"))
-            for k in range(a["held"]): self.raster.feed(self.v8.call("__heldJson", k), bytes(self.v8.eval(f"__heldRuns({k})")))
-            self.v8.call("__done")
+            a = json.loads(self._js("__aborted"))
+            for k in range(a["held"]): self.raster.feed(self._js("__heldJson", k), bytes(self._eval(f"__heldRuns({k})")))
+            self._js("__done")
             if a["canvas"] is not None: self.raster.drop(a["canvas"])
         except Exception: pass   # nothing recorded (the spec itself was refused)
 
-    def _on_record(self, _value):
-        """one record in the ring: copy it out, free its space, then draw it (on mini-racer's loop thread)"""
+    def _on_record(self, _value=None):
+        """one record in the ring: copy it out, free its space, then draw it (on the thread waiting for the render, or
+        mini-racer's loop thread)"""
         if self._err is not None: return
         try:
             i32 = self._i32; pos = self._read % (RING - 64); o = 64 + pos
@@ -151,22 +164,48 @@ class Engine:
         except BaseException as e:  # reported by the render that sent it
             self._err = e
 
+    def _eval(self, code: str):
+        """``code`` run in V8, its value: from this thread where mini-racer allows (_v8.py), else through its loop"""
+        return self._line.eval(code) if self._line is not None else self.v8.eval(code)
+
+    def _js(self, name: str, *args):
+        """the PRELUDE's function ``name`` called with plain arguments (numbers and strings), its value"""
+        return self._eval(f"{name}({','.join(json.dumps(a) for a in args)})")
+
     def call(self, name: str, *args):
+        given = json.dumps(args)
+        key = f"{name}\0{given}" if name in PURE else None
         with self._lock:
-            try:
-                return json.loads(self.v8.call("__call", name, json.dumps(args)))
-            except Exception as e:  # mini-racer wraps JS errors; give the core's message, not V8's frame dump
-                raise CoreError(_js_message(e)) from None
+            kept = self._answers.get(key) if key is not None else None
+            if kept is not None: self._answers.move_to_end(key); return json.loads(kept)
+            with turns():
+                try: answer = self._js("__call", name, given)
+                except Exception as e:  # mini-racer wraps JS errors; give the core's message, not V8's frame dump
+                    raise CoreError(_js_message(e)) from None
+            if key is not None: self._keep_answer(key, answer)
+            elif name == "drop": self._forget_answers(args[0])
+        return json.loads(answer)
+
+    def _keep_answer(self, key: str, answer: str):
+        if len(answer) > KEPT_CHARS // 8: return
+        self._answers[key] = answer; self._answer_chars += len(answer)
+        while len(self._answers) > KEPT_ANSWERS or self._answer_chars > KEPT_CHARS:
+            self._answer_chars -= len(self._answers.popitem(last=False)[1])
+
+    def _forget_answers(self, ref):
+        """an input let go: the answers about it go too (asked again, the core says it does not know it)"""
+        named = json.dumps(ref)
+        for k in [k for k in self._answers if named in k]: self._answer_chars -= len(self._answers.pop(k))
 
     def put_map(self, m) -> str:
         """register a DensityMap with the core (once per map): its grid copied straight into a V8 buffer"""
         cached = self._maps.get(id(m))
         if cached and cached[0] is m: return cached[1]
         ref = f"map{next(self._ids)}"
-        with self._lock:
-            buf = self.v8.eval(f"__mapBuf({m.data.size})")
+        with self._lock, turns():
+            buf = self._eval(f"__mapBuf({m.data.size})")
             np.frombuffer(buf, np.float32)[:] = m.data.ravel()   # (z, y, x) C order: x fastest, as the core reads it
-            self.v8.call("__putMap", ref, json.dumps(m.header()))
+            self._js("__putMap", ref, json.dumps(m.header()))
         self._maps[id(m)] = (m, ref)
         return ref
 
@@ -175,11 +214,12 @@ class Engine:
         if isinstance(value, dict) and value.keys() == {"text", "name"} and isinstance(value["text"], str):
             # a structure's text handed to V8 as a string: as JSON in a call (escaped twice, then parsed as a script and
             # again as JSON) a ribosome's 25 MB of mmCIF took 0.2 s, as a string 10 ms
-            with self._lock:
+            with self._lock, turns():
                 # (with the text's hash, worked out here in C, which the core keys what it read by: its own would be a
                 # pass over every character)
                 if self._put_text is None: self._put_text = self.v8.eval("(ref, name, text, hash) => MolSketchCore.put(ref, { text, name, hash })")
-                try: self._put_text(ref, str(value["name"]), value["text"], format(hash(value["text"]) & 0xFFFFFFFFFFFFFFFF, "x"))
+                given = (ref, str(value["name"]), value["text"], format(hash(value["text"]) & 0xFFFFFFFFFFFFFFFF, "x"))
+                try: self._line.call(self._put_text, *given) if self._line is not None else self._put_text(*given)
                 except Exception as e: raise CoreError(_js_message(e)) from None
             return ref
         self.call("put", ref, value)
@@ -197,43 +237,43 @@ class Engine:
     def render(self, spec: dict, svg: bool | str = False):
         # a large figure is millions of small objects (ops, paths) and none of them in a cycle: Python's collector,
         # walking them again and again as they arrive, would cost more than the drawing
-        # and V8 hands records over through Python's lock: switching threads every 0.5 ms rather than 5 keeps the
-        # engine from waiting on the replay while it draws
-        was = gc.isenabled(); gc.disable(); sw = sys.getswitchinterval(); sys.setswitchinterval(0.0005)
+        was = gc.isenabled(); gc.disable()
         try: return self._render(spec, svg)
         finally:
-            sys.setswitchinterval(sw)
             if was: gc.enable()
 
     def _tell_textures(self):
         """the engine told which textures there are, when that changed"""
         if not self.textures.on: return
         keys = sorted(self.textures.keys())
-        if keys != self._told: self.v8.call("__call", "setHostTextures", json.dumps([keys])); self._told = keys
+        if keys != self._told: self._js("__call", "setHostTextures", json.dumps([keys])); self._told = keys
 
     def _lost_textures(self, times: int):
         """a texture file gone since the engine was told of it (another process's cache pruned it, say): the engine
         forgets the textures it made from what it was given, and draws them again; a second time, it draws them all"""
         if times:
             self.raster.textures = None; self.textures.limit = 0
-            self.v8.call("__call", "setHostTextures", "[null]"); self._told = None
+            self._js("__call", "setHostTextures", "[null]"); self._told = None
         else: self.textures.rescan()
-        self.v8.call("__call", "dropTextures", "[]")
+        self._js("__call", "dropTextures", "[]")
 
     def _render(self, spec: dict, svg: bool | str = False):
-        with self._lock:
+        # V8 hands records over through Python's lock: short turns (0.5 ms rather than 5) keep the engine from waiting
+        # on the replay while it draws, and a busy thread from holding up each handover
+        with self._lock, turns():
             main = None
             try:
                 learned = lost = 0
                 while True:
                     self._tell_textures(); self.raster.missing.clear()
-                    self.v8.eval("__ringReset()"); self._read = 0; self._err = None
+                    self._eval("__ringReset()"); self._read = 0; self._err = None
                     try:
                         # the records the ring takes are drawn while this runs; by the time it returns (mini-racer
                         # delivers the result after the notifications sent before it) they all have been
-                        r = json.loads(self.v8.call("__render", json.dumps(spec))); main = r["canvas"]
-                        held = [(self.v8.call("__heldJson", k), bytes(self.v8.eval(f"__heldRuns({k})"))) for k in range(r["held"])]
-                        self.v8.call("__done")
+                        code = f"__render({json.dumps(json.dumps(spec))})"
+                        r = json.loads(self._line.eval(code, notes=self._on_record) if self._line is not None else self._eval(code)); main = r["canvas"]
+                        held = [(self._js("__heldJson", k), bytes(self._eval(f"__heldRuns({k})"))) for k in range(r["held"])]
+                        self._js("__done")
                     except Exception as e:
                         self._resync(); raise CoreError(_js_message(e)) from None
                     if self._err is not None: raise self._err
@@ -242,7 +282,7 @@ class Engine:
                         self.raster.drop(main); main = None; learned += 1
                         if self.raster.missing: self._lost_textures(lost); lost += 1
                         rows = [(f, t, self.text.measure(f, t)) for f, t in {(f, t) for f, t in r["miss"]}]
-                        self.v8.call("__learn", json.dumps(rows))
+                        self._js("__learn", json.dumps(rows))
                         self.misses = r["miss"]
                         continue
                     img = self._vector(main, spec.get("scale", 1), svg == "shapes") if svg else self.raster.image(main)
