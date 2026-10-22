@@ -45,21 +45,24 @@ fig = ms.load(gemmi.read_structure("protein.cif"))
 ### `ms.fetch(pdb_id, *, map=False, **kw)`
 
 Make a figure of an entry in the Protein Data Bank, such as `"2PTN"`. The file is downloaded from RCSB as mmCIF the
-first time and read from the cache after that (`~/.cache/molsketch`, or the folder named by `MOLSKETCH_CACHE`).
-With `map=True`, the cryo-EM map the entry was built into is fetched from EMDB and drawn with it (the same as
-`.map("auto")`). Other keywords are passed on to `load`. Raises `ValueError` if the ID is not a valid PDB ID or the
-entry does not exist.
+first time and read from the cache after that (`~/.cache/molsketch`, or the folder named by `MOLSKETCH_CACHE`; at
+most 500 MB of entries, the least recently used going first, or `MOLSKETCH_DOWNLOAD_CACHE_MB`). With `map=True`, the
+cryo-EM map the entry was built into is fetched from EMDB and drawn with it (the same as `.map("auto")`). Other
+keywords are passed on to `load`. Raises `ValueError` if the ID is not a valid PDB ID or the entry does not exist.
 
 ### `ms.fetch_map(emdb_id, *, max_voxels=320)`
 
-Make a figure of an EMDB entry's map on its own, such as `"EMD-11638"`. The map is downloaded once (kept in
-`~/.cache/molsketch/emdb`) with the depositors' recommended contour level and the sample's mass. Maps larger than
-`max_voxels` a side are averaged down. How maps are drawn, and why, is in [docs/maps.md](../../docs/maps.md).
+Make a figure of an EMDB entry's map on its own, such as `"EMD-11638"`, with the depositors' recommended contour level
+and the sample's mass. Maps larger than `max_voxels` a side are averaged down. The map is downloaded once and kept as
+read, averaged down (in `~/.cache/molsketch/emdb`; at most 1000 MB, the least recently used going first, or
+`MOLSKETCH_MAP_CACHE_MB`), so a later run reads it back in milliseconds; another `max_voxels` downloads it again. How
+maps are drawn, and why, is in [docs/maps.md](../../docs/maps.md).
 
 ### `ms.load_map(source, *, name=None, level=None, max_voxels=320)`
 
 Make a figure of a map on its own: a path to an MRC / CCP4 file (`.mrc`, `.map`, `.ccp4`, or any of them `.gz`), or
-a `DensityMap`. `level` is the contour level to start from.
+a `DensityMap`. `level` is the contour level to start from. A gzipped file is decompressed as it is read: nothing is
+written beside it.
 
 ### `ms.read_map(path, *, name=None, level=None, max_voxels=320)`
 
@@ -593,7 +596,9 @@ The server draws one figure at a time. It listens on 127.0.0.1 only, unless you 
 
 | variable | effect |
 |---|---|
-| `MOLSKETCH_CACHE` | where `fetch` keeps downloaded files, the drawing keeps its paper and chalk textures, and large structures are kept as read (default `~/.cache/molsketch`) |
+| `MOLSKETCH_CACHE` | where everything kept between runs is kept (default `~/.cache/molsketch`): structures `fetch` downloaded, EMDB maps as read, the paper and chalk textures, and large structures as read. Each of the four has a bound of its own, below; past it the least recently used go first |
+| `MOLSKETCH_DOWNLOAD_CACHE_MB` | how much the structures `fetch` downloaded may take (default 500); `0` keeps none, and every `fetch` downloads its entry |
+| `MOLSKETCH_MAP_CACHE_MB` | how much the EMDB maps (kept as read, averaged down) and their records may take (default 1000); `0` keeps none, and every `fetch_map` downloads its map |
 | `MOLSKETCH_WORKERS` | how many processes draw a video's frames (`save_frames`, `animate`, `turntable`) when `workers` is not given; `1` draws them in the calling process |
 | `MOLSKETCH_TEXTURE_CACHE_MB` | how much the kept textures may take (default 300); `0` keeps none, and every process draws them afresh |
 | `MOLSKETCH_MODEL_CACHE_MB` | how much the large structures kept as read may take (default 300); `0` keeps none, and every process reads them from their text |

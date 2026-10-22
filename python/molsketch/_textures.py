@@ -3,21 +3,22 @@ small marks, and drawing them was most of a fresh process's first figure (second
 later run takes the pixels the first one drew. The engine names each by everything it depends on (and the version of
 the code that draws it), so a file is only ever used for exactly the texture it holds.
 
-Files live in MOLSKETCH_CACHE/textures (~/.cache/molsketch/textures), one per texture: a header naming it, then its
-premultiplied pixels, deflated. The least recently used go past MOLSKETCH_TEXTURE_CACHE_MB (300 by default);
+Files live in MOLSKETCH_CACHE/textures (~/.cache/molsketch/textures), one per texture, named by the code that drew it
+(so a process looks only at its own version's) and a hash of its key: a header naming it, then its premultiplied pixels,
+deflated. The least recently used go past MOLSKETCH_TEXTURE_CACHE_MB (300 by default; _cache.py says how);
 MOLSKETCH_TEXTURE_CACHE_MB=0 turns the cache off."""
 from __future__ import annotations
 
 import hashlib
 import json
-import os
 import pathlib
 import struct
-import tempfile
 import zlib
 
 import numpy as np
 import skia
+
+from . import _cache
 
 MAGIC = b"MSTX1\n"
 CT = skia.ColorType.kN32_ColorType   # the surfaces' own layout: pixels go back exactly as they came
@@ -26,19 +27,19 @@ CT = skia.ColorType.kN32_ColorType   # the surfaces' own layout: pixels go back 
 class TextureCache:
     def __init__(self, host: str, folder: pathlib.Path | None = None, limit_mb: float | None = None):
         self.host = host
-        if limit_mb is None: limit_mb = float(os.environ.get("MOLSKETCH_TEXTURE_CACHE_MB", "300"))
-        self.limit = int(limit_mb * 1e6)
-        self.dir = folder or pathlib.Path(os.environ.get("MOLSKETCH_CACHE", pathlib.Path.home() / ".cache" / "molsketch")) / "textures"
+        self.shelf = _cache.shelf("textures", folder, limit_mb)
+        self.limit = self.shelf.limit; self.dir = self.shelf.dir   # (the engine sets limit to 0 to stop using it)
         self.files: dict[str, pathlib.Path] = {}
         if self.limit <= 0: return
         try: self.dir.mkdir(parents=True, exist_ok=True)
         except OSError: self.limit = 0; return
+        self.shelf.open()   # (pruned before the engine is told what there is)
         self.rescan()
 
     def rescan(self):
-        """the textures the folder holds now"""
+        """the textures the folder holds now, of this version"""
         self.files = {}
-        for f in self.dir.glob("*.tex"):
+        for f in self.dir.glob(self.host + "-*.tex"):
             try:
                 with open(f, "rb") as h:
                     if h.read(len(MAGIC)) != MAGIC: continue
@@ -63,7 +64,7 @@ class TextureCache:
                 px = np.frombuffer(zlib.decompress(fh.read()), np.uint8).reshape(h, w, 4)
             img = skia.Image.fromarray(px, colorType=CT, alphaType=skia.AlphaType.kPremul_AlphaType)
             canvas.save(); canvas.resetMatrix(); canvas.drawImage(img, 0, 0, skia.SamplingOptions(), skia.Paint(BlendMode=skia.BlendMode.kSrc)); canvas.restore()
-            os.utime(f)   # used: the last to go
+            self.shelf.used(f)   # the last to go
             return True
         except (OSError, ValueError, KeyError, zlib.error, struct.error):
             self.files.pop(key, None); return False
@@ -75,18 +76,10 @@ class TextureCache:
             img = surface.makeImageSnapshot(); w, h = img.width(), img.height()
             px = img.toarray(colorType=CT, alphaType=skia.AlphaType.kPremul_AlphaType)
             head = json.dumps({"key": key, "host": self.host, "w": w, "h": h}).encode()
-            path = self.dir / (hashlib.sha1((self.host + "\n" + key).encode()).hexdigest()[:24] + ".tex")
-            fd, tmp = tempfile.mkstemp(dir=self.dir, suffix=".part")
-            with os.fdopen(fd, "wb") as fh: fh.write(MAGIC + struct.pack("<I", len(head)) + head + zlib.compress(np.ascontiguousarray(px).tobytes(), 1))
-            os.replace(tmp, path); self.files[key] = path
-            self._prune()
-        except OSError: pass
-
-    def _prune(self):
-        try:
-            fs = sorted(self.dir.glob("*.tex"), key=lambda f: f.stat().st_mtime, reverse=True); total = 0
-            for f in fs:
-                total += f.stat().st_size
-                if total > self.limit:
-                    f.unlink(missing_ok=True); self.files = {k: v for k, v in self.files.items() if v != f}
-        except OSError: pass
+            path = self.dir / (self.host + "-" + hashlib.sha1((self.host + "\n" + key).encode()).hexdigest()[:24] + ".tex")
+            gone = self.shelf.put(path, MAGIC + struct.pack("<I", len(head)) + head + zlib.compress(np.ascontiguousarray(px).tobytes(), 1))
+        except OSError: return
+        if gone is None: return
+        self.files[key] = path
+        if gone:   # the least recently used, let go to make room: the engine is told before the next render
+            gone = set(gone); self.files = {k: v for k, v in self.files.items() if v not in gone}

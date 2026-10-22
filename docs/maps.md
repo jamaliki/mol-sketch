@@ -28,8 +28,8 @@ In the app, open the **Map** tab: type an EMDB ID and press *Fetch*, press *Map 
 entry, or open a map file (`.map`, `.mrc`, `.ccp4`, gzipped or not). You can also drop a map file on the drawing.
 
 Maps from EMDB come with the depositors' recommended contour level and the sample's molecular mass, and are
-downloaded once (Python keeps them in `~/.cache/molsketch/emdb`, the app in the browser's cache). Maps larger than
-320 voxels a side are averaged down when they are read.
+downloaded once (Python keeps them as read in `~/.cache/molsketch/emdb`, at most 1 GB of them, the least recently used
+going first; the app in the browser's cache). Maps larger than 320 voxels a side are averaged down when they are read.
 
 ## The contour level
 

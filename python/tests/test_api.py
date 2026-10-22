@@ -414,7 +414,7 @@ def test_system_font_text_keeps_every_glyph():
 def test_kept_textures_draw_the_same(tmp_path, monkeypatch):
     """the paper and chalk textures kept as files: a later engine takes them and draws the same pixels, and one whose
     files went after it started draws them again"""
-    from molsketch._engine import Engine
+    from molsketch._engine import Engine, _host_id
     monkeypatch.setenv("MOLSKETCH_CACHE", str(tmp_path))
     text = (EX / "1A8O.pdb").read_text()
 
@@ -428,7 +428,7 @@ def test_kept_textures_draw_the_same(tmp_path, monkeypatch):
     e = Engine()
     for f in kept: f.unlink()
     assert np.array_equal(draw(e, "chalkboard"), first["chalkboard"])
-    (tmp_path / "textures" / "x.tex").write_bytes(b"MSTX1\n")   # a broken file is passed over
+    (tmp_path / "textures" / f"{_host_id()}-x.tex").write_bytes(b"MSTX1\n")   # a broken file is passed over
     assert np.array_equal(draw(Engine(), "watercolour"), first["watercolour"])
 
 
