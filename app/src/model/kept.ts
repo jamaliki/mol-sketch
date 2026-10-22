@@ -5,8 +5,8 @@
    its bonds' orders will be worked out with (its bonds themselves are still worked out when first asked for).
 
    Layout (little-endian, each part padded to 4 bytes):
-     int32 MAGIC, VERSION, count, residues, JSON length (UTF-16 code units)
-     the JSON: { strings, entities, chains, center, radius, hints }   (UTF-16 code units)
+     int32 MAGIC, VERSION, count, residues, JSON length (UTF-16 code units), 0; float64 centre x, y, z, radius
+     the JSON: { strings, entities, chains, hints }   (UTF-16 code units)
      float32 x, y, z, b; int32 residueOf, serial; uint8 het, flags   (one per atom)
      uint16 element, atomName   (indices into strings)
      float64 resi; int32 atomStart, atomEnd, trace, orient, chain, resn, entity (strings); uint8 het | nucleic << 1, ss, subunit
@@ -14,7 +14,7 @@
 import { Structure, type Residue, type SS, type Subunit } from './structure';
 import { assignBondOrders, type OrderHints } from './bondorder';
 
-const MAGIC = 0x4d534d4b, VERSION = 1;
+const MAGIC = 0x4d534d4b, VERSION = 2, HEAD = 56;
 
 export function modelBytes(s: Structure, hints: OrderHints): ArrayBuffer | null {
   const n = s.count, R = s.residues, nr = R.length;
@@ -26,12 +26,12 @@ export function modelBytes(s: Structure, hints: OrderHints): ArrayBuffer | null 
   for (let r = 0; r < nr; r++) { chain[r] = str(R[r].chain); resn[r] = str(R[r].resn); entity[r] = str(R[r].entity) }
   if (strings.length > 0xffff) return null;   // (more names than an index holds: not kept)
   const entries = <K, V>(m: Map<K, Map<K, V>> | undefined) => m ? [...m].map(([k, v]) => [k, [...v]]) : null;
-  const json = JSON.stringify({ strings, entities: s.entities, chains: s.chains, center: s.center, radius: s.radius,
+  const json = JSON.stringify({ strings, entities: s.entities, chains: s.chains,
     hints: { comp: entries(hints.comp), conect: entries(hints.conect) } });
   const pad = (b: number) => (b + 3) & ~3;
-  const size = ((20 + pad(2 * json.length) + 24 * n + 2 * pad(n) + 2 * pad(2 * n) + 7) & ~7) + 8 * nr + 28 * nr + pad(3 * nr);
+  const size = ((HEAD + pad(2 * json.length) + 24 * n + 2 * pad(n) + 2 * pad(2 * n) + 7) & ~7) + 8 * nr + 28 * nr + pad(3 * nr);
   const buf = new ArrayBuffer(size); let o = 0;
-  const head = new Int32Array(buf, 0, 5); head.set([MAGIC, VERSION, n, nr, json.length]); o = 20;
+  new Int32Array(buf, 0, 6).set([MAGIC, VERSION, n, nr, json.length, 0]); new Float64Array(buf, 24, 4).set([...s.center, s.radius]); o = HEAD;   // (a centre of NaN stays NaN, as JSON would not keep it)
   const J = new Uint16Array(buf, o, json.length); for (let i = 0; i < json.length; i++) J[i] = json.charCodeAt(i); o += pad(2 * json.length);
   const put = <T extends Float32Array | Int32Array | Uint8Array | Uint16Array | Float64Array>(src: T, Kind: any, bytes: number) => { new Kind(buf, o, src.length).set(src); o += pad(bytes) };
   for (const a of [s.x, s.y, s.z, s.b]) put(a, Float32Array, 4 * n);
@@ -52,7 +52,8 @@ export function modelFrom(buf: ArrayBuffer, name: string): Structure | null {
   if (!(buf instanceof ArrayBuffer) || buf.byteLength < 20) return null;
   const [magic, version, n, nr, jl] = new Int32Array(buf, 0, 5);
   if (magic !== MAGIC || version !== VERSION) return null;
-  const pad = (b: number) => (b + 3) & ~3; let o = 20;
+  if (buf.byteLength < HEAD) return null;
+  const pad = (b: number) => (b + 3) & ~3; let o = HEAD; const cr = new Float64Array(buf, 24, 4);
   const J = new Uint16Array(buf, o, jl); let json = '';
   for (let i = 0; i < jl; i += 8192) json += String.fromCharCode.apply(null, J.subarray(i, Math.min(jl, i + 8192)) as any);
   o += pad(2 * jl);
@@ -73,7 +74,7 @@ export function modelFrom(buf: ArrayBuffer, name: string): Structure | null {
       nucleic: !!(flags[r] & 2), trace: trace[r], ss: String.fromCharCode(flags[nr + r]) as SS, entity: S[entity[r]], subunit: String.fromCharCode(flags[2 * nr + r]) as Subunit, orient: orient[r] };
     s.residues.push(res);
   }
-  s.chains = d.chains; s.entities = d.entities; s.center = d.center; s.radius = d.radius;
+  s.chains = d.chains; s.entities = d.entities; s.center = [cr[0], cr[1], cr[2]]; s.radius = cr[3];
   const maps = <K>(e: [K, [K, number][]][] | null) => e ? new Map(e.map(([k, v]) => [k, new Map(v)])) : undefined;
   const hints: OrderHints = {}; const comp = maps<string>(d.hints.comp), conect = maps<number>(d.hints.conect);
   if (comp) hints.comp = comp; if (conect) hints.conect = conect;

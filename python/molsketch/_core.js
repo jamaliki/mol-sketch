@@ -2536,7 +2536,8 @@
 
   // src/model/kept.ts
   var MAGIC = 1297304907;
-  var VERSION = 1;
+  var VERSION = 2;
+  var HEAD = 56;
   function modelBytes(s, hints) {
     const n = s.count, R = s.residues, nr = R.length;
     const strings = [], index = /* @__PURE__ */ new Map();
@@ -2566,17 +2567,15 @@
       strings,
       entities: s.entities,
       chains: s.chains,
-      center: s.center,
-      radius: s.radius,
       hints: { comp: entries(hints.comp), conect: entries(hints.conect) }
     });
     const pad = (b) => b + 3 & ~3;
-    const size = (20 + pad(2 * json.length) + 24 * n + 2 * pad(n) + 2 * pad(2 * n) + 7 & ~7) + 8 * nr + 28 * nr + pad(3 * nr);
+    const size = (HEAD + pad(2 * json.length) + 24 * n + 2 * pad(n) + 2 * pad(2 * n) + 7 & ~7) + 8 * nr + 28 * nr + pad(3 * nr);
     const buf = new ArrayBuffer(size);
     let o = 0;
-    const head = new Int32Array(buf, 0, 5);
-    head.set([MAGIC, VERSION, n, nr, json.length]);
-    o = 20;
+    new Int32Array(buf, 0, 6).set([MAGIC, VERSION, n, nr, json.length, 0]);
+    new Float64Array(buf, 24, 4).set([...s.center, s.radius]);
+    o = HEAD;
     const J = new Uint16Array(buf, o, json.length);
     for (let i = 0; i < json.length; i++) J[i] = json.charCodeAt(i);
     o += pad(2 * json.length);
@@ -2609,8 +2608,10 @@
     if (!(buf instanceof ArrayBuffer) || buf.byteLength < 20) return null;
     const [magic, version, n, nr, jl] = new Int32Array(buf, 0, 5);
     if (magic !== MAGIC || version !== VERSION) return null;
+    if (buf.byteLength < HEAD) return null;
     const pad = (b) => b + 3 & ~3;
-    let o = 20;
+    let o = HEAD;
+    const cr = new Float64Array(buf, 24, 4);
     const J = new Uint16Array(buf, o, jl);
     let json = "";
     for (let i = 0; i < jl; i += 8192) json += String.fromCharCode.apply(null, J.subarray(i, Math.min(jl, i + 8192)));
@@ -2663,8 +2664,8 @@
     }
     s.chains = d.chains;
     s.entities = d.entities;
-    s.center = d.center;
-    s.radius = d.radius;
+    s.center = [cr[0], cr[1], cr[2]];
+    s.radius = cr[3];
     const maps2 = (e) => e ? new Map(e.map(([k, v]) => [k, new Map(v)])) : void 0;
     const hints = {};
     const comp = maps2(d.hints.comp), conect = maps2(d.hints.conect);

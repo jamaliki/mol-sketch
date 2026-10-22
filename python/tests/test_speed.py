@@ -142,3 +142,8 @@ def test_a_large_structure_is_read_once_across_runs(tmp_path, monkeypatch):
     other = Engine(); assert same(answers(other), read) and given[-1] is not None; other.v8.close()
     kept[0].write_bytes(b"not a structure")
     broken = Engine(); assert same(answers(broken), read) and given[-1] is None; broken.v8.close()
+    # numbers JSON would not keep as they are: a coordinate that does not read (NaN, and the centre with it), a -0
+    lines = [line for line in (EX / "1A8O.pdb").read_text().splitlines() if line.startswith(("ATOM", "HETATM"))]
+    lines[3] = lines[3][:30] + "   xx.xx" + lines[3][38:]; lines[5] = lines[5][:60] + "  -0.0" + lines[5][66:]
+    text = "\n".join(lines) + "\nEND\n"; first = Engine(); read = answers(first); first.v8.close()
+    again = Engine(); assert same(answers(again), read) and given[-1] is not None; again.v8.close()
