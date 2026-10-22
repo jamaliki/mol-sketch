@@ -41,7 +41,11 @@ const keyframes = new WeakMap<Structure, { base: string; kf: any; ids: string[] 
 export function sceneFromStructure(s: Structure, style: Style, overrides: Record<string, string>, base: Float32Array, fitPoints: Float32Array, labels: any[] = []) {
   const rot = (x: number, y: number, z: number) => [base[0] * x + base[4] * y + base[8] * z, base[1] * x + base[5] * y + base[9] * z, base[2] * x + base[6] * y + base[10] * z];
   const bk = Array.from(base).join(','); let hit = keyframes.get(s);
-  if (!hit || hit.base !== bk) { hit = { base: bk, ...keyframeOf(s, rot) }; keyframes.set(s, hit) }
+  if (!hit || hit.base !== bk) {
+    hit = { base: bk, ...keyframeOf(s, rot) }; keyframes.set(s, hit);
+    // whether any atom is in a ribosomal subunit, as the engine's hasSubunits would find going through them all
+    Object.defineProperty(hit.kf, '__hasSubunits', { value: s.residues.some(r => !!r.entity && !!r.subunit && r.subunit !== 'X' && r.atomEnd > r.atomStart) });
+  }
   (sceneFromStructure as any).lastIds = hit.ids;
   let r = rotated.get(fitPoints);   // the fit points turned by the base: once per points and base, not once per frame
   if (!r || r.base !== bk) { const fp = new Float32Array(fitPoints.length); for (let i = 0; i < fitPoints.length; i += 3) { const q = rot(fitPoints[i], fitPoints[i + 1], fitPoints[i + 2]); fp[i] = q[0]; fp[i + 1] = q[1]; fp[i + 2] = q[2] } rotated.set(fitPoints, r = { base: bk, fp }) }

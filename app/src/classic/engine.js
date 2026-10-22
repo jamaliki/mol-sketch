@@ -245,14 +245,17 @@ function computeFit(){
   const key=scene.keyframes.length+'|'+(spinning?'sphere':VIEW_YAW+'|'+VIEW_PITCH+'|'+VIEW_ROLL)+'|'+(scene._rev||0);
   if(FIT.key===key)return;
   let mn=[1e9,1e9,1e9],mx=[-1e9,-1e9,-1e9],c=0;
-  const fitPts=[];if(scene.fitPoints){const f=scene.fitPoints;for(let i=0;i<f.length;i+=3)fitPts.push([f[i],f[i+1],f[i+2]])}else{for(const k of scene.keyframes)for(const id in k.atoms)fitPts.push(k.atoms[id].pos)}
-  for(const p of fitPts){for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],p[i]);mx[i]=Math.max(mx[i],p[i])}c++}
+  // (a structure's fit points are read where they are, a point at a time, not made into a list of points first: a
+  // ribosome's are 220,000)
+  const F=scene.fitPoints,fitPts=F?null:[];if(!F){for(const k of scene.keyframes)for(const id in k.atoms)fitPts.push(k.atoms[id].pos)}
+  const nf=F?Math.floor((F.length+2)/3):fitPts.length,P3=[0,0,0],pt=F?(q)=>{P3[0]=F[3*q];P3[1]=F[3*q+1];P3[2]=F[3*q+2];return P3}:(q)=>fitPts[q];
+  for(let q=0;q<nf;q++){const p=pt(q);for(let i=0;i<3;i++){mn[i]=Math.min(mn[i],p[i]);mx[i]=Math.max(mx[i],p[i])}c++}
   if(!c){FIT={cx:0,cy:0,cz:0,rx:0,ry:0,spanX:10,spanY:10,zspan:4,key};return}
   FIT.cx=(mn[0]+mx[0])/2;FIT.cy=(mn[1]+mx[1])/2;FIT.cz=(mn[2]+mx[2])/2;
   const yaw=VIEW_YAW*Math.PI/180,pitch=VIEW_PITCH*Math.PI/180;const cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
-  if(spinning){let R=0;for(const p of fitPts){R=Math.max(R,Math.hypot(p[0]-FIT.cx,p[1]-FIT.cy,p[2]-FIT.cz))}FIT.rx=0;FIT.ry=0;FIT.spanX=2*R;FIT.spanY=2*R;FIT.zspan=2*R;FIT.key=key;return}
+  if(spinning){let R=0;for(let q=0;q<nf;q++){const p=pt(q);R=Math.max(R,Math.hypot(p[0]-FIT.cx,p[1]-FIT.cy,p[2]-FIT.cz))}FIT.rx=0;FIT.ry=0;FIT.spanX=2*R;FIT.spanY=2*R;FIT.zspan=2*R;FIT.key=key;return}
   let rmn=[1e9,1e9,1e9],rmx=[-1e9,-1e9,-1e9];
-  for(const p of fitPts){const r=rot3(p,cy,sy,cp,sp);for(let i=0;i<3;i++){rmn[i]=Math.min(rmn[i],r[i]);rmx[i]=Math.max(rmx[i],r[i])}}
+  for(let q=0;q<nf;q++){const r=rot3(pt(q),cy,sy,cp,sp);for(let i=0;i<3;i++){rmn[i]=Math.min(rmn[i],r[i]);rmx[i]=Math.max(rmx[i],r[i])}}
   FIT.rx=(rmn[0]+rmx[0])/2;FIT.ry=(rmn[1]+rmx[1])/2;FIT.spanX=Math.max(rmx[0]-rmn[0],1);FIT.spanY=Math.max(rmx[1]-rmn[1],1);FIT.zspan=Math.max(rmx[2]-rmn[2],1);FIT.key=key;
 }
 function makeProjector(W,H){
@@ -562,7 +565,9 @@ function subunitColor(a){const k=a.subunit||'X';if(scene.groupColors&&scene.grou
   if(k==='X'&&!hasSubunits())return chainColor(a);   // no ribosomal subunits (a haemoglobin, a chaperonin): by chain, not one colour
   return SUBUNIT_COLS[k]||SUBUNIT_COLS.X}
 const SUBUNITS_OF=new WeakMap();   // keyframe → whether any of its atoms is in a subunit
-function hasSubunits(){const K=scene&&scene.keyframes&&scene.keyframes[0];if(!K)return false;let f=SUBUNITS_OF.get(K);if(f===undefined){f=false;for(const id in K.atoms){const u=K.atoms[id].subunit;if(u&&u!=='X'){f=true;break}}SUBUNITS_OF.set(K,f)}return f}
+// (a structure's keyframe says so itself, worked out as it was built: going through its atoms by id lists every id first,
+// a ribosome's 220,000)
+function hasSubunits(){const K=scene&&scene.keyframes&&scene.keyframes[0];if(!K)return false;let f=SUBUNITS_OF.get(K);if(f===undefined){if(typeof K.__hasSubunits==='boolean')f=K.__hasSubunits;else{f=false;for(const id in K.atoms){const u=K.atoms[id].subunit;if(u&&u!=='X'){f=true;break}}}SUBUNITS_OF.set(K,f)}return f}
 function entityColor(a){const e=a.entity||('chain:'+(a.chain||''));if(scene.groupColors&&scene.groupColors['entity:'+e])return scene.groupColors['entity:'+e];const GP=cfg.groupPalette&&cfg.groupPalette.length?cfg.groupPalette:GROUP_PALETTE;return GP[groupIndex('entity:'+e)%GP.length]}
 /** a chain's colour: its own if given, else the palette's in the order the chains come (counted on their own, so
     neighbouring chains never share a colour the way they could when residues and chains were counted together) */

@@ -4482,14 +4482,18 @@
       const key2 = scene.keyframes.length + "|" + (spinning ? "sphere" : VIEW_YAW + "|" + VIEW_PITCH + "|" + VIEW_ROLL) + "|" + (scene._rev || 0);
       if (FIT.key === key2) return;
       let mn = [1e9, 1e9, 1e9], mx = [-1e9, -1e9, -1e9], c = 0;
-      const fitPts = [];
-      if (scene.fitPoints) {
-        const f2 = scene.fitPoints;
-        for (let i = 0; i < f2.length; i += 3) fitPts.push([f2[i], f2[i + 1], f2[i + 2]]);
-      } else {
+      const F = scene.fitPoints, fitPts = F ? null : [];
+      if (!F) {
         for (const k of scene.keyframes) for (const id in k.atoms) fitPts.push(k.atoms[id].pos);
       }
-      for (const p of fitPts) {
+      const nf = F ? Math.floor((F.length + 2) / 3) : fitPts.length, P3 = [0, 0, 0], pt = F ? (q) => {
+        P3[0] = F[3 * q];
+        P3[1] = F[3 * q + 1];
+        P3[2] = F[3 * q + 2];
+        return P3;
+      } : (q) => fitPts[q];
+      for (let q = 0; q < nf; q++) {
+        const p = pt(q);
         for (let i = 0; i < 3; i++) {
           mn[i] = Math.min(mn[i], p[i]);
           mx[i] = Math.max(mx[i], p[i]);
@@ -4507,7 +4511,8 @@
       const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
       if (spinning) {
         let R = 0;
-        for (const p of fitPts) {
+        for (let q = 0; q < nf; q++) {
+          const p = pt(q);
           R = Math.max(R, Math.hypot(p[0] - FIT.cx, p[1] - FIT.cy, p[2] - FIT.cz));
         }
         FIT.rx = 0;
@@ -4519,8 +4524,8 @@
         return;
       }
       let rmn = [1e9, 1e9, 1e9], rmx = [-1e9, -1e9, -1e9];
-      for (const p of fitPts) {
-        const r = rot3(p, cy, sy, cp, sp);
+      for (let q = 0; q < nf; q++) {
+        const r = rot3(pt(q), cy, sy, cp, sp);
         for (let i = 0; i < 3; i++) {
           rmn[i] = Math.min(rmn[i], r[i]);
           rmx[i] = Math.max(rmx[i], r[i]);
@@ -5336,12 +5341,15 @@
       if (!K) return false;
       let f2 = SUBUNITS_OF.get(K);
       if (f2 === void 0) {
-        f2 = false;
-        for (const id in K.atoms) {
-          const u = K.atoms[id].subunit;
-          if (u && u !== "X") {
-            f2 = true;
-            break;
+        if (typeof K.__hasSubunits === "boolean") f2 = K.__hasSubunits;
+        else {
+          f2 = false;
+          for (const id in K.atoms) {
+            const u = K.atoms[id].subunit;
+            if (u && u !== "X") {
+              f2 = true;
+              break;
+            }
           }
         }
         SUBUNITS_OF.set(K, f2);
@@ -11663,6 +11671,7 @@
     if (!hit || hit.base !== bk) {
       hit = { base: bk, ...keyframeOf(s, rot) };
       keyframes.set(s, hit);
+      Object.defineProperty(hit.kf, "__hasSubunits", { value: s.residues.some((r2) => !!r2.entity && !!r2.subunit && r2.subunit !== "X" && r2.atomEnd > r2.atomStart) });
     }
     sceneFromStructure.lastIds = hit.ids;
     let r = rotated.get(fitPoints);
